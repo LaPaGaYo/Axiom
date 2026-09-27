@@ -1,17 +1,18 @@
 import { mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { runProcessSync, type ProcessResult } from '../shared/child-process/run-process'
+import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../shared/local-build-compatibility-contract'
 import { writeFileAtomically } from './codex-accounts/fs-utils'
 
 /**
- * Turns off the macOS accent picker for Orca's own preferences domain (#14746).
+ * Turns off the macOS accent picker for Axiom's own preferences domain (#14746).
  *
  * macOS routes press-and-hold to the accent popup unless an app opts out via
  * `ApplePressAndHoldEnabled`, so holding `j` in vim inserts one character instead of repeating.
  * The key is unset by default, which is why every terminal-hosting Mac app ships this opt-out.
  *
  * Written once and never again: a user who wants the accent picker back sets
- * `defaults write com.stablyai.orca ApplePressAndHoldEnabled -bool true` (or deletes the key), and
+ * `defaults write com.lapagayo.axiom ApplePressAndHoldEnabled -bool true` (or deletes the key), and
  * the recorded decision below keeps a later launch from overwriting that choice.
  *
  * A fresh write is assumed to land for the *next* launch, not the current one: it goes out through
@@ -42,14 +43,14 @@ const DEFAULTS_TIMEOUT_MS = 5_000
 /** Why: `defaults` exits 1 for "does not exist"; anything else means the probe itself failed. */
 const DEFAULTS_MISSING_STATUS = 1
 
-const ORCA_BUNDLE_ID = 'com.stablyai.orca'
+const ORCA_BUNDLE_ID = LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId
 
 export type PressAndHoldDecision =
   /** Not macOS — nothing is read or written. */
   | 'not-macos'
   /** A previous launch already decided; the domain is never touched again. */
   | 'already-decided'
-  /** The running bundle is not Orca's (e.g. a bare `Electron.app`), whose domain we do not own. */
+  /** The running bundle is not Axiom's (e.g. a bare `Electron.app`), whose domain we do not own. */
   | 'foreign-bundle'
   /** `defaults read` could not answer, so we cannot tell an unset key from a user's choice. */
   | 'probe-failed'
@@ -80,7 +81,7 @@ export type PressAndHoldHost = {
   now: () => string
 }
 
-/** Only Orca's own bundle: an unpackaged run is `com.github.Electron`, shared with every other
+/** Only Axiom's own bundle: an unpackaged run is `com.github.Electron`, shared with every other
  *  unpackaged Electron app on the machine. */
 export function isOrcaPreferencesDomain(domain: string): boolean {
   return domain === ORCA_BUNDLE_ID || domain.startsWith(`${ORCA_BUNDLE_ID}.`)
@@ -169,7 +170,7 @@ function parseRecord(raw: string): PressAndHoldRecord | null {
 }
 
 /**
- * Apply Orca's press-and-hold default at most once, leaving any explicit user value alone.
+ * Apply Axiom's press-and-hold default at most once, leaving any explicit user value alone.
  *
  * Returns the decision so startup can log it; the same value is persisted for support triage.
  */

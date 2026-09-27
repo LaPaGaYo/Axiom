@@ -4111,8 +4111,6 @@ private func isTrustedOrcaApplication(_ pid: pid_t) -> Bool {
     return bundleId == "com.lapagayo.axiom" ||
         bundleId == "com.lapagayo.axiom.dev" ||
         bundleId.hasPrefix("com.lapagayo.axiom.dev.") ||
-        bundleId == "com.stablyai.orca" ||
-        bundleId.hasPrefix("com.stablyai.orca.dev.") ||
         bundleId == "com.github.Electron"
 }
 

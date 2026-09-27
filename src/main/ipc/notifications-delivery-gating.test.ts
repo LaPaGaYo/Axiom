@@ -33,6 +33,7 @@ vi.mock('../tray/system-tray', async () =>
 )
 
 import { registerNotificationHandlers } from './notifications'
+import { openNotificationSystemSettings } from './notification-system-settings-link'
 
 describe('registerNotificationHandlers', () => {
   beforeEach(() => {
@@ -55,6 +56,25 @@ describe('registerNotificationHandlers', () => {
 
     expect(removeHandlerMock).toHaveBeenCalledWith('notifications:dispatch')
     expect(handleMock).toHaveBeenCalledWith('notifications:dispatch', expect.any(Function))
+  })
+
+  it('opens the packaged macOS app notification settings entry without a dev override', () => {
+    const originalPlatform = process.platform
+    const originalBundleId = process.env.ORCA_DEV_MACOS_BUNDLE_ID
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    delete process.env.ORCA_DEV_MACOS_BUNDLE_ID
+    try {
+      openNotificationSystemSettings()
+
+      expect(shellOpenExternalMock).toHaveBeenCalledWith(
+        `x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=${LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId}`
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+      if (originalBundleId !== undefined) {
+        process.env.ORCA_DEV_MACOS_BUNDLE_ID = originalBundleId
+      }
+    }
   })
 
   it('opens the current macOS app notification settings entry', async () => {
