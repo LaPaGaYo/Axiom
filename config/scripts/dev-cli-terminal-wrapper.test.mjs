@@ -18,6 +18,7 @@ describe('dev CLI terminal wrappers', () => {
     const wrapper = readFileSync(path.join(userDataPath, 'cli', 'bin', 'axiom-dev.cmd'), 'utf8')
     expect(wrapper).toContain(`set "ORCA_USER_DATA_PATH=${userDataPath}"`)
     expect(wrapper).toContain('set "ORCA_DEV_CLI_INVOCATION=1"')
+    expect(wrapper).toContain('set "ORCA_CLI_COMMAND=axiom-dev"')
     expect(wrapper).toContain(`node "${path.join(root, 'out', 'cli', 'index.js')}" %*`)
     expect(readFileSync(path.join(userDataPath, 'cli', 'bin', 'axiom.cmd'), 'utf8')).toBe(wrapper)
     expect(readFileSync(path.join(root, 'out', 'bin', 'axiom-dev.cmd'), 'utf8')).toBe(wrapper)
@@ -63,6 +64,7 @@ describe('dev CLI terminal wrappers', () => {
     const wrapper = readFileSync(path.join(userDataPath, 'cli', 'bin', 'axiom-dev'), 'utf8')
     expect(wrapper).toContain(`export ORCA_USER_DATA_PATH=${JSON.stringify(userDataPath)}`)
     expect(wrapper).toContain('export ORCA_DEV_CLI_INVOCATION=1')
+    expect(wrapper).toContain('export ORCA_CLI_COMMAND=axiom-dev')
     expect(wrapper).toContain(
       `exec node ${JSON.stringify(path.join(root, 'out', 'cli', 'index.js'))}`
     )

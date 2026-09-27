@@ -94,7 +94,7 @@ describe('electron-builder dev-channel identity', () => {
 
 describe('collectDevChannelPackagingProblems', () => {
   const goodWinConfig = {
-    publish: { repo: 'orca-adhoc', releaseType: 'prerelease' },
+    publish: { owner: 'LaPaGaYo', repo: 'Axiom', releaseType: 'prerelease' },
     extraMetadata: { version: '1.4.178-adhoc.20260819010203' },
     win: { verifyUpdateCodeSignature: false }
   }
@@ -121,7 +121,7 @@ describe('collectDevChannelPackagingProblems', () => {
       env
     })
 
-    expect(problems.join('\n')).toContain('must publish to "orca-adhoc"')
+    expect(problems.join('\n')).toContain('must publish to "Axiom"')
     expect(problems.join('\n')).toContain('rebase it onto a main that does')
   })
 
@@ -158,7 +158,7 @@ describe('collectDevChannelPackagingProblems', () => {
         channel: 'adhoc',
         platform: 'darwin',
         config: {
-          publish: { repo: 'orca-adhoc', releaseType: 'prerelease' },
+          publish: { owner: 'LaPaGaYo', repo: 'Axiom', releaseType: 'prerelease' },
           extraMetadata: { version: '1.4.178-adhoc.20260819010203' },
           win: { signtoolOptions: { publisherName: 'SignPath Foundation' } }
         },

@@ -12,3 +12,14 @@ describe('mixed-version CLI identities', () => {
     }
   )
 })
+
+describe('mixed-version Windows resume identities', () => {
+  it.each(['axiom', 'axiom-dev', 'orca', 'orca-ide'])(
+    'accepts %s without removing older command names',
+    (compatibilityWindowsCommand) => {
+      expect(
+        AskParams.safeParse({ question: 'Continue?', compatibilityWindowsCommand }).success
+      ).toBe(true)
+    }
+  )
+})

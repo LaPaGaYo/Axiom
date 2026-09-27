@@ -135,19 +135,12 @@ config/packaged-runtime-node-modules.cjs:posthog:1
 config/reliability-gates.jsonc:stablyai:272
 config/scripts/assert-github-release-is-draft.mjs:stablyai:1
 config/scripts/assert-github-release-is-draft.test.mjs:stablyai:4
-config/scripts/build-computer-macos.mjs:com.stablyai:1
-config/scripts/build-computer-macos.mjs:stablyai:1
-config/scripts/build-notification-status-macos.mjs:com.stablyai:1
-config/scripts/build-notification-status-macos.mjs:stablyai:1
 config/scripts/build-windows-cli-launcher.test.mjs:stablyai:1
 config/scripts/check-reliability-gates.test.mjs:stablyai:1
 config/scripts/ci-e2e-shard-selection.test.mjs:stablyai:1
 config/scripts/ci-shard-timings.md:stablyai:2
 config/scripts/create-draft-release.mjs:stablyai:1
 config/scripts/create-draft-release.test.mjs:stablyai:19
-config/scripts/dev-electron-bundle-identity.mjs:com.stablyai:1
-config/scripts/dev-electron-bundle-identity.mjs:orca.dev:1
-config/scripts/dev-electron-bundle-identity.mjs:stablyai:1
 config/scripts/electron-runtime-floor.test.ts:stablyai:1
 config/scripts/hourly-preflight-workflow.test.mjs:stablyai:2
 config/scripts/latest-stable-release.mjs:stablyai:1
@@ -163,7 +156,7 @@ config/scripts/pr-ready-check-reuse.test.mjs:stablyai:2
 config/scripts/pr-test-loc-summary.test.mjs:stablyai:8
 config/scripts/publish-complete-draft-releases.mjs:stablyai:1
 config/scripts/publish-complete-draft-releases.test.mjs:stablyai:3
-config/scripts/release-cut-token-permissions.test.mjs:stablyai:2
+config/scripts/release-cut-token-permissions.test.mjs:stablyai:1
 config/scripts/release-mac-build-workflow-dispatch.test.mjs:stablyai:11
 config/scripts/replace-cached-nsis-elevate.test.mjs:SignPath Foundation:1
 config/scripts/repro-windows-apphang-terminal-activation.mjs:stablyai:2
@@ -172,11 +165,8 @@ config/scripts/run-idle-cpu-benchmark.mjs:stablyai:1
 config/scripts/setup-adhoc-release-repo.sh:stablyai:2
 config/scripts/setup-daily-release-repo.sh:stablyai:2
 config/scripts/setup-hourly-release-token.sh:stablyai:5
-config/scripts/verify-dev-channel-packaging.mjs:stablyai:1
 config/scripts/verify-dev-channel-packaging.test.mjs:SignPath Foundation:3
 config/scripts/verify-packaged-plugin-resources.test.mjs:stablyai:3
-config/scripts/verify-release-required-assets.mjs:stablyai:1
-config/scripts/verify-release-required-assets.test.mjs:stablyai:2
 config/scripts/verify-telemetry-constants.mjs:posthog:4
 config/scripts/verify-windows-inner-signature.mjs:SignPath Foundation:1
 config/scripts/verify-windows-inner-signature.test.mjs:SignPath Foundation:6
@@ -710,10 +700,6 @@ src/shared/git-fork-sync.test.ts:stablyai:4
 src/shared/git-remote-error.test.ts:stablyai:1
 src/shared/git-remote-url-index.test.ts:stablyai:2
 src/shared/github/project-types.ts:stablyai:1
-src/shared/local-build-compatibility-contract.ts:com.stablyai:1
-src/shared/local-build-compatibility-contract.ts:stablyai:1
-src/shared/local-build-compatibility.test.ts:com.stablyai:1
-src/shared/local-build-compatibility.test.ts:stablyai:1
 src/shared/mobile-relay-pairing-fixtures.ts:onorca.dev:4
 src/shared/mobile-relay-pairing-fixtures.ts:orca.dev:4
 src/shared/node-cli-command-resolution.ts:stablyai:2

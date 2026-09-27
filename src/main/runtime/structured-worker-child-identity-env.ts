@@ -51,7 +51,8 @@ export function structuredWorkerChildIdentityEnv(
   const env: Record<string, string> = {
     ...childEnv,
     ORCA_TERMINAL_HANDLE: identity.handle,
-    ORCA_CLI_COMMAND: 'orca'
+    ORCA_CLI_COMMAND:
+      hasAppEnvironment() && !getAppEnvironment().isPackaged() ? 'axiom-dev' : 'axiom'
   }
   applyOrcaCliPath(env)
   return env

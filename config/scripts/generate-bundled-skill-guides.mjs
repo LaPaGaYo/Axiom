@@ -56,6 +56,14 @@ function normalizeMarkdown(markdown) {
   return markdown.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
 }
 
+// Why: guide sources retain upstream provenance and topic ids; executable tokens in
+// generated product guidance must resolve to the launchers this package installs.
+function renderProductCliGuidance(markdown) {
+  return markdown.replace(/(?<![\w./-])orca(?:-dev|-ide)?(?![\w.-])/gu, (command) =>
+    command === 'orca-dev' ? 'axiom-dev' : 'axiom'
+  )
+}
+
 function parseFrontmatter(markdown, sourcePath) {
   const normalized = normalizeMarkdown(markdown)
   const match = /^---\s*\n([\s\S]*?)\n---\s*(?:\n|$)/.exec(normalized)
@@ -118,7 +126,13 @@ async function readSharedStubBlocks(repoRoot) {
     }
     throw error
   }
-  return parseSharedStubBlocks(markdown, SHARED_STUB_SOURCE)
+  // Why: Axiom uses one release command on every platform; the upstream Linux
+  // screen-reader exception would incorrectly forbid our installed command.
+  markdown = markdown.replace(
+    /- Otherwise, on Linux outside an Orca-managed terminal,[\s\S]*?(?=- Otherwise, use)/u,
+    ''
+  )
+  return parseSharedStubBlocks(renderProductCliGuidance(markdown), SHARED_STUB_SOURCE)
 }
 
 function constantName(name) {
@@ -224,7 +238,9 @@ async function readGuideReferences(repoRoot, guideName) {
       .sort((left, right) => left.name.localeCompare(right.name, 'en'))
       .map(async (entry) => {
         const sourcePath = path.join(referenceRoot, entry.name)
-        const markdown = normalizeMarkdown(await readFile(sourcePath, 'utf8'))
+        const markdown = renderProductCliGuidance(
+          normalizeMarkdown(await readFile(sourcePath, 'utf8'))
+        )
         if (!markdown.trim()) {
           throw new Error(`Guide reference is empty: ${toPosixRelativePath(repoRoot, sourcePath)}`)
         }
@@ -306,7 +322,7 @@ async function buildArtifacts(repoRoot = REPO_ROOT) {
     const sourcePath = path.join(guideRoot, `${name}.md`)
     // Why: Git may render text with native EOLs despite repository policy; the
     // embedded guide and generated projection must have one platform-neutral identity.
-    const markdown = normalizeMarkdown(await readFile(sourcePath, 'utf8'))
+    const markdown = renderProductCliGuidance(normalizeMarkdown(await readFile(sourcePath, 'utf8')))
     const frontmatter = parseFrontmatter(markdown, toPosixRelativePath(repoRoot, sourcePath))
     if (frontmatter.name !== name) {
       throw new Error(`Guide source ${name}.md declares mismatched name ${frontmatter.name}`)
@@ -332,7 +348,7 @@ async function buildArtifacts(repoRoot = REPO_ROOT) {
     const content = stubTopics.has(name)
       ? composeStubProjection(
           markdown,
-          await readFile(stubPath, 'utf8'),
+          renderProductCliGuidance(await readFile(stubPath, 'utf8')),
           `skill-stubs/${name}.md`,
           { sharedBlocks }
         )
@@ -403,6 +419,7 @@ export {
   composeStubProjection,
   frontmatterBlock,
   normalizeMarkdown,
+  renderProductCliGuidance,
   parseFrontmatter,
   readSharedStubBlocks,
   serializeEmbeddedModule,

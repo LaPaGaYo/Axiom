@@ -84,7 +84,7 @@ describe('structuredWorkerChildIdentityEnv', () => {
     const handle = registerWorker()
     const env = structuredWorkerChildIdentityEnv(SESSION_ID, { PATH: '/usr/bin:/bin' })
     expect(env.ORCA_TERMINAL_HANDLE).toBe(handle)
-    expect(env.ORCA_CLI_COMMAND).toBe('orca')
+    expect(env.ORCA_CLI_COMMAND).toBe('axiom')
     expect(env.PATH).toBe(`${SHIM_DIR}:/usr/bin:/bin`)
   })
 
@@ -111,6 +111,7 @@ describe('structuredWorkerChildIdentityEnv', () => {
     registerWorker()
     const env = structuredWorkerChildIdentityEnv(SESSION_ID, { PATH: '/usr/bin' })
     expect(env.PATH).toBe(`${join(USER_DATA, 'cli', 'bin')}:/usr/bin`)
+    expect(env.ORCA_CLI_COMMAND).toBe('axiom-dev')
   })
 
   it('never puts a pane key in the child environment', () => {

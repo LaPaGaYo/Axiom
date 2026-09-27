@@ -180,7 +180,7 @@ describe('release-cut token permissions', () => {
   })
 
   it('keeps fork, tag, and reusable-workflow boundaries explicit', () => {
-    expect(workflow.jobs.cut.if).toBe("github.repository == 'stablyai/orca'")
+    expect(workflow.jobs.cut.if).toBe("github.repository == 'LaPaGaYo/Axiom'")
     expect(checkoutRef(workflow.jobs.cut)).toBe(
       "${{ github.event_name == 'schedule' && 'main' || inputs.ref }}"
     )

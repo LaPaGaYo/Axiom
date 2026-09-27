@@ -42,7 +42,7 @@ export type LegacyAskParams = {
   options?: string
   timeoutMs?: number
   compatibilityCliCommand?: 'orca' | 'orca-ide' | 'orca-dev' | 'axiom' | 'axiom-dev'
-  compatibilityWindowsCommand?: 'orca' | 'orca-ide'
+  compatibilityWindowsCommand?: 'orca' | 'orca-ide' | 'axiom' | 'axiom-dev'
 }
 
 export type LegacyReplyParams = {

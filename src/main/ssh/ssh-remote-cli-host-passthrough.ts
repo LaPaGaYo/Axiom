@@ -119,7 +119,7 @@ export function buildHostCliEnv(args: {
   // cwd-based selectors like `--worktree active`.
   env.ORCA_CLI_CWD = args.remoteCwd
   // Why: recovery commands run on the SSH execution host through its relay shim.
-  env.ORCA_CLI_COMMAND = 'orca'
+  env.ORCA_CLI_COMMAND = 'axiom'
   // Why: same node-mode hygiene as the shipped CLI launchers — stash and clear
   // NODE_OPTIONS so Electron's node bootstrap does not inherit them.
   env.ORCA_NODE_OPTIONS = args.hostEnv.NODE_OPTIONS ?? ''

@@ -11,7 +11,7 @@ type GuideInvocation = {
 }
 
 // Why: guides write examples as `orca ...`, `orca-dev ...`, or the `ORCA` placeholder.
-const CLI_INVOCATION = /(?:^|[\s`(])(?:orca|orca-dev|orca-ide|ORCA)\s+([^\n`]*)/g
+const CLI_INVOCATION = /(?:^|[\s`(])(?:axiom|axiom-dev|orca|orca-dev|orca-ide|ORCA)\s+([^\n`]*)/g
 
 // Longest path first so `orchestration worker-start` never resolves as `orchestration worker`.
 const SPECS_BY_DEPTH: CommandSpec[] = [...COMMAND_SPECS].sort(

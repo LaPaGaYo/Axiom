@@ -186,7 +186,7 @@ function createWindowsLauncherCompileCommand(
       'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
       `if (-not (Test-Path -LiteralPath ${powerShellLiteral(launcherPath)} -PathType Leaf)) { Write-Error 'The Orca SSH CLI launcher compiler produced no executable.'; exit 1 }`,
       // Why: remove the legacy %* bridge only after a successful compile, so a
-      // host missing csc.exe keeps its existing CLI (orca.exe shadows orca.cmd).
+      // host missing csc.exe keeps its existing CLI (axiom.exe shadows axiom.cmd).
       `Remove-Item -LiteralPath ${powerShellLiteral(legacyShimPath)} -Force -ErrorAction SilentlyContinue`,
       `Remove-Item -LiteralPath ${powerShellLiteral(sourcePath)} -Force`
     ].join('; ')
@@ -195,11 +195,11 @@ function createWindowsLauncherCompileCommand(
 
 export function createRemoteCliInstallPlan(env: RemoteCliInstallEnv): RemoteCliInstallPlan {
   if (isWindowsRemoteHost(env.hostPlatform)) {
-    const launcherFileName = 'orca.exe'
-    const sourceFileName = 'orca-launcher.cs'
+    const launcherFileName = 'axiom.exe'
+    const sourceFileName = 'axiom-launcher.cs'
     const launcherPath = joinRemotePath(env.hostPlatform, env.binDir, launcherFileName)
     const sourcePath = joinRemotePath(env.hostPlatform, env.binDir, sourceFileName)
-    const legacyShimPath = joinRemotePath(env.hostPlatform, env.binDir, 'orca.cmd')
+    const legacyShimPath = joinRemotePath(env.hostPlatform, env.binDir, 'axiom.cmd')
     const binDir = joinRemotePath(env.hostPlatform, env.binDir)
     return {
       launcherPath,
@@ -219,7 +219,7 @@ export function createRemoteCliInstallPlan(env: RemoteCliInstallEnv): RemoteCliI
     }
   }
 
-  const launcherPath = joinRemotePath(env.hostPlatform, env.binDir, 'orca')
+  const launcherPath = joinRemotePath(env.hostPlatform, env.binDir, 'axiom')
   return {
     launcherPath,
     files: [

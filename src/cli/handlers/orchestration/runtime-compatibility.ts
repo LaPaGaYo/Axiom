@@ -1,19 +1,40 @@
 import { RuntimeClientError } from '../../runtime-client'
 
-export function resolveCompatibilityCliCommand(): 'orca' | 'orca-ide' | 'orca-dev' {
+export function resolveCompatibilityCliCommand():
+  | 'orca'
+  | 'orca-ide'
+  | 'orca-dev'
+  | 'axiom'
+  | 'axiom-dev' {
   const configured = process.env.ORCA_CLI_COMMAND
-  if (configured === 'orca' || configured === 'orca-ide' || configured === 'orca-dev') {
+  if (
+    configured === 'axiom' ||
+    configured === 'axiom-dev' ||
+    configured === 'orca' ||
+    configured === 'orca-ide' ||
+    configured === 'orca-dev'
+  ) {
     return configured
   }
-  return process.platform === 'linux' ? 'orca-ide' : 'orca'
+  return isDevCliInvocation() ? 'axiom-dev' : 'axiom'
 }
 
-export function resolvePackagedWindowsCompatibilityCommand(): 'orca' | 'orca-ide' | undefined {
+export function resolvePackagedWindowsCompatibilityCommand():
+  | 'orca'
+  | 'orca-ide'
+  | 'axiom'
+  | 'axiom-dev'
+  | undefined {
   if (process.env.ORCA_WINDOWS_PACKAGED_CLI_LAUNCHER !== '1') {
     return undefined
   }
   const command = process.env.ORCA_CLI_COMMAND
-  if (command === 'orca' || command === 'orca-ide') {
+  if (
+    command === 'axiom' ||
+    command === 'axiom-dev' ||
+    command === 'orca' ||
+    command === 'orca-ide'
+  ) {
     return command
   }
   throw new RuntimeClientError(
@@ -37,6 +58,6 @@ export async function flushOrchestrationStdout(): Promise<void> {
 export function isDevCliInvocation(): boolean {
   return (
     process.env.ORCA_DEV_CLI_INVOCATION === '1' ||
-    (process.env.ORCA_USER_DATA_PATH?.includes('orca-dev') ?? false)
+    (process.env.ORCA_USER_DATA_PATH?.includes('axiom-dev') ?? false)
   )
 }

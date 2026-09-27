@@ -59,6 +59,8 @@ set -euo pipefail
 ELECTRON=${quoteShell(execPathValue)}
 CLI=${quoteShell(cliEntryPath)}
 export ORCA_USER_DATA_PATH=${quoteShell(userDataPath)}
+export ORCA_DEV_CLI_INVOCATION=1
+export ORCA_CLI_COMMAND=axiom-dev
 if [ -z "\${ORCA_APP_EXECUTABLE:-}" ]; then
   export ORCA_APP_EXECUTABLE="$ELECTRON"
   export ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT=1
@@ -81,6 +83,8 @@ setlocal
 set "ELECTRON=${escapeWindowsBatchValue(execPathValue)}"
 set "CLI=${escapeWindowsBatchValue(cliEntryPath)}"
 set "ORCA_USER_DATA_PATH=${escapeWindowsBatchValue(userDataPath)}"
+set "ORCA_DEV_CLI_INVOCATION=1"
+set "ORCA_CLI_COMMAND=axiom-dev"
 if not defined ORCA_APP_EXECUTABLE (
   set "ORCA_APP_EXECUTABLE=%ELECTRON%"
   set "ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT=1"

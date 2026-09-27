@@ -127,7 +127,7 @@ export const AskParams = z
     compatibilityCliCommand: z
       .enum(['orca', 'orca-ide', 'orca-dev', 'axiom', 'axiom-dev'])
       .optional(),
-    compatibilityWindowsCommand: z.enum(['orca', 'orca-ide']).optional()
+    compatibilityWindowsCommand: z.enum(['orca', 'orca-ide', 'axiom', 'axiom-dev']).optional()
   })
   .superRefine((params, ctx) => {
     if ((params.question ? 1 : 0) + (params.resume ? 1 : 0) !== 1) {

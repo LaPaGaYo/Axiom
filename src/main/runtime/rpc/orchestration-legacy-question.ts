@@ -72,7 +72,7 @@ export async function handleLegacyAsk(args: {
       )
       if (lostAnswer) {
         const cliCommand =
-          params.compatibilityCliCommand ?? params.compatibilityWindowsCommand ?? 'orca'
+          params.compatibilityCliCommand ?? params.compatibilityWindowsCommand ?? 'axiom'
         throw new OrchestrationError(
           'operation_unknown',
           `A matching legacy answer may have been accepted before the update. Run ${cliCommand} orchestration check --terminal ${principal.terminal_handle} before asking again.`
