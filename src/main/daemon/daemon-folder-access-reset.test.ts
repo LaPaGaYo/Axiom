@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../shared/local-build-compatibility-contract'
 import { validate } from '../telemetry/validator'
 
 const {
@@ -14,7 +15,7 @@ const {
   trackMock: vi.fn(),
   getPathMock: vi.fn(() => '/Applications/Orca.app/Contents/MacOS/Orca'),
   opendirMock: vi.fn(),
-  readMacosBundleIdMock: vi.fn<() => Promise<string | null>>(async () => 'com.stablyai.orca'),
+  readMacosBundleIdMock: vi.fn<() => Promise<string | null>>(),
   resetMacosTccPermissionMock: vi.fn<() => Promise<{ ok: boolean; detail?: string }>>(async () => ({
     ok: true
   })),
@@ -58,7 +59,7 @@ beforeEach(() => {
   trackMock.mockReset()
   getPathMock.mockReset().mockReturnValue('/Applications/Orca.app/Contents/MacOS/Orca')
   opendirMock.mockReset().mockResolvedValue(fakeDir())
-  readMacosBundleIdMock.mockReset().mockResolvedValue('com.stablyai.orca')
+  readMacosBundleIdMock.mockReset().mockResolvedValue(LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId)
   resetMacosTccPermissionMock.mockReset().mockResolvedValue({ ok: true })
   getTargetMock
     .mockReset()
@@ -124,7 +125,10 @@ describe('resetFolderAccessForDaemon runs the remedy', () => {
     await resetFolderAccessForDaemon(DAEMON)
 
     expect(readMacosBundleIdMock).toHaveBeenCalledWith('/Applications/Orca.app')
-    expect(resetMacosTccPermissionMock).toHaveBeenCalledWith(service, 'com.stablyai.orca')
+    expect(resetMacosTccPermissionMock).toHaveBeenCalledWith(
+      service,
+      LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId
+    )
   })
 
   // The prompt is attributed to whoever makes the syscall, so the app has to be what reads it.

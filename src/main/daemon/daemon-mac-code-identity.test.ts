@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../shared/local-build-compatibility-contract'
 
 const { runProcessMock } = vi.hoisted(() => ({ runProcessMock: vi.fn() }))
 vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
@@ -7,8 +8,7 @@ import { classifyCodesignDisplayOutput, getDaemonMacCodeIdentity } from './daemo
 
 const HELPER_PATH =
   '/Applications/Orca.app/Contents/Frameworks/Orca Helper.app/Contents/MacOS/Orca Helper'
-const PARKED_PATH =
-  '/private/var/folders/x/T/com.stablyai.orca.ShipIt.abc/Orca.app/Contents/MacOS/Orca'
+const PARKED_PATH = `/private/var/folders/x/T/${LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId}.ShipIt.abc/Orca.app/Contents/MacOS/Orca`
 
 function codesignReturns(stderr: string, code: number | null, timedOut = false): void {
   runProcessMock.mockResolvedValue({ code, stdout: '', stderr, timedOut })
@@ -27,7 +27,7 @@ describe('classifyCodesignDisplayOutput', () => {
   it('resolves the executable path codesign reports for a live process', () => {
     expect(
       classifyCodesignDisplayOutput(
-        `Executable=${HELPER_PATH}\nIdentifier=com.stablyai.orca.helper\nFormat=pid diskrep\n`,
+        `Executable=${HELPER_PATH}\nIdentifier=${LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId}.helper\nFormat=pid diskrep\n`,
         0
       )
     ).toBe('resolved')
@@ -37,7 +37,7 @@ describe('classifyCodesignDisplayOutput', () => {
     expect(classifyCodesignDisplayOutput(`Executable=${PARKED_PATH}\n`, 0)).toBe('parked')
     expect(
       classifyCodesignDisplayOutput(
-        'Executable=/Users/a/Library/Caches/com.stablyai.orca.ShipIt/u/Orca.app/Contents/MacOS/Orca\n',
+        `Executable=/Users/a/Library/Caches/${LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId}.ShipIt/u/Orca.app/Contents/MacOS/Orca\n`,
         0
       )
     ).toBe('parked')

@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
+import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../src/shared/local-build-compatibility-contract.ts'
 
 const require = createRequire(import.meta.url)
 const { createMacBuildCompatibility } = require('./mac-build-compatibility.cjs')
@@ -14,7 +15,7 @@ describe('mac build compatibility metadata', () => {
       })
     ).toMatchObject({
       formatVersion: 1,
-      appId: 'com.stablyai.orca',
+      appId: LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId,
       buildId: '1.2.3-local.1-abc123-arm64',
       version: '1.2.3-local.1',
       commit: 'abc123',

@@ -147,8 +147,6 @@ config/scripts/latest-stable-release.mjs:stablyai:1
 config/scripts/latest-stable-release.test.mjs:stablyai:3
 config/scripts/locale-ko-key-overrides.json:stablyai:1
 config/scripts/locale-translation-policy.mjs:posthog:1
-config/scripts/mac-build-compatibility.test.mjs:com.stablyai:1
-config/scripts/mac-build-compatibility.test.mjs:stablyai:1
 config/scripts/macos-launch-diagnostics.sh:com.stablyai:2
 config/scripts/macos-launch-diagnostics.sh:stablyai:3
 config/scripts/playwright-focused-workflow-selection.test.mjs:stablyai:1
@@ -286,9 +284,6 @@ src/cli/index-worktree-create-target.test.ts:stablyai:5
 src/cli/skills.test.ts:stablyai:11
 src/cli/specs/core.ts:stablyai:1
 src/cli/specs/project.ts:stablyai:9
-src/main/agent-hooks/server-endpoint-file-lifecycle.test.ts:com.stablyai:2
-src/main/agent-hooks/server-endpoint-file-lifecycle.test.ts:orca.dev:2
-src/main/agent-hooks/server-endpoint-file-lifecycle.test.ts:stablyai:2
 src/main/artifacts/artifact-cloud-config.test.ts:onorca.dev:2
 src/main/artifacts/artifact-cloud-config.test.ts:orca.dev:2
 src/main/artifacts/artifact-cloud-config.ts:onorca.dev:3
@@ -313,15 +308,9 @@ src/main/cli/windows-launcher-asset.test.ts:stablyai:1
 src/main/codex-cli/command.test.ts:stablyai:1
 src/main/codex/codex-app-server-session.ts:stablyai:1
 src/main/codex/codex-trust-grant-main-thread-boundary.test.ts:stablyai:1
-src/main/daemon/daemon-adoption-telemetry-event.test.ts:com.stablyai:1
 src/main/daemon/daemon-adoption-telemetry-event.test.ts:posthog:3
-src/main/daemon/daemon-adoption-telemetry-event.test.ts:stablyai:1
 src/main/daemon/daemon-folder-access-mismatch.test.ts:posthog:1
-src/main/daemon/daemon-folder-access-reset.test.ts:com.stablyai:3
-src/main/daemon/daemon-folder-access-reset.test.ts:stablyai:3
 src/main/daemon/daemon-lifecycle-event.test.ts:posthog:2
-src/main/daemon/daemon-mac-code-identity.test.ts:com.stablyai:3
-src/main/daemon/daemon-mac-code-identity.test.ts:stablyai:3
 src/main/daemon/terminal-snapshot-osc8-roundtrip.test.ts:stablyai:1
 src/main/git/command-runner/gh-exec-file-deadline.test.ts:stablyai:4
 src/main/git/command-runner/hosted-cli-deadline-log.test.ts:stablyai:2
@@ -365,9 +354,6 @@ src/main/ipc/feedback.ts:orca.dev:1
 src/main/ipc/gitlab.test.ts:stablyai:6
 src/main/ipc/notification-system-settings-link.ts:com.stablyai:1
 src/main/ipc/notification-system-settings-link.ts:stablyai:1
-src/main/ipc/notifications-delivery-gating.test.ts:com.stablyai:2
-src/main/ipc/notifications-delivery-gating.test.ts:orca.dev:2
-src/main/ipc/notifications-delivery-gating.test.ts:stablyai:2
 src/main/ipc/plugins.test.ts:stablyai:5
 src/main/ipc/repos-remote.test.ts:stablyai:14
 src/main/ipc/worktree-logic.test.ts:stablyai:4
@@ -377,8 +363,6 @@ src/main/ipc/worktree-push-target-setup.test.ts:stablyai:11
 src/main/ipc/worktree-remote-push-target-materialization.test.ts:stablyai:2
 src/main/ipc/worktrees-discovery-metadata-backfill.test.ts:stablyai:9
 src/main/ipc/worktrees-ssh-fork-push-target-remote.test.ts:stablyai:1
-src/main/local-builds/local-build-candidate.test.ts:com.stablyai:1
-src/main/local-builds/local-build-candidate.test.ts:stablyai:1
 src/main/macos-press-and-hold-default.defaults-domain.test.ts:com.stablyai:2
 src/main/macos-press-and-hold-default.defaults-domain.test.ts:stablyai:2
 src/main/macos-press-and-hold-default.test.ts:com.stablyai:6
@@ -392,8 +376,6 @@ src/main/macos-tcc-prompt-watch.test.ts:stablyai:10
 src/main/macos-tcc-prompt-watch.ts:com.stablyai:6
 src/main/macos-tcc-prompt-watch.ts:orca.dev:2
 src/main/macos-tcc-prompt-watch.ts:stablyai:6
-src/main/macos-tcc-reset.test.ts:com.stablyai:6
-src/main/macos-tcc-reset.test.ts:stablyai:6
 src/main/observability/bundle.test.ts:posthog:2
 src/main/observability/bundle.ts:posthog:1
 src/main/observability/index.ts:posthog:1
@@ -684,8 +666,6 @@ src/shared/cli-argument-boundary.test.ts:stablyai:2
 src/shared/cli-runtime-pairing-boundary.test.ts:stablyai:1
 src/shared/cloud-service-url.test.ts:onorca.dev:1
 src/shared/cloud-service-url.test.ts:orca.dev:1
-src/shared/daemon-adoption-telemetry.test.ts:com.stablyai:1
-src/shared/daemon-adoption-telemetry.test.ts:stablyai:1
 src/shared/feature-wall-tiles.ts:onorca.dev:12
 src/shared/feature-wall-tiles.ts:orca.dev:12
 src/shared/feature-wall-workflows.ts:onorca.dev:5

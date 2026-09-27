@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../shared/local-build-compatibility-contract'
 import type { ParsedDaemonPid } from './daemon-pid-file-parse'
 import { validate } from '../telemetry/validator'
 
@@ -71,8 +72,7 @@ const stalePidRecord: ParsedDaemonPid = {
   launchNonce: 'n',
   linuxStartTicks: null,
   bootId: null,
-  spawnerExecPath:
-    '/Users/alice/Library/Caches/com.stablyai.orca.ShipIt/u/Orca.app/Contents/MacOS/Orca',
+  spawnerExecPath: `/Users/alice/Library/Caches/${LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId}.ShipIt/u/Orca.app/Contents/MacOS/Orca`,
   cgroupUnit: null
 }
 const origin = {
