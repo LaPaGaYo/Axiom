@@ -17,6 +17,8 @@ RC=${PIPESTATUS[0]}
 { echo "== codex exit rc=$RC $(date)"; echo "== git status"; git status --porcelain; } | tee -a "$LOG"
 # The launcher commits the attempt so the candidate has an immutable identity even if the sandbox
 # kept Codex from touching .git; the verifier squashes/renames at integration time.
+# Codex's sandbox can leave a stale index.lock behind (it may not be allowed to unlink it); clear it only when no git process is alive.
+if [ -f .git/index.lock ] && ! pgrep -x git >/dev/null 2>&1; then rm -f .git/index.lock && echo "== removed stale .git/index.lock" | tee -a "$LOG"; fi
 if [ -n "$(git status --porcelain)" ]; then
   git add -A
   git -c core.hooksPath=/dev/null commit -q -m "codex($ID): attempt $SEQ (launcher commit)" -m "Brief: $BRIEF" -m "Log: $LOG" && echo "== committed $(git rev-parse --short HEAD)" | tee -a "$LOG"

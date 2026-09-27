@@ -171,3 +171,14 @@
 **决定**（Henry 2026-09-26）：Codex CLI 在 Henry 的 Mac 上运行；Claude 通过「计算机使用」在 Terminal 中启动 `codex exec`（以及 pnpm 安装/检查命令），Task 简报与运行日志放在仓库的 `.axiom-work/`（简报纳入版本控制，日志 gitignore）；Claude 通过连接的文件夹读取结果、审核 diff、发起验证命令。
 **理由**：这是当前网络策略下唯一能让 Codex 真正在仓库里干活的方式；也是 Axiom 「简报 → Worker 执行 → 独立验证 → 集成」流程的手工演练。
 **取代规则**：若网络设置放行 `api.openai.com` 且提供 OpenAI API key，可改为 Claude 直接驱动 Codex（原方案 A）。
+
+## D21 · 产品机器身份（bundle id、scheme、可执行名、发布源） — ACCEPTED
+
+**决定**（Henry 2026-09-26）：app id / bundle id `com.lapagayo.axiom`（computer-use 辅助进程 `com.lapagayo.axiom.computer-use`，mobile `com.lapagayo.axiom.mobile`）；productName `Axiom`；URL scheme `axiom://`；可执行名 `Axiom`（macOS/Windows）与 `axiom-ide`（Linux 包与二进制）；CLI `axiom`（dev 构建 `axiom-dev`）；发布源 GitHub `LaPaGaYo/Axiom`；Windows 暂不签名（不设 `publisherName`）。
+**后果**：`src/shared/local-build-compatibility-contract.json` 的 appId 变更后旧 Orca 数据目录不再互认（全新产品，可接受）；macOS TCC 授权随 bundle id 重置；M0-02 按此实施，并使 vendor-egress 基线相应收缩。
+**取代规则**：更改 bundle id 需新 Decision，并评估权限重置与数据目录迁移。
+
+## D22 · M0-01 集成记录 — ACCEPTED（事实记录）
+
+vendor-egress ratchet（Codex attempt `axiom/attempt/M0-01/1`，候选 `7115f1cb9`）经独立验证（`.axiom-work/verifications/M0-01-1.md`：ratchet、27 个单测、`tc:node`、changed-code 质量门、完整 `pnpm lint` 全部 PASS；注入/allow 标记验收在沙盒独立复现）后以 `--no-ff` 合入 main（`7579ec17c`）。基线：544 个文件 / 763 个 (file, needle) 对，M0 后续任务只能使其收缩。
+
