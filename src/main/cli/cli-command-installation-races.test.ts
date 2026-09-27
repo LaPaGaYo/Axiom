@@ -85,8 +85,8 @@ async function createMacCommandFixture() {
   const commandDirectory = join(root, 'bin')
   const commandPath = join(commandDirectory, 'orca')
   const resourcesPath = join(root, 'Current.app', 'Contents', 'Resources')
-  const launcherPath = join(resourcesPath, 'bin', 'orca')
-  const staleLauncherPath = join(root, 'Old.app', 'Contents', 'Resources', 'bin', 'orca')
+  const launcherPath = join(resourcesPath, 'bin', 'axiom')
+  const staleLauncherPath = join(root, 'Old.app', 'Contents', 'Resources', 'bin', 'axiom')
   await mkdir(commandDirectory, { recursive: true })
   await mkdir(dirname(launcherPath), { recursive: true })
   await writeFile(launcherPath, '#!/usr/bin/env bash\n', { mode: 0o755 })
@@ -306,7 +306,7 @@ describe.skipIf(process.platform === 'win32')('CLI command filesystem races', ()
     const homePath = join(root, 'home')
     const commandDirectory = join(homePath, '.local', 'bin')
     const resourcesPath = join(root, 'resources')
-    const launcherPath = join(resourcesPath, 'bin', 'orca-ide')
+    const launcherPath = join(resourcesPath, 'bin', 'axiom')
     const legacyPath = join(commandDirectory, 'orca')
     const managedLegacyTarget = join(resourcesPath, 'bin', 'orca')
     const foreignTarget = join(root, 'foreign-orca')
@@ -322,7 +322,7 @@ describe.skipIf(process.platform === 'win32')('CLI command filesystem races', ()
       isPackaged: true,
       userDataPath: join(root, 'user-data'),
       resourcesPath,
-      execPath: join(root, 'orca-ide'),
+      execPath: join(root, 'axiom'),
       appPath: join(root, 'resources', 'app.asar'),
       homePath,
       processPathEnv: commandDirectory
@@ -338,7 +338,7 @@ describe.skipIf(process.platform === 'win32')('CLI command filesystem races', ()
     const homePath = join(root, 'home')
     const commandDirectory = join(homePath, '.local', 'bin')
     const resourcesPath = join(root, 'resources')
-    const launcherPath = join(resourcesPath, 'bin', 'orca-ide')
+    const launcherPath = join(resourcesPath, 'bin', 'axiom')
     const legacyPath = join(commandDirectory, 'orca')
     const managedTarget = join(resourcesPath, 'bin', 'orca')
     const foreignTarget = join(root, 'foreign-orca')
@@ -374,7 +374,7 @@ describe.skipIf(process.platform === 'win32')('CLI command filesystem races', ()
       isPackaged: true,
       userDataPath: join(root, 'user-data'),
       resourcesPath,
-      execPath: join(root, 'orca-ide'),
+      execPath: join(root, 'axiom'),
       appPath: join(root, 'resources', 'app.asar'),
       homePath,
       processPathEnv: commandDirectory

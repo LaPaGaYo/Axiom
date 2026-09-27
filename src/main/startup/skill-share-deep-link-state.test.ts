@@ -15,7 +15,7 @@ describe('SkillShareDeepLinkState', () => {
     const publish = vi.fn()
 
     state.capture(['orca', 'https://app.orca.dev/skills/share/share_first'])
-    expect(state.capture(['orca', 'orca://skills/share/share_second'], publish)).toBe(true)
+    expect(state.capture(['orca', 'axiom://skills/share/share_second'], publish)).toBe(true)
 
     expect(publish).toHaveBeenCalledWith('share_second')
     expect(state.consume()).toBe('share_second')
@@ -28,4 +28,9 @@ describe('SkillShareDeepLinkState', () => {
     expect(state.capture(['orca', 'https://attacker.test/skills/share/share_bad'])).toBe(false)
     expect(state.consume()).toBe('share_safe')
   })
+})
+
+it('does not capture upstream deep links', () => {
+  const state = new SkillShareDeepLinkState()
+  expect(state.capture(['axiom', 'orca://skills/share/share_old'])).toBe(false)
 })

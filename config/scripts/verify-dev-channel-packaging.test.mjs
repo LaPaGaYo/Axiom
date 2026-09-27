@@ -34,12 +34,12 @@ afterEach(() => {
 })
 
 describe('electron-builder dev-channel identity', () => {
-  it('keeps the SignPath publisherName on stable Windows builds', () => {
+  it('ships stable Windows builds unsigned', () => {
     const config = loadConfigWithEnv({})
 
-    expect(config.win.signtoolOptions.publisherName).toBe('SignPath Foundation')
-    expect(config.win.verifyUpdateCodeSignature).toBeUndefined()
-    expect(config.publish.repo).toBe('orca')
+    expect(config.win.signtoolOptions).toBeUndefined()
+    expect(config.win.verifyUpdateCodeSignature).toBe(false)
+    expect(config.publish.repo).toBe('Axiom')
     expect(config.publish.releaseType).toBe('draft')
   })
 
@@ -53,24 +53,17 @@ describe('electron-builder dev-channel identity', () => {
     expect(config.win.verifyUpdateCodeSignature).toBe(false)
   })
 
-  // Why on every channel: the hook is the only handle electron-builder gives on
-  // the NSIS uninstaller, and it signs nothing — it relays the file to and from
-  // the CI SignPath request. Carrying it must not drag a publisherName onto a
-  // dev build, which is the failure the split above exists to prevent.
-  it('carries the uninstaller sign hook without changing publisherName semantics', () => {
+  it('omits the uninstaller signing hook on every Windows channel', () => {
     for (const env of [{}, WIN_ADHOC_ENV]) {
-      const config = loadConfigWithEnv(env)
-      expect(typeof config.win.signtoolOptions.sign).toBe('function')
+      expect(loadConfigWithEnv(env).win.signtoolOptions).toBeUndefined()
     }
-    expect(loadConfigWithEnv({}).win.signtoolOptions.publisherName).toBe('SignPath Foundation')
-    expect(loadConfigWithEnv(WIN_ADHOC_ENV).win.signtoolOptions.publisherName).toBeUndefined()
   })
 
   it.each([
-    ['hourly', { ORCA_WIN_HOURLY: '1' }, 'orca-hourly'],
-    ['daily', { ORCA_WIN_DAILY: '1' }, 'orca-daily'],
-    ['adhoc', { ORCA_WIN_ADHOC: '1' }, 'orca-adhoc']
-  ])('publishes %s Windows builds to its own repo as a prerelease', (_channel, env, repo) => {
+    ['hourly', { ORCA_WIN_HOURLY: '1' }, 'Axiom'],
+    ['daily', { ORCA_WIN_DAILY: '1' }, 'Axiom'],
+    ['adhoc', { ORCA_WIN_ADHOC: '1' }, 'Axiom']
+  ])('publishes %s Windows builds to Axiom as a prerelease', (_channel, env, repo) => {
     const config = loadConfigWithEnv(env)
 
     expect(config.publish.repo).toBe(repo)
@@ -95,7 +88,7 @@ describe('electron-builder dev-channel identity', () => {
     })
 
     expect(config.mac.notarize).toBe(true)
-    expect(config.publish.repo).toBe('orca-adhoc')
+    expect(config.publish.repo).toBe('Axiom')
   })
 })
 

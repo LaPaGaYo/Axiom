@@ -81,7 +81,6 @@ describe('collectCurrentVendorEgress', () => {
     const allowed = [
       'src/a.ts',
       'config/a.cjs',
-      'Casks/orca.rb',
       'mobile/app.json',
       'mobile/nested/node_modules/reference.js',
       'cloud/apps/a.ts',

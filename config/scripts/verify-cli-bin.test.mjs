@@ -23,7 +23,7 @@ function makeProjectWithCli(
   mkdirSync(path.dirname(cliPath), { recursive: true })
   writeFileSync(
     path.join(projectDir, 'package.json'),
-    JSON.stringify({ bin: { orca: './out/cli/index.js' }, type: rootPackageType }),
+    JSON.stringify({ bin: { axiom: './out/cli/index.js' }, type: rootPackageType }),
     'utf8'
   )
   if (writeOutPackageJson) {
@@ -50,7 +50,7 @@ describe('verifyPackageCliBin', () => {
   it('rejects an empty package bin target', () => {
     const { projectDir } = makeProjectWithCli('')
 
-    expect(() => verifyPackageCliBin({ projectDir })).toThrow('bin.orca target is empty')
+    expect(() => verifyPackageCliBin({ projectDir })).toThrow('bin.axiom target is empty')
   })
 
   it('rejects package bin targets without a Node shebang', () => {
@@ -71,7 +71,7 @@ describe('verifyPackageCliBin', () => {
     verifyPackageCliBin({ projectDir, fixPackageJson: true, runHelp: true })
 
     expect(JSON.parse(readFileSync(outPackageJsonPath, 'utf8'))).toEqual({
-      name: 'orca-compiled-output',
+      name: 'axiom-compiled-output',
       type: 'commonjs',
       private: true
     })

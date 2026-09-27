@@ -40,7 +40,7 @@ describe('WSL CLI PowerShell boundary', () => {
       try {
         const launcherPath = join(root, 'launcher.sh')
         const expectedCwd = await realpath(root)
-        await writeFile(launcherPath, buildWslLauncher('C:\\Orca\\orca.exe', '/bridge.ps1'))
+        await writeFile(launcherPath, buildWslLauncher('C:\\Orca\\axiom.exe', '/bridge.ps1'))
         await writeFile(join(root, 'wslpath'), '#!/bin/bash\nprintf "%s" "$2"\n', {
           mode: 0o700
         })
@@ -69,7 +69,7 @@ describe('WSL CLI PowerShell boundary', () => {
             'Bypass',
             '-File',
             '/bridge.ps1',
-            'C:\\Orca\\orca.exe',
+            'C:\\Orca\\axiom.exe',
             '-WslCwd',
             expectedCwd,
             ...(distro ? ['-WslDistro', distro] : []),
@@ -86,7 +86,7 @@ describe('WSL CLI PowerShell boundary', () => {
   )
 
   it('keeps forwarded argv outside PowerShell parsing', () => {
-    const launcher = buildWslLauncher('C:\\Program Files\\Orca\\orca.exe')
+    const launcher = buildWslLauncher('C:\\Program Files\\Orca\\axiom.exe')
     const bridge = buildWslBridgeScript()
 
     expect(launcher).toContain('"$ORCA_WIN_LAUNCHER" -WslCwd "$ORCA_WSL_CWD_WIN" "$@"')

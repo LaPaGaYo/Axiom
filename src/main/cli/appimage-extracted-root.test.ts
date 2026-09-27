@@ -40,7 +40,7 @@ async function makeFixture(): Promise<{
 async function writePayload(cwd: string, content = ''): Promise<void> {
   const launcherDir = join(cwd, 'squashfs-root', 'resources', 'bin')
   await mkdir(launcherDir, { recursive: true })
-  await writeFile(join(launcherDir, 'orca-ide'), content, { encoding: 'utf8', mode: 0o755 })
+  await writeFile(join(launcherDir, 'axiom'), content, { encoding: 'utf8', mode: 0o755 })
 }
 
 describe('appimage extracted root', () => {
@@ -182,7 +182,7 @@ describe('appimage extracted root', () => {
         appImagePath,
         cacheRootPath,
         runExtract: async (_path, cwd) => {
-          const launcherPath = join(cwd, 'squashfs-root', 'resources', 'bin', 'orca-ide')
+          const launcherPath = join(cwd, 'squashfs-root', 'resources', 'bin', 'axiom')
           if (entryKind === 'directory') {
             await mkdir(launcherPath, { recursive: true })
           } else {
@@ -207,7 +207,7 @@ describe('appimage extracted root', () => {
         appImagePath,
         cacheRootPath,
         runExtract: async (_path, cwd) => {
-          const launcherPath = join(cwd, 'squashfs-root', 'resources', 'bin', 'orca-ide')
+          const launcherPath = join(cwd, 'squashfs-root', 'resources', 'bin', 'axiom')
           await mkdir(dirname(launcherPath), { recursive: true })
           await symlink(executable, launcherPath)
         }
@@ -325,7 +325,7 @@ describe('appimage extracted root', () => {
       'a'.repeat(24),
       'resources',
       'bin',
-      'orca-ide'
+      'axiom'
     )
     const otherAppImagePath = join(root, 'Other.AppImage')
     await writeFile(otherAppImagePath, '#!/usr/bin/env bash\n', { mode: 0o755 })
@@ -349,7 +349,7 @@ describe('appimage extracted root', () => {
     expect(
       isAppImageExtractedLauncherPath(
         { appImagePath, cacheRootPath },
-        join(root, 'foreign', 'resources', 'bin', 'orca-ide')
+        join(root, 'foreign', 'resources', 'bin', 'axiom')
       )
     ).toBe(false)
   })
@@ -362,7 +362,7 @@ describe('appimage extracted root', () => {
       'b'.repeat(24),
       'resources',
       'bin',
-      'orca-ide'
+      'axiom'
     )
     publishAppImageLauncherEndpoint(cacheRootPath, 'installed', siblingLauncher)
     const options = { appImagePath, cacheRootPath }

@@ -12,7 +12,6 @@ const BASELINE_PATH = 'config/vendor-egress-baseline.txt'
 const SCAN_ROOTS = [
   'src/',
   'config/',
-  'Casks/',
   'mobile/',
   'cloud/',
   'resources/',

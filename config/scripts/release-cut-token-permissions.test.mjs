@@ -15,22 +15,12 @@ const EXPECTED_MATRIX = {
   '.github/workflows/e2e.yml#ssh-browser-network-route': { contents: 'read' },
   '.github/workflows/e2e.yml#ssh-localhost': { contents: 'read' },
   '.github/workflows/e2e.yml#ssh-docker-watcher-isolation': { contents: 'read' },
-  '.github/workflows/homebrew-bump.yml#bump-cask': { contents: 'read' },
   '.github/workflows/release-mac-build.yml#build-mac': { contents: 'write' },
   [`${RELEASE_WORKFLOW}#build`]: { actions: 'read', contents: 'write' },
   [`${RELEASE_WORKFLOW}#build-mac`]: { actions: 'write', contents: 'read' },
   [`${RELEASE_WORKFLOW}#create-release`]: { contents: 'write' },
   [`${RELEASE_WORKFLOW}#cut`]: { contents: 'write' },
   [`${RELEASE_WORKFLOW}#docs-production-dispatch`]: { actions: 'write' },
-  [`${RELEASE_WORKFLOW}#homebrew-bump`]: { contents: 'read' },
-  [`${RELEASE_WORKFLOW}#homebrew-bump -> .github/workflows/homebrew-bump.yml#bump-cask`]: {
-    contents: 'read'
-  },
-  [`${RELEASE_WORKFLOW}#homebrew-bump-published-rc-draft`]: { contents: 'read' },
-  [`${RELEASE_WORKFLOW}#homebrew-bump-published-rc-draft -> .github/workflows/homebrew-bump.yml#bump-cask`]:
-    {
-      contents: 'read'
-    },
   [`${RELEASE_WORKFLOW}#post-release-e2e`]: { actions: 'write' },
   [`${RELEASE_WORKFLOW}#publish-release`]: { contents: 'write' },
   [`${RELEASE_WORKFLOW}#release-preflight`]: { contents: 'read' },
@@ -48,7 +38,7 @@ const RELEASE_TAG_EXECUTION_JOBS = [
   'terminal-rendering-golden',
   'terminal-rendering-release-evidence'
 ]
-const REUSABLE_CALL_JOBS = ['homebrew-bump', 'homebrew-bump-published-rc-draft']
+const RETIRED_HOMEBREW_JOBS = ['homebrew-bump', 'homebrew-bump-published-rc-draft']
 
 function readWorkflow(relativePath) {
   const ref = process.env.RELEASE_CUT_WORKFLOW_REF
@@ -201,9 +191,9 @@ describe('release-cut token permissions', () => {
         expect(workflow.jobs[jobName].if).toBe("needs.cut.outputs.should_release == 'true'")
       }
     }
-    for (const jobName of REUSABLE_CALL_JOBS) {
-      expect(workflow.jobs[jobName].uses).toBe('./.github/workflows/homebrew-bump.yml')
-      expect(matrix[`${RELEASE_WORKFLOW}#${jobName}`]).toEqual({ contents: 'read' })
+    for (const jobName of RETIRED_HOMEBREW_JOBS) {
+      expect(workflow.jobs[jobName]).toBeUndefined()
+      expect(matrix[`${RELEASE_WORKFLOW}#${jobName}`]).toBeUndefined()
     }
 
     const macWorkflow = readWorkflow('.github/workflows/release-mac-build.yml')

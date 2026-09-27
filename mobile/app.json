@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "Orca",
-    "slug": "orca-mobile",
+    "name": "Axiom",
+    "slug": "axiom-mobile",
     "version": "0.0.51",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "scheme": "orca",
+    "scheme": "axiom",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.stably.orca.mobile",
+      "bundleIdentifier": "com.lapagayo.axiom.mobile",
       "buildNumber": "1",
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "Orca connects to the desktop app on your LAN.",
@@ -74,7 +74,7 @@
       "usesCleartextTraffic": true,
       "allowBackup": false,
       "permissions": ["RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS"],
-      "package": "com.stably.orca.mobile",
+      "package": "com.lapagayo.axiom.mobile",
       "versionCode": 18,
       "googleServicesFile": "./google-services.json"
     },

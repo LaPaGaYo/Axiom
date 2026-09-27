@@ -16,6 +16,17 @@ const FpmTarget = require('app-builder-lib/out/targets/FpmTarget').default
 const electronBuilderNativeRebuild = require('./electron-builder-native-rebuild.cjs')
 
 describe('electron-builder config', () => {
+  it('declares Axiom machine identity and unsigned Windows packaging', () => {
+    expect(electronBuilderConfig.appId).toBe('com.lapagayo.axiom')
+    expect(electronBuilderConfig.productName).toBe('Axiom')
+    expect(electronBuilderConfig.protocols).toEqual([{ name: 'Axiom', schemes: ['axiom'] }])
+    expect(electronBuilderConfig.win.executableName).toBe('Axiom')
+    expect(electronBuilderConfig.linux.executableName).toBe('axiom-ide')
+    expect(electronBuilderConfig.publish).toMatchObject({ owner: 'LaPaGaYo', repo: 'Axiom' })
+    expect(electronBuilderConfig.win.signtoolOptions).toBeUndefined()
+    expect(electronBuilderConfig.win.verifyUpdateCodeSignature).toBe(false)
+  })
+
   it('keeps the packaged app identity aligned with local-build validation', () => {
     expect(electronBuilderConfig.appId).toBe(
       require('../../src/shared/local-build-compatibility-contract.json').appId
@@ -38,7 +49,6 @@ describe('electron-builder config', () => {
         '!examples{,/**/*}',
         '!pr-evidence{,/**/*}',
         '!{.claude,.grok,.agents,.codex}{,/**/*}',
-        '!Casks{,/**/*}',
         '!{AGENTS.md,CLAUDE.md,DEVELOPING.md,bundle-size-progress.md,ORCHESTRATION_IMPLEMENTATION_CHECKLIST.md,ORCHESTRATION_STRUCTURED_OUTPUT_DESIGN.md}',
         '!out/**/*.test.js',
         '!resources/plugins/launch/**'
@@ -143,7 +153,7 @@ describe('electron-builder config', () => {
         }),
         expect.objectContaining({
           from: 'native/windows-cli-launcher/.build/orca.exe',
-          to: 'bin/orca.exe'
+          to: 'bin/axiom.exe'
         })
       ])
     )
@@ -173,7 +183,7 @@ describe('electron-builder config', () => {
       expect.arrayContaining([
         expect.objectContaining({
           from: 'resources/win32/bin/orca.cmd',
-          to: 'bin/orca.cmd'
+          to: 'bin/axiom.cmd'
         })
       ])
     )
@@ -270,17 +280,17 @@ describe('electron-builder config', () => {
   })
 
   it('matches the Linux desktop entry to Electron window class', () => {
-    expect(electronBuilderConfig.linux.desktop.entry.StartupWMClass).toBe('orca')
+    expect(electronBuilderConfig.linux.desktop.entry.StartupWMClass).toBe('axiom')
   })
 
   it('uses the release artifact set as local Linux targets without changing existing names', () => {
     expect(electronBuilderConfig.linux.target).toEqual(['AppImage', 'deb', 'rpm'])
     expect(electronBuilderConfig.toolsets).toEqual({ appimage: '1.0.3' })
-    expect(electronBuilderConfig.appImage.artifactName).toBe('orca-linux.${ext}')
-    expect(electronBuilderConfig.deb.artifactName).toBe('orca-ide_${version}_${arch}.${ext}')
+    expect(electronBuilderConfig.appImage.artifactName).toBe('axiom-linux.${ext}')
+    expect(electronBuilderConfig.deb.artifactName).toBe('axiom-ide_${version}_${arch}.${ext}')
     expect(electronBuilderConfig.rpm).toMatchObject({
-      packageName: 'orca-ide',
-      artifactName: 'orca-ide-${version}.${arch}.${ext}'
+      packageName: 'axiom-ide',
+      artifactName: 'axiom-ide-${version}.${arch}.${ext}'
     })
   })
 
@@ -297,7 +307,7 @@ describe('electron-builder config', () => {
   it('validates each AppImage before electron-builder publishes it', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-electron-builder-appimage-'))
     try {
-      const appImage = join(root, 'orca-linux.AppImage')
+      const appImage = join(root, 'axiom-linux.AppImage')
       await writeFile(appImage, 'not an ELF')
       await chmod(appImage, 0o755)
 
@@ -305,7 +315,7 @@ describe('electron-builder config', () => {
         electronBuilderConfig.artifactBuildCompleted({ file: appImage, arch: 1 })
       ).toThrow(/ELF header is outside/)
       expect(() =>
-        electronBuilderConfig.artifactBuildCompleted({ file: join(root, 'orca-ide.deb') })
+        electronBuilderConfig.artifactBuildCompleted({ file: join(root, 'axiom-ide.deb') })
       ).not.toThrow()
     } finally {
       await rm(root, { recursive: true, force: true })
@@ -318,7 +328,7 @@ describe('electron-builder config', () => {
       delete require.cache[configPath]
       process.env.ORCA_LINUX_ARM64_RELEASE = '1'
       expect(require('../electron-builder.config.cjs').appImage.artifactName).toBe(
-        'orca-linux-arm64.${ext}'
+        'axiom-linux-arm64.${ext}'
       )
     } finally {
       if (original === undefined) {
@@ -340,6 +350,7 @@ describe('electron-builder config', () => {
       delete process.env.ORCA_MAC_RELEASE
       process.env.ORCA_LOCAL_BUILD_VERSION = '1.4.159-rc.0.local.123.abc'
       expect(require('../electron-builder.config.cjs').extraMetadata).toEqual({
+        name: 'axiom',
         version: '1.4.159-rc.0.local.123.abc'
       })
     } finally {
@@ -366,7 +377,7 @@ describe('electron-builder config', () => {
       delete require.cache[configPath]
       process.env.ORCA_LOCAL_BUILD_VERSION = '1.4.159-local.123.abc'
       process.env.ORCA_MAC_RELEASE = '1'
-      expect(require('../electron-builder.config.cjs').extraMetadata).toBeUndefined()
+      expect(require('../electron-builder.config.cjs').extraMetadata).toEqual({ name: 'axiom' })
     } finally {
       if (originalLocalVersion === undefined) {
         delete process.env.ORCA_LOCAL_BUILD_VERSION
