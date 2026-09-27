@@ -1,3 +1,4 @@
+import { DEV_COMMAND_NAME } from '../../../cli/cli-install-constants'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { dispatchWriteFailureReason } from '../../../../shared/structured-agent-session-dispatch-rejection'
 
@@ -94,7 +95,7 @@ describe('structured worker session hold', () => {
       onJournalActivity: () => {}
     })
     expect(envAtSpawn?.ORCA_TERMINAL_HANDLE).toBe(created.identity.handle)
-    expect(envAtSpawn?.ORCA_CLI_COMMAND).toBe('orca')
+    expect(envAtSpawn?.ORCA_CLI_COMMAND).toBe(DEV_COMMAND_NAME)
     expect(envAtSpawn?.ORCA_PANE_KEY).toBeUndefined()
     releaseStructuredWorkerSession('d_spawn')
   })

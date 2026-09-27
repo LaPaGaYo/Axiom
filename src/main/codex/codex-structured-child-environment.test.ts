@@ -1,3 +1,4 @@
+import { DEV_COMMAND_NAME } from '../cli/cli-install-constants'
 import { describe, expect, it } from 'vitest'
 import { CODEX_SPAWN_TOKEN_ENV } from './codex-structured-owner-identity'
 import { buildCodexStructuredChildEnvironment } from './codex-structured-child-environment'
@@ -61,7 +62,7 @@ describe('buildCodexStructuredChildEnvironment', () => {
     try {
       const env = buildCodexStructuredChildEnvironment(launch, 'spawn-token', sessionId)
       expect(env.ORCA_TERMINAL_HANDLE).toBe(handle)
-      expect(env.ORCA_CLI_COMMAND).toBe('orca')
+      expect(env.ORCA_CLI_COMMAND).toBe(DEV_COMMAND_NAME)
       // A pane key here would leak into hook-emitted agent statuses, which assume a PTY leaf.
       expect(env.ORCA_PANE_KEY).toBeUndefined()
     } finally {
