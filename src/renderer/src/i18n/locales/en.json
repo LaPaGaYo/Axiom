@@ -1215,15 +1215,6 @@
         "e6b7139d2a": "Restart this session to load your current Codex configuration.",
         "7b1d20f4c8": "Keep current session"
       },
-      "FirstLaunchBanner": {
-        "b9e1b966c7": "Dismiss notice",
-        "94cc673726": "Got it",
-        "fc5cc29955": "Opt out",
-        "d1deebb050": "Privacy policy",
-        "958d2cc31b": "Anonymous counts of which features you use help us prioritize what to build. No file contents, prompts, terminal output, or anything that identifies you. Change anytime in Settings -> Privacy & Telemetry.",
-        "9784b4d7bc": "Help us decide what to build next",
-        "fcbee32f08": "Telemetry notice"
-      },
       "GitHubItemDialog": {
         "3ab6ac0fc8": "Preview and edit the selected GitHub issue or pull request.",
         "3cd5ae5b7b": "No files changed.",
@@ -7903,12 +7894,6 @@
           "a2b3505c77": "Review file created"
         },
         "PrivacyPane": {
-          "36e0e2e63b": "environment variable. Unset it and restart to re-enable.",
-          "79a0f3c16c": "Telemetry is disabled by the",
-          "e3970bbbf5": "Telemetry is disabled because a CI environment variable is set. Unset it and restart.",
-          "fe904ac984": "Share anonymous usage data",
-          "77410e0566": "Privacy policy",
-          "8bfdd23a88": "Help us figure out what to build next. Orca sends anonymous counts of which features you use and where things break.",
           "afec8b03be": "ci"
         },
         "QuickCommandsList": {
@@ -10265,31 +10250,10 @@
         },
         "privacy": {
           "search": {
-            "3922051573": "data",
-            "e8bc614a18": "disable",
-            "d8191ae5ca": "environment variable",
-            "94e04427f6": "env",
-            "664f1a8984": "continuous integration",
-            "5854a5c752": "ci",
-            "69637f4dc4": "orca_telemetry_disabled",
-            "058550f6bc": "do_not_track",
-            "83a6cd79b3": "do not track",
-            "f7a2d9f137": "Environment variables that disable telemetry transmission.",
-            "e058a3c98d": "Telemetry environment variables",
             "1686c07fee": "support",
             "c0494ff48a": "diagnostics",
             "8b08f32366": "App diagnostics and support sharing controls.",
             "6d258d2ed6": "Diagnostics",
-            "ead1deded2": "share",
-            "27a27b2f63": "opt out",
-            "4d4bb76bf4": "opt in",
-            "b021b9cb81": "anonymous",
-            "79c319948b": "usage",
-            "77d3180def": "telemetry",
-            "b707cc3981": "Help improve Orca by sending anonymous feature-usage events.",
-            "57b283461a": "Share Anonymous Usage Data",
-            "2b5a5c312f": "posthog",
-            "4104f6f0f3": "analytics",
             "10124159f1": "privacy",
             "aa3b794c17": "Anonymous product usage data, diagnostics, and telemetry controls.",
             "5c508bad41": "Privacy & Telemetry"

@@ -544,15 +544,11 @@ src/renderer/src/hooks/useComposerState-host-context-boundaries.test.ts:stablyai
 src/renderer/src/hooks/useComposerState-host-retarget.test.ts:stablyai:1
 src/renderer/src/hooks/useGitHubSlugMetadata.test.tsx:stablyai:8
 src/renderer/src/i18n/locales/en.json:orca.dev:1
-src/renderer/src/i18n/locales/en.json:posthog:1
 src/renderer/src/i18n/locales/en.json:stablyai:1
-src/renderer/src/i18n/locales/es.json:posthog:1
 src/renderer/src/i18n/locales/es.json:stablyai:1
 src/renderer/src/i18n/locales/fr.json:orca.dev:1
-src/renderer/src/i18n/locales/fr.json:posthog:1
 src/renderer/src/i18n/locales/fr.json:stablyai:1
 src/renderer/src/i18n/locales/ja.json:orca.dev:1
-src/renderer/src/i18n/locales/ja.json:posthog:1
 src/renderer/src/i18n/locales/ja.json:stablyai:1
 src/renderer/src/i18n/locales/ko.json:orca.dev:1
 src/renderer/src/i18n/locales/ko.json:stablyai:1

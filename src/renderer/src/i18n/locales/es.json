@@ -883,15 +883,6 @@
         "9375620cc3": "Reinicia esta sesión para usar {{value0}}. Se mantiene en la cuenta anterior hasta que lo hagas.",
         "6133594b12": "Mantener cuenta anterior"
       },
-      "FirstLaunchBanner": {
-        "b9e1b966c7": "Descartar aviso",
-        "94cc673726": "Entiendo",
-        "fc5cc29955": "Optar por no participar",
-        "d1deebb050": "Política de privacidad",
-        "958d2cc31b": "Los recuentos anónimos de las funciones que usas nos ayudan a priorizar qué crear. Sin contenido de archivos, prompts, salida de terminal ni nada que te identifique. Puedes cambiarlo en cualquier momento en Ajustes -> Privacidad y telemetría.",
-        "9784b4d7bc": "Ayúdanos a decidir qué crear a continuación",
-        "fcbee32f08": "Aviso de telemetría"
-      },
       "GitHubItemDialog": {
         "3ab6ac0fc8": "Previsualiza y edita el issue o pull request de GitHub seleccionado.",
         "3cd5ae5b7b": "No se cambiaron archivos.",
@@ -6670,12 +6661,6 @@
           "a2b3505c77": "Archivo de revisión creado"
         },
         "PrivacyPane": {
-          "36e0e2e63b": "variable de entorno. Quítala y reinicia para volver a habilitarla.",
-          "79a0f3c16c": "La telemetría está desactivada por el",
-          "e3970bbbf5": "La telemetría está desactivada porque hay una variable de entorno de CI configurada. Quítala y reinicia.",
-          "fe904ac984": "Compartir datos de uso anónimos",
-          "77410e0566": "Política de privacidad",
-          "8bfdd23a88": "Ayúdanos a descubrir qué crear a continuación. Orca envía recuentos anónimos de qué funciones usas y dónde fallan las cosas.",
           "afec8b03be": "ci"
         },
         "QuickCommandsPane": {
@@ -8873,31 +8858,10 @@
         },
         "privacy": {
           "search": {
-            "3922051573": "datos",
-            "e8bc614a18": "desactivar",
-            "d8191ae5ca": "variable de entorno",
-            "94e04427f6": "env",
-            "664f1a8984": "integración continua",
-            "5854a5c752": "CI",
-            "69637f4dc4": "orca_telemetry_disabled",
-            "058550f6bc": "do_not_track",
-            "83a6cd79b3": "no rastrear",
-            "f7a2d9f137": "Variables de entorno que deshabilitan la transmisión de telemetría.",
-            "e058a3c98d": "Variables de entorno de telemetría",
             "1686c07fee": "soporte",
             "c0494ff48a": "diagnósticos",
             "8b08f32366": "Diagnósticos de la aplicación y controles para compartir con soporte.",
             "6d258d2ed6": "Diagnósticos",
-            "ead1deded2": "compartir",
-            "27a27b2f63": "optar por no participar",
-            "4d4bb76bf4": "optar por participar",
-            "b021b9cb81": "anónimo",
-            "79c319948b": "uso",
-            "77d3180def": "telemetría",
-            "b707cc3981": "Ayude a mejorar Orca enviando eventos anónimos de uso de funciones.",
-            "57b283461a": "Compartir datos de uso anónimos",
-            "2b5a5c312f": "posthog",
-            "4104f6f0f3": "analíticas",
             "10124159f1": "privacidad",
             "aa3b794c17": "Datos anónimos de uso del producto, diagnósticos y controles de telemetría.",
             "5c508bad41": "Privacidad y telemetría"

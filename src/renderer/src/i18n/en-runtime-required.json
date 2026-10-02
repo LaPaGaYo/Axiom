@@ -27,15 +27,6 @@
       "CodexRestartChip": {
         "9263e75f49": "Codex is using the previous account"
       },
-      "FirstLaunchBanner": {
-        "94cc673726": "Got it",
-        "958d2cc31b": "Anonymous counts of which features you use help us prioritize what to build. No file contents, prompts, terminal output, or anything that identifies you. Change anytime in Settings -> Privacy & Telemetry.",
-        "9784b4d7bc": "Help us decide what to build next",
-        "b9e1b966c7": "Dismiss notice",
-        "d1deebb050": "Privacy policy",
-        "fc5cc29955": "Opt out",
-        "fcbee32f08": "Telemetry notice"
-      },
       "GitHubItemDialog": {
         "04539beb48": "issue",
         "307c98e8e3": "Show {{value0}} more lines above",
@@ -1385,13 +1376,7 @@
           "fullCoverage_other": "All {{value0}} detected agents have the skill."
         },
         "PrivacyPane": {
-          "36e0e2e63b": "environment variable. Unset it and restart to re-enable.",
-          "77410e0566": "Privacy policy",
-          "79a0f3c16c": "Telemetry is disabled by the",
-          "8bfdd23a88": "Help us figure out what to build next. Orca sends anonymous counts of which features you use and where things break.",
-          "afec8b03be": "ci",
-          "e3970bbbf5": "Telemetry is disabled because a CI environment variable is set. Unset it and restart.",
-          "fe904ac984": "Share anonymous usage data"
+          "afec8b03be": "ci"
         },
         "ProjectWindowsRuntimeSetting": {
           "activeTaskPlural": "{{count}} active tasks",
@@ -1748,31 +1733,6 @@
             "search": {
               "b730ff7049": "experimental"
             }
-          }
-        },
-        "privacy": {
-          "search": {
-            "3922051573": "data",
-            "058550f6bc": "do_not_track",
-            "27a27b2f63": "opt out",
-            "2b5a5c312f": "posthog",
-            "4104f6f0f3": "analytics",
-            "4d4bb76bf4": "opt in",
-            "57b283461a": "Share Anonymous Usage Data",
-            "5854a5c752": "ci",
-            "664f1a8984": "continuous integration",
-            "69637f4dc4": "orca_telemetry_disabled",
-            "77d3180def": "telemetry",
-            "79c319948b": "usage",
-            "83a6cd79b3": "do not track",
-            "94e04427f6": "env",
-            "b021b9cb81": "anonymous",
-            "b707cc3981": "Help improve Orca by sending anonymous feature-usage events.",
-            "d8191ae5ca": "environment variable",
-            "e058a3c98d": "Telemetry environment variables",
-            "e8bc614a18": "disable",
-            "ead1deded2": "share",
-            "f7a2d9f137": "Environment variables that disable telemetry transmission."
           }
         },
         "providerAccountScope": {
