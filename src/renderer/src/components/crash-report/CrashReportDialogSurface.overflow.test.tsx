@@ -67,7 +67,12 @@ describe('CrashReportDialogSurface overflow containment', () => {
         onReportChange={() => {}}
       />
     )
-    await waitFor(() => expect(viewer).toHaveBeenCalledOnce())
+    await waitFor(() => expect(container.querySelector('pre')).not.toBeNull())
+    expect(viewer).not.toHaveBeenCalled()
+    expect(container.textContent).not.toContain('Send Report')
+    expect(container.textContent).not.toContain('Send a privacy-safe')
+    expect(container.textContent).not.toContain('Attach recent diagnostic logs')
+    expect(container.textContent).toContain('Copy Details')
 
     const dialog = container.querySelector('[role="dialog"]')
     const output = dialog?.querySelector('pre')

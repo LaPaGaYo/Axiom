@@ -18,6 +18,10 @@ vi.mock('./updater-prerelease-feed', () => moduleFactories.updaterPrereleaseFeed
 vi.mock('./local-builds/local-build-switch', () => moduleFactories.localBuildSwitch())
 vi.mock('./local-builds/local-build-feed-server', () => moduleFactories.localBuildFeedServer())
 
+vi.mock('../shared/product-egress-policy', async () =>
+  (await import('./updater-test-harness')).enabledUpdaterPolicy()
+)
+
 warmUpdaterModule()
 
 describe('updater', () => {
@@ -57,11 +61,11 @@ describe('updater', () => {
       expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
       expect(autoUpdaterMock.setFeedURL).toHaveBeenCalledWith({
         provider: 'generic',
-        url: 'https://github.com/stablyai/orca/releases/download/v1.3.51-rc.7'
+        url: 'https://github.com/LaPaGaYo/Axiom/releases/download/v1.3.51-rc.7'
       })
       expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
         provider: 'generic',
-        url: 'https://github.com/stablyai/orca/releases/download/v1.3.51-rc.6'
+        url: 'https://github.com/LaPaGaYo/Axiom/releases/download/v1.3.51-rc.6'
       })
     })
 
@@ -687,7 +691,7 @@ describe('updater', () => {
     })
     expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
       provider: 'generic',
-      url: 'https://github.com/stablyai/orca/releases/download/v1.3.18'
+      url: 'https://github.com/LaPaGaYo/Axiom/releases/download/v1.3.18'
     })
   })
 
@@ -713,7 +717,7 @@ describe('updater', () => {
     expect(autoUpdaterMock.allowPrerelease).toBe(true)
     expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
       provider: 'generic',
-      url: 'https://github.com/stablyai/orca/releases/download/v1.3.18-rc.1'
+      url: 'https://github.com/LaPaGaYo/Axiom/releases/download/v1.3.18-rc.1'
     })
   })
 })

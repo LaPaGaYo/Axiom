@@ -1,3 +1,4 @@
+import { PRODUCT_EGRESS_POLICY } from '../../../../shared/product-egress-policy'
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Clipboard, Send } from 'lucide-react'
 import { toast } from 'sonner'
@@ -82,6 +83,7 @@ export function CrashReportDialogSurface({
   onOpenChange,
   onReportChange
 }: CrashReportDialogSurfaceProps): React.JSX.Element {
+  const feedbackEnabled = PRODUCT_EGRESS_POLICY.feedbackApiUrl !== null
   const mountedRef = useMountedRef()
   const [notes, setNotes] = useState('')
   const [includeDiagnosticLogs, setIncludeDiagnosticLogs] = useState(true)
@@ -105,6 +107,9 @@ export function CrashReportDialogSurface({
   }, [])
 
   const loadViewerForOpenDialog = useCallback((): void => {
+    if (!feedbackEnabled) {
+      return
+    }
     const requestId = ++viewerRequestIdRef.current
     setViewer(null)
     void window.api.gh
@@ -120,7 +125,7 @@ export function CrashReportDialogSurface({
           console.error('Failed to load GitHub viewer for crash report:', error)
         }
       })
-  }, [mountedRef])
+  }, [feedbackEnabled, mountedRef])
 
   useEffect(() => {
     if (!open) {
@@ -169,6 +174,9 @@ export function CrashReportDialogSurface({
   }
 
   const handleSubmit = async (): Promise<void> => {
+    if (!feedbackEnabled) {
+      return
+    }
     setSubmitting(true)
     try {
       const result = await window.api.crashReports.submit({
@@ -239,7 +247,9 @@ export function CrashReportDialogSurface({
             <AlertTriangle className="size-4 text-destructive" />
             {getDialogTitle(report)}
           </DialogTitle>
-          <DialogDescription className="text-xs">{getDialogDescription(report)}</DialogDescription>
+          <DialogDescription>
+            {feedbackEnabled ? getDialogDescription(report) : null}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="min-w-0 space-y-3">
@@ -265,7 +275,7 @@ export function CrashReportDialogSurface({
                 </pre>
               </div>
             </>
-          ) : (
+          ) : feedbackEnabled || loading ? (
             <div className="rounded-md border border-border/70 bg-muted/30 p-3 text-xs text-muted-foreground">
               {loading
                 ? translate(
@@ -277,7 +287,7 @@ export function CrashReportDialogSurface({
                     'No automatic crash report was captured. You can still send details and include recent diagnostic logs when available.'
                   )}
             </div>
-          )}
+          ) : null}
           <div className="space-y-1">
             <textarea
               value={notes}
@@ -295,29 +305,31 @@ export function CrashReportDialogSurface({
               {notes.length.toLocaleString()} / {MAX_USER_NOTES_LENGTH.toLocaleString()}
             </div>
           </div>
-          <div className="flex items-start gap-2 rounded-md border border-border/70 bg-muted/20 p-3">
-            <Checkbox
-              id="crash-report-attach-diagnostics"
-              checked={includeDiagnosticLogs}
-              onCheckedChange={(checked) => setIncludeDiagnosticLogs(checked === true)}
-              disabled={submitting}
-              className="mt-0.5"
-            />
-            <div className="space-y-1">
-              <Label htmlFor="crash-report-attach-diagnostics" className="text-xs">
-                {translate(
-                  'auto.components.crash.report.CrashReportDialog.b082f27490',
-                  'Attach recent diagnostic logs'
-                )}
-              </Label>
-              <div className="text-xs leading-5 text-muted-foreground">
-                {translate(
-                  'auto.components.crash.report.CrashReportDialog.e59f0b9427',
-                  'Sends a capped redacted log bundle with the report.'
-                )}
+          {feedbackEnabled ? (
+            <div className="flex items-start gap-2 rounded-md border border-border/70 bg-muted/20 p-3">
+              <Checkbox
+                id="crash-report-attach-diagnostics"
+                checked={includeDiagnosticLogs}
+                onCheckedChange={(checked) => setIncludeDiagnosticLogs(checked === true)}
+                disabled={submitting}
+                className="mt-0.5"
+              />
+              <div className="space-y-1">
+                <Label htmlFor="crash-report-attach-diagnostics" className="text-xs">
+                  {translate(
+                    'auto.components.crash.report.CrashReportDialog.b082f27490',
+                    'Attach recent diagnostic logs'
+                  )}
+                </Label>
+                <div className="text-xs leading-5 text-muted-foreground">
+                  {translate(
+                    'auto.components.crash.report.CrashReportDialog.e59f0b9427',
+                    'Sends a capped redacted log bundle with the report.'
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          ) : null}
         </div>
 
         <DialogFooter className="gap-2">
@@ -340,10 +352,15 @@ export function CrashReportDialogSurface({
           >
             {translate('auto.components.crash.report.CrashReportDialog.88fea8e84e', "Don't Send")}
           </Button>
-          <Button type="button" size="sm" onClick={handleSubmit} disabled={loading || submitting}>
-            <Send className="size-3.5" />
-            {translate('auto.components.crash.report.CrashReportDialog.b4951cd27c', 'Send Report')}
-          </Button>
+          {feedbackEnabled ? (
+            <Button type="button" size="sm" onClick={handleSubmit} disabled={loading || submitting}>
+              <Send className="size-3.5" />
+              {translate(
+                'auto.components.crash.report.CrashReportDialog.b4951cd27c',
+                'Send Report'
+              )}
+            </Button>
+          ) : null}
         </DialogFooter>
       </DialogContent>
     </Dialog>

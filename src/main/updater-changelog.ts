@@ -1,3 +1,4 @@
+import { PRODUCT_EGRESS_POLICY } from '../shared/product-egress-policy'
 import { net } from 'electron'
 import type { ChangelogData } from '../shared/update-status-types'
 import { compareVersions } from './updater-fallback'
@@ -9,8 +10,6 @@ type ChangelogEntry = {
   mediaUrl?: string
   releaseNotesUrl: string
 }
-
-const CHANGELOG_URL = 'https://onorca.dev/changelog'
 
 function isValidEntry(entry: ChangelogEntry): boolean {
   return (
@@ -42,7 +41,11 @@ export async function fetchChangelog(
   incomingVersion: string,
   localVersion: string
 ): Promise<ChangelogData | null> {
-  const res = await net.fetch('https://onorca.dev/whats-new/changelog.json', {
+  const { changelogJsonUrl, changelogPageUrl } = PRODUCT_EGRESS_POLICY
+  if (changelogJsonUrl === null) {
+    return null
+  }
+  const res = await net.fetch(changelogJsonUrl, {
     signal: AbortSignal.timeout(5000)
   })
   if (!res.ok) {
@@ -84,6 +87,9 @@ export async function fetchChangelog(
   // haven't seen yet. We swap the release notes URL to the generic
   // changelog page since the shown content doesn't match the incoming
   // version.
+  if (changelogPageUrl === null) {
+    return null
+  }
   for (let i = 0; i < entries.length; i++) {
     const candidate = entries[i]
     if (!isValidEntry(candidate) || !hasRichContent(candidate)) {
@@ -127,7 +133,7 @@ export async function fetchChangelog(
     const { version: _, ...release } = candidate
     // Why: the shown content is from an older entry, not the incoming version.
     // Point to the generic changelog page so the link doesn't mislead.
-    return { release: { ...release, releaseNotesUrl: CHANGELOG_URL }, releasesBehind }
+    return { release: { ...release, releaseNotesUrl: changelogPageUrl }, releasesBehind }
   }
 
   return null

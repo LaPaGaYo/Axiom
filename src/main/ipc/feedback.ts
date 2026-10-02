@@ -199,6 +199,14 @@ async function submitFeedbackWithDiagnosticBundle(
 export async function submitFeedback(
   args: InternalFeedbackSubmitArgs
 ): Promise<FeedbackSubmitResult> {
+  if (FEEDBACK_API_URL === null) {
+    return {
+      ok: false,
+      status: null,
+      reason: 'disabled',
+      error: 'Feedback submission is disabled.'
+    }
+  }
   // Why: buildSubmitBody drops images on the crash lane, so validating them
   // there would abort a crash report over attachments it never meant to send.
   if (args.submissionType !== 'crash' && args.images !== undefined) {
@@ -227,8 +235,7 @@ export async function submitFeedback(
     if (res.ok) {
       return { ok: true }
     }
-    // Why: api.onorca.dev serves a different product, so transient failures
-    // retry the endpoint that owns feedback and crash delivery.
+    // Why: transient failures retry only the configured feedback endpoint.
     if (res.status >= 500) {
       return retryFeedbackOnPrimary(body, new Error(`status ${res.status}`))
     }

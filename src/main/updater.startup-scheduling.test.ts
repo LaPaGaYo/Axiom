@@ -26,6 +26,10 @@ vi.mock('./updater-prerelease-feed', () => moduleFactories.updaterPrereleaseFeed
 vi.mock('./local-builds/local-build-switch', () => moduleFactories.localBuildSwitch())
 vi.mock('./local-builds/local-build-feed-server', () => moduleFactories.localBuildFeedServer())
 
+vi.mock('../shared/product-egress-policy', async () =>
+  (await import('./updater-test-harness')).enabledUpdaterPolicy()
+)
+
 warmUpdaterModule()
 
 describe('updater', () => {

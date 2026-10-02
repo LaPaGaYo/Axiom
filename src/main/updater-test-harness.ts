@@ -1,3 +1,4 @@
+import type * as ProductEgressPolicyModule from '../shared/product-egress-policy'
 import { afterAll, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { clearTrackedRealTimers, trackRealTimers } from './updater-test-timer-tracking'
@@ -264,7 +265,7 @@ export function createUpdaterMocks(): UpdaterMocks {
           : result
       },
       getReleaseDownloadUrl: (tag: string) =>
-        `https://github.com/stablyai/orca/releases/download/${tag}`
+        `https://github.com/LaPaGaYo/Axiom/releases/download/${tag}`
     }),
     localBuildSwitch: () => ({ chooseLocalBuild: chooseLocalBuildMock }),
     localBuildFeedServer: () => ({ startLocalBuildFeed: startLocalBuildFeedMock })
@@ -341,5 +342,20 @@ export function createUpdaterMocks(): UpdaterMocks {
     closeLocalBuildFeedMock,
     moduleFactories,
     resetUpdaterMocks
+  }
+}
+
+/** Keeps opt-in scheduling regressions distinct from the shipped V1 policy tests. */
+export async function enabledUpdaterPolicy(): Promise<typeof ProductEgressPolicyModule> {
+  const actual = await vi.importActual<typeof ProductEgressPolicyModule>(
+    '../shared/product-egress-policy'
+  )
+  return {
+    ...actual,
+    PRODUCT_EGRESS_POLICY: {
+      ...actual.PRODUCT_EGRESS_POLICY,
+      automaticUpdateChecks: true,
+      nudgeUrl: 'https://updates.example.test/nudge.json'
+    }
   }
 }

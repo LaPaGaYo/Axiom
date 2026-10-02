@@ -1,3 +1,4 @@
+import { PRODUCT_EGRESS_POLICY } from '../shared/product-egress-policy'
 import { net } from 'electron'
 import { compareVersions, isValidVersion } from './updater-fallback'
 
@@ -8,8 +9,12 @@ export type NudgeConfig = {
 }
 
 export async function fetchNudge(): Promise<NudgeConfig | null> {
+  const { nudgeUrl } = PRODUCT_EGRESS_POLICY
+  if (nudgeUrl === null) {
+    return null
+  }
   try {
-    const res = await net.fetch('https://onorca.dev/whats-new/nudge.json', {
+    const res = await net.fetch(nudgeUrl, {
       signal: AbortSignal.timeout(5000)
     })
     if (!res.ok) {

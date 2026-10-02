@@ -1,3 +1,7 @@
+import {
+  PRODUCT_EGRESS_POLICY,
+  productReleaseRepositorySlug
+} from '../../shared/product-egress-policy'
 import { app, powerMonitor } from 'electron'
 import type { BrowserWindow } from 'electron'
 import { is } from '@electron-toolkit/utils'
@@ -37,6 +41,19 @@ export type UpdaterSetupOptions = {
 
 /** Initializes electron-updater and attaches lifecycle/event bridges. */
 export class UpdaterSetup extends UpdaterDownloadInstall {
+  // Why: outcome and retry handlers also schedule checks after a manual request.
+  protected override scheduleAutomaticUpdateCheck(delayMs: number): void {
+    if (PRODUCT_EGRESS_POLICY.automaticUpdateChecks) {
+      super.scheduleAutomaticUpdateCheck(delayMs)
+    }
+  }
+
+  protected override runBackgroundUpdateCheck(nudgeId?: string | null): boolean {
+    return PRODUCT_EGRESS_POLICY.automaticUpdateChecks
+      ? super.runBackgroundUpdateCheck(nudgeId)
+      : false
+  }
+
   checkForUpdates(): void {
     this.checkForUpdatesInBackground()
   }
@@ -161,7 +178,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     if (this.activeUpdateSource === 'release') {
       autoUpdater.setFeedURL({
         provider: 'generic',
-        url: 'https://github.com/stablyai/orca/releases/latest/download'
+        url: `https://github.com/${productReleaseRepositorySlug()}/releases/latest/download`
       })
     }
     if (this.autoUpdaterInitialized) {
@@ -224,6 +241,10 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
 
     void this.checkForUpdateNudge()
     this.scheduleUpdateNudgeCheck()
+
+    if (!PRODUCT_EGRESS_POLICY.automaticUpdateChecks) {
+      return
+    }
 
     const checkDailyOnWake = () => {
       void this.checkForUpdateNudge()

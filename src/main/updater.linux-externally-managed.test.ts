@@ -32,6 +32,10 @@ const EXTERNALLY_MANAGED_MESSAGE =
 
 /** #17702: a repackaged install (AUR, Nix, container rebuild) inherits the .deb `package-type`
  *  marker but has no package manager that can apply an Orca-downloaded package. */
+vi.mock('../shared/product-egress-policy', async () =>
+  (await import('./updater-test-harness')).enabledUpdaterPolicy()
+)
+
 warmUpdaterModule()
 
 describe('updater externally managed Linux installs', () => {

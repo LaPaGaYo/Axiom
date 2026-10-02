@@ -36,20 +36,16 @@ describe('release channel', () => {
     expect(getVersionChannel('not-a-version')).toBeNull()
   })
 
-  // Why: hourly tags must never resolve to the main repo — the releases atom feed
-  // exposes only 10 entries, so 24 hourly tags a day would evict every stable/RC
-  // entry and leave real users with nothing to update to.
-  it('keeps dev builds out of the main release repo, and apart from each other', () => {
-    expect(getReleaseRepoForChannel('hourly')).toBe('stablyai/orca-hourly')
-    expect(getReleaseRepoForChannel('daily')).toBe('stablyai/orca-daily')
-    // Why adhoc gets its own repo rather than sharing hourly's: an unlanded
-    // branch build must never surface to someone who only meant to ride main.
-    expect(getReleaseRepoForChannel('adhoc')).toBe('stablyai/orca-adhoc')
-    expect(getReleaseRepoForChannel('stable')).toBe('stablyai/orca')
-    expect(getReleaseRepoForChannel('rc')).toBe('stablyai/orca')
+  // D21 preserves channel selection while pinning every channel to the product repository.
+  it('routes every channel to the product release repository', () => {
+    expect(getReleaseRepoForChannel('hourly')).toBe('LaPaGaYo/Axiom')
+    expect(getReleaseRepoForChannel('daily')).toBe('LaPaGaYo/Axiom')
+    expect(getReleaseRepoForChannel('adhoc')).toBe('LaPaGaYo/Axiom')
+    expect(getReleaseRepoForChannel('stable')).toBe('LaPaGaYo/Axiom')
+    expect(getReleaseRepoForChannel('rc')).toBe('LaPaGaYo/Axiom')
   })
 
-  it('marks exactly the dev channels as having their own repo', () => {
+  it('preserves the legacy dev-channel grouping', () => {
     expect(hasDedicatedReleaseRepo('hourly')).toBe(true)
     expect(hasDedicatedReleaseRepo('daily')).toBe(true)
     expect(hasDedicatedReleaseRepo('adhoc')).toBe(true)
@@ -61,21 +57,21 @@ describe('release channel', () => {
   // in the hourly repo.
   it('builds release-notes links against the repo that published the version', () => {
     expect(getReleaseNotesUrlForVersion('1.4.160-hourly.202607281400')).toBe(
-      'https://github.com/stablyai/orca-hourly/releases/tag/v1.4.160-hourly.202607281400'
+      'https://github.com/LaPaGaYo/Axiom/releases/tag/v1.4.160-hourly.202607281400'
     )
     expect(getReleaseNotesUrlForVersion('1.4.160-daily.202607281300')).toBe(
-      'https://github.com/stablyai/orca-daily/releases/tag/v1.4.160-daily.202607281300'
+      'https://github.com/LaPaGaYo/Axiom/releases/tag/v1.4.160-daily.202607281300'
     )
     expect(getReleaseNotesUrlForVersion('1.4.160')).toBe(
-      'https://github.com/stablyai/orca/releases/tag/v1.4.160'
+      'https://github.com/LaPaGaYo/Axiom/releases/tag/v1.4.160'
     )
     expect(getReleaseNotesUrlForVersion('v1.4.160-rc.3')).toBe(
-      'https://github.com/stablyai/orca/releases/tag/v1.4.160-rc.3'
+      'https://github.com/LaPaGaYo/Axiom/releases/tag/v1.4.160-rc.3'
     )
     expect(getReleaseNotesUrlForVersion('1.4.160-adhoc.20260728140533')).toBe(
-      'https://github.com/stablyai/orca-adhoc/releases/tag/v1.4.160-adhoc.20260728140533'
+      'https://github.com/LaPaGaYo/Axiom/releases/tag/v1.4.160-adhoc.20260728140533'
     )
-    expect(getReleaseNotesUrlForVersion(null)).toBe('https://github.com/stablyai/orca/releases')
+    expect(getReleaseNotesUrlForVersion(null)).toBe('https://github.com/LaPaGaYo/Axiom/releases')
   })
 
   it('round-trips an hourly version stamp as UTC', () => {
@@ -264,7 +260,7 @@ describe('release channel', () => {
       channel: 'hourly',
       name: null,
       publishedAt: null,
-      releaseUrl: `https://github.com/stablyai/orca-hourly/releases/tag/v${version}`,
+      releaseUrl: `https://github.com/LaPaGaYo/Axiom/releases/tag/v${version}`,
       installerUrl: null
     })
     const sorted = sortReleaseBuildsNewestFirst([
@@ -310,7 +306,7 @@ describe('release channel', () => {
       channel: 'adhoc',
       name: null,
       publishedAt: null,
-      releaseUrl: `https://github.com/stablyai/orca-adhoc/releases/tag/v${version}`,
+      releaseUrl: `https://github.com/LaPaGaYo/Axiom/releases/tag/v${version}`,
       installerUrl: null
     })
     const sorted = sortReleaseBuildsNewestFirst([
@@ -332,7 +328,7 @@ describe('release channel', () => {
       channel: 'adhoc',
       name: null,
       publishedAt: null,
-      releaseUrl: `https://github.com/stablyai/orca-adhoc/releases/tag/v${version}`,
+      releaseUrl: `https://github.com/LaPaGaYo/Axiom/releases/tag/v${version}`,
       installerUrl: null
     })
     const sorted = sortReleaseBuildsNewestFirst([

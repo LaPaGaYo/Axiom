@@ -44,6 +44,10 @@ function downloadedEvent(packageType: LinuxRootPackageType): Record<string, unkn
   }
 }
 
+vi.mock('../shared/product-egress-policy', async () =>
+  (await import('./updater-test-harness')).enabledUpdaterPolicy()
+)
+
 warmUpdaterModule()
 
 describe('updater Linux root packages', () => {

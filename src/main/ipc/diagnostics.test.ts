@@ -135,17 +135,13 @@ describe('diagnostics IPC handlers', () => {
     })
   })
 
-  it('pins official builds to the compile-time diagnostics endpoint', async () => {
+  it('refuses official-build uploads regardless of an env override', async () => {
     const bundle = makeBundle({
       bundleSubmissionId: 'bundleabcdefghijklmnop',
       payload: '{"type":"bundle-header"}\n{"safe":true}\n'
     })
-    const globalOverrides = globalThis as {
-      ORCA_BUILD_IDENTITY?: 'stable'
-      ORCA_DIAGNOSTICS_TOKEN_URL?: string
-    }
-    globalOverrides.ORCA_BUILD_IDENTITY = 'stable'
-    globalOverrides.ORCA_DIAGNOSTICS_TOKEN_URL = 'https://official.example.com/diagnostics/token'
+    vi.stubGlobal('ORCA_BUILD_IDENTITY', 'stable')
+    vi.stubGlobal('ORCA_DIAGNOSTICS_TOKEN_URL', 'https://obsolete.example.test/diagnostics/token')
     process.env.ORCA_DIAGNOSTICS_TOKEN_URL = 'https://attacker.example.com/diagnostics/token'
     collectDiagnosticBundleMock.mockReturnValue(bundle)
     readFileSyncMock.mockReturnValue(bundle.payload)
@@ -155,13 +151,10 @@ describe('diagnostics IPC handlers', () => {
 
     await collect({}, 30)
     await openPreview({}, bundle.bundleSubmissionId)
-    await upload({}, bundle.bundleSubmissionId)
-
-    expect(uploadDiagnosticBundleMock).toHaveBeenCalledWith({
-      tokenEndpoint: 'https://official.example.com/diagnostics/token',
-      payload: bundle.payload,
-      bundleSubmissionId: bundle.bundleSubmissionId
-    })
+    await expect(upload({}, bundle.bundleSubmissionId)).rejects.toThrow(
+      'sending diagnostics is not configured for this build'
+    )
+    expect(uploadDiagnosticBundleMock).not.toHaveBeenCalled()
   })
 
   it('returns a quiet cancellation when the user declines upload confirmation', async () => {

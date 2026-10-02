@@ -1,3 +1,4 @@
+import { productReleaseRepositorySlug } from './product-egress-policy'
 import { compareAppVersions, isValidAppVersion } from './app-version'
 
 export type ReleaseChannel = 'stable' | 'rc' | 'hourly' | 'daily' | 'adhoc'
@@ -18,19 +19,17 @@ export const RELEASE_CHANNEL_LABELS: Readonly<Record<ReleaseChannel, string>> = 
   adhoc: 'Adhoc'
 }
 
-/** Dev builds live in their own repos so their tags never enter the main
- *  releases atom feed, which only exposes the 10 newest entries — 24 hourly
- *  tags a day would evict every stable/RC entry and strand real users. */
-export const HOURLY_RELEASE_REPO = 'stablyai/orca-hourly'
-export const DAILY_RELEASE_REPO = 'stablyai/orca-daily'
-export const ADHOC_RELEASE_REPO = 'stablyai/orca-adhoc'
-export const MAIN_RELEASE_REPO = 'stablyai/orca'
+// D21 pins every channel to the product repository while preserving channel selection.
+export const HOURLY_RELEASE_REPO = productReleaseRepositorySlug()
+export const DAILY_RELEASE_REPO = productReleaseRepositorySlug()
+export const ADHOC_RELEASE_REPO = productReleaseRepositorySlug()
+export const MAIN_RELEASE_REPO = productReleaseRepositorySlug()
 
 export const HOURLY_PRERELEASE_IDENTIFIER = 'hourly'
 export const DAILY_PRERELEASE_IDENTIFIER = 'daily'
 export const ADHOC_PRERELEASE_IDENTIFIER = 'adhoc'
 
-/** The dev channels, each published to its own repo rather than the main one. */
+/** Legacy dev-channel grouping retained for channel-specific build selection. */
 const DEDICATED_REPO_CHANNELS = ['hourly', 'daily', 'adhoc'] as const
 
 export type DedicatedRepoChannel = (typeof DEDICATED_REPO_CHANNELS)[number]
@@ -47,8 +46,7 @@ export function isReleaseChannel(value: unknown): value is ReleaseChannel {
   return typeof value === 'string' && RELEASE_CHANNELS.includes(value as ReleaseChannel)
 }
 
-/** True for channels published outside the main repo. The updater reports these
- *  as a distinct source so a pinned dev build is never mistaken for a release. */
+/** The updater keeps dev builds distinct so a pinned build is never mistaken for a release. */
 export function hasDedicatedReleaseRepo(channel: ReleaseChannel): channel is DedicatedRepoChannel {
   return (DEDICATED_REPO_CHANNELS as readonly ReleaseChannel[]).includes(channel)
 }

@@ -1,3 +1,15 @@
+import type * as ProductEgressPolicyModule from '../../shared/product-egress-policy'
+vi.mock('../../shared/product-egress-policy', async (importOriginal) => {
+  const actual = await importOriginal<typeof ProductEgressPolicyModule>()
+  return {
+    ...actual,
+    PRODUCT_EGRESS_POLICY: {
+      ...actual.PRODUCT_EGRESS_POLICY,
+      pluginKillListUrl: 'https://plugins.example.test/kill-list.json'
+    }
+  }
+})
+
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

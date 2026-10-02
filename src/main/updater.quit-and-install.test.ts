@@ -42,6 +42,10 @@ vi.mock('./startup/hydrate-shell-path', () => ({
   }
 }))
 
+vi.mock('../shared/product-egress-policy', async () =>
+  (await import('./updater-test-harness')).enabledUpdaterPolicy()
+)
+
 warmUpdaterModule()
 
 describe('updater', () => {

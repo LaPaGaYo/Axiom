@@ -1,0 +1,27 @@
+export type ProductEgressPolicy = {
+  /** GitHub repository that serves release assets and the prerelease feed. */
+  readonly updateFeed: { readonly owner: string; readonly repo: string }
+  /** When false, automatic checks are disabled; menu-initiated checks still run. */
+  readonly automaticUpdateChecks: boolean
+  readonly changelogJsonUrl: string | null
+  readonly changelogPageUrl: string | null
+  readonly nudgeUrl: string | null
+  readonly pluginKillListUrl: string | null
+  readonly feedbackApiUrl: string | null
+  /** Official-build pinned endpoint; null disables official diagnostic uploads. */
+  readonly diagnosticsTokenUrl: string | null
+}
+
+export const PRODUCT_EGRESS_POLICY: ProductEgressPolicy = {
+  updateFeed: { owner: 'LaPaGaYo', repo: 'Axiom' },
+  automaticUpdateChecks: false,
+  changelogJsonUrl: null,
+  changelogPageUrl: null,
+  nudgeUrl: null,
+  pluginKillListUrl: null,
+  feedbackApiUrl: null,
+  diagnosticsTokenUrl: null
+}
+
+export const productReleaseRepositorySlug = (): string =>
+  `${PRODUCT_EGRESS_POLICY.updateFeed.owner}/${PRODUCT_EGRESS_POLICY.updateFeed.repo}`
