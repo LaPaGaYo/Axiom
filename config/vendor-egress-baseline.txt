@@ -131,7 +131,6 @@ cloud/packages/push-contract/src/push-limits.ts:com.stably.orca:1
 cloud/packages/relay-contract/src/contract.test.ts:onorca.dev:7
 cloud/packages/relay-contract/src/contract.test.ts:orca.dev:7
 config/i18n-translation-source.md:stablyai:1
-config/packaged-runtime-node-modules.cjs:posthog:1
 config/reliability-gates.jsonc:stablyai:272
 config/scripts/assert-github-release-is-draft.mjs:stablyai:1
 config/scripts/assert-github-release-is-draft.test.mjs:stablyai:4
@@ -164,11 +163,9 @@ config/scripts/setup-daily-release-repo.sh:stablyai:2
 config/scripts/setup-hourly-release-token.sh:stablyai:5
 config/scripts/verify-dev-channel-packaging.test.mjs:SignPath Foundation:3
 config/scripts/verify-packaged-plugin-resources.test.mjs:stablyai:3
-config/scripts/verify-telemetry-constants.mjs:posthog:4
 config/scripts/verify-windows-inner-signature.mjs:SignPath Foundation:1
 config/scripts/verify-windows-inner-signature.test.mjs:SignPath Foundation:6
 config/scripts/windows-signing-workflow-contract.test.mjs:SignPath Foundation:1
-electron.vite.config.ts:posthog:6
 mobile/fastlane/Appfile:com.stably.orca:1
 mobile/fastlane/Fastfile:com.stably.orca:1
 mobile/google-services.json:com.stably.orca:1
@@ -261,7 +258,6 @@ mobile/src/transport/pre-profile-pairing-coordinator.test.ts:onorca.dev:5
 mobile/src/transport/pre-profile-pairing-coordinator.test.ts:orca.dev:5
 mobile/src/transport/relay-host-signed-out-verdict.test.ts:onorca.dev:1
 mobile/src/transport/relay-host-signed-out-verdict.test.ts:orca.dev:1
-package.json:posthog:1
 package.json:stablyai:3
 resources/plugins/launch/bundled-plugins.json:stablyai:2
 resources/plugins/launch/orca-marketplace.json:stablyai:7
@@ -429,10 +425,7 @@ src/main/startup/configure-process.ts:stablyai:1
 src/main/startup/hydrate-shell-path.ts:stablyai:1
 src/main/startup/skill-share-deep-link-state.test.ts:orca.dev:3
 src/main/telemetry/burst-cap.ts:posthog:1
-src/main/telemetry/client-lifecycle.test.ts:posthog:17
-src/main/telemetry/client-test-harness.ts:posthog:8
-src/main/telemetry/client.test.ts:posthog:3
-src/main/telemetry/client.ts:posthog:27
+src/main/telemetry/client.test.ts:posthog:1
 src/main/telemetry/onboarding-feature-setup-validator.test.ts:stablyai:1
 src/main/telemetry/validator.test.ts:posthog:1
 src/main/window/renderer-document-navigation.test.ts:stablyai:1
@@ -504,7 +497,6 @@ src/renderer/src/components/settings/RepositoryHostSetupsSection.workspace-windo
 src/renderer/src/components/settings/RepositoryIconPicker.github-avatar-refresh.test.tsx:stablyai:6
 src/renderer/src/components/settings/linear-agent-skill-install-cta.test.tsx:stablyai:2
 src/renderer/src/components/settings/local-network-connection-history.ts:orca.dev:1
-src/renderer/src/components/settings/privacy-search.ts:posthog:1
 src/renderer/src/components/settings/repository-icon-github.test.ts:stablyai:15
 src/renderer/src/components/sidebar/CommentMarkdown.test.tsx:stablyai:9
 src/renderer/src/components/sidebar/SidebarFeedbackDialog.tsx:stablyai:1
@@ -582,9 +574,6 @@ src/renderer/src/lib/project-host-clone-url.test.ts:stablyai:2
 src/renderer/src/lib/project-host-workspace-target.test.ts:stablyai:35
 src/renderer/src/lib/repo-search.test.ts:stablyai:3
 src/renderer/src/lib/smart-github-submit.test.ts:stablyai:20
-src/renderer/src/lib/telemetry.ts:onorca.dev:1
-src/renderer/src/lib/telemetry.ts:orca.dev:1
-src/renderer/src/lib/telemetry.ts:posthog:1
 src/renderer/src/lib/terminal-links.test.ts:stablyai:1
 src/renderer/src/lib/terminal-quick-command-project-scope.test.ts:stablyai:5
 src/renderer/src/lib/work-item-link-query-bounds.test.ts:stablyai:1
@@ -649,4 +638,3 @@ src/shared/telemetry-events.test.ts:stablyai:1
 src/shared/tui-agent-config.ts:stablyai:1
 src/shared/updater-windows-signature-check.test.ts:SignPath Foundation:2
 src/shared/workspace-session-partition-owner.ts:stablyai:1
-src/types/build-constants.d.ts:posthog:1
