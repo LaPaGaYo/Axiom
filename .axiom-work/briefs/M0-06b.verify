@@ -1,0 +1,2 @@
+targets: src/shared/plugins src/main/plugins src/main/ipc/plugin-marketplaces src/main/github src/main/star-nag src/main/startup src/shared/agent-feature-install-commands src/main/runtime/runtime-skill-install-commands src/cli/handlers/skills src/shared/product-egress-policy src/renderer/src/components/plugins
+extra: ! rg -n "stablyai|orca-plugins" src/shared/plugins src/main/plugins src/main/github/client/fetch/orca-star.ts src/main/star-nag src/shared/agent-feature-install-commands.ts src/main/runtime/runtime-skill-install-commands.ts --glob '!*.test.*'
