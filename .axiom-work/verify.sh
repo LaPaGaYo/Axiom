@@ -4,6 +4,8 @@
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 ID="${1:?}"; SEQ="${2:?}"; shift 2
+# Remaining args: vitest targets (files/dirs) for the unit-tests step; VERIFY_EXTRA holds extra shell commands separated by ';'.
+TEST_TARGETS=("$@")
 mkdir -p .axiom-work/logs
 TS=$(date +%Y%m%d-%H%M%S); LOG=".axiom-work/logs/verify-$ID-$SEQ-$TS.log"
 export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
@@ -16,9 +18,12 @@ echo "node: $(node --version)  pnpm: $(pnpm --version)  git: $(git --version)"
 FAIL=0
 run() { local name="$1"; shift; echo; echo "---- CHECK $name :: $*"; local t0=$(date +%s); "$@"; local rc=$?; local t1=$(date +%s); echo "---- RESULT $name rc=$rc duration=$((t1-t0))s"; [ $rc -eq 0 ] || FAIL=1; }
 run vendor-egress-ratchet pnpm run check:vendor-egress-ratchet
-run unit-tests pnpm test config/scripts/check-vendor-egress-ratchet.test.mjs
+if [ ${#TEST_TARGETS[@]} -gt 0 ]; then run unit-tests pnpm test "${TEST_TARGETS[@]}"; fi
 run typecheck-node pnpm tc:node
+run typecheck-cli pnpm tc:cli
+run typecheck-web pnpm tc:web
 run code-quality-changed pnpm run check:code-quality:changed
-for extra in "$@"; do run "extra" bash -c "$extra"; done
+IFS=';' read -ra EXTRAS <<< "${VERIFY_EXTRA:-}"
+for extra in "${EXTRAS[@]}"; do [ -n "$extra" ] && run "extra" bash -c "$extra"; done
 run full-lint pnpm lint
 echo; echo "== verify $ID seq=$SEQ end $(date) OVERALL=$([ $FAIL -eq 0 ] && echo PASS || echo FAIL)"

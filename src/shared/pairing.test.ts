@@ -16,7 +16,7 @@ describe('pairing offer', () => {
 
   it('encode then decode round-trips correctly', () => {
     const url = encodePairingOffer(offer)
-    expect(url).toMatch(/^orca:\/\/pair\?code=/)
+    expect(url).toMatch(/^axiom:\/\/pair\?code=/)
 
     const decoded = decodePairingOffer(url)
     expect(decoded).toEqual(offer)
@@ -55,45 +55,51 @@ describe('pairing offer', () => {
     expect(code).not.toMatch(/[+/=]/)
   })
 
+  it('rejects the upstream scheme instead of accepting it as an alias', () => {
+    const url = encodePairingOffer(offer).replace(/^.*?:/, 'orca:')
+    expect(() => decodePairingOffer(url)).toThrow('Invalid pairing URL')
+    expect(parsePairingCode(url)).toBeNull()
+  })
+
   it('rejects URLs with wrong scheme', () => {
     expect(() => decodePairingOffer('https://example.com#abc')).toThrow('Invalid pairing URL')
   })
 
-  it('rejects orca URLs outside the exact pairing route', () => {
+  it('rejects axiom URLs outside the exact pairing route', () => {
     const url = encodePairingOffer(offer)
     const code = new URLSearchParams(url.slice(url.indexOf('?') + 1)).get('code')!
 
-    expect(parsePairingCode(`orca://pairing?code=${code}`)).toBeNull()
-    expect(parsePairingCode(`orca://pair-extra?code=${code}`)).toBeNull()
-    expect(() => decodePairingOffer(`orca://pairing?code=${code}`)).toThrow('Invalid pairing URL')
+    expect(parsePairingCode(`axiom://pairing?code=${code}`)).toBeNull()
+    expect(parsePairingCode(`axiom://pair-extra?code=${code}`)).toBeNull()
+    expect(() => decodePairingOffer(`axiom://pairing?code=${code}`)).toThrow('Invalid pairing URL')
   })
 
   it('rejects URLs without a pairing code', () => {
-    expect(() => decodePairingOffer('orca://pair')).toThrow('Invalid pairing URL')
+    expect(() => decodePairingOffer('axiom://pair')).toThrow('Invalid pairing URL')
   })
 
   it('decodes legacy hash URLs', () => {
     const url = encodePairingOffer(offer)
     const code = new URLSearchParams(url.slice(url.indexOf('?') + 1)).get('code')!
-    expect(decodePairingOffer(`orca://pair#${code}`)).toEqual(offer)
+    expect(decodePairingOffer(`axiom://pair#${code}`)).toEqual(offer)
   })
 
   it('rejects payloads with missing fields', () => {
     const partial = { v: 2, endpoint: 'ws://host:1234' }
     const base64 = Buffer.from(JSON.stringify(partial)).toString('base64')
-    expect(() => decodePairingOffer(`orca://pair#${base64}`)).toThrow()
+    expect(() => decodePairingOffer(`axiom://pair#${base64}`)).toThrow()
   })
 
   it('rejects payloads with wrong version', () => {
     const wrong = { ...offer, v: 1 }
     const base64 = Buffer.from(JSON.stringify(wrong)).toString('base64')
-    expect(() => decodePairingOffer(`orca://pair#${base64}`)).toThrow()
+    expect(() => decodePairingOffer(`axiom://pair#${base64}`)).toThrow()
   })
 
   it('rejects payloads with missing publicKeyB64', () => {
     const wrong = { v: 2, endpoint: 'ws://host:1234', deviceToken: 'tok' }
     const base64 = Buffer.from(JSON.stringify(wrong)).toString('base64')
-    expect(() => decodePairingOffer(`orca://pair#${base64}`)).toThrow()
+    expect(() => decodePairingOffer(`axiom://pair#${base64}`)).toThrow()
   })
 })
 
@@ -105,7 +111,7 @@ describe('parsePairingCode', () => {
     publicKeyB64: 'pubkey-xyz'
   }
 
-  it('parses a full orca://pair# URL', () => {
+  it('parses a full axiom://pair# URL', () => {
     const url = encodePairingOffer(offer)
     expect(parsePairingCode(url)).toEqual(offer)
   })

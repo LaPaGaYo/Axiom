@@ -446,13 +446,14 @@ describe('Windows NSIS uninstaller signing', () => {
     expect(verify.run).toContain('$script:advisories.Add($problem)')
   })
 
-  it('wires the electron-builder sign hook that the relay depends on', () => {
+  it('keeps the Axiom package unsigned while upstream workflow retirement is pending', () => {
     const require = createRequire(import.meta.url)
     const configPath = resolve(projectDir, 'config/electron-builder.config.cjs')
     delete require.cache[require.resolve(configPath)]
     const config = require(configPath)
 
-    expect(typeof config.win.signtoolOptions.sign).toBe('function')
+    expect(config.win.signtoolOptions).toBeUndefined()
+    expect(config.win.verifyUpdateCodeSignature).toBe(false)
     delete require.cache[require.resolve(configPath)]
   })
 })

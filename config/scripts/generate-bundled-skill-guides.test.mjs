@@ -13,6 +13,7 @@ import {
   buildArtifacts,
   frontmatterBlock,
   normalizeMarkdown,
+  renderProductCliGuidance,
   parseFrontmatter,
   readSharedStubBlocks,
   toPosixRelativePath,
@@ -88,7 +89,9 @@ describe('bundled skill guide generator', () => {
       const projection = await readFile(path.join(projectDir, 'skills', name, 'SKILL.md'), 'utf8')
 
       // The routing frontmatter is the unchanged discovery surface.
-      expect(projection.startsWith(frontmatterBlock(source, `${name}.md`))).toBe(true)
+      expect(
+        projection.startsWith(frontmatterBlock(renderProductCliGuidance(source), `${name}.md`))
+      ).toBe(true)
       // The stub is a thin hybrid pointer, not the full guide.
       expect(projection).not.toEqual(source)
       expect(projection.length).toBeLessThan(source.length)
@@ -210,12 +213,12 @@ describe('bundled skill guide generator', () => {
         'utf8'
       )
       const frontmatter = parseFrontmatter(source, `${guide.name}.md`)
-      expect(guide.description).toBe(frontmatter.description)
-      expect(guide.markdown).toBe(source)
+      expect(guide.description).toBe(renderProductCliGuidance(frontmatter.description))
+      expect(guide.markdown).toBe(renderProductCliGuidance(source))
       expect(guide.aliases).toEqual(GUIDE_ALIASES[guide.name])
       const references = GUIDE_REFERENCES[guide.name]
       if (!references) {
-        expect(guide.fullMarkdown).toBe(source)
+        expect(guide.fullMarkdown).toBe(renderProductCliGuidance(source))
         expect(guide.references).toEqual([])
         continue
       }
@@ -226,7 +229,7 @@ describe('bundled skill guide generator', () => {
       )
       for (const reference of guide.references) {
         expect(reference.markdown).toBe(
-          normalizeMarkdown(
+          renderProductCliGuidance(
             await readFile(
               path.join(
                 projectDir,
@@ -242,14 +245,16 @@ describe('bundled skill guide generator', () => {
       }
       expect(guide.fullMarkdown).not.toBe(guide.markdown)
       expect(guide.fullMarkdown.length).toBeGreaterThan(guide.markdown.length)
-      expect(guide.fullMarkdown.startsWith(source.trimEnd())).toBe(true)
+      expect(guide.fullMarkdown.startsWith(renderProductCliGuidance(source).trimEnd())).toBe(true)
       for (const reference of references) {
         const marker = `<!-- bundled-reference: references/${reference} -->`
         expect(guide.fullMarkdown.split(marker)).toHaveLength(2)
         expect(guide.fullMarkdown).toContain(
-          await readFile(
-            path.join(projectDir, 'skill-guides', guide.name, 'references', reference),
-            'utf8'
+          renderProductCliGuidance(
+            await readFile(
+              path.join(projectDir, 'skill-guides', guide.name, 'references', reference),
+              'utf8'
+            )
           )
         )
       }
@@ -386,8 +391,8 @@ describe('bundled skill guide generator', () => {
     expect([...blocks.keys()]).toEqual(['resolver', 'no-guessing'])
     // Why: the guide copies of this warning had each dropped one half. #7904 is the incident
     // where bare `orca` started the screen reader talking on a user's Ubuntu box.
-    expect(blocks.get('resolver').text).toContain('(`/usr/bin/orca`)')
-    expect(blocks.get('resolver').text).toContain("starts speech on the user's machine")
+    expect(blocks.get('resolver').text).toContain('use `axiom`')
+    expect(blocks.get('resolver').text).not.toContain('screen reader')
     for (const name of STUB_TOPICS) {
       const projection = await readFile(path.join(projectDir, 'skills', name, 'SKILL.md'), 'utf8')
       for (const [id, block] of blocks) {
@@ -490,5 +495,27 @@ describe('guide reference routing', () => {
       }
     }
     expect(mismatches).toEqual([])
+  })
+})
+
+describe('product CLI guidance projection', () => {
+  it('rewrites executable tokens without renaming env vars, topics, paths, or hosts', () => {
+    expect(
+      renderProductCliGuidance(
+        'orca status; orca-dev skills get orca-cli; orca-ide help; ORCA_CLI_COMMAND /usr/bin/orca orca.example.test'
+      )
+    ).toBe(
+      'axiom status; axiom-dev skills get orca-cli; axiom help; ORCA_CLI_COMMAND /usr/bin/orca orca.example.test'
+    )
+  })
+
+  it('ships Axiom command discovery in every generated stub', async () => {
+    const artifacts = await buildArtifacts(projectDir)
+    for (const artifact of artifacts.filter((entry) => entry.path.endsWith('SKILL.md'))) {
+      expect(artifact.content).toContain('use `axiom-dev`')
+      expect(artifact.content).toContain('use `axiom`')
+      expect(artifact.content).not.toContain('use `orca-ide`')
+      expect(artifact.content).not.toContain('Never run bare\n  `axiom`')
+    }
   })
 })

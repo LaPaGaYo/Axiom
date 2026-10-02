@@ -8,7 +8,7 @@ import { getBundledLauncherPath, LINUX_CLI_COMMAND_NAME } from './bundled-cli-la
 import { DEV_COMMAND_NAME } from './cli-install-constants'
 import { buildColocatedWslLauncher, buildWslBridgeScript } from './wsl-cli-scripts'
 
-/** Packaged builds share `orca-ide` with guest registration; dev builds get their own name. */
+/** Packaged builds share `axiom` with guest registration; dev builds get their own name. */
 export function getWslCliCommandName(isPackaged: boolean): string {
   return isPackaged ? LINUX_CLI_COMMAND_NAME : DEV_COMMAND_NAME
 }

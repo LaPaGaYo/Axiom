@@ -30,7 +30,6 @@ const {
 } = require('./scripts/verify-packaged-node-pty-job-ownership.cjs')
 const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
 const { verifyStaticAppImagePackage } = require('./scripts/static-appimage-package-contract.cjs')
-const { signWindowsUninstallerViaSignPath } = require('./scripts/windows-uninstaller-signing.cjs')
 
 // Why: dev-channel builds must carry the *release* identity — same bundle id,
 // Developer ID signature, and notarization ticket — or Squirrel.Mac refuses to
@@ -61,20 +60,8 @@ const devChannelBuildVersion = isHourlyChannel
     : isAdhocChannel
       ? process.env.ORCA_ADHOC_BUILD_VERSION
       : undefined
-// Why each dev channel gets its own repo rather than tagging into the main one:
-// the releases atom feed exposes only the 10 newest entries, so 24 hourly tags a
-// day would evict every stable/RC entry and strand users on a feed with nothing
-// to install. Keeping adhoc/daily separate from hourly too means a branch build
-// or a once-a-day cut cannot be picked up by someone who only meant to ride
-// main's hourlies.
-const devChannelRepo = isHourlyChannel
-  ? 'orca-hourly'
-  : isDailyChannel
-    ? 'orca-daily'
-    : isAdhocChannel
-      ? 'orca-adhoc'
-      : null
-const appId = 'com.stablyai.orca'
+const isDevChannel = isHourlyChannel || isDailyChannel || isAdhocChannel
+const appId = 'com.lapagayo.axiom'
 const featureWallResources = {
   from: 'resources/onboarding/feature-wall',
   to: 'onboarding/feature-wall'
@@ -172,14 +159,17 @@ const windowsRuntimeResources = existsSync(
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
   appId,
-  productName: 'Orca',
-  protocols: [{ name: 'Orca', schemes: ['orca'] }],
+  productName: 'Axiom',
+  protocols: [{ name: 'Axiom', schemes: ['axiom'] }],
   toolsets: { appimage: '1.0.3' },
-  ...(devChannelBuildVersion
-    ? { extraMetadata: { version: devChannelBuildVersion } }
-    : localBuildVersion
-      ? { extraMetadata: { version: localBuildVersion } }
-      : {}),
+  extraMetadata: {
+    name: 'axiom',
+    ...(devChannelBuildVersion
+      ? { version: devChannelBuildVersion }
+      : localBuildVersion
+        ? { version: localBuildVersion }
+        : {})
+  },
   directories: {
     buildResources: 'resources/build'
   },
@@ -213,7 +203,6 @@ module.exports = {
     // Why: local agent/tooling directories may contain worktree symlink loops;
     // they are never runtime inputs and must not be traversed by electron-builder.
     '!{.claude,.grok,.agents,.codex}{,/**/*}',
-    '!Casks{,/**/*}',
     '!{AGENTS.md,CLAUDE.md,DEVELOPING.md,bundle-size-progress.md,ORCHESTRATION_IMPLEMENTATION_CHECKLIST.md,ORCHESTRATION_STRUCTURED_OUTPUT_DESIGN.md}',
     '!out/**/*.test.js',
     // Why: main builds with sourcemap:'hidden' so release CI can publish maps
@@ -425,40 +414,20 @@ module.exports = {
     }
   },
   win: {
-    executableName: 'Orca',
-    // Why: Windows installers are signed after electron-builder packaging by
-    // SignPath, so the packager cannot infer the updater publisherName.
-    //
-    // Why dev channels drop it instead: they ship unsigned, because SignPath's
-    // approval waits are budgeted in hours and cannot fit an hourly cadence.
-    // electron-updater Authenticode-verifies every installer it downloads
-    // against the publisherName baked into the *installed* app's app-update.yml
-    // (NsisUpdater.verifySignature), and skips verification entirely when that
-    // name is absent. An unsigned build that still claimed 'SignPath Foundation'
-    // would therefore reject its own channel's next build — and its way back to
-    // stable with it. Dropping it is what makes dev→dev and dev→stable work.
-    // Why a sign hook on a build that does not sign: it is the only moment
-    // electron-builder exposes the NSIS uninstaller (built in its own makensis
-    // pass, embedded, then deleted). The hook signs nothing — it relays the file
-    // to and from the CI SignPath request, and is inert when the relay env vars
-    // are unset, so local and dev builds are unaffected. publisherName stays on
-    // its existing channel split above.
-    signtoolOptions: {
-      sign: signWindowsUninstallerViaSignPath,
-      ...(isWinDevChannel ? {} : { publisherName: 'SignPath Foundation' })
-    },
-    ...(isWinDevChannel ? { verifyUpdateCodeSignature: false } : {}),
+    executableName: 'Axiom',
+    // Why: Axiom currently ships unsigned Windows installers on every channel.
+    verifyUpdateCodeSignature: false,
     extraResources: [
       ...commonExtraResources,
       ...windowsRuntimeResources,
       winSpeechNativeResource,
       {
         from: 'resources/win32/bin/orca.cmd',
-        to: 'bin/orca.cmd'
+        to: 'bin/axiom.cmd'
       },
       {
         from: 'native/windows-cli-launcher/.build/orca.exe',
-        to: 'bin/orca.exe'
+        to: 'bin/axiom.exe'
       },
       {
         from: 'node_modules/agent-browser/bin/agent-browser-win32-x64.exe',
@@ -472,7 +441,7 @@ module.exports = {
     ]
   },
   nsis: {
-    artifactName: 'orca-windows-setup.${ext}',
+    artifactName: 'axiom-windows-setup.${ext}',
     shortcutName: '${productName}',
     uninstallDisplayName: '${productName}',
     createDesktopShortcut: 'always',
@@ -538,7 +507,7 @@ module.exports = {
       macSpeechNativeResource,
       {
         from: 'resources/darwin/bin/orca',
-        to: 'bin/orca'
+        to: 'bin/axiom'
       },
       {
         from: 'node_modules/agent-browser/bin/agent-browser-darwin-${arch}',
@@ -578,7 +547,7 @@ module.exports = {
   // silently downgrading to ad-hoc artifacts that look shippable in CI logs.
   forceCodeSigning: isMacRelease,
   dmg: {
-    artifactName: 'orca-macos-${arch}.${ext}'
+    artifactName: 'axiom-macos-${arch}.${ext}'
   },
   linux: {
     // Why mimeTypes and not fileAssociations: shared-mime-info already maps *.md/*.markdown to
@@ -587,17 +556,16 @@ module.exports = {
     // default. .mdx is deliberately absent: Ubuntu 24.04's mime database maps it to
     // application/x-genesis-32x-rom, so claiming it here would need a glob override.
     mimeTypes: ['text/markdown'],
-    // Why: Ubuntu desktop ships GNOME Orca as the `orca` package and /usr/bin/orca.
-    // The Linux installer should not claim those system package/file names.
-    executableName: 'orca-ide',
+    // The desktop binary stays distinct from the public axiom CLI launcher.
+    executableName: 'axiom-ide',
     // Why: the icns source lets electron-builder emit standard hicolor PNG
     // sizes; a single 1024px PNG is ignored by some Linux docks/launchers.
     icon: 'resources/build/icon.icns',
     desktop: {
       entry: {
-        // Why: Electron reports WM_CLASS=orca for the visible Linux window;
-        // GNOME docks need an exact match to group it with orca-ide.desktop.
-        StartupWMClass: 'orca'
+        // Why: match the packaged application name so GNOME groups its windows
+        // with the axiom-ide desktop entry.
+        StartupWMClass: 'axiom'
       }
     },
     extraResources: [
@@ -606,7 +574,7 @@ module.exports = {
       linuxSpeechNativeResource,
       {
         from: 'resources/linux/bin/orca-ide',
-        to: 'bin/orca-ide'
+        to: 'bin/axiom'
       },
       {
         from: 'node_modules/agent-browser/bin/agent-browser-linux-${arch}',
@@ -620,16 +588,16 @@ module.exports = {
     ],
     // Keep local artifacts aligned with the release pipeline.
     target: ['AppImage', 'deb', 'rpm'],
-    maintainer: 'stablyai',
+    maintainer: 'LaPaGaYo',
     category: 'Utility'
   },
   appImage: {
-    artifactName: isLinuxArm64Release ? 'orca-linux-arm64.${ext}' : 'orca-linux.${ext}'
+    artifactName: isLinuxArm64Release ? 'axiom-linux-arm64.${ext}' : 'axiom-linux.${ext}'
   },
   deb: {
-    packageName: 'orca-ide',
-    artifactName: 'orca-ide_${version}_${arch}.${ext}',
-    // Why: xvfb lets the bundled `orca serve` CLI run browser panes on a headless
+    packageName: 'axiom-ide',
+    artifactName: 'axiom-ide_${version}_${arch}.${ext}',
+    // Why: xvfb lets the bundled `axiom serve` CLI run browser panes on a headless
     // Linux host — Chromium needs a display server even for offscreen rendering,
     // and serve starts Xvfb itself when present (see ensure-virtual-display.ts).
     depends: [
@@ -642,7 +610,7 @@ module.exports = {
       'xclip',
       'xvfb'
     ],
-    // Why: symlink the bundled CLI onto PATH at install time so `orca-ide serve`
+    // Why: symlink the bundled CLI onto PATH at install time so `axiom serve`
     // works on a headless host. The in-app CLI registration (CliInstaller) is
     // GUI-triggered and can never run on a server, so without this the CLI is
     // unreachable from the shell on exactly the hosts that need it.
@@ -650,8 +618,8 @@ module.exports = {
     afterRemove: 'resources/linux/packaging/after-remove.sh'
   },
   rpm: {
-    packageName: 'orca-ide',
-    artifactName: 'orca-ide-${version}.${arch}.${ext}',
+    packageName: 'axiom-ide',
+    artifactName: 'axiom-ide-${version}.${arch}.${ext}',
     // Why: see deb depends. RPM distros ship Xvfb as xorg-x11-server-Xvfb (there
     // is no `xvfb` package), so the name differs from the deb here.
     depends: [
@@ -676,13 +644,13 @@ module.exports = {
   npmRebuild: true,
   publish: {
     provider: 'github',
-    owner: 'stablyai',
-    repo: devChannelRepo ?? 'orca',
+    owner: 'LaPaGaYo',
+    repo: 'Axiom',
     // Why draft on the main repo: `--publish always` otherwise creates a
     // public GitHub release as soon as the first platform uploads, and
     // /releases/latest serves a missing Windows exe. release-cut undrafts
     // only after every required asset exists.
-    releaseType: devChannelRepo ? 'prerelease' : 'draft'
+    releaseType: isDevChannel ? 'prerelease' : 'draft'
   }
 }
 
@@ -700,7 +668,7 @@ function chmodUnixCliLaunchers(resourcesDir, electronPlatformName) {
   if (electronPlatformName === 'win32') {
     return
   }
-  for (const launcherName of ['orca', 'orca-ide']) {
+  for (const launcherName of ['axiom']) {
     const launcherPath = join(resourcesDir, 'bin', launcherName)
     if (!existsSync(launcherPath)) {
       continue

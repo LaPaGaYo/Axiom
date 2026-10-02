@@ -1,3 +1,4 @@
+import { DEV_COMMAND_NAME } from '../../cli/cli-install-constants'
 import { settledWriteStub } from '../../providers/settled-pty-write-stub'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
@@ -62,7 +63,7 @@ describe('OrcaRuntimeService', () => {
         .map(([, data]) => data)
         .filter((data): data is string => typeof data === 'string')
       expect(payloads).toContain(
-        '\nYou have 1 orchestration message. Run `orca-dev orchestration check --run run_test`.\n'
+        `\nYou have 1 orchestration message. Run \`${DEV_COMMAND_NAME} orchestration check --run run_test\`.\n`
       )
       expect(payloads.some((data) => data.includes('reserved completion'))).toBe(false)
       expect(status.delivered_at).toEqual(expect.any(String))

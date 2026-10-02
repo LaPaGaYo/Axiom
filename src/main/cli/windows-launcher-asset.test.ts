@@ -7,8 +7,8 @@ describe('packaged Windows CLI launcher asset', () => {
     const launcherPath = join(process.cwd(), 'resources', 'win32', 'bin', 'orca.cmd')
     const launcher = readFileSync(launcherPath, 'utf8')
 
-    expect(launcher).toContain('set "LAUNCHER=%SCRIPT_DIR%orca.exe"')
-    expect(launcher).toContain('orca.cmd cannot safely forward orchestration message bodies')
+    expect(launcher).toContain('set "LAUNCHER=%SCRIPT_DIR%axiom.exe"')
+    expect(launcher).toContain('axiom.cmd cannot safely forward orchestration message bodies')
     expect(launcher).not.toContain('"%ELECTRON%" "%CLI%" %*')
   })
 
@@ -24,7 +24,7 @@ describe('packaged Windows CLI launcher asset', () => {
     expect(source).toContain(
       'string requestedCliCommand = Environment.GetEnvironmentVariable("ORCA_CLI_COMMAND");'
     )
-    expect(source).toContain('requestedCliCommand == "orca-ide" ? "orca-ide" : "orca"')
+    expect(source).toContain('requestedCliCommand == "axiom-dev" ? "axiom-dev" : "axiom"')
     expect(source).toContain('child.WaitForExit();')
     expect(source).toContain('return child.ExitCode;')
   })

@@ -1,4 +1,5 @@
 import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/setup-agent-sequencing'
+import { getOrcaCliCommandNameForPlatform } from '../../../../shared/orca-cli-command-name'
 import { isOpenCode2LaunchCommand } from '../../../../shared/opencode-launch-command'
 import {
   detectExplicitPiAgentKindFromCommand,
@@ -300,7 +301,9 @@ export function buildPtyHostEnv(
     baseEnv.BROWSER === undefined &&
     process.env.BROWSER === undefined
   ) {
-    const cliCommand = opts.isWsl ? getWslCliCommandName(opts.isPackaged) : 'orca'
+    const cliCommand = opts.isWsl
+      ? getWslCliCommandName(opts.isPackaged)
+      : getOrcaCliCommandNameForPlatform(process.platform)
     baseEnv.BROWSER = `${cliCommand} open-url --url %s`
   }
 

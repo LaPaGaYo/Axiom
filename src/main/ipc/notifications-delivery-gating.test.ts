@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../shared/local-build-compatibility-contract'
 
 import {
   getAllWindowsMock,
@@ -32,6 +33,7 @@ vi.mock('../tray/system-tray', async () =>
 )
 
 import { registerNotificationHandlers } from './notifications'
+import { openNotificationSystemSettings } from './notification-system-settings-link'
 
 describe('registerNotificationHandlers', () => {
   beforeEach(() => {
@@ -56,11 +58,30 @@ describe('registerNotificationHandlers', () => {
     expect(handleMock).toHaveBeenCalledWith('notifications:dispatch', expect.any(Function))
   })
 
+  it('opens the packaged macOS app notification settings entry without a dev override', () => {
+    const originalPlatform = process.platform
+    const originalBundleId = process.env.ORCA_DEV_MACOS_BUNDLE_ID
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    delete process.env.ORCA_DEV_MACOS_BUNDLE_ID
+    try {
+      openNotificationSystemSettings()
+
+      expect(shellOpenExternalMock).toHaveBeenCalledWith(
+        `x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=${LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId}`
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+      if (originalBundleId !== undefined) {
+        process.env.ORCA_DEV_MACOS_BUNDLE_ID = originalBundleId
+      }
+    }
+  })
+
   it('opens the current macOS app notification settings entry', async () => {
     const originalPlatform = process.platform
     const originalBundleId = process.env.ORCA_DEV_MACOS_BUNDLE_ID
     Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
-    process.env.ORCA_DEV_MACOS_BUNDLE_ID = 'com.stablyai.orca.dev.fb5a47066f08'
+    process.env.ORCA_DEV_MACOS_BUNDLE_ID = `${LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId}.dev.fb5a47066f08`
     try {
       registerNotificationHandlers({
         getSettings: () => ({
@@ -77,7 +98,7 @@ describe('registerNotificationHandlers', () => {
       handler({})
 
       expect(shellOpenExternalMock).toHaveBeenCalledWith(
-        'x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=com.stablyai.orca.dev.fb5a47066f08'
+        `x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=${LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId}.dev.fb5a47066f08`
       )
     } finally {
       Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })

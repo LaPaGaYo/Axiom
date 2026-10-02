@@ -41,5 +41,7 @@ export type CoordinatorRuntime = {
     launchTokenHash: string | null
   } | null
   // Why: Windows can host native and WSL workers at once, so the worker pane (not the coordinator) picks the packaged CLI name.
-  getTerminalOrchestrationCliCommand?(handle: string): 'orca' | 'orca-dev' | 'orca-ide'
+  getTerminalOrchestrationCliCommand?(
+    handle: string
+  ): 'orca' | 'orca-dev' | 'orca-ide' | 'axiom' | 'axiom-dev'
 }

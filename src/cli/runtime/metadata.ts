@@ -44,14 +44,14 @@ export function getDefaultUserDataPath(
   homeDir = homedir()
 ): string {
   // Why: in dev mode (and for parallel Orca instances), the Electron app writes
-  // runtime metadata to a separate userData directory (e.g. `orca-dev`) to avoid
+  // runtime metadata to a separate userData directory (e.g. `axiom-dev`) to avoid
   // clobbering the production app's metadata. The CLI needs to find the same
   // metadata file, so this env var lets the CLI target a specific instance.
   if (process.env.ORCA_USER_DATA_PATH) {
     return process.env.ORCA_USER_DATA_PATH
   }
   if (platform === 'darwin') {
-    return join(homeDir, 'Library', 'Application Support', 'orca')
+    return join(homeDir, 'Library', 'Application Support', 'axiom')
   }
   if (platform === 'win32') {
     const appData = process.env.APPDATA
@@ -61,10 +61,10 @@ export function getDefaultUserDataPath(
         'APPDATA is not set, so the Orca runtime metadata path cannot be resolved.'
       )
     }
-    return join(appData, 'orca')
+    return join(appData, 'axiom')
   }
   // Why: the CLI must find the same metadata file Electron writes in packaged
   // runs, so this mirrors Electron's default userData base instead of inventing
   // a CLI-specific config path.
-  return join(process.env.XDG_CONFIG_HOME || join(homeDir, '.config'), 'orca')
+  return join(process.env.XDG_CONFIG_HOME || join(homeDir, '.config'), 'axiom')
 }

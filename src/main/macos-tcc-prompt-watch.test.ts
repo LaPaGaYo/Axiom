@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../shared/local-build-compatibility-contract'
 import {
   MacosTccPromptWatch,
   type LogStreamChild,
@@ -14,8 +15,7 @@ const REAL_PROMPT_LINE =
   '2026-07-27 15:35:26.136 Df tccd[79149:c81551c] [com.apple.TCC:access] AUTHREQ_PROMPTING: msgID=80871.81, service=kTCCServiceSystemPolicyDocumentsFolder, subject=Sub:{com.orca.tccprobe.shapecapture}Resp:{TCCDProcess: identifier=com.orca.tccprobe.shapecapture, pid=74171, auid=501, euid=501, binary_path=/private/tmp/tccprobe/TccProbe.app/Contents/MacOS/TccProbe},'
 
 // Same shape, but the #9756 case: an agent CLI accesses, Orca is held responsible.
-const ORCA_APPDATA_LINE =
-  '2026-07-27 15:40:02.001 Df tccd[79149:c81551c] [com.apple.TCC:access] AUTHREQ_PROMPTING: msgID=80871.99, service=kTCCServiceSystemPolicyAppData, subject=Sub:{node-5555494487fbc7467d473fd8b0a397018cbf954b}Resp:{TCCDProcess: identifier=com.stablyai.orca, pid=47548, auid=501, euid=501, binary_path=/opt/homebrew/Cellar/node/26.5.0/bin/node},'
+const ORCA_APPDATA_LINE = `2026-07-27 15:40:02.001 Df tccd[79149:c81551c] [com.apple.TCC:access] AUTHREQ_PROMPTING: msgID=80871.99, service=kTCCServiceSystemPolicyAppData, subject=Sub:{node-5555494487fbc7467d473fd8b0a397018cbf954b}Resp:{TCCDProcess: identifier=${LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId}, pid=47548, auid=501, euid=501, binary_path=/opt/homebrew/Cellar/node/26.5.0/bin/node},`
 
 // Preflight checks dominate the TCC subsystem and must never count as a dialog.
 const PREFLIGHT_LINE =
@@ -34,7 +34,7 @@ describe('parseTccPromptEvent', () => {
   it('separates the accessing binary from the responsible app', () => {
     const event = parseTccPromptEvent(ORCA_APPDATA_LINE)
     // The whole point of #9756: the dialog says Orca, but node did the access.
-    expect(event?.responsibleIdentifier).toBe('com.stablyai.orca')
+    expect(event?.responsibleIdentifier).toBe(LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId)
     expect(event?.accessingIdentifier).toBe('node-5555494487fbc7467d473fd8b0a397018cbf954b')
     expect(event?.binaryPath).toBe('/opt/homebrew/Cellar/node/26.5.0/bin/node')
   })
@@ -49,14 +49,14 @@ describe('parseTccPromptEvent', () => {
 })
 
 describe('isOrcaAttributedPrompt', () => {
-  it('accepts the app and detached terminal helper across Orca build identities', () => {
+  it('accepts the app and detached terminal helper across Axiom build identities', () => {
     for (const id of [
-      'com.stablyai.orca',
-      'com.stablyai.orca.helper',
-      'com.stablyai.orca.dev',
-      'com.stablyai.orca.dev.helper',
-      'com.stablyai.orca.local',
-      'com.stablyai.orca.local.helper'
+      LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId,
+      `${LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId}.helper`,
+      `${LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId}.dev`,
+      `${LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId}.dev.helper`,
+      `${LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId}.local`,
+      `${LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId}.local.helper`
     ]) {
       expect(
         isOrcaAttributedPrompt({
@@ -83,7 +83,7 @@ describe('isOrcaAttributedPrompt', () => {
       isOrcaAttributedPrompt({
         service: 'kTCCServiceMicrophone',
         accessingIdentifier: 'orca',
-        responsibleIdentifier: 'com.stablyai.orca'
+        responsibleIdentifier: LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId
       })
     ).toBe(false)
   })
@@ -152,7 +152,7 @@ describe('MacosTccPromptWatch', () => {
     expect(onPrompt).toHaveBeenCalledTimes(1)
     expect(onPrompt.mock.calls[0][0]).toMatchObject({
       service: 'kTCCServiceSystemPolicyAppData',
-      responsibleIdentifier: 'com.stablyai.orca'
+      responsibleIdentifier: LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId
     })
     watch.stop()
   })

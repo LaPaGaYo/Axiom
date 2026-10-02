@@ -5,7 +5,7 @@ description: >-
   on-demand, disposable runtime (cloud sandbox, VM, SSH host, or local container)
   Orca creates fresh for each workspace. Use to stand up a new recipe end to end,
   fix an `environmentRecipes` entry in `orca.yaml`, scaffold provider lifecycle
-  scripts, or resolve an `orca vm recipe doctor` failure. Use `orca-cli` for
+  scripts, or resolve an `axiom vm recipe doctor` failure. Use `orca-cli` for
   ordinary worktree and workspace creation with no recipe involved.
 ---
 
@@ -19,11 +19,8 @@ Choose the executable once and reuse it for every later command:
 
 - If the `ORCA_CLI_COMMAND` environment variable is set, use its value. Orca exports this
   for managed WSL sessions.
-- Otherwise, in a dev checkout whose session exposes `ORCA_DEV_REPO_ROOT`, use `orca-dev`.
-- Otherwise, on Linux outside an Orca-managed terminal, use `orca-ide`. Never run bare
-  `orca` there — outside Orca's terminals it normally resolves to the
-  GNOME Orca screen reader (`/usr/bin/orca`) and starts speech on the user's machine.
-- Otherwise, use `orca`.
+- Otherwise, in a dev checkout whose session exposes `ORCA_DEV_REPO_ROOT`, use `axiom-dev`.
+- Otherwise, use `axiom`.
 
 Below, `ORCA` is a placeholder for the executable you resolved. Substitute it before
 running anything; do not create a shell variable or run `ORCA` literally. This works the

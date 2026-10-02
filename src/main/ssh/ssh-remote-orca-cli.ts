@@ -241,7 +241,7 @@ async function dispatchRemoteCli(
           types: optionalRemoteCliString(parsed.flags, 'types'),
           format: parsed.flags.has('format') ? true : undefined,
           inject: parsed.flags.has('inject') ? true : undefined,
-          compatibilityCliCommand: 'orca',
+          compatibilityCliCommand: 'axiom',
           run: optionalRemoteCliString(parsed.flags, 'run'),
           ack: optionalRemoteCliString(parsed.flags, 'ack'),
           wait: parsed.flags.has('wait') ? true : undefined,
@@ -261,7 +261,7 @@ async function dispatchRemoteCli(
           timeoutMs: optionalRemoteCliNumber(parsed.flags, 'timeout-ms'),
           from: resolveRemoteCliHandle(parsed.flags, env, 'from'),
           run: optionalRemoteCliString(parsed.flags, 'run'),
-          compatibilityCliCommand: 'orca'
+          compatibilityCliCommand: 'axiom'
         },
         {
           ...compatibilityEnvelope,

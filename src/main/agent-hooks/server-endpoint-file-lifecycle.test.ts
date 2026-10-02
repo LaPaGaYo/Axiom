@@ -14,6 +14,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer, _internals } from './server'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../shared/local-build-compatibility-contract'
 import { LEAF_3 } from './server.test-fixtures'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
@@ -141,12 +142,14 @@ describe('Endpoint file lifecycle', () => {
     await server.start({
       env: 'development',
       userDataPath,
-      endpointNamespace: 'com.stablyai.orca.dev.test123'
+      endpointNamespace: `${LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId}.dev.test123`
     })
     try {
       const env = server.buildPtyEnv()
       expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBe(server.endpointFilePath)
-      expect(env.ORCA_AGENT_HOOK_ENDPOINT).toContain('com.stablyai.orca.dev.test123')
+      expect(env.ORCA_AGENT_HOOK_ENDPOINT).toContain(
+        `${LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId}.dev.test123`
+      )
       expect(env.ORCA_AGENT_HOOK_PORT).toBeTruthy()
       expect(env.ORCA_AGENT_HOOK_TOKEN).toBeTruthy()
     } finally {

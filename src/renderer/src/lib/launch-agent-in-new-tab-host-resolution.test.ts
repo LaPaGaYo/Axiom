@@ -1,6 +1,8 @@
 // Execution-host coverage for launchAgentInNewTab, split from launch-agent-in-new-tab.test.ts to
 // keep both files within the lines budget.
 
+import { buildAgentStartupPlan } from '../../../shared/tui-agent-startup'
+import { getOrcaCliCommandNameForPlatform } from '../../../shared/orca-cli-command-name'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockCreateTab = vi.fn()
@@ -95,7 +97,11 @@ async function launchOnLinux(): Promise<void> {
   launchAgentInNewTab({ agent: 'claude-agent-teams', worktreeId: 'wt-1', launchPlatform: 'linux' })
 }
 
-function queuedCommand(): string {
+vi.mock('../../../shared/tui-agent-startup', { spy: true })
+
+function queuedCommand(isRemote: boolean): string {
+  // Why: both routes use Axiom, so assert host selection independently of spelling.
+  expect(buildAgentStartupPlan).toHaveBeenLastCalledWith(expect.objectContaining({ isRemote }))
   return mockQueueTabStartupCommand.mock.calls[0]?.[1]?.command
 }
 
@@ -128,7 +134,9 @@ describe('launchAgentInNewTab execution host resolution', () => {
 
     await launchOnLinux()
 
-    expect(queuedCommand()).toBe("orca-ide claude-teams '--dangerously-skip-permissions'")
+    expect(queuedCommand(false)).toBe(
+      `${getOrcaCliCommandNameForPlatform('linux')} claude-teams '--dangerously-skip-permissions'`
+    )
   })
 
   it('keeps a worktree on one SSH host remote while a rival row names another', async () => {
@@ -140,7 +148,9 @@ describe('launchAgentInNewTab execution host resolution', () => {
 
     await launchOnLinux()
 
-    expect(queuedCommand()).toBe("orca claude-teams '--dangerously-skip-permissions'")
+    expect(queuedCommand(true)).toBe(
+      `${getOrcaCliCommandNameForPlatform('linux')} claude-teams '--dangerously-skip-permissions'`
+    )
   })
 
   it('keeps a runtime host reaching a nested SSH target on the relay shim name', async () => {
@@ -151,7 +161,9 @@ describe('launchAgentInNewTab execution host resolution', () => {
 
     await launchOnLinux()
 
-    expect(queuedCommand()).toBe("orca claude-teams '--dangerously-skip-permissions'")
+    expect(queuedCommand(true)).toBe(
+      `${getOrcaCliCommandNameForPlatform('linux')} claude-teams '--dangerously-skip-permissions'`
+    )
   })
 
   it('keeps a runtime host with no nested SSH target on the local CLI name', async () => {
@@ -162,6 +174,8 @@ describe('launchAgentInNewTab execution host resolution', () => {
 
     await launchOnLinux()
 
-    expect(queuedCommand()).toBe("orca-ide claude-teams '--dangerously-skip-permissions'")
+    expect(queuedCommand(false)).toBe(
+      `${getOrcaCliCommandNameForPlatform('linux')} claude-teams '--dangerously-skip-permissions'`
+    )
   })
 })

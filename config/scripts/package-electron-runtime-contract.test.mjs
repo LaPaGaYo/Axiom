@@ -421,7 +421,7 @@ describe('Electron runtime package contract', () => {
     expect(versionStep.run).toContain('git rev-parse "$existing_rc_tag"')
   })
 
-  it('bumps separate Homebrew casks for stable and RC desktop tags', () => {
+  it('keeps upstream Homebrew publishing disabled', () => {
     const releaseWorkflow = parse(
       readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
     )
@@ -429,29 +429,10 @@ describe('Electron runtime package contract', () => {
       readFileSync(join(projectDir, '.github/workflows/homebrew-bump.yml'), 'utf8')
     )
 
-    expect(releaseWorkflow.jobs['homebrew-bump'].if).toContain(
-      "startsWith(needs.cut.outputs.tag, 'v')"
-    )
-    expect(releaseWorkflow.jobs['homebrew-bump'].if).not.toContain('-rc.')
-    expect(releaseWorkflow.jobs['homebrew-bump-published-rc-draft'].with.tag).toBe(
-      '${{ needs.cut.outputs.latest_published_rc_tag }}'
-    )
-
-    const resolveCaskStep = homebrewWorkflow.jobs['bump-cask'].steps.find(
-      (step) => step.name === 'Resolve cask target'
-    )
-    const renderStep = homebrewWorkflow.jobs['bump-cask'].steps.find(
-      (step) => step.name === 'Render updated cask file'
-    )
-    const copyStep = homebrewWorkflow.jobs['bump-cask'].steps.find(
-      (step) => step.name === 'Copy cask into tap and open PR'
-    )
-
-    expect(resolveCaskStep.run).toContain('token="orca@rc"')
-    expect(resolveCaskStep.run).toContain('token="orca"')
-    expect(renderStep.env.CASK_PATH).toBe('${{ steps.cask.outputs.path }}')
-    expect(copyStep.run).toContain('cp "$CASK_PATH" "tap/$CASK_PATH"')
-    expect(copyStep.run).toContain('git add "$CASK_PATH"')
+    expect(releaseWorkflow.jobs['homebrew-bump']).toBeUndefined()
+    expect(releaseWorkflow.jobs['homebrew-bump-published-rc-draft']).toBeUndefined()
+    expect(homebrewWorkflow.jobs.disabled.if).toBe('${{ false }}')
+    expect(JSON.stringify(homebrewWorkflow)).not.toContain('Casks/')
   })
 
   it('installs the Electron package binary in the shared unit-test workflow', () => {

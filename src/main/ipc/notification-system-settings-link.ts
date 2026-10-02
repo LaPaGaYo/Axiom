@@ -1,6 +1,7 @@
 import { shell } from 'electron'
+import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../shared/local-build-compatibility-contract'
 
-const MACOS_PACKAGED_BUNDLE_ID = 'com.stablyai.orca'
+const MACOS_PACKAGED_BUNDLE_ID = LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId
 const MACOS_NOTIFICATION_SETTINGS_URL =
   'x-apple.systempreferences:com.apple.Notifications-Settings.extension'
 

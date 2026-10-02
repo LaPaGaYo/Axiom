@@ -1,11 +1,3 @@
-Casks/orca.rb:com.stablyai:5
-Casks/orca.rb:onorca.dev:1
-Casks/orca.rb:orca.dev:1
-Casks/orca.rb:stablyai:7
-Casks/orca@rc.rb:com.stablyai:5
-Casks/orca@rc.rb:onorca.dev:1
-Casks/orca@rc.rb:orca.dev:1
-Casks/orca@rc.rb:stablyai:8
 README.md:SignPath Foundation:1
 README.md:onorca.dev:28
 README.md:orca.dev:28
@@ -138,46 +130,30 @@ cloud/packages/push-contract/src/push-host-proof-vector.json:orca.dev:1
 cloud/packages/push-contract/src/push-limits.ts:com.stably.orca:1
 cloud/packages/relay-contract/src/contract.test.ts:onorca.dev:7
 cloud/packages/relay-contract/src/contract.test.ts:orca.dev:7
-config/dev-app-update.yml:stablyai:1
-config/electron-builder.config.cjs:SignPath Foundation:2
-config/electron-builder.config.cjs:com.stablyai:1
-config/electron-builder.config.cjs:stablyai:3
 config/i18n-translation-source.md:stablyai:1
 config/packaged-runtime-node-modules.cjs:posthog:1
 config/reliability-gates.jsonc:stablyai:272
 config/scripts/assert-github-release-is-draft.mjs:stablyai:1
 config/scripts/assert-github-release-is-draft.test.mjs:stablyai:4
-config/scripts/build-computer-macos.mjs:com.stablyai:1
-config/scripts/build-computer-macos.mjs:stablyai:1
-config/scripts/build-notification-status-macos.mjs:com.stablyai:1
-config/scripts/build-notification-status-macos.mjs:stablyai:1
 config/scripts/build-windows-cli-launcher.test.mjs:stablyai:1
 config/scripts/check-reliability-gates.test.mjs:stablyai:1
 config/scripts/ci-e2e-shard-selection.test.mjs:stablyai:1
 config/scripts/ci-shard-timings.md:stablyai:2
 config/scripts/create-draft-release.mjs:stablyai:1
 config/scripts/create-draft-release.test.mjs:stablyai:19
-config/scripts/dev-electron-bundle-identity.mjs:com.stablyai:1
-config/scripts/dev-electron-bundle-identity.mjs:orca.dev:1
-config/scripts/dev-electron-bundle-identity.mjs:stablyai:1
-config/scripts/electron-builder-mac-channel-config.test.mjs:com.stablyai:4
-config/scripts/electron-builder-mac-channel-config.test.mjs:stablyai:4
 config/scripts/electron-runtime-floor.test.ts:stablyai:1
 config/scripts/hourly-preflight-workflow.test.mjs:stablyai:2
 config/scripts/latest-stable-release.mjs:stablyai:1
 config/scripts/latest-stable-release.test.mjs:stablyai:3
 config/scripts/locale-ko-key-overrides.json:stablyai:1
 config/scripts/locale-translation-policy.mjs:posthog:1
-config/scripts/mac-build-compatibility.test.mjs:com.stablyai:1
-config/scripts/mac-build-compatibility.test.mjs:stablyai:1
-config/scripts/macos-launch-diagnostics.sh:com.stablyai:2
-config/scripts/macos-launch-diagnostics.sh:stablyai:3
+config/scripts/macos-launch-diagnostics.sh:stablyai:1
 config/scripts/playwright-focused-workflow-selection.test.mjs:stablyai:1
 config/scripts/pr-ready-check-reuse.test.mjs:stablyai:2
 config/scripts/pr-test-loc-summary.test.mjs:stablyai:8
 config/scripts/publish-complete-draft-releases.mjs:stablyai:1
 config/scripts/publish-complete-draft-releases.test.mjs:stablyai:3
-config/scripts/release-cut-token-permissions.test.mjs:stablyai:2
+config/scripts/release-cut-token-permissions.test.mjs:stablyai:1
 config/scripts/release-mac-build-workflow-dispatch.test.mjs:stablyai:11
 config/scripts/replace-cached-nsis-elevate.test.mjs:SignPath Foundation:1
 config/scripts/repro-windows-apphang-terminal-activation.mjs:stablyai:2
@@ -186,17 +162,13 @@ config/scripts/run-idle-cpu-benchmark.mjs:stablyai:1
 config/scripts/setup-adhoc-release-repo.sh:stablyai:2
 config/scripts/setup-daily-release-repo.sh:stablyai:2
 config/scripts/setup-hourly-release-token.sh:stablyai:5
-config/scripts/verify-dev-channel-packaging.mjs:stablyai:1
-config/scripts/verify-dev-channel-packaging.test.mjs:SignPath Foundation:5
+config/scripts/verify-dev-channel-packaging.test.mjs:SignPath Foundation:3
 config/scripts/verify-packaged-plugin-resources.test.mjs:stablyai:3
-config/scripts/verify-release-required-assets.mjs:stablyai:1
-config/scripts/verify-release-required-assets.test.mjs:stablyai:2
 config/scripts/verify-telemetry-constants.mjs:posthog:4
 config/scripts/verify-windows-inner-signature.mjs:SignPath Foundation:1
 config/scripts/verify-windows-inner-signature.test.mjs:SignPath Foundation:6
 config/scripts/windows-signing-workflow-contract.test.mjs:SignPath Foundation:1
 electron.vite.config.ts:posthog:6
-mobile/app.json:com.stably.orca:2
 mobile/fastlane/Appfile:com.stably.orca:1
 mobile/fastlane/Fastfile:com.stably.orca:1
 mobile/google-services.json:com.stably.orca:1
@@ -311,9 +283,6 @@ src/cli/index-worktree-create-target.test.ts:stablyai:5
 src/cli/skills.test.ts:stablyai:11
 src/cli/specs/core.ts:stablyai:1
 src/cli/specs/project.ts:stablyai:9
-src/main/agent-hooks/server-endpoint-file-lifecycle.test.ts:com.stablyai:2
-src/main/agent-hooks/server-endpoint-file-lifecycle.test.ts:orca.dev:2
-src/main/agent-hooks/server-endpoint-file-lifecycle.test.ts:stablyai:2
 src/main/artifacts/artifact-cloud-config.test.ts:onorca.dev:2
 src/main/artifacts/artifact-cloud-config.test.ts:orca.dev:2
 src/main/artifacts/artifact-cloud-config.ts:onorca.dev:3
@@ -333,23 +302,14 @@ src/main/artifacts/artifact-share-record-allocation.test.ts:orca.dev:2
 src/main/artifacts/artifact-share-record-store.test.ts:onorca.dev:9
 src/main/artifacts/artifact-share-record-store.test.ts:orca.dev:9
 src/main/azure-devops/repository-ref.test.ts:stablyai:1
-src/main/cli/linux-terminal-orca-cli-shim.ts:stablyai:1
 src/main/cli/orca-cli-child-path.ts:stablyai:2
 src/main/cli/windows-launcher-asset.test.ts:stablyai:1
 src/main/codex-cli/command.test.ts:stablyai:1
 src/main/codex/codex-app-server-session.ts:stablyai:1
 src/main/codex/codex-trust-grant-main-thread-boundary.test.ts:stablyai:1
-src/main/computer/macos-computer-use-permissions.ts:com.stablyai:1
-src/main/computer/macos-computer-use-permissions.ts:stablyai:1
-src/main/daemon/daemon-adoption-telemetry-event.test.ts:com.stablyai:1
 src/main/daemon/daemon-adoption-telemetry-event.test.ts:posthog:3
-src/main/daemon/daemon-adoption-telemetry-event.test.ts:stablyai:1
 src/main/daemon/daemon-folder-access-mismatch.test.ts:posthog:1
-src/main/daemon/daemon-folder-access-reset.test.ts:com.stablyai:3
-src/main/daemon/daemon-folder-access-reset.test.ts:stablyai:3
 src/main/daemon/daemon-lifecycle-event.test.ts:posthog:2
-src/main/daemon/daemon-mac-code-identity.test.ts:com.stablyai:3
-src/main/daemon/daemon-mac-code-identity.test.ts:stablyai:3
 src/main/daemon/terminal-snapshot-osc8-roundtrip.test.ts:stablyai:1
 src/main/git/command-runner/gh-exec-file-deadline.test.ts:stablyai:4
 src/main/git/command-runner/hosted-cli-deadline-log.test.ts:stablyai:2
@@ -391,11 +351,6 @@ src/main/ipc/feedback.test.ts:orca.dev:13
 src/main/ipc/feedback.ts:onorca.dev:1
 src/main/ipc/feedback.ts:orca.dev:1
 src/main/ipc/gitlab.test.ts:stablyai:6
-src/main/ipc/notification-system-settings-link.ts:com.stablyai:1
-src/main/ipc/notification-system-settings-link.ts:stablyai:1
-src/main/ipc/notifications-delivery-gating.test.ts:com.stablyai:2
-src/main/ipc/notifications-delivery-gating.test.ts:orca.dev:2
-src/main/ipc/notifications-delivery-gating.test.ts:stablyai:2
 src/main/ipc/plugins.test.ts:stablyai:5
 src/main/ipc/repos-remote.test.ts:stablyai:14
 src/main/ipc/worktree-logic.test.ts:stablyai:4
@@ -405,25 +360,6 @@ src/main/ipc/worktree-push-target-setup.test.ts:stablyai:11
 src/main/ipc/worktree-remote-push-target-materialization.test.ts:stablyai:2
 src/main/ipc/worktrees-discovery-metadata-backfill.test.ts:stablyai:9
 src/main/ipc/worktrees-ssh-fork-push-target-remote.test.ts:stablyai:1
-src/main/local-builds/local-build-candidate.test.ts:com.stablyai:1
-src/main/local-builds/local-build-candidate.test.ts:stablyai:1
-src/main/local-builds/local-build-compatibility-contract.test.ts:com.stablyai:1
-src/main/local-builds/local-build-compatibility-contract.test.ts:stablyai:1
-src/main/macos-press-and-hold-default.defaults-domain.test.ts:com.stablyai:2
-src/main/macos-press-and-hold-default.defaults-domain.test.ts:stablyai:2
-src/main/macos-press-and-hold-default.test.ts:com.stablyai:6
-src/main/macos-press-and-hold-default.test.ts:orca.dev:1
-src/main/macos-press-and-hold-default.test.ts:stablyai:6
-src/main/macos-press-and-hold-default.ts:com.stablyai:2
-src/main/macos-press-and-hold-default.ts:stablyai:2
-src/main/macos-tcc-prompt-watch.test.ts:com.stablyai:10
-src/main/macos-tcc-prompt-watch.test.ts:orca.dev:2
-src/main/macos-tcc-prompt-watch.test.ts:stablyai:10
-src/main/macos-tcc-prompt-watch.ts:com.stablyai:6
-src/main/macos-tcc-prompt-watch.ts:orca.dev:2
-src/main/macos-tcc-prompt-watch.ts:stablyai:6
-src/main/macos-tcc-reset.test.ts:com.stablyai:6
-src/main/macos-tcc-reset.test.ts:stablyai:6
 src/main/observability/bundle.test.ts:posthog:2
 src/main/observability/bundle.ts:posthog:1
 src/main/observability/index.ts:posthog:1
@@ -498,10 +434,6 @@ src/main/skills/skill-update-registration.test.ts:stablyai:4
 src/main/startup/browser-process-user-agent-ordering.test.ts:orca.dev:1
 src/main/startup/cli-launch-redirect.test.ts:stablyai:2
 src/main/startup/configure-process.ts:stablyai:1
-src/main/startup/dev-instance-identity.test.ts:com.stablyai:1
-src/main/startup/dev-instance-identity.test.ts:stablyai:2
-src/main/startup/dev-instance-identity.ts:com.stablyai:1
-src/main/startup/dev-instance-identity.ts:stablyai:1
 src/main/startup/hydrate-shell-path.ts:stablyai:1
 src/main/startup/skill-share-deep-link-state.test.ts:orca.dev:3
 src/main/telemetry/burst-cap.ts:posthog:1
@@ -718,8 +650,6 @@ src/shared/cli-argument-boundary.test.ts:stablyai:2
 src/shared/cli-runtime-pairing-boundary.test.ts:stablyai:1
 src/shared/cloud-service-url.test.ts:onorca.dev:1
 src/shared/cloud-service-url.test.ts:orca.dev:1
-src/shared/daemon-adoption-telemetry.test.ts:com.stablyai:1
-src/shared/daemon-adoption-telemetry.test.ts:stablyai:1
 src/shared/feature-wall-tiles.ts:onorca.dev:12
 src/shared/feature-wall-tiles.ts:orca.dev:12
 src/shared/feature-wall-workflows.ts:onorca.dev:5
@@ -734,12 +664,6 @@ src/shared/git-fork-sync.test.ts:stablyai:4
 src/shared/git-remote-error.test.ts:stablyai:1
 src/shared/git-remote-url-index.test.ts:stablyai:2
 src/shared/github/project-types.ts:stablyai:1
-src/shared/local-build-compatibility-contract.json:com.stablyai:1
-src/shared/local-build-compatibility-contract.json:stablyai:1
-src/shared/local-build-compatibility-contract.ts:com.stablyai:1
-src/shared/local-build-compatibility-contract.ts:stablyai:1
-src/shared/local-build-compatibility.test.ts:com.stablyai:1
-src/shared/local-build-compatibility.test.ts:stablyai:1
 src/shared/mobile-relay-pairing-fixtures.ts:onorca.dev:4
 src/shared/mobile-relay-pairing-fixtures.ts:orca.dev:4
 src/shared/node-cli-command-resolution.ts:stablyai:2

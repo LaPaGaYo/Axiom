@@ -170,12 +170,12 @@ function runCli(cliArgs, options = {}) {
 
 function defaultDevUserDataPath() {
   if (process.platform === 'darwin') {
-    return resolve(homedir(), 'Library', 'Application Support', 'orca-dev')
+    return resolve(homedir(), 'Library', 'Application Support', 'axiom-dev')
   }
   if (process.platform === 'win32') {
-    return resolve(process.env.APPDATA ?? resolve(homedir(), 'AppData', 'Roaming'), 'orca-dev')
+    return resolve(process.env.APPDATA ?? resolve(homedir(), 'AppData', 'Roaming'), 'axiom-dev')
   }
-  return resolve(process.env.XDG_CONFIG_HOME ?? resolve(homedir(), '.config'), 'orca-dev')
+  return resolve(process.env.XDG_CONFIG_HOME ?? resolve(homedir(), '.config'), 'axiom-dev')
 }
 
 function unwrapResult(value) {

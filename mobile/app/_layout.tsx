@@ -67,7 +67,7 @@ export default function RootLayout() {
   useEffect(() => startPushTokenSync(), [])
   useEffect(() => startAndroidForegroundPushPresentation(), [])
 
-  // Why: route `orca://pair?...` deep links to the confirm screen so
+  // Why: route `axiom://pair?...` deep links to the confirm screen so
   // the same pairing flow runs whether the link arrived via QR scan,
   // paste, AirDrop, Messages, or `xcrun simctl openurl`. getInitialURL
   // covers cold-start (link tapped while app was closed); the listener
@@ -77,7 +77,7 @@ export default function RootLayout() {
       const code = extractPairingCodeFromUrl(url)
       if (code) {
         // Why: Android camera launches can leave Expo Router's unmatched
-        // `orca://pair` route underneath this screen; replacing keeps cancel
+        // `axiom://pair` route underneath this screen; replacing keeps cancel
         // and edge-back from revealing the router error page.
         router.replace({ pathname: '/pair-confirm', params: { code } })
       }

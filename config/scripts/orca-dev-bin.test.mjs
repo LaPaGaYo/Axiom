@@ -10,7 +10,7 @@ const wrapperPath = path.join(projectDir, 'config', 'scripts', 'orca-dev.mjs')
 
 describe('orca-dev package bin', () => {
   it('uses a Node entrypoint for cross-platform package installs', () => {
-    expect(packageJson.bin['orca-dev']).toBe('./config/scripts/orca-dev.mjs')
+    expect(packageJson.bin['axiom-dev']).toBe('./config/scripts/orca-dev.mjs')
     expect(readFileSync(wrapperPath, 'utf8')).toMatch(/^#!\/usr\/bin\/env node\n/)
   })
 

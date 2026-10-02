@@ -50,8 +50,7 @@ export function buildAgentStartupPlan(args: {
   agentEnv?: Record<string, string> | null
   sessionOptions?: Record<string, SessionOptionValue>
   sessionOptionsOverrideAgentArgs?: boolean
-  /** Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
-   * `orca-ide` rename must be skipped for remote launches. */
+  /** Why: SSH launches must resolve the relay-installed command, not local desktop overrides. */
   isRemote?: boolean
 }): AgentStartupPlan | null {
   const { agent, prompt, cmdOverrides, platform, allowEmptyPromptLaunch = false } = args
@@ -224,7 +223,7 @@ export function buildAgentDraftLaunchPlan(args: {
   agentEnv?: Record<string, string> | null
   sessionOptions?: Record<string, SessionOptionValue>
   sessionOptionsOverrideAgentArgs?: boolean
-  /** Why: see buildAgentStartupPlan — remote launches use the plain `orca` shim. */
+  /** Why: see buildAgentStartupPlan — remote launches use the relay-installed command. */
   isRemote?: boolean
 }): AgentDraftLaunchPlan | null {
   const { agent, draft, cmdOverrides, platform } = args

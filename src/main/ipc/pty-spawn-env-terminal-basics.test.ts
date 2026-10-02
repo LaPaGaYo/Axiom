@@ -1,3 +1,4 @@
+import { getOrcaCliCommandNameForPlatform } from '../../shared/orca-cli-command-name'
 import { withFreshOmpLaunch } from '../../shared/omp-fresh-launch'
 import { describe, expect, it, vi } from 'vitest'
 import { piBuildPtyEnvMock, spawnMock } from './pty-ipc-mock-registry'
@@ -140,7 +141,9 @@ describe('registerPtyHandlers', () => {
           }
         )
 
-        expect(env.BROWSER).toBe('orca open-url --url %s')
+        expect(env.BROWSER).toBe(
+          `${getOrcaCliCommandNameForPlatform(process.platform)} open-url --url %s`
+        )
       } finally {
         if (inheritedBrowser === undefined) {
           delete process.env.BROWSER
@@ -183,7 +186,7 @@ describe('registerPtyHandlers', () => {
           }
         )
 
-        expect(env.BROWSER).toBe('orca-ide open-url --url %s')
+        expect(env.BROWSER).toBe(`${getOrcaCliCommandNameForPlatform('linux')} open-url --url %s`)
       } finally {
         if (inheritedBrowser === undefined) {
           delete process.env.BROWSER

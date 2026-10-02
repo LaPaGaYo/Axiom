@@ -254,17 +254,17 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
       const ptyId = this.resolveLeafForHandle(handle)?.ptyId
       pty = ptyId ? (this.ptysById.get(ptyId) ?? null) : null
     } catch {
-      return 'orca'
+      return 'axiom'
     }
     if (!pty) {
-      return 'orca'
+      return 'axiom'
     }
     return resolveTerminalOrchestrationCliCommand({
       connectionId: pty.connectionId,
       isWsl: pty.isWsl,
       worktreeId: pty.worktreeId,
-      // Dev builds run the CLI as `orca-dev`; a packaged app must not advertise it.
-      runtimeCliCommand: getAppEnvironment().isPackaged() ? undefined : 'orca-dev',
+      // Dev builds run the CLI as `axiom-dev`; a packaged app must not advertise it.
+      runtimeCliCommand: getAppEnvironment().isPackaged() ? undefined : 'axiom-dev',
       projectRuntime: this.store
         ? resolveLocalProjectRuntimeForWorktreeId(this.requireStore(), pty.worktreeId)
         : undefined

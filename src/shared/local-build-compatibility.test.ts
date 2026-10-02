@@ -8,7 +8,7 @@ import {
 function target(overrides: Partial<LocalBuildCompatibility> = {}): LocalBuildCompatibility {
   return {
     formatVersion: 1,
-    appId: 'com.stablyai.orca',
+    appId: 'com.lapagayo.axiom',
     buildId: '1.2.3-abc-arm64',
     version: '1.2.3-local.1.abc',
     commit: 'abc',
@@ -33,7 +33,7 @@ describe('local build compatibility', () => {
     expect(getLocalBuildCompatibilityError(target(), 1, [27, 28])).toBeNull()
   })
 
-  it('parses only bounded Orca compatibility contracts', () => {
+  it('parses only bounded Axiom compatibility contracts', () => {
     expect(parseLocalBuildCompatibility(target())).toEqual(target())
     expect(() => parseLocalBuildCompatibility(target({ appId: 'other.app' }))).toThrow(
       'invalid compatibility metadata'

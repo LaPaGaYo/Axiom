@@ -80,7 +80,7 @@ const CASES = [
 try {
   if (!appImage) {
     fail(
-      'Usage: run-linux-cli-launch-contract-docker.mjs --appimage /path/to/orca-linux.AppImage [--platform linux/amd64|linux/arm64]'
+      'Usage: run-linux-cli-launch-contract-docker.mjs --appimage /path/to/axiom-linux.AppImage [--platform linux/amd64|linux/arm64]'
     )
   }
   if (commandArgs.includes('--platform') && !platform) {
@@ -210,19 +210,19 @@ function stageArtifacts() {
       '-v',
       `${artifactVolume}:/artifacts`,
       '-v',
-      `${appImage}:/input/orca-linux.AppImage:ro`,
+      `${appImage}:/input/axiom-linux.AppImage:ro`,
       '--entrypoint',
       'bash',
       tag,
       '-lc',
       [
         'set -euo pipefail',
-        'cp /input/orca-linux.AppImage /artifacts/orca-linux.AppImage',
-        'chmod +x /artifacts/orca-linux.AppImage',
+        'cp /input/axiom-linux.AppImage /artifacts/axiom-linux.AppImage',
+        'chmod +x /artifacts/axiom-linux.AppImage',
         'chown -R orca:orca /artifacts',
         // Use the AppImage runtime's no-FUSE extraction path.
-        'cd /artifacts && runuser --user orca -- ./orca-linux.AppImage --appimage-extract >/dev/null',
-        'test -x /artifacts/squashfs-root/resources/bin/orca-ide'
+        'cd /artifacts && runuser --user orca -- ./axiom-linux.AppImage --appimage-extract >/dev/null',
+        'test -x /artifacts/squashfs-root/resources/bin/axiom'
       ].join(' && ')
     ],
     { timeoutMs: STAGING_TIMEOUT_MS }

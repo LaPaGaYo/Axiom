@@ -1,3 +1,4 @@
+import { DEV_COMMAND_NAME } from '../../../../../cli/cli-install-constants'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcContext } from '../../../core'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
@@ -348,7 +349,7 @@ describe('orchestration RPC methods', () => {
 
       expect(send).toHaveBeenCalledWith(
         'term_a',
-        expect.stringContaining('orca-dev orchestration send'),
+        expect.stringContaining(`${DEV_COMMAND_NAME} orchestration send`),
         expect.objectContaining(dispatchPreambleSendOptions(expect.any(String)))
       )
     })

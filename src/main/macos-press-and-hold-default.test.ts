@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessResult } from '../shared/child-process/run-process'
+import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../shared/local-build-compatibility-contract'
 import {
   ensureMacPressAndHoldDefault,
   interpretDefaultsRead,
@@ -13,7 +14,7 @@ import {
   type PressAndHoldRecord
 } from './macos-press-and-hold-default'
 
-const ORCA_DOMAIN = 'com.stablyai.orca'
+const ORCA_DOMAIN = LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId
 
 type HostOverrides = Partial<PressAndHoldHost> & { record?: PressAndHoldRecord | null }
 
@@ -140,12 +141,12 @@ describe('ensureMacPressAndHoldDefault', () => {
       expect(writes).toEqual([])
     })
 
-    it('accepts Orca and its channel-scoped bundles, and nothing else', () => {
-      expect(isOrcaPreferencesDomain('com.stablyai.orca')).toBe(true)
-      expect(isOrcaPreferencesDomain('com.stablyai.orca.dev')).toBe(true)
+    it('accepts Axiom and its channel-scoped bundles, and nothing else', () => {
+      expect(isOrcaPreferencesDomain(ORCA_DOMAIN)).toBe(true)
+      expect(isOrcaPreferencesDomain(`${ORCA_DOMAIN}.dev`)).toBe(true)
       expect(isOrcaPreferencesDomain('com.github.Electron')).toBe(false)
       // Why: a prefix test without the dot would accept a lookalike bundle id.
-      expect(isOrcaPreferencesDomain('com.stablyai.orcafake')).toBe(false)
+      expect(isOrcaPreferencesDomain(`${ORCA_DOMAIN}fake`)).toBe(false)
     })
   })
 
@@ -245,10 +246,10 @@ describe('readBundleIdentifierFromExecutablePath', () => {
   it('reads CFBundleIdentifier from the plist beside the executable', () => {
     const exe = bundleWithPlist(
       '<plist><dict>\n<key>CFBundleName</key>\n<string>Orca</string>\n' +
-        '<key>CFBundleIdentifier</key>\n\t<string>com.stablyai.orca</string>\n</dict></plist>'
+        `<key>CFBundleIdentifier</key>\n\t<string>${ORCA_DOMAIN}</string>\n</dict></plist>`
     )
 
-    expect(readBundleIdentifierFromExecutablePath(exe)).toBe('com.stablyai.orca')
+    expect(readBundleIdentifierFromExecutablePath(exe)).toBe(ORCA_DOMAIN)
   })
 
   it('returns null when the plist is missing or carries no identifier', () => {

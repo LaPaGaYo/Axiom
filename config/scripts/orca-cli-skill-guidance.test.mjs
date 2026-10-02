@@ -1,3 +1,6 @@
+import { DEV_COMMAND_NAME } from '../../src/main/cli/cli-install-constants'
+import { getOrcaCliCommandNameForPlatform } from '../../src/shared/orca-cli-command-name'
+import { renderProductCliGuidance } from './generate-bundled-skill-guides.mjs'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -185,9 +188,9 @@ describe('orca CLI install stub', () => {
     expect(stub).toContain('ORCA skills get orca-cli')
     // The safe CLI-resolution contract must survive in the stub, never a bare `orca`.
     expect(stub).toContain('ORCA_CLI_COMMAND')
-    expect(stub).toContain('orca-dev')
-    expect(stub).toContain('orca-ide')
-    expect(stub).toContain('GNOME Orca screen reader')
+    expect(stub).toContain(`use \`${DEV_COMMAND_NAME}\``)
+    expect(stub).toContain(`use \`${getOrcaCliCommandNameForPlatform('linux')}\``)
+    expect(stub).not.toContain('GNOME Orca screen reader')
     expect(stub).not.toMatch(/^orca /mu)
   })
 
@@ -212,6 +215,8 @@ describe('orca CLI install stub', () => {
   it('keeps the routing frontmatter identical to the guide', () => {
     const frontmatter = (text) => /^---\n[\s\S]*?\n---\n/u.exec(text)[0]
 
-    expect(frontmatter(readSkill(stubPath))).toBe(frontmatter(readSkill(guidePath)))
+    expect(frontmatter(readSkill(stubPath))).toBe(
+      frontmatter(renderProductCliGuidance(readSkill(guidePath)))
+    )
   })
 })

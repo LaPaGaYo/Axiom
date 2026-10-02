@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from './local-build-compatibility-contract'
 import {
   classifyDaemonPtyCwd,
   classifyDaemonSpawnerPath,
@@ -20,7 +21,7 @@ describe('classifyDaemonSpawnerPath', () => {
     ).toBe('applications')
     expect(
       classifyDaemonSpawnerPath(
-        '/Users/a/Library/Caches/com.stablyai.orca.ShipIt/update.abc/Orca.app/Contents/MacOS/Orca',
+        `/Users/a/Library/Caches/${LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId}.ShipIt/update.abc/Orca.app/Contents/MacOS/Orca`,
         alwaysExists
       )
     ).toBe('updater-cache')

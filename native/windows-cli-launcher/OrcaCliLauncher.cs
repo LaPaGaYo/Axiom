@@ -12,7 +12,7 @@ internal static class OrcaCliLauncher
             string launcherDirectory = Path.GetDirectoryName(typeof(OrcaCliLauncher).Assembly.Location);
             string resourcesDirectory = Directory.GetParent(launcherDirectory).FullName;
             string appDirectory = Directory.GetParent(resourcesDirectory).FullName;
-            string electronPath = Path.Combine(appDirectory, "Orca.exe");
+            string electronPath = Path.Combine(appDirectory, "Axiom.exe");
             string cliPath = Path.Combine(
                 resourcesDirectory,
                 "app.asar.unpacked",
@@ -23,7 +23,7 @@ internal static class OrcaCliLauncher
 
             if (!File.Exists(electronPath))
             {
-                Console.Error.WriteLine("Unable to locate Orca.exe next to \"{0}\"", resourcesDirectory);
+                Console.Error.WriteLine("Unable to locate Axiom.exe next to \"{0}\"", resourcesDirectory);
                 return 1;
             }
 
@@ -51,7 +51,7 @@ internal static class OrcaCliLauncher
             string requestedCliCommand = Environment.GetEnvironmentVariable("ORCA_CLI_COMMAND");
             Environment.SetEnvironmentVariable(
                 "ORCA_CLI_COMMAND",
-                requestedCliCommand == "orca-ide" ? "orca-ide" : "orca"
+                requestedCliCommand == "axiom-dev" ? "axiom-dev" : "axiom"
             );
 
             using (Process child = Process.Start(startInfo))

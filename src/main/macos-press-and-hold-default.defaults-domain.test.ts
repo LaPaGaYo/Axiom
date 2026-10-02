@@ -5,6 +5,7 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { runProcessSync } from '../shared/child-process/run-process'
+import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../shared/local-build-compatibility-contract'
 import {
   PRESS_AND_HOLD_KEY,
   ensureMacPressAndHoldDefault,
@@ -16,17 +17,17 @@ import {
 } from './macos-press-and-hold-default'
 
 /**
- * Runs against the real `/usr/bin/defaults` on a throwaway Orca-owned domain.
+ * Runs against the real `/usr/bin/defaults` on a throwaway Axiom-owned domain.
  *
  * The whole design rests on one claim the mocks cannot make: a domain that has never been written
  * is distinguishable from one explicitly set to `false`. Electron's `systemPreferences` cannot tell
  * them apart, so if `defaults` could not either, "only write when unset" would be unimplementable.
  *
- * Every domain used here is a throwaway UUID under Orca's own prefix, deleted along with its plist
- * in `afterEach`; the real `com.stablyai.orca` domain is never read or written.
+ * Every domain used here is a throwaway UUID under Axiom's own prefix, deleted along with its plist
+ * in `afterEach`; the runtime contract's app domain is never read or written.
  */
 
-// Why a real Orca-owned domain shape: the ownership guard rejects anything else, so a fake prefix
+// Why a real Axiom-owned domain shape: the ownership guard rejects anything else, so a fake prefix
 // would exercise a different branch than production.
 const domains: string[] = []
 
@@ -34,7 +35,7 @@ const domains: string[] = []
 const DEFAULTS_MISSING_EXIT_CODE = 1
 
 function throwawayDomain(): string {
-  const domain = `com.stablyai.orca.defaults-domain-test.${randomUUID()}`
+  const domain = `${LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId}.defaults-domain-test.${randomUUID()}`
   domains.push(domain)
   return domain
 }

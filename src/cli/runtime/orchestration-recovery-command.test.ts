@@ -6,12 +6,18 @@ import {
 
 describe('orchestration recovery command identity', () => {
   it.each([
-    ['configured dev', { ORCA_CLI_COMMAND: 'orca-dev' }, 'darwin', 'orca-dev'],
-    ['configured WSL', { ORCA_CLI_COMMAND: 'orca-ide' }, 'linux', 'orca-ide'],
-    ['dev checkout', { ORCA_DEV_REPO_ROOT: '/repo' }, 'darwin', 'orca-dev'],
-    ['packaged Linux', {}, 'linux', 'orca-ide'],
-    ['local macOS', {}, 'darwin', 'orca'],
-    ['local Windows', {}, 'win32', 'orca']
+    ['configured dev', { ORCA_CLI_COMMAND: 'axiom-dev' }, 'darwin', 'axiom-dev'],
+    ['configured WSL', { ORCA_CLI_COMMAND: 'axiom' }, 'linux', 'axiom'],
+    [
+      'custom dev profile',
+      { ORCA_DEV_CLI_INVOCATION: '1', ORCA_USER_DATA_PATH: '/custom/profile' },
+      'darwin',
+      'axiom-dev'
+    ],
+    ['dev checkout', { ORCA_DEV_REPO_ROOT: '/repo' }, 'darwin', 'axiom-dev'],
+    ['packaged Linux', {}, 'linux', 'axiom'],
+    ['local macOS', {}, 'darwin', 'axiom'],
+    ['local Windows', {}, 'win32', 'axiom']
   ] as const)('resolves the %s CLI identity', (_name, env, platform, expected) => {
     expect(resolveOrchestrationCliExecutable(env, platform)).toBe(expected)
   })
@@ -27,10 +33,10 @@ describe('orchestration recovery command identity', () => {
           timeoutMs: 90_000,
           devMode: false
         },
-        'orca'
+        'axiom'
       )
     ).toEqual([
-      'orca',
+      'axiom',
       'orchestration',
       'worker-start',
       '--task',
@@ -49,7 +55,7 @@ describe('orchestration recovery command identity', () => {
       buildOrchestrationRecoveryCommand(
         'orchestration.workerStart',
         { task: 'task_1' },
-        'orca-dev',
+        'axiom-dev',
         [
           'orchestration',
           'worker-start',
@@ -61,7 +67,7 @@ describe('orchestration recovery command identity', () => {
         ]
       )
     ).toEqual([
-      'orca-dev',
+      'axiom-dev',
       'orchestration',
       'worker-start',
       '--task',
@@ -84,7 +90,7 @@ describe('orchestration recovery command identity', () => {
       ['orchestration', 'worker-retain', '--dispatch', 'dispatch_1', '--json']
     ]
   ] as const)('preserves exact raw argv for %s recovery', (_name, method, args) => {
-    expect(buildOrchestrationRecoveryCommand(method, {}, 'orca', args)).toEqual(['orca', ...args])
+    expect(buildOrchestrationRecoveryCommand(method, {}, 'axiom', args)).toEqual(['axiom', ...args])
   })
 
   it.each([
@@ -100,16 +106,16 @@ describe('orchestration recovery command identity', () => {
     ]
   ])('blocks %s credential argv instead of exposing it', (_name, args) => {
     expect(
-      buildOrchestrationRecoveryCommand('orchestration.send', {}, 'orca', args)
+      buildOrchestrationRecoveryCommand('orchestration.send', {}, 'axiom', args)
     ).toBeUndefined()
   })
 
   it('supports the explicit executable-first form', () => {
     expect(
-      buildOrchestrationRecoveryCommand('orca-ide', 'orchestration.workerStop', {
+      buildOrchestrationRecoveryCommand('axiom', 'orchestration.workerStop', {
         dispatch: 'dispatch_1'
       })
-    ).toEqual(['orca-ide', 'orchestration', 'worker-stop', '--dispatch', 'dispatch_1'])
+    ).toEqual(['axiom', 'orchestration', 'worker-stop', '--dispatch', 'dispatch_1'])
   })
 
   it('reconstructs worker-retain when raw argv is unavailable', () => {

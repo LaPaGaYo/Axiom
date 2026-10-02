@@ -13,7 +13,7 @@ description: >-
 # Orca Orchestration
 
 This file is a discovery stub, not the usage guide. The full, version-matched Orca
-orchestration reference is served by the `orca` binary itself — kept out of this file on
+orchestration reference is served by the `axiom` binary itself — kept out of this file on
 purpose so it can never drift from the binary that will actually run your commands.
 
 Engage Orca orchestration whenever you need structured multi-agent coordination: threaded
@@ -31,11 +31,8 @@ Choose the executable once and reuse it for every later command:
 
 - If the `ORCA_CLI_COMMAND` environment variable is set, use its value. Orca exports this
   for managed WSL sessions.
-- Otherwise, in a dev checkout whose session exposes `ORCA_DEV_REPO_ROOT`, use `orca-dev`.
-- Otherwise, on Linux outside an Orca-managed terminal, use `orca-ide`. Never run bare
-  `orca` there — outside Orca's terminals it normally resolves to the
-  GNOME Orca screen reader (`/usr/bin/orca`) and starts speech on the user's machine.
-- Otherwise, use `orca`.
+- Otherwise, in a dev checkout whose session exposes `ORCA_DEV_REPO_ROOT`, use `axiom-dev`.
+- Otherwise, use `axiom`.
 
 Below, `ORCA` is a placeholder for the executable you resolved. Substitute it before
 running anything; do not create a shell variable or run `ORCA` literally. This works the

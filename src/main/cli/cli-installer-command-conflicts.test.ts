@@ -35,7 +35,7 @@ describe('CliInstaller', () => {
     'refuses to replace an unknown symlink at the command path',
     async () => {
       const fixture = await makeFixture()
-      const installPath = join(fixture.root, 'bin', 'orca')
+      const installPath = join(fixture.root, 'bin', 'axiom')
       const existingTarget = '/tmp/not-orca'
       await mkdir(join(fixture.root, 'bin'), { recursive: true })
       await symlink(existingTarget, installPath)
@@ -67,8 +67,8 @@ describe('CliInstaller', () => {
       const commandDir = join(fixture.root, 'bin')
       const installPath = join(commandDir, 'orca')
       const resourcesPath = join(fixture.root, 'Current.app', 'Contents', 'Resources')
-      const launcherPath = join(resourcesPath, 'bin', 'orca')
-      const oldLauncherPath = join(fixture.root, 'Old.app', 'Contents', 'Resources', 'bin', 'orca')
+      const launcherPath = join(resourcesPath, 'bin', 'axiom')
+      const oldLauncherPath = join(fixture.root, 'Old.app', 'Contents', 'Resources', 'bin', 'axiom')
       await mkdir(commandDir, { recursive: true })
       await mkdir(join(resourcesPath, 'bin'), { recursive: true })
       await writeFile(launcherPath, '#!/usr/bin/env bash\n', 'utf8')
@@ -92,7 +92,7 @@ describe('CliInstaller', () => {
   )
 
   // Why: old dev/package experiments wrote a generated Orca launcher file
-  // directly into /usr/local/bin/orca. That broke profiling because Settings
+  // directly into /usr/local/bin/axiom. That broke profiling because Settings
   // treated the regular file as a hard conflict and would not self-heal it.
   it.skipIf(process.platform === 'win32')(
     'replaces stale generated Unix launcher files',
@@ -101,7 +101,7 @@ describe('CliInstaller', () => {
       const commandDir = join(fixture.root, 'bin')
       const installPath = join(commandDir, 'orca')
       const resourcesPath = join(fixture.root, 'Current.app', 'Contents', 'Resources')
-      const launcherPath = join(resourcesPath, 'bin', 'orca')
+      const launcherPath = join(resourcesPath, 'bin', 'axiom')
       const oldCliPath = join(fixture.root, 'OldWorktree', 'out', 'cli', 'index.js')
       await mkdir(commandDir, { recursive: true })
       await mkdir(join(resourcesPath, 'bin'), { recursive: true })
@@ -177,13 +177,13 @@ describe('CliInstaller', () => {
     'replaces stale sibling dev launcher symlinks from packaged installs',
     async () => {
       const fixture = await makeFixture()
-      for (const devLauncherName of ['orca', 'orca-dev']) {
+      for (const devLauncherName of ['axiom', 'axiom-dev']) {
         const caseRoot = join(fixture.root, devLauncherName)
         const commandDir = join(caseRoot, 'bin')
         const installPath = join(commandDir, 'orca')
         const userDataPath = join(caseRoot, 'orca')
         const resourcesPath = join(caseRoot, 'Current.app', 'Contents', 'Resources')
-        const launcherPath = join(resourcesPath, 'bin', 'orca')
+        const launcherPath = join(resourcesPath, 'bin', 'axiom')
         const devLauncherPath = join(`${userDataPath}-dev`, 'cli', 'bin', devLauncherName)
         await mkdir(commandDir, { recursive: true })
         await mkdir(join(resourcesPath, 'bin'), { recursive: true })

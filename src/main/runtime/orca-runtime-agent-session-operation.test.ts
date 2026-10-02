@@ -1,3 +1,5 @@
+import { buildAgentStartupPlan } from '../../shared/tui-agent-startup'
+import { getOrcaCliCommandNameForPlatform } from '../../shared/orca-cli-command-name'
 import {
   CreateAgentSessionParams,
   EnsureAgentSessionParams
@@ -8,6 +10,8 @@ import type {
   RuntimeCreateAgentSessionResult
 } from '../../shared/agent-session-host-authority'
 import { OrcaRuntimeService } from './orca-runtime'
+
+vi.mock('../../shared/tui-agent-startup', { spy: true })
 
 function operationId(now = Date.now()): string {
   return `${now}-0123456789abcdef0123456789abcdef`
@@ -216,9 +220,16 @@ describe('agent-session create operation ledger', () => {
       request(operationId(), { agent: 'claude-agent-teams', prompt: '' })
     )
 
+    expect(buildAgentStartupPlan).toHaveBeenLastCalledWith(
+      expect.objectContaining({ isRemote: false })
+    )
     expect(createTerminal).toHaveBeenCalledWith(
       'id:worktree-1',
-      expect.objectContaining({ command: expect.stringContaining('orca-ide claude-teams') })
+      expect.objectContaining({
+        command: expect.stringContaining(
+          `${getOrcaCliCommandNameForPlatform('linux')} claude-teams`
+        )
+      })
     )
   })
 

@@ -1,3 +1,4 @@
+import { getOrcaCliCommandNameForPlatform } from '../../shared/orca-cli-command-name'
 import { describe, expect, it, vi } from 'vitest'
 import { spawnMock, openCodeClearPtyMock, piClearPtyMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
@@ -508,7 +509,7 @@ describe('registerPtyHandlers', () => {
     expect(spawnCall[0]).toBe('wsl.exe')
     expect(env.ORCA_TERMINAL_HANDLE).toBe('term_wsl')
     expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
-    expect(env.ORCA_CLI_COMMAND).toBe('orca-ide')
+    expect(env.ORCA_CLI_COMMAND).toBe(getOrcaCliCommandNameForPlatform('linux'))
     expect(env.ORCA_WSL_CLI_DIR).toBe('C:\\orca-user-data\\wsl-managed-cli\\hash')
     expect(env.WSLENV?.split(':')).toEqual(
       expect.arrayContaining([

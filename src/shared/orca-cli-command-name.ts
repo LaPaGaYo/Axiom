@@ -1,9 +1,9 @@
 export function getOrcaCliCommandNameForPlatform(platform: NodeJS.Platform): string {
   if (platform === 'linux') {
-    return 'orca-ide'
+    return 'axiom'
   }
   if (platform === 'win32') {
-    return 'orca.cmd'
+    return 'axiom.cmd'
   }
-  return 'orca'
+  return 'axiom'
 }

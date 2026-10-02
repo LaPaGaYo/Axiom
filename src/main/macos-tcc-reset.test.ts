@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessResult } from '../shared/child-process/run-process'
+import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../shared/local-build-compatibility-contract'
 
 const { runProcessMock } = vi.hoisted(() => ({ runProcessMock: vi.fn() }))
 vi.mock('../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
@@ -24,9 +25,13 @@ beforeEach(() => {
 
 describe('readMacosBundleId', () => {
   it('reads CFBundleIdentifier out of the bundle’s Info.plist', async () => {
-    runProcessMock.mockResolvedValue(processResult({ stdout: 'com.stablyai.orca\n' }))
+    runProcessMock.mockResolvedValue(
+      processResult({ stdout: `${LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId}\n` })
+    )
 
-    await expect(readMacosBundleId('/Applications/Orca.app')).resolves.toBe('com.stablyai.orca')
+    await expect(readMacosBundleId('/Applications/Orca.app')).resolves.toBe(
+      LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId
+    )
     expect(runProcessMock).toHaveBeenCalledWith(
       expect.objectContaining({
         program: '/usr/libexec/PlistBuddy',
@@ -56,12 +61,15 @@ describe('resetMacosTccPermission', () => {
     runProcessMock.mockResolvedValue(processResult({}))
 
     await expect(
-      resetMacosTccPermission('SystemPolicyDocumentsFolder', 'com.stablyai.orca')
+      resetMacosTccPermission(
+        'SystemPolicyDocumentsFolder',
+        LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId
+      )
     ).resolves.toEqual({ ok: true })
     expect(runProcessMock).toHaveBeenCalledWith(
       expect.objectContaining({
         program: '/usr/bin/tccutil',
-        args: ['reset', 'SystemPolicyDocumentsFolder', 'com.stablyai.orca']
+        args: ['reset', 'SystemPolicyDocumentsFolder', LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId]
       })
     )
   })
@@ -95,7 +103,10 @@ describe('resetMacosTccPermission', () => {
     runProcessMock.mockResolvedValue(result)
 
     await expect(
-      resetMacosTccPermission('SystemPolicyDownloadsFolder', 'com.stablyai.orca')
+      resetMacosTccPermission(
+        'SystemPolicyDownloadsFolder',
+        LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId
+      )
     ).resolves.toEqual({ ok: false, detail })
   })
 
@@ -103,7 +114,10 @@ describe('resetMacosTccPermission', () => {
     runProcessMock.mockRejectedValue(new Error('EACCES'))
 
     await expect(
-      resetMacosTccPermission('SystemPolicyDocumentsFolder', 'com.stablyai.orca')
+      resetMacosTccPermission(
+        'SystemPolicyDocumentsFolder',
+        LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId
+      )
     ).resolves.toEqual({ ok: false, detail: 'EACCES' })
   })
 })

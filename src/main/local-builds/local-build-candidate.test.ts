@@ -7,6 +7,7 @@ import { promisify } from 'node:util'
 import { afterEach, describe, expect, it } from 'vitest'
 import { stringify } from 'yaml'
 import type { LocalBuildCompatibility } from '../../shared/local-build-compatibility'
+import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../shared/local-build-compatibility-contract'
 import { loadLocalBuildCandidate } from './local-build-candidate'
 import { startLocalBuildFeed } from './local-build-feed-server'
 
@@ -16,7 +17,7 @@ const execFileAsync = promisify(execFile)
 function compatibility(): LocalBuildCompatibility {
   return {
     formatVersion: 1,
-    appId: 'com.stablyai.orca',
+    appId: LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId,
     buildId: '1.2.3-local.1-abc-arm64',
     version: '1.2.3-local.1',
     commit: 'abc',
