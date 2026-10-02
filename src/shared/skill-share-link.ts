@@ -1,10 +1,15 @@
+import { PRODUCT_EGRESS_POLICY } from './product-egress-policy'
+
 const SHARE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/
-const PRODUCTION_HOSTS = new Set(['app.orca.dev', 'share.onorca.dev'])
+const PRODUCTION_HOSTS = new Set(PRODUCT_EGRESS_POLICY.skillShareHosts)
 
 export function parseSkillShareId(value: string): string | null {
   const trimmed = value.trim()
   if (SHARE_ID_PATTERN.test(trimmed)) {
     return trimmed
+  }
+  if (PRODUCTION_HOSTS.size === 0) {
+    return null
   }
   let url: URL
   try {

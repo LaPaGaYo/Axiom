@@ -123,6 +123,7 @@ vi.mock('../runtime/push/push-gateway-client', () => ({
 afterEach(() => {
   rmSync(state.root, { recursive: true, force: true })
   vi.clearAllMocks()
+  vi.unstubAllEnvs()
 })
 
 it('refuses recovery overlap before initializing the browser provider or runtime', async () => {
@@ -139,6 +140,7 @@ it('refuses recovery overlap before initializing the browser provider or runtime
 })
 
 it('starts push after RPC identity is available and stops dispatch on shutdown', async () => {
+  vi.stubEnv('ORCA_PUSH_GATEWAY_URL', 'https://push.example')
   state.root = mkdtempSync(join(tmpdir(), 'orca-headless-push-'))
   state.controller = new RuntimeMobileNotificationController()
   state.registry = new DeviceRegistry(state.root)
@@ -184,4 +186,29 @@ it('releases admission when host setup fails before a runtime exists', async () 
   await expect(startOrcad()).rejects.toThrow('browser setup failed')
   expect(readdirSync(profileStateAccessPaths(state.root).participants)).toEqual([])
   acquireProfileStateMaintenance(state.root).release()
+})
+
+it('leaves push unregistered when no gateway is configured', async () => {
+  vi.stubEnv('ORCA_PUSH_GATEWAY_URL', '')
+  state.root = mkdtempSync(join(tmpdir(), 'axiom-headless-no-push-'))
+  state.controller = new RuntimeMobileNotificationController()
+  state.registry = new DeviceRegistry(state.root)
+  const phone = state.registry.addDevice('no-push-phone', 'mobile')
+  const { startOrcad } = await import('./orcad-entry')
+  const host = await startOrcad({ noPairing: true, json: true })
+  try {
+    expect(
+      await state.controller.registerPushDevice({
+        deviceId: phone.deviceId,
+        platform: 'android',
+        token: 'test-token',
+        filter: { onlyWhenDesktopAway: true }
+      })
+    ).toMatchObject({ registered: false })
+    expect(state.controller.getListenerCount()).toBe(0)
+    expect(state.register).not.toHaveBeenCalled()
+    expect(state.send).not.toHaveBeenCalled()
+  } finally {
+    await host.stop()
+  }
 })

@@ -13,6 +13,9 @@ export async function runSkillCloudOperation<T>(input: {
   operation(token: string, apiUrl: string): Promise<T>
 }): Promise<SkillCloudOperation<T>> {
   const apiUrl = resolveArtifactCloudApiUrl(input.options.apiUrl)
+  if (!apiUrl) {
+    return { status: 'unconfigured', message: 'Skill sharing is not configured in this build.' }
+  }
   const active = ensureActiveOrcaProfile(input.userDataPath)
   const stamp = {
     profileId: active.profile.id,

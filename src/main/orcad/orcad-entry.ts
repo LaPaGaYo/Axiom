@@ -302,11 +302,13 @@ async function startOrcadRuntime(
     ...(options.port !== undefined ? { wsPort: options.port, preferPinnedWsPort: true } : {})
   })
   await rpc.start()
-  const pushService = DesktopPushService.create({
-    runtime,
-    runtimeRpc: rpc,
-    gatewayUrl: resolvePushGatewayOrigin(process.env, getAppEnvironment().isPackaged())
-  })
+  const gatewayUrl = resolvePushGatewayOrigin(process.env, getAppEnvironment().isPackaged())
+  const pushService = gatewayUrl
+    ? DesktopPushService.create({ runtime, runtimeRpc: rpc, gatewayUrl })
+    : null
+  if (!gatewayUrl) {
+    console.error('[push] Background push startup skipped: gateway unconfigured')
+  }
   pushService?.start()
   getAppEnvironment().onWillQuit(() => pushService?.stop())
   console.error(`[orcad] ${describeOrcadBindExposure(bindHost)}`)

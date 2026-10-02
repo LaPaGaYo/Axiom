@@ -10,6 +10,16 @@ export type ProductEgressPolicy = {
   readonly feedbackApiUrl: string | null
   /** Official-build pinned endpoint; null disables official diagnostic uploads. */
   readonly diagnosticsTokenUrl: string | null
+  /** Packaged cloud defaults; null requires explicit environment configuration. */
+  readonly cloudAuth: {
+    readonly apiBaseUrl: string
+    readonly clientId: string
+    readonly relayDirectorUrl: string
+  } | null
+  readonly pushGatewayOrigin: string | null
+  readonly artifactShareApiOrigin: string | null
+  /** Empty means only bare skill-share identifiers are accepted. */
+  readonly skillShareHosts: readonly string[]
 }
 
 export const PRODUCT_EGRESS_POLICY: ProductEgressPolicy = {
@@ -20,7 +30,11 @@ export const PRODUCT_EGRESS_POLICY: ProductEgressPolicy = {
   nudgeUrl: null,
   pluginKillListUrl: null,
   feedbackApiUrl: null,
-  diagnosticsTokenUrl: null
+  diagnosticsTokenUrl: null,
+  cloudAuth: null,
+  pushGatewayOrigin: null,
+  artifactShareApiOrigin: null,
+  skillShareHosts: []
 }
 
 export const productReleaseRepositorySlug = (): string =>

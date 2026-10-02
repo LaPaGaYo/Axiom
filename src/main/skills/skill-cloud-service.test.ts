@@ -5,8 +5,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SkillCloudVersion } from '../../shared/skill-cloud-contract'
 import { SkillCloudService } from './skill-cloud-service'
 
-const { packaged } = vi.hoisted(() => ({ packaged: { value: false } }))
+const { packaged, policy } = vi.hoisted(() => {
+  const policy: { artifactShareApiOrigin: string | null } = { artifactShareApiOrigin: null }
+  return { packaged: { value: false }, policy }
+})
 const createdPaths: string[] = []
+
+vi.mock('../../shared/product-egress-policy', () => ({ PRODUCT_EGRESS_POLICY: policy }))
 
 vi.mock('electron', () => ({
   app: {
@@ -20,6 +25,7 @@ afterEach(() => {
   for (const path of createdPaths.splice(0)) {
     rmSync(path, { recursive: true, force: true })
   }
+  policy.artifactShareApiOrigin = null
   packaged.value = false
   vi.unstubAllEnvs()
   vi.unstubAllGlobals()
@@ -116,9 +122,10 @@ describe('SkillCloudService bearer links', () => {
   it('rejects the development auth token in packaged builds', async () => {
     packaged.value = true
     vi.stubEnv('ORCA_CLOUD_AUTH_TOKEN', 'desktop-e2e-token')
+    policy.artifactShareApiOrigin = 'https://share.example'
 
     await expect(
-      new SkillCloudService(userDataPath()).listOwnedShares({ apiUrl: 'https://share.onorca.dev' })
+      new SkillCloudService(userDataPath()).listOwnedShares({ apiUrl: 'https://share.example' })
     ).rejects.toThrow('available only in development builds')
   })
 })

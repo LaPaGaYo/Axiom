@@ -79,10 +79,18 @@ function setup(
   preparation?: Promise<SkillSharePreview>,
   authStatus: Promise<unknown> = Promise.resolve({
     cloud: { email: 'owner@example.com', ...(organization ? { activeOrgId: 'org_1' } : {}) }
-  })
+  }),
+  cloudStatus: 'ok' | 'unconfigured' = 'ok'
 ) {
   let progressListener: ((progress: SkillShareProgress) => void) | null = null
   const skills = {
+    listOwnedShares: vi
+      .fn()
+      .mockResolvedValue(
+        cloudStatus === 'ok'
+          ? { status: 'ok', value: [] }
+          : { status: 'unconfigured', message: 'Skill sharing is not configured in this build.' }
+      ),
     listManagedInstalls: vi.fn().mockResolvedValue({ status: 'ok', value: installs }),
     prepareShare: vi
       .fn()
@@ -125,6 +133,14 @@ afterEach(() => {
 })
 
 describe('SkillShareDialog', () => {
+  it('hides the share action when the cloud service is unconfigured', async () => {
+    const { skills } = setup([], false, [skill], {}, undefined, undefined, 'unconfigured')
+    await screen.findByText('Skill sharing is not configured in this build.')
+    expect(screen.queryByRole('button', { name: /Publish/ })).toBeNull()
+    expect(skills.prepareShare).not.toHaveBeenCalled()
+    expect(skills.publishShare).not.toHaveBeenCalled()
+  })
+
   it('releases a preparation that resolves after the dialog unmounts', async () => {
     const preparation = deferred<SkillSharePreview>()
     const { skills, unmount } = setup([], false, [skill], {}, preparation.promise)

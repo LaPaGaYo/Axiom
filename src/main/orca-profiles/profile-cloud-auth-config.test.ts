@@ -15,7 +15,7 @@ describe('Orca cloud auth config', () => {
   it('reports unconfigured without both API URL and client ID', () => {
     expect(getOrcaCloudAuthConfig({})).toEqual({
       configured: false,
-      setupMessage: 'Orca Cloud sign-in is not configured for this build.'
+      setupMessage: 'Cloud sign-in is not configured for this build.'
     })
   })
 
@@ -37,29 +37,36 @@ describe('Orca cloud auth config', () => {
         orgEndpoint: 'https://orca-cloud.example/v1/desktop/auth/org',
         logoutEndpoint: 'https://orca-cloud.example/v1/desktop/auth/logout',
         relayTokenEndpoint: 'https://orca-cloud.example/v1/desktop/auth/relay-token',
-        relayDirectorUrl: 'https://relay.onorca.dev',
+        relayDirectorUrl: '',
         clientId: 'desktop-client',
         scope: 'openid profile email offline_access'
       }
     })
   })
 
-  it('uses first-party production endpoints without runtime env in packaged builds', () => {
+  it('is unconfigured without runtime env in packaged builds', () => {
     expect(getOrcaCloudAuthConfig({}, true)).toEqual({
+      configured: false,
+      setupMessage: 'Cloud sign-in is not configured for this build.'
+    })
+  })
+
+  it('preserves explicit packaged cloud and relay configuration', () => {
+    expect(
+      getOrcaCloudAuthConfig(
+        {
+          ORCA_CLOUD_API_URL: 'https://login.example',
+          ORCA_CLOUD_CLIENT_ID: 'desktop-client',
+          ORCA_RELAY_URL: 'https://relay.example'
+        },
+        true
+      )
+    ).toMatchObject({
       configured: true,
       config: {
-        apiBaseUrl: 'https://login.onorca.dev',
-        authorizeEndpoint: 'https://login.onorca.dev/v1/desktop/auth/authorize',
-        sessionEndpoint: 'https://login.onorca.dev/v1/desktop/auth/session',
-        refreshEndpoint: 'https://login.onorca.dev/v1/desktop/auth/refresh',
-        capabilitiesEndpoint: 'https://login.onorca.dev/v1/desktop/auth/capabilities',
-        profileEndpoint: 'https://login.onorca.dev/v1/desktop/auth/profile',
-        orgEndpoint: 'https://login.onorca.dev/v1/desktop/auth/org',
-        logoutEndpoint: 'https://login.onorca.dev/v1/desktop/auth/logout',
-        relayTokenEndpoint: 'https://login.onorca.dev/v1/desktop/auth/relay-token',
-        relayDirectorUrl: 'https://relay.onorca.dev',
-        clientId: 'orca-desktop',
-        scope: 'openid profile email offline_access'
+        apiBaseUrl: 'https://login.example',
+        clientId: 'desktop-client',
+        relayDirectorUrl: 'https://relay.example'
       }
     })
   })
