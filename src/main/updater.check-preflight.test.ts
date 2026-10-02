@@ -24,6 +24,10 @@ vi.mock('./updater-prerelease-feed', () => moduleFactories.updaterPrereleaseFeed
 vi.mock('./local-builds/local-build-switch', () => moduleFactories.localBuildSwitch())
 vi.mock('./local-builds/local-build-feed-server', () => moduleFactories.localBuildFeedServer())
 
+vi.mock('../shared/product-egress-policy', async () =>
+  (await import('./updater-test-harness-product-policy')).enabledUpdaterPolicy()
+)
+
 warmUpdaterModule()
 
 describe('updater', () => {
@@ -442,7 +446,7 @@ describe('updater', () => {
     })
     expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
       provider: 'generic',
-      url: 'https://github.com/stablyai/orca/releases/download/v1.4.36-rc.5'
+      url: 'https://github.com/LaPaGaYo/Axiom/releases/download/v1.4.36-rc.5'
     })
     expect(
       sendMock.mock.calls

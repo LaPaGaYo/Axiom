@@ -1,3 +1,4 @@
+import { PRODUCT_EGRESS_POLICY } from '../../../../shared/product-egress-policy'
 import React, { useState } from 'react'
 import {
   BookOpen,
@@ -121,7 +122,7 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
   const handleMenuOpenChange = (open: boolean): void => {
     setMenuOpen(open)
     updateCheckModifiersRef.current = NO_UPDATE_CHECK_MODIFIERS
-    if (open) {
+    if (open && PRODUCT_EGRESS_POLICY.feedbackApiUrl !== null) {
       // Warm on the precursor: reading the menu and clicking Send Feedback takes hundreds of ms,
       // so the chunk is already in the module map by the time the item is selected.
       void loadSidebarFeedbackDialog().catch(() => {})
@@ -253,13 +254,15 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
               )}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={handleOpenFeedback}>
-              <MessageSquareText className="size-3.5" />
-              {translate(
-                'auto.components.sidebar.SidebarSettingsHelpMenu.4cf5b868d7',
-                'Send Feedback'
-              )}
-            </DropdownMenuItem>
+            {PRODUCT_EGRESS_POLICY.feedbackApiUrl !== null ? (
+              <DropdownMenuItem onSelect={handleOpenFeedback}>
+                <MessageSquareText className="size-3.5" />
+                {translate(
+                  'auto.components.sidebar.SidebarSettingsHelpMenu.4cf5b868d7',
+                  'Send Feedback'
+                )}
+              </DropdownMenuItem>
+            ) : null}
             {showMilestones ? (
               <DropdownMenuItem onSelect={openMilestones}>
                 <img
@@ -354,7 +357,7 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      {feedbackDialogMounted ? (
+      {PRODUCT_EGRESS_POLICY.feedbackApiUrl !== null && feedbackDialogMounted ? (
         <React.Suspense fallback={null}>
           <SidebarFeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
         </React.Suspense>

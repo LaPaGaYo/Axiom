@@ -118,6 +118,10 @@ vi.mock('./updater-nudge', () => ({
   shouldApplyNudge: vi.fn().mockReturnValue(false)
 }))
 
+vi.mock('../shared/product-egress-policy', async () =>
+  (await import('./updater-test-harness-product-policy')).enabledUpdaterPolicy()
+)
+
 warmUpdaterModule()
 
 describe('updater mac install handoff', () => {

@@ -1,4 +1,23 @@
+import type * as ProductEgressPolicyModule from '../shared/product-egress-policy'
+vi.mock('../shared/product-egress-policy', async (importOriginal) => {
+  const actual = await importOriginal<typeof ProductEgressPolicyModule>()
+  return {
+    ...actual,
+    PRODUCT_EGRESS_POLICY: {
+      ...actual.PRODUCT_EGRESS_POLICY,
+      changelogJsonUrl: 'https://updates.example.test/changelog.json',
+      get changelogPageUrl() {
+        return changelogPageUrlMock()
+      }
+    }
+  }
+})
+
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { changelogPageUrlMock } = vi.hoisted(() => ({
+  changelogPageUrlMock: vi.fn<() => string | null>()
+}))
 
 const fetchMock = vi.fn()
 
@@ -26,13 +45,32 @@ function makeEntries(
     title: item.title ?? `Release ${item.version}`,
     description: item.description ?? '',
     mediaUrl: item.mediaUrl,
-    releaseNotesUrl: item.releaseNotesUrl ?? `https://onorca.dev/changelog/${item.version}`
+    releaseNotesUrl:
+      item.releaseNotesUrl ?? `https://updates.example.test/changelog/${item.version}`
   }))
 }
 
 describe('fetchChangelog', () => {
   beforeEach(() => {
     fetchMock.mockReset()
+    changelogPageUrlMock.mockReturnValue('https://updates.example.test/changelog')
+  })
+
+  it('does not emit a fallback entry when the generic changelog page is disabled', async () => {
+    changelogPageUrlMock.mockReturnValue(null)
+    fetchMock.mockResolvedValue(
+      jsonResponse(
+        makeEntries([
+          { version: '1.1.17', mediaUrl: 'https://updates.example.test/media/demo.gif' },
+          { version: '1.1.15' }
+        ])
+      )
+    )
+    await expect(fetchChangelog('1.1.21', '1.1.15')).resolves.toBeNull()
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://updates.example.test/changelog.json',
+      expect.any(Object)
+    )
   })
 
   it('returns exact match when the incoming version has rich content', async () => {
@@ -40,7 +78,7 @@ describe('fetchChangelog', () => {
       {
         version: '1.1.21',
         description: 'New feature',
-        mediaUrl: 'https://onorca.dev/media/1.1.21.gif'
+        mediaUrl: 'https://updates.example.test/media/1.1.21.gif'
       },
       { version: '1.1.20' },
       { version: '1.1.19' }
@@ -51,7 +89,7 @@ describe('fetchChangelog', () => {
 
     expect(result).not.toBeNull()
     expect(result!.release.title).toBe('Release 1.1.21')
-    expect(result!.release.releaseNotesUrl).toBe('https://onorca.dev/changelog/1.1.21')
+    expect(result!.release.releaseNotesUrl).toBe('https://updates.example.test/changelog/1.1.21')
     expect(result!.releasesBehind).toBe(2)
   })
 
@@ -62,8 +100,8 @@ describe('fetchChangelog', () => {
       {
         version: '1.1.17',
         description: 'Cool feature',
-        mediaUrl: 'https://onorca.dev/media/1.1.17.gif',
-        releaseNotesUrl: 'https://onorca.dev/changelog/1.1.17'
+        mediaUrl: 'https://updates.example.test/media/1.1.17.gif',
+        releaseNotesUrl: 'https://updates.example.test/changelog/1.1.17'
       },
       { version: '1.1.16' },
       { version: '1.1.15' }
@@ -76,7 +114,7 @@ describe('fetchChangelog', () => {
     expect(result!.release.title).toBe('Release 1.1.17')
     expect(result!.release.description).toBe('Cool feature')
     // Why: fallback entries link to the generic changelog, not a version-specific page.
-    expect(result!.release.releaseNotesUrl).toBe('https://onorca.dev/changelog')
+    expect(result!.release.releaseNotesUrl).toBe('https://updates.example.test/changelog')
     expect(result!.releasesBehind).toBe(2)
   })
 
@@ -88,7 +126,7 @@ describe('fetchChangelog', () => {
       {
         version: '1.1.17',
         description: 'Great update',
-        mediaUrl: 'https://onorca.dev/media/1.1.17.gif'
+        mediaUrl: 'https://updates.example.test/media/1.1.17.gif'
       },
       { version: '1.1.15' }
     ])
@@ -98,7 +136,7 @@ describe('fetchChangelog', () => {
 
     expect(result).not.toBeNull()
     expect(result!.release.title).toBe('Release 1.1.17')
-    expect(result!.release.releaseNotesUrl).toBe('https://onorca.dev/changelog')
+    expect(result!.release.releaseNotesUrl).toBe('https://updates.example.test/changelog')
     // releasesBehind is from local (index 2) to incoming (index 0) = 2
     expect(result!.releasesBehind).toBe(2)
   })
@@ -138,7 +176,7 @@ describe('fetchChangelog', () => {
       {
         version: '1.1.17',
         description: 'Old feature',
-        mediaUrl: 'https://onorca.dev/media/old.gif'
+        mediaUrl: 'https://updates.example.test/media/old.gif'
       }
     ])
     fetchMock.mockResolvedValue(jsonResponse(entries))
@@ -158,7 +196,7 @@ describe('fetchChangelog', () => {
       {
         version: '1.1.18',
         description: 'Current feature',
-        mediaUrl: 'https://onorca.dev/media/current.gif'
+        mediaUrl: 'https://updates.example.test/media/current.gif'
       },
       { version: '1.1.17' }
     ])
@@ -168,7 +206,7 @@ describe('fetchChangelog', () => {
 
     expect(result).not.toBeNull()
     expect(result!.release.title).toBe('Release 1.1.18')
-    expect(result!.release.releaseNotesUrl).toBe('https://onorca.dev/changelog')
+    expect(result!.release.releaseNotesUrl).toBe('https://updates.example.test/changelog')
   })
 
   it('shows rich entry when local version is not in JSON (very old user)', async () => {
@@ -177,7 +215,7 @@ describe('fetchChangelog', () => {
       {
         version: '1.1.17',
         description: 'Feature demo',
-        mediaUrl: 'https://onorca.dev/media/demo.gif'
+        mediaUrl: 'https://updates.example.test/media/demo.gif'
       }
     ])
     fetchMock.mockResolvedValue(jsonResponse(entries))
@@ -186,7 +224,7 @@ describe('fetchChangelog', () => {
 
     expect(result).not.toBeNull()
     expect(result!.release.title).toBe('Release 1.1.17')
-    expect(result!.release.releaseNotesUrl).toBe('https://onorca.dev/changelog')
+    expect(result!.release.releaseNotesUrl).toBe('https://updates.example.test/changelog')
     // releasesBehind is null because the local version isn't in the JSON.
     expect(result!.releasesBehind).toBeNull()
   })
@@ -200,7 +238,7 @@ describe('fetchChangelog', () => {
       {
         version: '1.1.17',
         description: 'Old feature',
-        mediaUrl: 'https://onorca.dev/media/old.gif'
+        mediaUrl: 'https://updates.example.test/media/old.gif'
       }
     ])
     fetchMock.mockResolvedValue(jsonResponse(entries))
@@ -231,12 +269,12 @@ describe('fetchChangelog', () => {
       {
         version: '1.1.21',
         description: 'Latest feature',
-        mediaUrl: 'https://onorca.dev/media/latest.gif'
+        mediaUrl: 'https://updates.example.test/media/latest.gif'
       },
       {
         version: '1.1.17',
         description: 'Older feature',
-        mediaUrl: 'https://onorca.dev/media/old.gif'
+        mediaUrl: 'https://updates.example.test/media/old.gif'
       },
       { version: '1.1.15' }
     ])
@@ -246,12 +284,16 @@ describe('fetchChangelog', () => {
 
     expect(result!.release.title).toBe('Release 1.1.21')
     // Exact match keeps its own releaseNotesUrl.
-    expect(result!.release.releaseNotesUrl).toBe('https://onorca.dev/changelog/1.1.21')
+    expect(result!.release.releaseNotesUrl).toBe('https://updates.example.test/changelog/1.1.21')
   })
 
   it('strips version from the returned release object', async () => {
     const entries = makeEntries([
-      { version: '1.1.17', description: 'Feature', mediaUrl: 'https://onorca.dev/media/demo.gif' },
+      {
+        version: '1.1.17',
+        description: 'Feature',
+        mediaUrl: 'https://updates.example.test/media/demo.gif'
+      },
       { version: '1.1.15' }
     ])
     fetchMock.mockResolvedValue(jsonResponse(entries))

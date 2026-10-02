@@ -1,13 +1,10 @@
+import { PRODUCT_EGRESS_POLICY } from '../../shared/product-egress-policy'
+
 // Build-time diagnostic upload routing. Kept outside ipc/diagnostics.ts so
 // crash reporting can attach logs through the same pinned endpoint rules.
 
 export function resolveDiagnosticBuildTokenEndpoint(): string | null {
-  const endpoint =
-    typeof ORCA_DIAGNOSTICS_TOKEN_URL !== 'undefined'
-      ? ORCA_DIAGNOSTICS_TOKEN_URL
-      : ((globalThis as { ORCA_DIAGNOSTICS_TOKEN_URL?: string | null })
-          .ORCA_DIAGNOSTICS_TOKEN_URL ?? null)
-  return typeof endpoint === 'string' && endpoint.length > 0 ? endpoint : null
+  return PRODUCT_EGRESS_POLICY.diagnosticsTokenUrl
 }
 
 export function resolveDiagnosticBuildIdentity(): 'stable' | 'rc' | null {
@@ -21,8 +18,7 @@ export function resolveDiagnosticBuildIdentity(): 'stable' | 'rc' | null {
 
 export function resolveDiagnosticTokenEndpoint(): string | null {
   const buildEndpoint = resolveDiagnosticBuildTokenEndpoint()
-  // Official builds must stay pinned to the CI-substituted endpoint; user env
-  // cannot redirect uploads that the UI labels as going to Orca support.
+  // Official builds obey product policy; only unofficial builds may use the developer override.
   if (resolveDiagnosticBuildIdentity()) {
     return buildEndpoint
   }

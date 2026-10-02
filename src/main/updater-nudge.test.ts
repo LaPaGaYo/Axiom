@@ -1,3 +1,15 @@
+import type * as ProductEgressPolicyModule from '../shared/product-egress-policy'
+vi.mock('../shared/product-egress-policy', async (importOriginal) => {
+  const actual = await importOriginal<typeof ProductEgressPolicyModule>()
+  return {
+    ...actual,
+    PRODUCT_EGRESS_POLICY: {
+      ...actual.PRODUCT_EGRESS_POLICY,
+      nudgeUrl: 'https://updates.example.test/nudge.json'
+    }
+  }
+})
+
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { netFetchMock } = vi.hoisted(() => ({

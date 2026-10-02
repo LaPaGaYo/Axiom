@@ -17,6 +17,7 @@ export type FeedbackSubmitArgs = {
 }
 
 export type FeedbackRequestFailure = {
+  reason?: 'disabled'
   status: number | null
   error: string
 }

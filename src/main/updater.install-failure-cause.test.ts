@@ -167,6 +167,10 @@ async function reachDownloaded(): Promise<typeof UpdaterModule> {
   return updater
 }
 
+vi.mock('../shared/product-egress-policy', async () =>
+  (await import('./updater-test-harness-product-policy')).enabledUpdaterPolicy()
+)
+
 warmUpdaterModule()
 
 /**

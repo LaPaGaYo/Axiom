@@ -1,3 +1,4 @@
+import { PRODUCT_EGRESS_POLICY } from '../../shared/product-egress-policy'
 import { app } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import { fetchNudge, shouldApplyNudge } from '../updater-nudge'
@@ -7,7 +8,7 @@ import { UpdaterBuildSelection } from './updater-build-selection'
 /** Polls update campaigns and exposes their dismissal actions. */
 export abstract class UpdaterNudge extends UpdaterBuildSelection {
   protected async checkForUpdateNudge(): Promise<void> {
-    if (!app.isPackaged || is.dev) {
+    if (PRODUCT_EGRESS_POLICY.nudgeUrl === null || !app.isPackaged || is.dev) {
       return
     }
     if (this.nudgeCheckInFlight) {
@@ -49,6 +50,9 @@ export abstract class UpdaterNudge extends UpdaterBuildSelection {
   }
 
   protected scheduleUpdateNudgeCheck(): void {
+    if (PRODUCT_EGRESS_POLICY.nudgeUrl === null) {
+      return
+    }
     if (this.nudgeCheckTimer) {
       clearTimeout(this.nudgeCheckTimer)
     }

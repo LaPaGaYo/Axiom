@@ -1,3 +1,4 @@
+import { PRODUCT_EGRESS_POLICY } from '../../shared/product-egress-policy'
 import { net } from 'electron'
 import { appendFeedbackImagesToFormData } from './feedback-image-attachments'
 import type {
@@ -10,7 +11,7 @@ import type {
 // endpoint rejects. Electron's net module runs in the main process and is not
 // subject to CORS, so we proxy the submission through IPC. This mirrors the
 // same pattern used by updater-changelog.ts and updater-nudge.ts.
-export const FEEDBACK_API_URL = 'https://www.onorca.dev/v1/feedback'
+export const FEEDBACK_API_URL = PRODUCT_EGRESS_POLICY.feedbackApiUrl
 const FEEDBACK_REQUEST_TIMEOUT_MS = 10_000
 const DIAGNOSTIC_BUNDLE_CONTENT_TYPE = 'application/x-ndjson'
 
@@ -39,11 +40,14 @@ export type FeedbackSubmitBody = {
 export type { FeedbackRequestFailure } from '../../shared/feedback-submit-contract'
 
 export async function postFeedback(
-  url: string,
+  url: string | null,
   body: FeedbackSubmitBody,
   timeoutMs = FEEDBACK_REQUEST_TIMEOUT_MS,
   readResponse?: (response: Response) => Promise<void>
 ): Promise<Response> {
+  if (url === null) {
+    throw new Error('Feedback submission is disabled.')
+  }
   const controller = new AbortController()
   // Why: a silent endpoint must not leave feedback IPC pending forever.
   const timeout = setTimeout(() => controller.abort(), timeoutMs)

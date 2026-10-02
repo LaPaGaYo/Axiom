@@ -1,3 +1,4 @@
+import { PRODUCT_EGRESS_POLICY } from '../../shared/product-egress-policy'
 import {
   findKilledPlugin,
   isPluginKillListTooFarInFuture,
@@ -7,7 +8,7 @@ import {
 } from '../../shared/plugins/plugin-kill-list'
 import { PluginKillListStore } from './plugin-kill-list-store'
 
-export const PLUGIN_KILL_LIST_URL = 'https://onorca.dev/plugins/kill-list.json'
+export const PLUGIN_KILL_LIST_URL = PRODUCT_EGRESS_POLICY.pluginKillListUrl
 const PLUGIN_KILL_LIST_DOWNLOAD_LIMIT = 4 * 1024 * 1024
 
 type PluginKillListFetcher = () => Promise<PluginKillList>
@@ -75,6 +76,10 @@ export class PluginKillListService {
 
   private async performRefresh(): Promise<PluginKillList> {
     await this.initialize()
+    // Why: disabling remote revocations must not erase the cached local safety list.
+    if (PLUGIN_KILL_LIST_URL === null) {
+      return this.currentList ?? emptyKillList()
+    }
     const fetched = pluginKillListSchema.parse(await this.fetcher())
     if (isPluginKillListTooFarInFuture(fetched)) {
       throw new Error('refusing a plugin kill list generated too far in the future')
@@ -98,6 +103,9 @@ export async function fetchPluginKillList(
   fetcher: typeof fetch = fetch,
   url = PLUGIN_KILL_LIST_URL
 ): Promise<PluginKillList> {
+  if (url === null) {
+    return emptyKillList()
+  }
   const response = await fetcher(url, { cache: 'no-store' })
   if (!response.ok) {
     throw new Error(`plugin kill-list request failed with HTTP ${response.status}`)
