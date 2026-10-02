@@ -24,7 +24,7 @@ const SILENT_SETTLE_DELAY_MS = 1_000
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 vi.mock('../shared/product-egress-policy', async () =>
-  (await import('./updater-test-harness')).enabledUpdaterPolicy()
+  (await import('./updater-test-harness-product-policy')).enabledUpdaterPolicy()
 )
 
 warmUpdaterModule()
