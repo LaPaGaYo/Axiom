@@ -31,10 +31,8 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): void 
   if (!validate(name, props).ok) {
     return
   }
-  if (!consumeBurstToken(name)) {
-    return
-  }
   // D25: discard immediately; no sink, queue, or network transport exists in V1.
+  void consumeBurstToken(name)
 }
 
 export async function setOptIn(_via: OptInVia, optedIn: boolean): Promise<void> {

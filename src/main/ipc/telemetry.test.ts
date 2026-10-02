@@ -1,36 +1,21 @@
-// Telemetry IPC boundary tests: the renderer is in the threat model, so handlers drop malformed calls, cap consent mutations, and derive `via` main-side.
+// Renderer-controlled input must still pass the main-owned event and cohort boundary.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { Store } from '../persistence'
 
 const handlers = new Map<string, (_event: unknown, ...args: unknown[]) => unknown>()
-const {
-  handleMock,
-  trackMock,
-  setOptInMock,
-  persistBannerAcknowledgeMock,
-  consumeConsentMutationTokenMock,
-  getCohortAtEmitMock,
-  getOnboardingCohortAtEmitMock
-} = vi.hoisted(() => ({
-  handleMock: vi.fn(),
-  trackMock: vi.fn(),
-  setOptInMock: vi.fn(),
-  persistBannerAcknowledgeMock: vi.fn(),
-  consumeConsentMutationTokenMock: vi.fn(),
-  getCohortAtEmitMock: vi.fn(),
-  getOnboardingCohortAtEmitMock: vi.fn()
-}))
+const { handleMock, trackMock, getCohortAtEmitMock, getOnboardingCohortAtEmitMock } = vi.hoisted(
+  () => ({
+    handleMock:
+      vi.fn<(channel: string, handler: (_event: unknown, ...args: unknown[]) => unknown) => void>(),
+    trackMock: vi.fn(),
+    getCohortAtEmitMock: vi.fn(),
+    getOnboardingCohortAtEmitMock: vi.fn()
+  })
+)
 
 vi.mock('electron', () => ({ ipcMain: { handle: handleMock } }))
 vi.mock('../telemetry/client', () => ({
-  track: trackMock,
-  setOptIn: setOptInMock,
-  persistBannerAcknowledgeWithoutEmitting: persistBannerAcknowledgeMock
-}))
-vi.mock('../telemetry/burst-cap', () => ({
-  consumeConsentMutationToken: consumeConsentMutationTokenMock
+  track: trackMock
 }))
 vi.mock('../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: getCohortAtEmitMock
@@ -39,77 +24,38 @@ vi.mock('../telemetry/onboarding-cohort-classifier', () => ({
   getOnboardingCohortAtEmit: getOnboardingCohortAtEmitMock
 }))
 
-import { _resetStoreForTests, registerTelemetryHandlers } from './telemetry'
+import { registerTelemetryHandlers } from './telemetry'
 
-function captureHandlers(): void {
+function registerHandlers(): void {
+  registerTelemetryHandlers()
   handlers.clear()
-  for (const call of handleMock.mock.calls) {
-    const [channel, handler] = call as [
-      string,
-      typeof handlers extends Map<string, infer V> ? V : never
-    ]
+  for (const [channel, handler] of handleMock.mock.calls) {
     handlers.set(channel, handler)
   }
-}
-
-// Fake Store whose `telemetry` block tests reassign between invocations to seed derivation states.
-type FakeStoreState = { settings: GlobalSettings }
-function makeFakeStore(telemetry: GlobalSettings['telemetry']): {
-  store: Store
-  state: FakeStoreState
-} {
-  const state: FakeStoreState = { settings: { telemetry } as unknown as GlobalSettings }
-  const store = {
-    getSettings: vi.fn(() => state.settings),
-    updateSettings: vi.fn((updates: Partial<GlobalSettings>) => {
-      state.settings = { ...state.settings, ...updates } as GlobalSettings
-      return state.settings
-    })
-  } as unknown as Store
-  return { store, state }
-}
-
-function registerWith(telemetry: GlobalSettings['telemetry']): FakeStoreState {
-  const { store, state } = makeFakeStore(telemetry)
-  registerTelemetryHandlers(store)
-  captureHandlers()
-  return state
 }
 
 describe('telemetry IPC handlers', () => {
   beforeEach(() => {
     handleMock.mockReset()
     trackMock.mockReset()
-    setOptInMock.mockReset()
-    persistBannerAcknowledgeMock.mockReset()
-    consumeConsentMutationTokenMock.mockReset()
-    consumeConsentMutationTokenMock.mockReturnValue(true)
     getCohortAtEmitMock.mockReset()
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 0 })
     getOnboardingCohortAtEmitMock.mockReset()
     getOnboardingCohortAtEmitMock.mockReturnValue({ cohort: undefined })
-    _resetStoreForTests()
   })
   afterEach(() => {
     vi.restoreAllMocks()
   })
 
-  it('registers all four channels', () => {
-    registerWith({
-      installId: 'x',
-      existedBeforeTelemetryRelease: false,
-      optedIn: true
-    })
-    expect(handlers.has('telemetry:track')).toBe(true)
-    expect(handlers.has('telemetry:setOptIn')).toBe(true)
-    expect(handlers.has('telemetry:acknowledgeBanner')).toBe(true)
-    expect(handlers.has('telemetry:getConsentState')).toBe(true)
+  it('registers only the track channel', () => {
+    registerHandlers()
+    expect([...handlers.keys()]).toEqual(['telemetry:track'])
   })
 
   // ── telemetry:track ──────────────────────────────────────────────────
 
   it('forwards a well-typed track call to track() and injects cohort for COHORT_EXTENDED events', () => {
-    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+    registerHandlers()
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
     const handler = handlers.get('telemetry:track')!
     handler({}, 'app_opened', {})
@@ -119,7 +65,7 @@ describe('telemetry IPC handlers', () => {
 
   // Schemas are `.strict()`, so injecting `nth_repo_added` on a non-cohort event would drop the whole event at the validator.
   it('does NOT inject cohort on events outside COHORT_EXTENDED', () => {
-    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+    registerHandlers()
     const handler = handlers.get('telemetry:track')!
     handler({}, 'settings_changed', { setting_key: 'editorAutoSave', value_kind: 'bool' })
     expect(trackMock).toHaveBeenCalledTimes(1)
@@ -132,7 +78,7 @@ describe('telemetry IPC handlers', () => {
 
   // Renderer-only Setup-step events depend on the handler injecting cohort so call sites stay synchronous.
   it('injects cohort for add_repo_setup_step_action (renderer-only event)', () => {
-    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+    registerHandlers()
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 1 })
     const handler = handlers.get('telemetry:track')!
     handler({}, 'add_repo_setup_step_action', { action: 'skip' })
@@ -143,7 +89,7 @@ describe('telemetry IPC handlers', () => {
   })
 
   it('drops main-owned events from renderer telemetry IPC', () => {
-    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+    registerHandlers()
     const handler = handlers.get('telemetry:track')!
     handler({}, 'app_starred_orca', { source: 'settings' })
     handler({}, 'star_nag_outcome', {
@@ -166,7 +112,7 @@ describe('telemetry IPC handlers', () => {
   })
 
   it('injects cohort for setup script prompt events', () => {
-    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+    registerHandlers()
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 3 })
     const handler = handlers.get('telemetry:track')!
     handler({}, 'setup_script_prompt_shown', {
@@ -203,7 +149,7 @@ describe('telemetry IPC handlers', () => {
 
   // Fail-soft: `nth_repo_added` is optional, so an undefined cohort still validates.
   it('forwards undefined cohort when the classifier returns undefined', () => {
-    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+    registerHandlers()
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: undefined })
     const handler = handlers.get('telemetry:track')!
     handler({}, 'app_opened', {})
@@ -212,7 +158,7 @@ describe('telemetry IPC handlers', () => {
 
   // Security: same spread-order invariant as cohort — main-derived `nth_repo_added` overrides any renderer-forged value.
   it('main-derived nth_repo_added overrides renderer-supplied value', () => {
-    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+    registerHandlers()
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
     const handler = handlers.get('telemetry:track')!
     handler({}, 'app_opened', { nth_repo_added: 99 })
@@ -222,7 +168,7 @@ describe('telemetry IPC handlers', () => {
   // ── Onboarding cohort injection (mirrors the nth_repo_added pattern) ──
 
   it('injects onboarding cohort on events whose schema declares cohort', () => {
-    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+    registerHandlers()
     getOnboardingCohortAtEmitMock.mockReturnValue({ cohort: 'fresh_install' })
     const handler = handlers.get('telemetry:track')!
     handler({}, 'onboarding_step_viewed', { step: 1, value_kind: 'agent' })
@@ -234,14 +180,14 @@ describe('telemetry IPC handlers', () => {
   })
 
   it('does NOT inject onboarding cohort on non-onboarding events', () => {
-    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+    registerHandlers()
     const handler = handlers.get('telemetry:track')!
     handler({}, 'settings_changed', { setting_key: 'editorAutoSave', value_kind: 'bool' })
     expect(getOnboardingCohortAtEmitMock).not.toHaveBeenCalled()
   })
 
   it('forwards undefined onboarding cohort fail-soft', () => {
-    registerWith({ installId: 'x', existedBeforeTelemetryRelease: true, optedIn: null })
+    registerHandlers()
     getOnboardingCohortAtEmitMock.mockReturnValue({ cohort: undefined })
     const handler = handlers.get('telemetry:track')!
     handler({}, 'onboarding_started', {})
@@ -250,7 +196,7 @@ describe('telemetry IPC handlers', () => {
 
   // Security: main spreads cohort after caller props so main wins; flipping the order would let a renderer forge `cohort`.
   it('main-derived cohort overrides renderer-supplied cohort', () => {
-    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+    registerHandlers()
     getOnboardingCohortAtEmitMock.mockReturnValue({ cohort: 'fresh_install' })
     const handler = handlers.get('telemetry:track')!
     // Caller tries to forge cohort='upgrade_backfill'; main must overwrite.
@@ -262,7 +208,7 @@ describe('telemetry IPC handlers', () => {
 
   // Security: a fail-soft undefined cohort must still overwrite a forged value; a conditional-assign refactor would regress this.
   it('main-derived undefined cohort overrides renderer-supplied cohort (degraded classifier)', () => {
-    registerWith({ installId: 'x', existedBeforeTelemetryRelease: true, optedIn: true })
+    registerHandlers()
     getOnboardingCohortAtEmitMock.mockReturnValue({ cohort: undefined })
     const handler = handlers.get('telemetry:track')!
     // Forged cohort='upgrade_backfill' is stripped by the explicit-undefined spread.
@@ -273,7 +219,7 @@ describe('telemetry IPC handlers', () => {
   })
 
   it('drops track calls with a non-string name', () => {
-    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+    registerHandlers()
     const handler = handlers.get('telemetry:track')!
     handler({}, 42, {})
     handler({}, null, {})
@@ -282,7 +228,7 @@ describe('telemetry IPC handlers', () => {
   })
 
   it('drops track calls with non-object props', () => {
-    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+    registerHandlers()
     const handler = handlers.get('telemetry:track')!
     handler({}, 'app_opened', 'string-not-object')
     handler({}, 'app_opened', 42)
@@ -290,7 +236,7 @@ describe('telemetry IPC handlers', () => {
   })
 
   it('treats null/undefined props as an empty object', () => {
-    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+    registerHandlers()
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 0 })
     const handler = handlers.get('telemetry:track')!
     handler({}, 'app_opened', null)
@@ -298,171 +244,5 @@ describe('telemetry IPC handlers', () => {
     expect(trackMock).toHaveBeenCalledTimes(2)
     expect(trackMock).toHaveBeenNthCalledWith(1, 'app_opened', { nth_repo_added: 0 })
     expect(trackMock).toHaveBeenNthCalledWith(2, 'app_opened', { nth_repo_added: 0 })
-  })
-
-  // ── telemetry:setOptIn — input narrowing ─────────────────────────────
-
-  it('drops setOptIn with non-boolean optedIn', () => {
-    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
-    const handler = handlers.get('telemetry:setOptIn')!
-    handler({}, 'true')
-    handler({}, 1)
-    handler({}, null)
-    handler({}, undefined)
-    expect(setOptInMock).not.toHaveBeenCalled()
-    // None of these should have consumed a mutation token either.
-    expect(consumeConsentMutationTokenMock).not.toHaveBeenCalled()
-  })
-
-  it('drops setOptIn past the consent-mutation rate limit', () => {
-    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
-    const handler = handlers.get('telemetry:setOptIn')!
-    consumeConsentMutationTokenMock.mockReturnValue(false)
-    handler({}, true)
-    expect(setOptInMock).not.toHaveBeenCalled()
-  })
-
-  // ── telemetry:setOptIn — `via` derivation ────────────────────────────
-
-  it("derives via='first_launch_banner' for an existing user with optedIn=null clicking Turn off", () => {
-    // Only path where an existing user (optedIn=null) flips to false: the notice's "Turn off" button.
-    registerWith({
-      installId: 'x',
-      existedBeforeTelemetryRelease: true,
-      optedIn: null
-    })
-    const handler = handlers.get('telemetry:setOptIn')!
-    handler({}, false)
-    expect(setOptInMock).toHaveBeenCalledWith('first_launch_banner', false)
-  })
-
-  it("derives via='settings' (not 'first_launch_banner') for a defensive opt-in call from the pre-notice state", () => {
-    // Security: refuse via='first_launch_banner' on a forged setOptIn(true) pre-notice; fall through to 'settings'.
-    registerWith({
-      installId: 'x',
-      existedBeforeTelemetryRelease: true,
-      optedIn: null
-    })
-    const handler = handlers.get('telemetry:setOptIn')!
-    handler({}, true)
-    expect(setOptInMock).toHaveBeenCalledWith('settings', true)
-  })
-
-  it("derives via='settings' for a new user toggling off from Settings (no first-launch surface exists)", () => {
-    // New users (existed=false) see no first-launch surface, so any opt-out routes through Settings.
-    registerWith({
-      installId: 'x',
-      existedBeforeTelemetryRelease: false,
-      optedIn: true
-    })
-    const handler = handlers.get('telemetry:setOptIn')!
-    handler({}, false)
-    expect(setOptInMock).toHaveBeenCalledWith('settings', false)
-  })
-
-  it("derives via='settings' for an opt-in toggle flip after a prior opt-out", () => {
-    // Re-opt-in from Settings: neither cohort marker nor notice state triggers a first-launch tag.
-    registerWith({
-      installId: 'x',
-      existedBeforeTelemetryRelease: true,
-      optedIn: false
-    })
-    const handler = handlers.get('telemetry:setOptIn')!
-    handler({}, true)
-    expect(setOptInMock).toHaveBeenCalledWith('settings', true)
-  })
-
-  it("derives via='settings' for a new user flipping Settings off→on (not a first-launch interaction)", () => {
-    registerWith({
-      installId: 'x',
-      existedBeforeTelemetryRelease: false,
-      optedIn: false
-    })
-    const handler = handlers.get('telemetry:setOptIn')!
-    handler({}, true)
-    expect(setOptInMock).toHaveBeenCalledWith('settings', true)
-  })
-
-  it("derives via='settings' when the telemetry block is missing (defensive)", () => {
-    // Should never happen post-migration; handler must fall through to 'settings', not throw.
-    registerWith(undefined)
-    const handler = handlers.get('telemetry:setOptIn')!
-    handler({}, true)
-    expect(setOptInMock).toHaveBeenCalledWith('settings', true)
-  })
-
-  // ── telemetry:acknowledgeBanner — silent-persist path ────────────────
-
-  it('routes banner ✕ through persistBannerAcknowledgeWithoutEmitting without invoking setOptIn', () => {
-    // Why the separate channel: reaching setOptIn would derive a `via` and fire `telemetry_opted_in`; acknowledge must persist silently.
-    registerWith({
-      installId: 'x',
-      existedBeforeTelemetryRelease: true,
-      optedIn: null
-    })
-    const handler = handlers.get('telemetry:acknowledgeBanner')!
-    handler({})
-    expect(persistBannerAcknowledgeMock).toHaveBeenCalledTimes(1)
-    expect(setOptInMock).not.toHaveBeenCalled()
-    expect(trackMock).not.toHaveBeenCalled()
-  })
-
-  it('acknowledgeBanner consumes a consent-mutation token and drops past the cap', () => {
-    registerWith({
-      installId: 'x',
-      existedBeforeTelemetryRelease: true,
-      optedIn: null
-    })
-    const handler = handlers.get('telemetry:acknowledgeBanner')!
-    consumeConsentMutationTokenMock.mockReturnValue(false)
-    handler({})
-    expect(persistBannerAcknowledgeMock).not.toHaveBeenCalled()
-  })
-
-  // ── telemetry:acknowledgeBanner — state-precondition guard ───────────
-  // Security: guard passes only (existed=true, optedIn=null) and runs before token consumption, blocking a compromised renderer from flipping resolved consent.
-
-  it('acknowledgeBanner rejects an existing user who already opted in', () => {
-    registerWith({
-      installId: 'x',
-      existedBeforeTelemetryRelease: true,
-      optedIn: true
-    })
-    const handler = handlers.get('telemetry:acknowledgeBanner')!
-    handler({})
-    expect(persistBannerAcknowledgeMock).not.toHaveBeenCalled()
-    expect(consumeConsentMutationTokenMock).not.toHaveBeenCalled()
-  })
-
-  it('acknowledgeBanner rejects an existing user who already opted out', () => {
-    registerWith({
-      installId: 'x',
-      existedBeforeTelemetryRelease: true,
-      optedIn: false
-    })
-    const handler = handlers.get('telemetry:acknowledgeBanner')!
-    handler({})
-    expect(persistBannerAcknowledgeMock).not.toHaveBeenCalled()
-    expect(consumeConsentMutationTokenMock).not.toHaveBeenCalled()
-  })
-
-  it('acknowledgeBanner rejects the new-user cohort regardless of optedIn', () => {
-    registerWith({
-      installId: 'x',
-      existedBeforeTelemetryRelease: false,
-      optedIn: true
-    })
-    const handler = handlers.get('telemetry:acknowledgeBanner')!
-    handler({})
-    expect(persistBannerAcknowledgeMock).not.toHaveBeenCalled()
-    expect(consumeConsentMutationTokenMock).not.toHaveBeenCalled()
-  })
-
-  it('acknowledgeBanner rejects a missing telemetry block', () => {
-    registerWith(undefined)
-    const handler = handlers.get('telemetry:acknowledgeBanner')!
-    handler({})
-    expect(persistBannerAcknowledgeMock).not.toHaveBeenCalled()
-    expect(consumeConsentMutationTokenMock).not.toHaveBeenCalled()
   })
 })
