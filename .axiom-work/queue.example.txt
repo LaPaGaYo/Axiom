@@ -1,0 +1,2 @@
+# Template for .axiom-work/queue.txt (gitignored): one attempt per line: <ID> [seq] [--base <ref>]
+# M0-06a 2

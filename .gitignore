@@ -204,6 +204,7 @@ ci-shards/
 # Axiom: local run logs of Codex/verification launches (briefs are versioned)
 .axiom-work/logs/
 .axiom-work/fullsuite.target
+.axiom-work/queue.txt
 
 # Axiom: durable product docs must be tracked despite the upstream docs/** ignore (see AGENTS.md Required Reading)
 !docs/PROJECT_CHARTER.md
