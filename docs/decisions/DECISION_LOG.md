@@ -182,3 +182,8 @@
 
 vendor-egress ratchet（Codex attempt `axiom/attempt/M0-01/1`，候选 `7115f1cb9`）经独立验证（`.axiom-work/verifications/M0-01-1.md`：ratchet、27 个单测、`tc:node`、changed-code 质量门、完整 `pnpm lint` 全部 PASS；注入/allow 标记验收在沙盒独立复现）后以 `--no-ff` 合入 main（`7579ec17c`）。基线：544 个文件 / 763 个 (file, needle) 对，M0 后续任务只能使其收缩。
 
+
+## D23 · M0-02 集成记录 — ACCEPTED（事实记录）
+
+产品机器身份（D21）由 Codex 经 5 次 Attempt 完成（`axiom/attempt/M0-02/1..5`，同一基线 `0720ac7fa` 上叠加；attempt 2/4 为验证后的 NEEDS_FIX 返工，attempt 3 为 MINOR_ADJUSTMENT 范围扩展），候选 `369765e4f` 经独立验证（`.axiom-work/verifications/M0-02-5.md`）后以 `--no-ff` 合入 main（`9ac363a7e`）。验证事实：ratchet PASS 且基线 763 → 687 对（−76）；`tc:node/cli/web`、changed-code 质量门、`verify:cli-bin`、skill manifest/guides、完整 `pnpm lint` 全部 PASS；macOS computer-use 辅助进程 Swift 包在 Mac 上编译通过；全量 vitest 16 个失败文件中 13 个在 main 上同样失败（宿主环境）、2 个为计时抖动（候选与 main 各 10/10 焦点复跑通过）、1 个为上游测试缺陷（`tests/e2e/.cross-version-checkouts/` 未被排除）。
+**保留的风险/后续**：真实打包、通用二进制 helper 构建与签名未演练（M0 出口检查）；29 处用户可见文案仍写 `orca://pair`（CLI 帮助/错误文本、渲染层标签、6 个 i18n 文件）→ 归入 M0-05；`e2e-worker-env-isolation` 与 `pty-runtime-hidden-at-spawn-mark` 两个上游测试的稳定性问题各立 hygiene 跟进项。
