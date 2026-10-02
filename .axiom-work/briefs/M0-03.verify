@@ -1,0 +1,2 @@
+targets: src/main/updater src/main/plugins src/main/ipc/feedback src/main/observability src/shared/product-egress-policy src/shared/release-channel src/renderer/src/components/UpdateCard src/renderer/src/components/sidebar/SidebarSettingsHelpMenu src/main/window/main-window-updater
+extra: ! rg -n "onorca\.dev|stablyai" src/main/updater src/main/updater-*.ts src/main/plugins/plugin-kill-list-service.ts src/main/ipc/feedback-request.ts src/main/ipc/feedback.ts src/main/observability/diagnostic-upload-endpoint.ts src/shared/release-channel.ts --glob '!*.test.*'

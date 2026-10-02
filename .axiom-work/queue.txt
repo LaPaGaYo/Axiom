@@ -1,0 +1,2 @@
+# One attempt per line: <ID> [seq] [--base <ref>]   — run with launchers/queue.command
+# M0-03 1
