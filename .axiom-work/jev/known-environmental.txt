@@ -1,0 +1,20 @@
+# Test files known to fail on the verifier's Mac independently of any candidate (fail identically on main).
+# One path per line. Kept by the verifier; see .axiom-work/verifications/M0-02-5.md for the original triage.
+config/scripts/pr-workflow-lint-parity.test.mjs
+config/scripts/skill-recipe-shell.test.mjs
+src/main/browser/browser-manager-viewport-ownership.test.ts
+src/main/daemon/bash-prompt-command-composition.test.ts
+src/main/runtime/orchestration-cli-subprocess.test.ts
+src/shared/startup-shell-portability.live-shell.test.ts
+tests/e2e/cross-version-wire/agent-session-unproven-release-downgrade.unit.test.ts
+tests/e2e/cross-version-wire/cross-version-browser-placement.unit.test.ts
+tests/e2e/cross-version-wire/cross-version-session-tabs-retirement-proof.unit.test.ts
+tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts
+tests/e2e/cross-version-wire/cross-version-worktree-identity-downgrade.unit.test.ts
+tests/e2e/cross-version-wire/release-checkout.unit.test.ts
+tests/e2e/relay-region-correction.unit.test.ts
+# Timing-sensitive / upstream defects (pass focused; fail under full-suite load)
+src/main/ipc/pty-runtime-hidden-at-spawn-mark.test.ts
+tests/e2e/e2e-worker-env-isolation.unit.test.ts
+config/scripts/build-native-for-platform.test.mjs
+src/main/ssh/ssh-remote-commands.test.ts

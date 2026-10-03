@@ -78,5 +78,9 @@ else
   VLOG=$(ls -t .axiom-work/logs/verify-"$ID"-"$SEQ"-*.log | head -1)
   { echo "verification log: $VLOG"; grep -E '^---- RESULT|OVERALL=' "$VLOG"; } >> "$SUMMARY"
 fi
+# 4. Advisory Jev triage (D29): never a gate; skipped silently when no key is installed.
+if [ -f .axiom-work/jev/triage.mjs ]; then
+  echo; echo "== jev triage (advisory)"; node .axiom-work/jev/triage.mjs "$ID" "$SEQ" 2>&1 || echo "jev: triage failed (ignored)"
+fi
 echo; echo "== SUMMARY ($SUMMARY)"; cat "$SUMMARY"
 echo "== attempt $ID seq=$SEQ end $(date)"
