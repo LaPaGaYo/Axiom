@@ -240,7 +240,7 @@ marketplace 官方源禁用 / skills 安装源改 `LaPaGaYo/Axiom` / star 提示
 **实施方式**（验证者核实后的最小方案）：本仓库的 i18n key 是稳定标识（`auto.<file>.<sha1>` 只在 `localize-renderer-strings.mjs` 为**新**字符串生成时计算；既有 `translate(key, default)` 调用的 key 不随 default 变化），`verify-localization-extraction` 对 "en.json 值 ≠ 调用点默认值" 只报告不失败。因此 M0-05b-1 同时改调用点默认文本与六个 catalog 的**值**、key 不动：翻译得以保留（品牌词在各语言里都是拉丁拼写，直接替换），运行时必需 catalog 不膨胀；Henry 接受的"回退英文"成为兜底而非必然。不改的东西：标识符、`ORCA_*` 环境变量（D13）、skill 名（`orca-cli` 等）、`orcad`、测试 fixture、署名文本。M0-05b-2：`docs/site` 改名改链接，删除 `mobile`/`android-apk`/`telemetry` 三页，安装页改为"预发布：从源码构建"，首页注明文档继承自 Orca 正在修订；内置 skill 指南的产品名同样处理并重生成 manifest。
 **取代规则**：若将来需要改 skill 名、守护进程名或环境变量名，需新 Decision 并评估兼容性（D13）。
 
-## D33 · 上游 cloud 基础设施树删除；mobile 树保留但声明为不交付 — PROPOSED
+## D33 · 上游 cloud 基础设施树删除；mobile 树保留但声明为不交付 — ACCEPTED（Henry 2026-10-03）
 
 **提议**：删除 `cloud/`（529 个文件：relay/push/login 的部署与运维基础设施）及其 CI（`.github/workflows/cloud-*.yml`、`.github/actions/cloud-sql-rollout-lease/`、CODEOWNERS 对应行）——`src/`、`config/`、`tests/` 均不依赖它，git 历史保留。`mobile/`（3394 个文件）保留在树中：桌面构建与若干根级门禁（`build-mobile-web-app-bundle.mjs`、oxlint/knip/reliability-gates 配置、changed-code 质量门）引用它，删除成本高于收益；但移除其发布/CI 工作流（`mobile.yml`、`mobile-android-release.yml`、`mobile-ios-release.yml`、`install-mobile-dependencies` action，PR 工作流中的 mobile 依赖安装与 mobile web app 作业），并在 vendor-egress ratchet 中把 `mobile/**` 声明为不交付代码予以排除。桌面端的移动配对面板不在本决定范围内。
 **备选**：按 orca-mapping §7 原表述"保留目录但移出默认构建"同时保留 cloud/——cloud 与桌面产品零耦合，保留只剩噪音与误导；或连 mobile/ 一起删——需要改动 6+ 个根级配置与脚本，且桌面端配对功能的去留是产品决定，留待 V1 之后。
