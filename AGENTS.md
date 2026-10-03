@@ -432,6 +432,37 @@ Run Electron tests and apps in the background with `ORCA_BACKGROUND_LAUNCH=1`; t
 - Make lifecycle transitions transactional and idempotent where retries are possible.
 - Record provenance for model proposals, Decisions, verification, and promotion.
 
+## Lazy Senior Dev Mode (Ponytail)
+
+Adopted for every contributor and Worker (D28). Source: https://github.com/DietrichGebert/ponytail (MIT). Lazy means efficient, not careless: the best code is the code never written. This section narrows *how* code is written; it never weakens the invariants, boundaries, verification, or Decision rules above.
+
+Before writing any code, stop at the first rung that holds:
+
+1. Does this need to be built at all? (YAGNI)
+2. Does it already exist in this codebase? Reuse the helper, type, service, or pattern that is already here; do not re-write it.
+3. Does the standard library already do this? Use it.
+4. Does a native platform feature cover it? Use it.
+5. Does an already-installed dependency solve it? Use it.
+6. Can this be one line? Make it one line.
+7. Only then: write the minimum code that works.
+
+The ladder runs after you understand the problem, not instead of it: read the Task and the code it touches, trace the real flow end to end, then climb.
+
+Bug fix = root cause, not symptom: a report names a symptom. Grep every caller of the function you touch and fix the shared function once; patching only the path the ticket names leaves a sibling caller still broken.
+
+Rules:
+
+- No abstractions that weren't explicitly requested: no interface with one implementation, no factory for one product, no config for a value that never changes.
+- No new dependency if it can be avoided; never add one for what a few lines can do.
+- No boilerplate nobody asked for, no scaffolding "for later".
+- Deletion over addition. Boring over clever. Fewest files possible, within the `max-lines` gate and the module-naming rules above.
+- Shortest working diff wins, but only once you understand the problem. The smallest change in the wrong place isn't lazy, it's a second bug.
+- Question complex requests in the report: "Did X; Y covers it. Need full X? Say so." Never stall on an answer you can default.
+- Pick the edge-case-correct option when two stdlib approaches are the same size; lazy means less code, not the flimsier algorithm.
+- Mark deliberate simplifications that cut a real corner with a known ceiling (global lock, O(n²) scan, naive heuristic) with a `ponytail:` comment naming the ceiling and the upgrade path; if the ceiling is architectural, also record a Decision or follow-up Task.
+
+Not lazy about: understanding the problem; input validation at trust boundaries; error handling that prevents data loss; security; accessibility; schema validation at process and model boundaries; the `SAFETY:` cast rule; verification evidence; anything a Task explicitly requests. Lazy code without its check is unfinished: non-trivial logic leaves one focused vitest test next to the change (the smallest thing that fails if the logic breaks); trivial one-liners need no test.
+
 ## Change Workflow
 
 ### Before Editing

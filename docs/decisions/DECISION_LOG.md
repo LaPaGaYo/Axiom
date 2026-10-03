@@ -209,3 +209,10 @@ vendor-egress ratchet（Codex attempt `axiom/attempt/M0-01/1`，候选 `7115f1cb
 
 cloud 服务置于产品出口策略之后，由 Codex 经 2 次 Attempt 完成（`axiom/attempt/M0-06a/1..2`；attempt 1 把"分享 host 列表为空即拒绝"放在 `axiom:` 分支之前导致产品自身深链被拒，并在沙盒跑 `pnpm install --offline --ignore-scripts` 弄坏宿主 Electron 二进制；attempt 2 按 addendum 修复解析顺序并补 pin 测试），候选 `75b3e74c3` 经独立验证（`.axiom-work/verifications/M0-06a-2.md`）后以 `--no-ff` 合入 main（`3b85ebcd6`）。因分支基线早于 M0-04 集成，合入后在合并树上执行回归（`.axiom-work/verify-merged.sh M0-04 M0-06a`，日志 `verify-merged-3b85ebcd6-*.log`）：基线重生成结果与自动合并一致（620 对），ratchet、两任务焦点测试、`tc` ×3、changed-code 质量门、全部额外断言、完整 `pnpm lint` 均 PASS。实现：`ProductEgressPolicy` 新增 `cloudAuth`/`pushGatewayOrigin`/`artifactShareApiOrigin`（均 `null`）与 `skillShareHosts`（空）；打包构建不再回退到任何厂商默认值，Orca Cloud 登录/relay、push、artifact 分享、skill cloud 在未设环境变量时为 `unconfigured`（不发请求），CLI `artifacts` 返回类型化的未配置错误；skill 分享链接仅接受裸 id 与 `axiom://skills/share/<id>`。
 **保留的风险/后续**：UI 中仍有登录/分享邀请文案与入口（M0-05a/05b）；环境变量重新启用 artifact/skill API 时仅允许 policy host 或非打包 loopback，未来接入自有 host 需新 Decision；打包与代理抓包验证归 M0-08。流水线新规：Worker 不得在沙盒执行任何写 `node_modules` 的命令；`attempt.sh` 检测到篡改会先 `pnpm install --frozen-lockfile` 修复再验证；`verify-merged.sh` 成为合并树回归的标准工具。
+
+## D28 · 采用 Ponytail"懒惰资深开发"规则（所有贡献者与 Worker） — ACCEPTED（Henry 2026-10-02）
+
+**决定**：把 https://github.com/DietrichGebert/ponytail （MIT）的规则作为 `AGENTS.md` 的"Lazy Senior Dev Mode (Ponytail)"一节，对 Claude 与 Codex Worker 同时生效（Codex 自动读取仓库根 `AGENTS.md`，无需改 brief）：写代码前按阶梯停在第一个成立的台阶——YAGNI → 仓库已有实现 → 标准库 → 平台原生 → 已装依赖 → 一行 → 最后才写最小代码；bug 修根因不修症状；不加未被要求的抽象、依赖和脚手架；最短可用 diff。
+**边界**：本节只收窄"怎么写"，不削弱架构不变量、边界处 schema 校验、`SAFETY:` 断言规则、`max-lines` 与模块命名规则、验证证据与 Decision 记录；"一个可运行检查"在本仓库等于一个聚焦的 vitest 测试；带上限的刻意简化要加 `ponytail:` 注释，属于架构层面的还要记 Decision 或后续 Task。Claude 侧同一规则以账号技能 `ponytail` 安装（原文 + Axiom 约束附注）。
+**动机**（Henry）：避免把小任务做成大工程、反复造轮子。
+**取代规则**：移除或放宽本节需新 Decision。
