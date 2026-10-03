@@ -36,8 +36,24 @@ fi
 BASE_SHA=$(git rev-parse HEAD)
 
 # 2. Worker attempt (Codex). run-codex.sh creates/switches the branch and commits whatever the Worker left.
+# Why the snapshot: a sandboxed `pnpm install --offline --ignore-scripts` re-links node_modules and strips the
+# Electron binary (M0-06a attempt 1); verification must not run on a toolchain the Worker damaged.
+nm_fingerprint() { node -e 'const fs=require("fs");for(const p of ["node_modules/.modules.yaml","node_modules/electron/path.txt","node_modules/electron/dist/version"]){try{console.log(p,fs.statSync(p).mtimeMs)}catch{console.log(p,"missing")}}' 2>/dev/null; }
+export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" && nvm use 24 >/dev/null 2>&1
+NM_BEFORE=$(nm_fingerprint)
 bash .axiom-work/run-codex.sh "$ID" "$SEQ"
 CODEX_RC=$?
+NM_AFTER=$(nm_fingerprint)
+if [ "$NM_BEFORE" != "$NM_AFTER" ]; then
+  echo "== WARNING: the Worker modified node_modules (install/relink); repairing with pnpm install --frozen-lockfile before verification"
+  echo "-- before:"; echo "$NM_BEFORE"; echo "-- after:"; echo "$NM_AFTER"
+  export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+  pnpm install --frozen-lockfile 2>&1 | tail -5
+  echo "== repair rc=${PIPESTATUS[0]}"
+  NM_REPAIRED=1
+else
+  NM_REPAIRED=0
+fi
 HEAD_SHA=$(git rev-parse HEAD)
 echo "== worker finished rc=$CODEX_RC base=$(git rev-parse --short "$BASE_SHA") head=$(git rev-parse --short "$HEAD_SHA")"
 {
@@ -45,6 +61,7 @@ echo "== worker finished rc=$CODEX_RC base=$(git rev-parse --short "$BASE_SHA") 
   echo "worker rc: $CODEX_RC"
   echo "candidate: $HEAD_SHA (base $BASE_SHA)"
   echo "report: $([ -f ".axiom-work/reports/$ID-$SEQ.md" ] && echo present || echo MISSING)"
+  [ "$NM_REPAIRED" = 1 ] && echo "node_modules: MODIFIED BY WORKER — repaired before verification (see log)"
 } > "$SUMMARY"
 
 if [ "$HEAD_SHA" = "$BASE_SHA" ]; then

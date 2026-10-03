@@ -253,7 +253,7 @@ async function launchDesktopMode(
   // issue its first request ahead of the persisted proxy.
   startDesktopPushService(runtimeRpc)
   const cloudAuth = getOrcaCloudAuthConfig()
-  if (cloudAuth.configured) {
+  if (cloudAuth.configured && cloudAuth.config.relayDirectorUrl) {
     try {
       const relayService = new DesktopRelayService({
         authConfig: cloudAuth.config,

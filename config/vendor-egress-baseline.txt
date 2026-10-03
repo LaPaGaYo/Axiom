@@ -279,10 +279,6 @@ src/cli/index-worktree-create-target.test.ts:stablyai:5
 src/cli/skills.test.ts:stablyai:11
 src/cli/specs/core.ts:stablyai:1
 src/cli/specs/project.ts:stablyai:9
-src/main/artifacts/artifact-cloud-config.test.ts:onorca.dev:2
-src/main/artifacts/artifact-cloud-config.test.ts:orca.dev:2
-src/main/artifacts/artifact-cloud-config.ts:onorca.dev:3
-src/main/artifacts/artifact-cloud-config.ts:orca.dev:3
 src/main/artifacts/artifact-cloud-recovery.test.ts:onorca.dev:4
 src/main/artifacts/artifact-cloud-recovery.test.ts:orca.dev:4
 src/main/artifacts/artifact-cloud-service-races.test.ts:onorca.dev:1
@@ -356,10 +352,6 @@ src/main/observability/index.ts:posthog:1
 src/main/observability/redactor.ts:posthog:2
 src/main/orca-profiles/profile-artifact-cloud-cleanup.test.ts:onorca.dev:1
 src/main/orca-profiles/profile-artifact-cloud-cleanup.test.ts:orca.dev:1
-src/main/orca-profiles/profile-cloud-auth-config.test.ts:onorca.dev:11
-src/main/orca-profiles/profile-cloud-auth-config.test.ts:orca.dev:11
-src/main/orca-profiles/profile-cloud-auth-config.ts:onorca.dev:2
-src/main/orca-profiles/profile-cloud-auth-config.ts:orca.dev:2
 src/main/orcad/orcad-profile-state-telemetry.ts:posthog:1
 src/main/persistence-automations.test.ts:stablyai:17
 src/main/persistence-initial-load.test.ts:stablyai:5
@@ -391,8 +383,6 @@ src/main/runtime/push/desktop-push-service.test.ts:onorca.dev:1
 src/main/runtime/push/desktop-push-service.test.ts:orca.dev:1
 src/main/runtime/push/push-gateway-client.test.ts:onorca.dev:1
 src/main/runtime/push/push-gateway-client.test.ts:orca.dev:1
-src/main/runtime/push/push-gateway-origin.ts:onorca.dev:1
-src/main/runtime/push/push-gateway-origin.ts:orca.dev:1
 src/main/runtime/push/push-gateway-session.test.ts:onorca.dev:1
 src/main/runtime/push/push-gateway-session.test.ts:orca.dev:1
 src/main/runtime/push/push-host-proof.test.ts:onorca.dev:1
@@ -414,8 +404,6 @@ src/main/runtime/runtime-git-sync-commands.test.ts:stablyai:1
 src/main/runtime/runtime-rpc-mobile-method-allowlist.test.ts:stablyai:18
 src/main/runtime/structured-worker-child-identity-env.test.ts:stablyai:1
 src/main/runtime/structured-worker-child-identity-env.ts:stablyai:1
-src/main/skills/skill-cloud-service.test.ts:onorca.dev:1
-src/main/skills/skill-cloud-service.test.ts:orca.dev:1
 src/main/skills/skill-freshness-inventory.test.ts:stablyai:2
 src/main/skills/skill-update-outcome.test.ts:stablyai:1
 src/main/skills/skill-update-registration.test.ts:stablyai:4
@@ -423,7 +411,6 @@ src/main/startup/browser-process-user-agent-ordering.test.ts:orca.dev:1
 src/main/startup/cli-launch-redirect.test.ts:stablyai:2
 src/main/startup/configure-process.ts:stablyai:1
 src/main/startup/hydrate-shell-path.ts:stablyai:1
-src/main/startup/skill-share-deep-link-state.test.ts:orca.dev:3
 src/main/telemetry/burst-cap.ts:posthog:1
 src/main/telemetry/client.test.ts:posthog:1
 src/main/telemetry/onboarding-feature-setup-validator.test.ts:stablyai:1
@@ -514,7 +501,6 @@ src/renderer/src/components/sidebar/worktree-list-groups-project-host-setups.tes
 src/renderer/src/components/sidebar/worktree-list-groups-test-fixtures.ts:stablyai:1
 src/renderer/src/components/sidebar/worktree-meta-updates.test.ts:stablyai:4
 src/renderer/src/components/skills/SkillFreshnessUpdateDialog.test.tsx:stablyai:4
-src/renderer/src/components/skills/SkillInstallDialog.test.tsx:orca.dev:3
 src/renderer/src/components/skills/SkillInstallManagementDialog.test.tsx:orca.dev:1
 src/renderer/src/components/skills/SkillInstallReviewContent.tsx:orca.dev:1
 src/renderer/src/components/skills/SkillSharedLinkRow.test.tsx:onorca.dev:1
@@ -627,8 +613,6 @@ src/shared/plugins/plugin-marketplace.ts:stablyai:3
 src/shared/project-host-setup-projection.test.ts:stablyai:27
 src/shared/repo-icon.test.ts:stablyai:8
 src/shared/resolved-worktree-lineage.test.ts:stablyai:3
-src/shared/skill-share-link.ts:onorca.dev:1
-src/shared/skill-share-link.ts:orca.dev:1
 src/shared/task-source-context.test.ts:stablyai:6
 src/shared/telemetry-events.test.ts:stablyai:1
 src/shared/tui-agent-config.ts:stablyai:1

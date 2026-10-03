@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+import type { ArtifactCloudOperation, ArtifactListPage } from '../../../../shared/artifacts'
 import { ArrowRight, Files } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Button } from '@/components/ui/button'
@@ -6,6 +8,7 @@ import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-s
 import { useAppStore } from '@/store'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { translate } from '@/i18n/i18n'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 
 type HowToStep = { key: string; title: string; description: string }
 
@@ -15,10 +18,37 @@ export function ArtifactsSettingsPane({
 }: {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const openArtifactsPage = useAppStore((state) => state.openArtifactsPage)
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
   const connect = useAppStore((state) => state.connectCurrentOrcaProfile)
+  const [cloudState, setCloudState] = useState<ArtifactCloudOperation<ArtifactListPage> | null>(
+    null
+  )
+  const [cloudError, setCloudError] = useState<string | null>(null)
+  useEffect(() => {
+    let disposed = false
+    void callRuntimeRpc<ArtifactCloudOperation<ArtifactListPage>>(
+      { kind: 'local' },
+      'artifacts.list',
+      {}
+    ).then(
+      (result) => {
+        if (!disposed) {
+          setCloudState(result)
+          setCloudError(null)
+        }
+      },
+      (error: unknown) => {
+        if (!disposed) {
+          setCloudError(error instanceof Error ? error.message : String(error))
+        }
+      }
+    )
+    return () => {
+      disposed = true
+    }
+  }, [authStatus?.configured, authStatus?.state])
   const signedIn = authStatus?.state === 'connected'
   // Why: the capability lives in the desktop host's store and is deliberately absent from the
   // settings.update allowlist, so a web client can only mirror it — never grant it.
@@ -26,6 +56,17 @@ export function ArtifactsSettingsPane({
   const sharingEnabled = settings.artifactSharingEnabled === true
 
   useOrcaProfileAuthStatusRefresh()
+
+  if (cloudError || cloudState?.status === 'unconfigured') {
+    return (
+      <p className="py-5 text-sm text-muted-foreground" role="status">
+        {cloudError ?? (cloudState?.status === 'unconfigured' ? cloudState.message : '')}
+      </p>
+    )
+  }
+  if (!cloudState) {
+    return null
+  }
 
   const howToSteps: HowToStep[] = [
     ...(sharingEnabled

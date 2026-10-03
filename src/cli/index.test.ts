@@ -260,6 +260,7 @@ describe('artifact runtime routing', () => {
   })
 
   it('uses the desktop runtime despite remote-selection environment fallbacks', async () => {
+    vi.stubEnv('ORCA_ARTIFACTS_API_URL', 'https://artifacts.example')
     vi.stubEnv('ORCA_ENVIRONMENT', 'remote-environment')
     vi.stubEnv('ORCA_PAIRING_CODE', 'remote-pairing-code')
     vi.spyOn(console, 'log').mockImplementation(() => undefined)
@@ -270,7 +271,7 @@ describe('artifact runtime routing', () => {
 
     expect(process.exitCode).not.toBe(1)
     expect(runtimeClientConstructorMock).toHaveBeenCalledWith(null, null)
-    expect(callMock).toHaveBeenCalledWith('artifacts.list', {})
+    expect(callMock).toHaveBeenCalledWith('artifacts.list', { apiUrl: 'https://artifacts.example' })
   })
 })
 

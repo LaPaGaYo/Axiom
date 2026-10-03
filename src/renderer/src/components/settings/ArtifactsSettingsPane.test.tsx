@@ -1,12 +1,13 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render as renderComponent, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 
 const mocks = vi.hoisted(() => ({
+  list: vi.fn(),
   connect: vi.fn(),
   fetchAuthStatus: vi.fn(),
   openArtifactsPage: vi.fn(),
@@ -18,6 +19,8 @@ const mocks = vi.hoisted(() => ({
     isWebClient: false
   }
 }))
+
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.list }))
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
@@ -39,8 +42,17 @@ vi.mock('@/store', () => ({
 
 import { ArtifactsSettingsPane } from './ArtifactsSettingsPane'
 
+async function render(ui: React.ReactElement) {
+  let view!: ReturnType<typeof renderComponent>
+  await act(async () => {
+    view = renderComponent(ui)
+  })
+  return view
+}
+
 describe('ArtifactsSettingsPane', () => {
   beforeEach(() => {
+    mocks.list.mockResolvedValue({ status: 'ok', value: { artifacts: [] } })
     mocks.connect.mockReset()
     mocks.fetchAuthStatus.mockReset()
     mocks.openArtifactsPage.mockReset()
@@ -50,8 +62,23 @@ describe('ArtifactsSettingsPane', () => {
 
   afterEach(cleanup)
 
-  it('explains the complete sharing workflow', () => {
-    render(
+  it('hides all sign-in and sharing controls when the service is unconfigured', async () => {
+    mocks.list.mockResolvedValue({
+      status: 'unconfigured',
+      message: 'Artifact sharing is not configured in this build.'
+    })
+    await render(
+      <ArtifactsSettingsPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />
+    )
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Artifact sharing is not configured in this build.'
+    )
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+  })
+
+  it('explains the complete sharing workflow', async () => {
+    await render(
       <ArtifactsSettingsPane
         settings={{ ...getDefaultSettings('/tmp'), showArtifactsButton: true }}
         updateSettings={vi.fn()}
@@ -83,23 +110,29 @@ describe('ArtifactsSettingsPane', () => {
   it('offers sign in for a local profile', async () => {
     const user = userEvent.setup()
     mocks.state.orcaProfileAuthStatus = { configured: true, state: 'local' }
-    render(<ArtifactsSettingsPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />)
+    await render(
+      <ArtifactsSettingsPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />
+    )
 
     expect(screen.getByText('Sign in to share artifacts')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Sign in to Orca' }))
     expect(mocks.connect).toHaveBeenCalledOnce()
   })
 
-  it('keeps sign in clickable while reconnect is required', () => {
+  it('keeps sign in clickable while reconnect is required', async () => {
     mocks.state.orcaProfileAuthStatus = { configured: true, state: 'reconnect-required' }
-    render(<ArtifactsSettingsPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />)
+    await render(
+      <ArtifactsSettingsPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />
+    )
 
     expect(screen.getByRole('button', { name: 'Sign in again' })).toBeEnabled()
   })
 
-  it('loads missing account status and disables sign in until configured', () => {
+  it('loads missing account status and disables sign in until configured', async () => {
     mocks.state.orcaProfileAuthStatus = null
-    render(<ArtifactsSettingsPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />)
+    await render(
+      <ArtifactsSettingsPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />
+    )
 
     expect(mocks.fetchAuthStatus).toHaveBeenCalledOnce()
     expect(screen.getByRole('button', { name: 'Sign in to Orca' })).toBeDisabled()
@@ -108,7 +141,7 @@ describe('ArtifactsSettingsPane', () => {
   it('controls only sidebar visibility and always allows opening Artifacts', async () => {
     const user = userEvent.setup()
     const updateSettings = vi.fn()
-    render(
+    await render(
       <ArtifactsSettingsPane
         settings={{ ...getDefaultSettings('/tmp'), showArtifactsButton: false }}
         updateSettings={updateSettings}
@@ -129,8 +162,10 @@ describe('ArtifactsSettingsPane', () => {
     expect(mocks.openArtifactsPage).toHaveBeenCalledOnce()
   })
 
-  it('describes public publishing and existing-link retention', () => {
-    render(<ArtifactsSettingsPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />)
+  it('describes public publishing and existing-link retention', async () => {
+    await render(
+      <ArtifactsSettingsPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />
+    )
 
     expect(
       screen.getByRole('switch', { name: 'Allow publishing public artifact links' })
@@ -143,7 +178,7 @@ describe('ArtifactsSettingsPane', () => {
   it('grants and revokes the publish capability through the toggle', async () => {
     const user = userEvent.setup()
     const updateSettings = vi.fn()
-    const { rerender } = render(
+    const { rerender } = await render(
       <ArtifactsSettingsPane
         settings={{ ...getDefaultSettings('/tmp'), artifactSharingEnabled: false }}
         updateSettings={updateSettings}
@@ -169,7 +204,7 @@ describe('ArtifactsSettingsPane', () => {
     const user = userEvent.setup()
     const updateSettings = vi.fn()
     mocks.state.isWebClient = true
-    render(
+    await render(
       <ArtifactsSettingsPane
         settings={{ ...getDefaultSettings('/tmp'), artifactSharingEnabled: true }}
         updateSettings={updateSettings}
@@ -185,8 +220,8 @@ describe('ArtifactsSettingsPane', () => {
     expect(screen.getByText(/Desktop only/)).toBeInTheDocument()
   })
 
-  it('leads with the opt-in step while publishing is off, and drops it once granted', () => {
-    const { rerender } = render(
+  it('leads with the opt-in step while publishing is off, and drops it once granted', async () => {
+    const { rerender } = await render(
       <ArtifactsSettingsPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />
     )
 
@@ -206,9 +241,11 @@ describe('ArtifactsSettingsPane', () => {
     expect(screen.getByText('Choose a file to share')).toBeInTheDocument()
   })
 
-  it('points web clients at the desktop app for the opt-in step', () => {
+  it('points web clients at the desktop app for the opt-in step', async () => {
     mocks.state.isWebClient = true
-    render(<ArtifactsSettingsPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />)
+    await render(
+      <ArtifactsSettingsPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />
+    )
 
     expect(
       screen.getByText(/Open Settings → Artifacts in the Orca desktop app on the host device/)

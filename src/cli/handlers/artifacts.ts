@@ -1,4 +1,5 @@
 import { basename, extname, resolve } from 'node:path'
+import { PRODUCT_EGRESS_POLICY } from '../../shared/product-egress-policy'
 import type {
   ArtifactCloudOperation,
   ArtifactCloudOptions,
@@ -46,6 +47,12 @@ function cloudOptions(ctx: HandlerContext): ArtifactCloudOptions {
 }
 
 function rejectArtifactRemoteSelectionFlags(ctx: HandlerContext): void {
+  if (!cloudOptions(ctx).apiUrl && !PRODUCT_EGRESS_POLICY.artifactShareApiOrigin) {
+    throw new RuntimeClientError(
+      'unconfigured',
+      'Artifact sharing is not configured in this build.'
+    )
+  }
   rejectRemoteSelectionFlags(
     ctx.flags,
     'artifact commands; artifacts use the signed-in desktop account.'
@@ -157,7 +164,7 @@ function requireOperation<T>(operation: ArtifactCloudOperation<T>): T {
   if (operation.status === 'reconnect-required') {
     throw new RuntimeClientError('authentication_required', 'Sign in to Orca and try again.')
   }
-  throw new RuntimeClientError('authentication_unconfigured', operation.message)
+  throw new RuntimeClientError('unconfigured', operation.message)
 }
 
 export const ARTIFACT_HANDLERS: Record<string, CommandHandler> = {

@@ -18,6 +18,7 @@ import { listSshTargets } from './host-selector-alternatives'
 import { reportCliError } from './cli-error'
 import { printHelp } from './help'
 import type { RuntimeClient } from './runtime-client'
+import { RuntimeClientError } from './runtime/types'
 import { COMMAND_SPECS } from './specs'
 import { resolveOrchestrationCliExecutable } from './runtime/orchestration-recovery-command'
 
@@ -180,6 +181,19 @@ export async function main(
       json
     })
   } catch (error) {
+    if (
+      parsed.commandPath[0] === 'artifacts' &&
+      error instanceof RuntimeClientError &&
+      error.code === 'unconfigured'
+    ) {
+      if (json) {
+        console.log(JSON.stringify({ ok: false, reason: 'unconfigured' }))
+      } else {
+        console.error(error.message)
+      }
+      process.exitCode = 1
+      return
+    }
     const worktreeSelector = parsed.flags.get('worktree')
     reportCliError(error, json, {
       commandPath: parsed.commandPath,

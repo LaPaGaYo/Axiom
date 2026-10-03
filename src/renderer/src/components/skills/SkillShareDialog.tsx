@@ -50,6 +50,7 @@ export function SkillShareDialog({
   const [preview, setPreview] = useState<SkillSharePreview | null>(null)
   // Why: the dialog never shows who is publishing — it only needs to know that a
   // Cloud account exists, since publishing fails without one.
+  const [cloudConfigured, setCloudConfigured] = useState(false)
   const [hasCloudAccount, setHasCloudAccount] = useState(false)
   const [releaseNotes, setReleaseNotes] = useState('')
   const [progress, setProgress] = useState<SkillShareProgress | null>(null)
@@ -73,12 +74,17 @@ export function SkillShareDialog({
     let disposed = false
     let retainedPreparationId: string | null = null
     setPreview(null)
+    setCloudConfigured(false)
     setShareUrl(null)
     setProgress(null)
     setError(null)
     setPublishingNewVersion(false)
     setPreparing(true)
     void (async () => {
+      const cloudState = await window.api.skills.listOwnedShares()
+      if (cloudState.status === 'unconfigured') {
+        return { cloudState }
+      }
       let managedInstall: ManagedSkillInstall | null = null
       try {
         const operation = await window.api.skills.listManagedInstalls()
@@ -97,12 +103,20 @@ export function SkillShareDialog({
       const auth = await window.api.orcaProfiles.authStatus()
       return { nextPreview, auth, managedInstall }
     })()
-      .then(async ({ nextPreview, auth, managedInstall }) => {
+      .then(async (result) => {
+        if (result.cloudState) {
+          if (!disposed && generation.current === current) {
+            setError(result.cloudState.message)
+          }
+          return
+        }
+        const { nextPreview, auth, managedInstall } = result
         if (disposed || generation.current !== current) {
           await window.api.skills.releaseShare(nextPreview.preparationId)
           return
         }
         retainedPreparationId = nextPreview.preparationId
+        setCloudConfigured(true)
         setPreview(nextPreview)
         setPublishingNewVersion(managedInstall !== null)
         const cloud = auth.cloud
@@ -313,7 +327,7 @@ export function SkillShareDialog({
                 ? translate('auto.components.skills.SkillShareDialog.3af85f6add', 'Done')
                 : translate('auto.components.skills.SkillShareDialog.30985d4fc0', 'Cancel')}
             </Button>
-            {!shareUrl ? (
+            {!shareUrl && cloudConfigured ? (
               publishing ? (
                 <Button
                   type="button"

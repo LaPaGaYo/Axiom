@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { parseSkillShareId } from './skill-share-link'
 
 describe('parseSkillShareId', () => {
-  it('accepts durable Orca links and bare identifiers', () => {
+  it('accepts bare identifiers and Axiom deep links when share hosts are unconfigured', () => {
     expect(parseSkillShareId('share_123')).toBe('share_123')
-    expect(parseSkillShareId('https://app.orca.dev/skills/share/share_123')).toBe('share_123')
-    expect(parseSkillShareId('https://share.onorca.dev/skills/share/share_123/')).toBe('share_123')
+    expect(parseSkillShareId('https://app.orca.dev/skills/share/share_123')).toBeNull()
+    expect(parseSkillShareId('https://share.onorca.dev/skills/share/share_123/')).toBeNull()
     expect(parseSkillShareId('axiom://skills/share/share_123')).toBe('share_123')
   })
 

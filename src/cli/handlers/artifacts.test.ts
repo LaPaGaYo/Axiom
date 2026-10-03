@@ -13,6 +13,10 @@ import {
 import { RuntimeRpcFailureError } from '../runtime-client'
 import { reportCliError } from '../format'
 
+vi.mock('../../shared/product-egress-policy', () => ({
+  PRODUCT_EGRESS_POLICY: { artifactShareApiOrigin: 'https://artifacts.example' }
+}))
+
 const item: ArtifactListItem = {
   artifact: {
     version: 1,

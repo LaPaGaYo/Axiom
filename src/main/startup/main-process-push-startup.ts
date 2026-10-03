@@ -15,11 +15,16 @@ export function startDesktopPushService(runtimeRpc: OrcaRuntimeRpcServer): void 
     console.warn('[push] Background push startup skipped: runtime not started')
     return
   }
+  const gatewayUrl = getOrcaPushGatewayUrl()
+  if (!gatewayUrl) {
+    console.info('[push] Background push startup skipped: gateway unconfigured')
+    return
+  }
   try {
     const pushService = DesktopPushService.create({
       runtime,
       runtimeRpc,
-      gatewayUrl: getOrcaPushGatewayUrl()
+      gatewayUrl
     })
     pushService?.start()
     state.desktopPushService = pushService

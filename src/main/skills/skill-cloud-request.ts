@@ -23,6 +23,13 @@ export async function skillCloudRequest<T>(input: {
   timeoutMs?: number
 }): Promise<T> {
   const apiUrl = resolveArtifactCloudApiUrl(input.apiUrl)
+  if (!apiUrl) {
+    throw new SkillCloudRequestError(
+      503,
+      'unconfigured',
+      'Skill sharing is not configured in this build.'
+    )
+  }
   const url = new URL(input.path, `${apiUrl}/`)
   if (url.origin !== apiUrl || !url.pathname.startsWith('/v1/')) {
     throw new Error('skill-cloud-request-path-invalid')

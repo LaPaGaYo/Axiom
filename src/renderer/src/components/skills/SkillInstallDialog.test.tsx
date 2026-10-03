@@ -120,7 +120,7 @@ function installApi(previewInstall: ReturnType<typeof vi.fn>) {
 
 async function inspectSkill(expectedDescription = 'A private skill'): Promise<void> {
   fireEvent.change(screen.getByLabelText('Orca skill link'), {
-    target: { value: 'https://app.orca.dev/skills/share/share_1' }
+    target: { value: 'share_1' }
   })
   fireEvent.click(screen.getByRole('button', { name: 'Inspect skill' }))
   await screen.findByText(expectedDescription)
@@ -145,6 +145,20 @@ afterEach(() => {
 })
 
 describe('SkillInstallDialog', () => {
+  it('shows the existing unconfigured state for a bare share identifier', async () => {
+    const skills = installApi(vi.fn())
+    skills.resolveShare.mockResolvedValue({
+      status: 'unconfigured',
+      message: 'Skill sharing is not configured in this build.'
+    })
+    Object.defineProperty(window, 'api', { configurable: true, value: { skills } })
+    render(<SkillInstallDialog open initialLink="share_1" onOpenChange={() => undefined} />)
+    await screen.findByText('Skill sharing is not configured in this build.')
+    expect(skills.previewInstall).not.toHaveBeenCalled()
+    expect(skills.installShare).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'Install' })).toBeNull()
+  })
+
   it('renders long Unicode metadata and multiline release notes before installation', async () => {
     const sharedVersion = version()
     const longName = `skill-${'n'.repeat(58)}`
@@ -431,10 +445,7 @@ describe('SkillInstallDialog', () => {
       'Close',
       'Inspect skill'
     ])
-    await user.type(
-      screen.getByRole('textbox', { name: 'Orca skill link' }),
-      'https://app.orca.dev/skills/share/share_1'
-    )
+    await user.type(screen.getByRole('textbox', { name: 'Orca skill link' }), 'share_1')
     await user.keyboard('{Enter}')
     await screen.findByText('A private skill')
     expect(screen.getByRole('combobox', { name: 'Machine' })).toBeTruthy()
@@ -450,7 +461,7 @@ describe('SkillInstallDialog', () => {
     render(<SkillInstallDialog open onOpenChange={() => undefined} />)
 
     fireEvent.change(screen.getByLabelText('Orca skill link'), {
-      target: { value: 'https://app.orca.dev/skills/share/share_1' }
+      target: { value: 'share_1' }
     })
     fireEvent.click(screen.getByRole('button', { name: 'Inspect skill' }))
 
