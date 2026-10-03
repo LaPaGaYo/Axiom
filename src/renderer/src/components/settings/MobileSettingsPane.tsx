@@ -12,8 +12,6 @@ import { MobileRelayBetaNotice } from './MobileRelayBetaNotice'
 export { getMobileSettingsPaneSearchEntries }
 
 const ORCA_IOS_APP_STORE_URL = 'https://apps.apple.com/app/orca-ide/id6766130217'
-const ORCA_ANDROID_APK_URL =
-  'https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.48/app-release.apk'
 
 export function MobileSettingsPane(): React.JSX.Element {
   const showMobileButton = useAppStore((s) => s.settings?.showMobileButton !== false)
@@ -42,19 +40,6 @@ export function MobileSettingsPane(): React.JSX.Element {
               className="cursor-pointer underline underline-offset-2 hover:text-foreground"
             >
               {translate('auto.components.settings.MobileSettingsPane.b5a2ed83ff', 'App Store')}
-            </button>
-            {' · '}
-            <button
-              type="button"
-              // Why: Android is moving to Google Play soon, but until then
-              // link directly to the pinned APK asset for the current mobile release.
-              onClick={() => void window.api.shell.openUrl(ORCA_ANDROID_APK_URL)}
-              className="cursor-pointer underline underline-offset-2 hover:text-foreground"
-            >
-              {translate(
-                'auto.components.settings.MobileSettingsPane.androidApkLabel',
-                'Android APK'
-              )}
             </button>
             {translate(
               'auto.components.settings.MobileSettingsPane.installOutro',

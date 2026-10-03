@@ -34,6 +34,7 @@ vi.mock('../settings/MachineNameField', () => ({
 }))
 
 import { HeroFlow, type StepIndex } from './MobileHero'
+import { getInstallCopy } from './mobile-platform-copy'
 import { MobileHeroPairingStep } from './MobileHeroPairingStep'
 
 class MockResizeObserver {
@@ -110,6 +111,16 @@ describe('HeroFlow height', () => {
       />
     )
   }
+
+  it('omits unavailable Android install links and QR codes', () => {
+    const installCopy = getInstallCopy('android', 'stable')
+    expect(installCopy).toBeNull()
+    renderFlow(0, { platform: 'android', installCopy })
+    expect(screen.queryByRole('button', { name: 'Download APK' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Copy install link' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /install guide/i })).toBeNull()
+    expect(screen.queryByRole('img', { name: 'Install QR' })).toBeNull()
+  })
 
   it('sizes to the active step and updates when the taller pairing step opens', () => {
     const { rerender } = renderFlow(0)

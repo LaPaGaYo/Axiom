@@ -6,9 +6,7 @@ import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 
 const ORCA_REPO_URL =
-  PRODUCT_EGRESS_POLICY.starPromptRepository === null
-    ? null
-    : `https://github.com/${PRODUCT_EGRESS_POLICY.starPromptRepository}`
+  PRODUCT_EGRESS_POLICY.starPromptRepository === null ? null : PRODUCT_EGRESS_POLICY.repositoryUrl
 type StarNagMode = 'gh' | 'web'
 type StarNagToastStatus = 'idle' | 'busy' | 'starred' | 'opened'
 

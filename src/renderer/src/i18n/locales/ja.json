@@ -239,7 +239,7 @@
         "b411ec0069": "接続",
         "2cf9e5a294": "保存済みサーバーをクリア",
         "4a4c017be1": "エンドポイント：",
-        "27393856e4": "orca://pair?code=...",
+        "27393856e4": "axiom://pair?code=...",
         "7a566540de": "ペアリング URL またはコード",
         "cb4d287238": "サーバー名",
         "3affe7de3a": "このブラウザが到達できる Orca サーバーからペアリング URL を貼り付けます。",
@@ -4165,7 +4165,6 @@
         "share": {
           "card": {
             "utils": {
-              "19f4b4dc75": "github.com/stablyai/orca",
               "d864fc5f98": "出力",
               "5d66fdd7c2": "入力",
               "7080aeaebb": "推論",
@@ -4644,10 +4643,10 @@
           "157de228b4": "スキルを検査する",
           "69236de8d6": "確認中…",
           "27672470d9": "リンクを開いても何もインストールされません。まず不変バージョンを確認してください。",
-          "66cff7a804": "https://app.orca.dev/skills/share/…",
           "93eb0fe8c7": "Orca のスキルリンク",
           "releaseNotes": "リリースノート:",
-          "targetHeader": "インストール対象"
+          "targetHeader": "インストール対象",
+          "66cff7a804": "axiom://skills/share/<id>"
         },
         "SkillInstallTargetFields": {
           "8e6a972229": "このマシンにはワークスペースがありません。",
@@ -5192,8 +5191,6 @@
           "5b120b9634": "匿名で送信",
           "c9e5ea0791": "GitHub:",
           "d46ddd66fc": "何を改善できるでしょうか?",
-          "3460258a54": "Xをフォロー",
-          "26108d3699": "Discord に参加",
           "d245c4ef6c": "GitHub Issue",
           "9b33530b3d": "その他の連絡方法",
           "a828fa4aee": "何が機能しているのか、何が壊れているのか、Orca が次に何をすべきかを共有します。",
@@ -5270,9 +5267,7 @@
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Orca を再起動",
           "29c56f30ee": "アップデートをチェックする",
-          "eb9884e55b": "Discord",
           "5687ab246a": "GitHub",
-          "5f83d86d92": "変更履歴",
           "cdc87f897e": "ドキュメント",
           "e565171a7c": "キーボードショートカット",
           "4cf5b868d7": "フィードバックを送信する",
@@ -5282,8 +5277,7 @@
           "5161eef55d": "Orca を再起動しています…",
           "d396773ef0": "チェック中",
           "f8a2c91d4e": "マイルストーン",
-          "b7e4d2a19c": "オンボーディング",
-          "c4f8e1b72a": "X"
+          "b7e4d2a19c": "オンボーディング"
         },
         "SidebarToolbar": {
           "19e32d0e5f": "フォルダーピッカーを開いてプロジェクトを追加します",
@@ -6105,7 +6099,7 @@
           "serverName": "サーバー名",
           "serverNamePlaceholder": "開発環境",
           "pairingCode": "ペアリングコード",
-          "pairingCodePlaceholder": "orca://pair?code=...",
+          "pairingCodePlaceholder": "axiom://pair?code=...",
           "pairingHelpPrefix": "実行",
           "pairingCommand": "orca serve --pairing-address <host>",
           "pairingHelpSuffix": "をサーバーで実行し、出力されたペアリング URL を貼り付けます。",
@@ -7592,8 +7586,7 @@
           "682293cadf": "左サイドバー上部に Orca Mobile ボタンを表示します。",
           "d4f2b65f30": "サイドバーに Orca Mobile ショートカットを表示します。",
           "installIntro": "Orca Mobile は",
-          "installOutro": "からインストールし、以下でペアリングしてください。",
-          "androidApkLabel": "Android APK"
+          "installOutro": "からインストールし、以下でペアリングしてください。"
         },
         "NotificationsPane": {
           "906b4afebf": "テスト通知を送信する",
@@ -8032,7 +8025,7 @@
           "55fcc964cd": "をサーバーで実行し、出力されたペアリング URL を貼り付けます。",
           "960e901ae4": "orca serve --pairing-address <host>",
           "163671f7b5": "実行",
-          "c3d772c514": "orca://pair?code=...",
+          "c3d772c514": "axiom://pair?code=...",
           "9bc9b83474": "ペアリングコード",
           "e038625857": "開発環境",
           "54ebacc600": "サーバー名",
@@ -11669,7 +11662,7 @@
           "namePlaceholder": "Linux ワークステーション",
           "nameHelp": "これは Orca でのコンピュータの表示名だけを変更します。",
           "accessLink": "アクセスリンク",
-          "accessLinkPlaceholder": "orca://pair?code=...",
+          "accessLinkPlaceholder": "axiom://pair?code=...",
           "accessLinkHelp": "Orca は接続前に接続先を表示します。認証情報は非表示のままです。",
           "destination": "リンク先",
           "loopbackTitle": "このリンクはこのデバイス自身を指しています",

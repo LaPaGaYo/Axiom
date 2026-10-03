@@ -1,3 +1,4 @@
+import { PRODUCT_EGRESS_POLICY } from '../../../../shared/product-egress-policy'
 import { useEffect, useState } from 'react'
 import { translate } from '@/i18n/i18n'
 import { resolveClientEnvironmentFooter } from '@/lib/client-environment-info'
@@ -269,7 +270,7 @@ export function TerminalErrorToast({
                 'If this persists, please'
               )}{' '}
               <a
-                href="https://github.com/stablyai/orca/issues"
+                href={PRODUCT_EGRESS_POLICY.issuesUrl}
                 style={{ color: 'inherit', textDecoration: 'underline' }}
               >
                 {translate(

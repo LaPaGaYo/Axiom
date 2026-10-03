@@ -1,3 +1,4 @@
+import { PRODUCT_EGRESS_POLICY } from '../../../../shared/product-egress-policy'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, Copy } from 'lucide-react'
 import { cn } from '../../lib/utils'
@@ -20,7 +21,7 @@ type HeroFlowProps = {
   platform: Platform
   onPlatformChange: (next: Platform) => void
   installQrUrl: string | null
-  installCopy: InstallCopy
+  installCopy: InstallCopy | null
   iosChannel: IosChannel
   onIosChannelChange: (next: IosChannel) => void
   onOpenAndroidInstallGuide: () => void
@@ -196,21 +197,23 @@ export function HeroFlow({
                   <span className="mp-channel-tagline">{getChannelTagline(iosChannel)}</span>
                 </div>
               ) : null}
-              <div className="mp-inline-actions">
-                <button type="button" className="mp-ghost-action" onClick={onOpenInstallUrl}>
-                  {installCopy.ctaLabel}
-                </button>
-                <button type="button" className="mp-text-link" onClick={onCopyInstallUrl}>
-                  <Copy className="size-3.5" />
-                  {translate('auto.components.mobile.MobileHero.aa97420ba4', 'Copy install link')}
-                </button>
-              </div>
-              {platform === 'android' ? (
+              {installCopy ? (
+                <div className="mp-inline-actions">
+                  <button type="button" className="mp-ghost-action" onClick={onOpenInstallUrl}>
+                    {installCopy.ctaLabel}
+                  </button>
+                  <button type="button" className="mp-text-link" onClick={onCopyInstallUrl}>
+                    <Copy className="size-3.5" />
+                    {translate('auto.components.mobile.MobileHero.aa97420ba4', 'Copy install link')}
+                  </button>
+                </div>
+              ) : null}
+              {platform === 'android' && installCopy && PRODUCT_EGRESS_POLICY.docsUrl !== null ? (
                 <MobileAndroidInstallHelp onOpenGuide={onOpenAndroidInstallGuide} />
               ) : null}
             </div>
             <div className="mp-qr mp-qr-large">
-              {installQrUrl ? (
+              {installCopy && installQrUrl ? (
                 <img
                   src={installQrUrl}
                   alt={translate('auto.components.mobile.MobileHero.3241f3c26a', 'Install QR')}

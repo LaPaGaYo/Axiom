@@ -7,9 +7,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 
 const ORCA_REPO_URL =
-  PRODUCT_EGRESS_POLICY.starPromptRepository === null
-    ? null
-    : `https://github.com/${PRODUCT_EGRESS_POLICY.starPromptRepository}`
+  PRODUCT_EGRESS_POLICY.starPromptRepository === null ? null : PRODUCT_EGRESS_POLICY.repositoryUrl
 type StarNagMode = 'gh' | 'web'
 
 /**

@@ -1,3 +1,4 @@
+import { PRODUCT_EGRESS_POLICY } from '../../../shared/product-egress-policy'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, ExternalLink, FolderPlus, GitBranchPlus, Star, X } from 'lucide-react'
 import { cn } from '../lib/utils'
@@ -25,7 +26,7 @@ type ShortcutItem = {
 }
 
 // Do not deep-link to /stargazers: GitHub 404s that page for users without repo write access.
-const ORCA_GITHUB_URL = 'https://github.com/stablyai/orca'
+const ORCA_GITHUB_URL = PRODUCT_EGRESS_POLICY.repositoryUrl
 
 type StarButtonProps = {
   hasRepos: boolean

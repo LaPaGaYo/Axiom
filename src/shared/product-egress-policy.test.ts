@@ -5,6 +5,10 @@ describe('V1 product egress policy', () => {
   it('pins the release repository and disables automatic checks and optional endpoints', () => {
     expect(PRODUCT_EGRESS_POLICY).toEqual({
       updateFeed: { owner: 'LaPaGaYo', repo: 'Axiom' },
+      repositoryUrl: 'https://github.com/LaPaGaYo/Axiom',
+      issuesUrl: 'https://github.com/LaPaGaYo/Axiom/issues',
+      docsUrl: 'https://github.com/LaPaGaYo/Axiom#readme',
+      communityLinks: [],
       automaticUpdateChecks: false,
       changelogJsonUrl: null,
       changelogPageUrl: null,

@@ -6,7 +6,8 @@ vi.mock(import('../../../../shared/product-egress-policy'), async (importOrigina
     ...original,
     PRODUCT_EGRESS_POLICY: {
       ...original.PRODUCT_EGRESS_POLICY,
-      starPromptRepository: 'example/application'
+      starPromptRepository: 'example/application',
+      repositoryUrl: 'https://github.com/example/public-source'
     }
   }
 })
@@ -170,7 +171,7 @@ describe('StarNagToastHost', () => {
       button?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    expect(shell.openUrl).toHaveBeenCalledWith('https://github.com/example/application')
+    expect(shell.openUrl).toHaveBeenCalledWith('https://github.com/example/public-source')
     expect(starNag.openWeb).toHaveBeenCalledTimes(1)
     expect(starNag.starOrca).not.toHaveBeenCalled()
     expect(toastContainer.textContent).toContain('GitHub opened')
