@@ -233,3 +233,9 @@ marketplace 官方源禁用 / skills 安装源改 `LaPaGaYo/Axiom` / star 提示
 
 产品链接 / README / 署名 / `orca://` 文案由 Codex 经 2 次 Attempt 完成（`axiom/attempt/M0-05a/1..2`；attempt 2 仅把 `MobilePage.test.tsx` 超出 800 行的用例拆到 `MobilePage.install-links.test.tsx`），候选 `0062a1873` 经独立验证（`.axiom-work/verifications/M0-05a-2.md`，含全量 suite：失败集 = 已知集合，无新失败）后以 `--no-ff` 合入 main（`50b4301b1`），基线 594 → 559 对。实现：policy 新增 `repositoryUrl`/`issuesUrl`（由 `updateFeed` 推导）、`docsUrl`（仓库 README）、`communityLinks`（空）；渲染层/CLI 的上游仓库链接、文档站链接、Discord/X 链接、`https://app.orca.dev/skills/share/…` 形式、移动端 APK 下载链接全部改为读 policy 或不渲染；29 处 `orca://pair` 文案改为 `axiom://pair`（六个 locale 只替换子串，key 不变）；`README.md` 重写为 Axiom（使命、状态、Based on Orca 署名、Developing、Documentation、License）；新增 `NOTICE.md`（MIT，Lovecast Inc. 版权与修改声明）；`LICENSE` 未动。
 **保留的风险/后续**：UI 字符串与 i18n 值里的产品名 "Orca"、`docs/site/**`、内置 skill 指南文案归 M0-05b（会改变 i18n key hash，需要 Henry 决定翻译回退与 `docs/site/` 去留）；移动端面板本身由 M0-07 移出构建。
+
+## D32 · 品牌文案与文档站：UI 字符串 "Orca"→"Axiom"，翻译允许回退英文，上游文档站保留并改造 — ACCEPTED（Henry 2026-10-03）
+
+**决定**（Henry）：应用与 CLI 中用户可见的产品名全部改为 Axiom；其他五种语言若因此丢失翻译，回退英文可以接受；`docs/site/`（上游文档站）保留，改造为 Axiom 的文档而不是删除。
+**实施方式**（验证者核实后的最小方案）：本仓库的 i18n key 是稳定标识（`auto.<file>.<sha1>` 只在 `localize-renderer-strings.mjs` 为**新**字符串生成时计算；既有 `translate(key, default)` 调用的 key 不随 default 变化），`verify-localization-extraction` 对 "en.json 值 ≠ 调用点默认值" 只报告不失败。因此 M0-05b-1 同时改调用点默认文本与六个 catalog 的**值**、key 不动：翻译得以保留（品牌词在各语言里都是拉丁拼写，直接替换），运行时必需 catalog 不膨胀；Henry 接受的"回退英文"成为兜底而非必然。不改的东西：标识符、`ORCA_*` 环境变量（D13）、skill 名（`orca-cli` 等）、`orcad`、测试 fixture、署名文本。M0-05b-2：`docs/site` 改名改链接，删除 `mobile`/`android-apk`/`telemetry` 三页，安装页改为"预发布：从源码构建"，首页注明文档继承自 Orca 正在修订；内置 skill 指南的产品名同样处理并重生成 manifest。
+**取代规则**：若将来需要改 skill 名、守护进程名或环境变量名，需新 Decision 并评估兼容性（D13）。

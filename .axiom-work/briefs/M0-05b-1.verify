@@ -1,0 +1,2 @@
+targets: src/renderer src/cli src/main/menu src/main/ipc src/main/updater src/shared/product-egress-policy
+extra: ! rg -n "Orca" src/renderer/src/i18n/locales/en.json src/renderer/src/i18n/en-runtime-required.json; node config/scripts/verify-localization-extraction.mjs; pnpm run verify:localization-runtime-catalog

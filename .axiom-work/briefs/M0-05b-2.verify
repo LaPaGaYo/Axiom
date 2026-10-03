@@ -1,0 +1,2 @@
+targets: src/cli/bundled-skill-guides config/scripts/generate-bundled-skill-guides config/scripts/generate-skill-bundle-manifest
+extra: ! rg -n "onorca\.dev|github\.com/stablyai|discord\.gg|x\.com/orca|app\.orca\.dev" docs/site/content skills skill-guides resources/skills; test ! -e docs/site/content/docs/mobile.mdx; test ! -e docs/site/content/docs/android-apk.mdx; test ! -e docs/site/content/docs/telemetry.mdx; node --test docs/site/tests/*.test.mjs; pnpm run verify:bundled-skill-guides; node config/scripts/generate-skill-bundle-manifest.mjs
