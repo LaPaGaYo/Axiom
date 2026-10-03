@@ -1,2 +1,2 @@
 targets: config/scripts/pr-workflow-lint-parity config/scripts/check-vendor-egress-ratchet
-extra: test ! -d cloud; ! ls .github/workflows | grep -E "^(cloud-|mobile)"; ! rg -n "install-mobile-dependencies|mobile_web_app|mobile_dependencies" .github
+extra: test ! -d cloud; ! ls .github/workflows | grep -E "^(cloud-|mobile)"; ! git grep -n -E "install-mobile-dependencies|mobile_web_app|mobile_dependencies" -- .github
