@@ -97,7 +97,7 @@ export class RemoteRuntimeSubscriptionOutbound {
     this.options.fail(
       new RemoteRuntimeClientError(
         'remote_runtime_unavailable',
-        'Remote Orca runtime outbound memory admission failed; reconnecting.'
+        'Remote Axiom runtime outbound memory admission failed; reconnecting.'
       )
     )
     return false
@@ -133,7 +133,7 @@ export class RemoteRuntimeSubscriptionOutbound {
           this.options.fail(
             new RemoteRuntimeClientError(
               'remote_runtime_unavailable',
-              'Remote Orca runtime send buffer overflow; reconnecting.'
+              'Remote Axiom runtime send buffer overflow; reconnecting.'
             )
           ),
         ...this.options.binaryQueue,

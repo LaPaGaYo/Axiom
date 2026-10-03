@@ -19,7 +19,7 @@ export function getPluginManifest(): string {
     `# ${HERMES_PLUGIN_MARKER}`,
     `name: ${HERMES_PLUGIN_NAME}`,
     'version: 1.0.0',
-    'description: "Reports Hermes Agent lifecycle events to Orca."',
+    'description: "Reports Hermes Agent lifecycle events to Axiom."',
     'author: "Orca"',
     'kind: standalone',
     'provides_hooks:',

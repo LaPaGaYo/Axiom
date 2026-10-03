@@ -154,7 +154,7 @@ export async function rollbackOrcad(options: OrcadRollbackOptions): Promise<Orca
         code: 'orcad_rollback_stop_incomplete',
         reason:
           `Could not verify that orcad ${options.record.active} exited (${stopped}). ` +
-          'Nothing was restored. Orca requires matching runtime readiness before signaling ' +
+          'Nothing was restored. Axiom requires matching runtime readiness before signaling ' +
           'an incumbent and confirmed exit before replacing its state.'
       }
     }

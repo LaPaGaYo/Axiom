@@ -110,7 +110,7 @@ async function captureSnapshot(
   )
   if (capture === 'failed') {
     throw new Error(
-      `Could not snapshot ${options.userDataDir} before activating ${fullVersion}. Orca's ` +
+      `Could not snapshot ${options.userDataDir} before activating ${fullVersion}. Axiom's ` +
         'persisted state carries no schema version, so without a snapshot a rollback has no ' +
         'way back. Refusing to activate.'
     )
@@ -259,7 +259,7 @@ export async function deployOrcad(input: OrcadDeployOptions): Promise<OrcadDeplo
         code: 'orcad_outgoing_stop_incomplete',
         reason:
           `Could not verify that orcad ${record.active} exited (${stopped}). ` +
-          'No snapshot was taken and the candidate was not started. Orca requires matching ' +
+          'No snapshot was taken and the candidate was not started. Axiom requires matching ' +
           'runtime readiness before signaling an incumbent and confirmed exit before snapshotting.'
       }
     }

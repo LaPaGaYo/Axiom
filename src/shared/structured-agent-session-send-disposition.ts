@@ -99,7 +99,7 @@ export function structuredAgentSessionRejectionNotice(reason: string | null): st
   // Any other reason we minted is an internal cause with no user-facing meaning;
   // only a provider's own explanation is worth reading verbatim.
   return dispatchRejectionReasonIsInternal(reason)
-    ? 'Orca could not send your message — Retry to send it again.'
+    ? 'Axiom could not send your message — Retry to send it again.'
     : reason
 }
 
@@ -137,7 +137,7 @@ export function disposeStructuredAgentSessionSendResult(
   if (refusedRedelivery(input.entry, submission)) {
     return {
       entries: dropEntry(input),
-      error: 'Message delivery is unconfirmed and Orca will not send it again',
+      error: 'Message delivery is unconfirmed and Axiom will not send it again',
       blockedClientMessageId: input.blockedClientMessageId,
       retryWithFreshClientMessageId: null
     }

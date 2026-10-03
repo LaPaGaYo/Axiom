@@ -75,9 +75,9 @@ function runDesktopRecovery(argv: readonly string[]): void {
       dialog.showMessageBox({
         type: 'error',
         buttons: ['Quit'],
-        title: 'Orca profile state was not changed',
-        message: 'Orca could not apply the selected profile state.',
-        detail: `${response.message}\n\nReopen Orca to choose again.`
+        title: 'Axiom profile state was not changed',
+        message: 'Axiom could not apply the selected profile state.',
+        detail: `${response.message}\n\nReopen Axiom to choose again.`
       })
     )
     .catch((error: unknown) => console.warn('[profile-state] Recovery error dialog failed:', error))
@@ -108,7 +108,7 @@ function runRecoveryRequest(payload: string | undefined): ProfileStateRecoveryRe
       if (!acquireSingleInstanceLock(app, () => {})) {
         throw new ProfileStateRecoveryCommandError(
           'runtime_error',
-          'Stop Orca before profile-state rollback so no process can write the SQLite database.'
+          'Stop Axiom before profile-state rollback so no process can write the SQLite database.'
         )
       }
       return {

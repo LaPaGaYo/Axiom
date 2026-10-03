@@ -51,7 +51,7 @@ export async function launchProfileStateRecovery(
     } catch {
       throw new RuntimeClientError(
         'runtime_error',
-        'Orca recovery returned an invalid response. Inspect retained recovery artifacts before retrying.'
+        'Axiom recovery returned an invalid response. Inspect retained recovery artifacts before retrying.'
       )
     }
     const result = profileStateRecoveryResponseSchema.safeParse(parsed)
@@ -66,7 +66,7 @@ export async function launchProfileStateRecovery(
   }
   throw new RuntimeClientError(
     'runtime_error',
-    'Orca recovery did not complete successfully. Inspect retained recovery artifacts before retrying.',
+    'Axiom recovery did not complete successfully. Inspect retained recovery artifacts before retrying.',
     {
       exitCode: response.code,
       signal: response.signal,

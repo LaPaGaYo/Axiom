@@ -159,7 +159,7 @@ describe('authority-owned automation run completion', () => {
     })
 
     expect(readRun(store, automation.id, run.id).error).toBe(
-      'Orca stopped watching this run before it reported completion.'
+      'Axiom stopped watching this run before it reported completion.'
     )
     // The token is still recoverable where it is actually useful.
     expect(logged.mock.calls.flat().map(String).join(' ')).toContain('terminal_handle_stale')
@@ -206,7 +206,7 @@ describe('authority-owned automation run completion', () => {
     expect(readRun(store, automation.id, dispatching.id).error).toContain('agent started')
     expect(readRun(store, automation.id, pendingManual.id)).toMatchObject({
       status: 'dispatch_failed',
-      error: 'Orca stopped before this manual run could launch.'
+      error: 'Axiom stopped before this manual run could launch.'
     })
     expect(readRun(store, automation.id, pendingScheduled.id).status).toBe('pending')
     service.stop()

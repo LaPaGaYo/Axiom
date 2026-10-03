@@ -53,7 +53,7 @@ describe('CliInstaller', () => {
         state: 'conflict',
         supported: true
       })
-      await expect(installer.install()).rejects.toThrow('Refusing to replace non-Orca command')
+      await expect(installer.install()).rejects.toThrow('Refusing to replace non-Axiom command')
       await expect(readlink(installPath)).resolves.toBe(existingTarget)
     }
   )
@@ -166,7 +166,7 @@ describe('CliInstaller', () => {
         state: 'conflict',
         currentTarget: null
       })
-      await expect(installer.install()).rejects.toThrow('Refusing to replace non-Orca command')
+      await expect(installer.install()).rejects.toThrow('Refusing to replace non-Axiom command')
       await expect(readFile(installPath, 'utf8')).resolves.toContain('/tmp/not-orca')
     }
   )

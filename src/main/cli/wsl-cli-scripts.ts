@@ -8,7 +8,7 @@ const FIND_INTEROP_POWERSHELL = `if command -v powershell.exe >/dev/null 2>&1; t
 elif [ -x /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe ]; then
   ORCA_POWERSHELL=/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe
 else
-  echo "Orca WSL CLI requires Windows interop and could not find powershell.exe." >&2
+  echo "Axiom WSL CLI requires Windows interop and could not find powershell.exe." >&2
   exit 1
 fi`
 
@@ -29,7 +29,7 @@ export function buildColocatedWslLauncher(
     '"$(dirname -- "$0")/orca-wsl-bridge.ps1"',
     `ORCA_POWERSHELL=$(wslpath -u ${quoteShell(windowsPowerShellPath)})
 if [ ! -x "$ORCA_POWERSHELL" ]; then
-  echo "Orca WSL CLI requires Windows interop and access to $ORCA_POWERSHELL." >&2
+  echo "Axiom WSL CLI requires Windows interop and access to $ORCA_POWERSHELL." >&2
   exit 1
 fi`
   )
@@ -111,7 +111,7 @@ $exitCode = 0
 try {
   # Why: a param block prefix-binds forwarded flags such as --for in PowerShell 5.1.
   if ($args.Count -lt 1) {
-    throw 'Invalid Orca WSL CLI bridge invocation.'
+    throw 'Invalid Axiom WSL CLI bridge invocation.'
   }
   [string]$OrcaLauncher = $args[0]
   [string]$WslCwd = ''
@@ -119,14 +119,14 @@ try {
   [int]$ForwardArgStart = 1
   if ($args.Count -ge 2 -and $args[1] -eq '-WslCwd') {
     if ($args.Count -lt 3) {
-      throw 'Invalid Orca WSL CLI bridge invocation.'
+      throw 'Invalid Axiom WSL CLI bridge invocation.'
     }
     $WslCwd = $args[2]
     $ForwardArgStart = 3
   }
   if ($ForwardArgStart -eq 3 -and $args.Count -ge 4 -and $args[3] -eq '-WslDistro') {
     if ($args.Count -lt 5) {
-      throw 'Invalid Orca WSL CLI bridge invocation.'
+      throw 'Invalid Axiom WSL CLI bridge invocation.'
     }
     $WslDistro = $args[4]
     $ForwardArgStart = 5
@@ -164,7 +164,7 @@ ${bridgeLines(setAppEnv)}  $StartInfo.Arguments = (($ForwardArgs | ForEach-Objec
   $StartInfo.WorkingDirectory = $LauncherDirectory
   $Process = [System.Diagnostics.Process]::Start($StartInfo)
   if ($null -eq $Process) {
-    throw 'Unable to start the Orca Windows CLI launcher.'
+    throw 'Unable to start the Axiom Windows CLI launcher.'
   }
   $Process.WaitForExit()
   $exitCode = $Process.ExitCode

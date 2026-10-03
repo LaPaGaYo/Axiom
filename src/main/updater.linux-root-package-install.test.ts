@@ -117,7 +117,7 @@ describe('updater Linux root packages', () => {
 
       expect(lastStatus(send)).toEqual({
         state: 'error',
-        message: 'Quit Orca before running the system package install command.',
+        message: 'Quit Axiom before running the system package install command.',
         recovery: {
           kind: 'linux-package-install',
           packageType,
@@ -232,7 +232,7 @@ describe('updater Linux root packages', () => {
     expect(lastStatus(send)).toEqual({
       state: 'error',
       message:
-        'Orca could not verify the installed Linux package format, so it will not install this update automatically. Download the update from the official release page and install it manually.',
+        'Axiom could not verify the installed Linux package format, so it will not install this update automatically. Download the update from the official release page and install it manually.',
       version: '1.0.61',
       retryable: false
     })

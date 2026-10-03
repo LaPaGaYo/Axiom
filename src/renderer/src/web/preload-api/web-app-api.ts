@@ -10,7 +10,7 @@ export function createWebAppApi(): Partial<PreloadApi> {
     app: {
       getIdentity: () =>
         Promise.resolve({
-          name: 'Orca',
+          name: 'Axiom',
           isDev: false,
           devLabel: null,
           devBranch: null,

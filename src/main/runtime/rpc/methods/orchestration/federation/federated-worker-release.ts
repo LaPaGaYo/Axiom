@@ -122,7 +122,7 @@ export async function releaseFederatedWorker(args: {
     const detail = error instanceof Error ? error.message : String(error)
     return {
       ...receipt,
-      lastError: `The execution host acknowledged ${remote.state}, but Orca could not apply the confirmed release to the home projection: ${detail}`,
+      lastError: `The execution host acknowledged ${remote.state}, but Axiom could not apply the confirmed release to the home projection: ${detail}`,
       recovery: confirmedReleaseProjectionRecovery(args.dispatchId)
     }
   }
@@ -143,7 +143,7 @@ export function parseRemoteReleaseReceipt(
 }
 
 function confirmedReleaseProjectionRecovery(dispatchId: string): string {
-  return `Inspect with: orca orchestration worker-show --dispatch ${dispatchId} --json — then retry worker-release with a fresh request ID (omit --retry-request to let the CLI generate one). Reusing the prior request ID only replays the confirmed remote receipt without reapplying the home projection. Never substitute a broad terminal close.`
+  return `Inspect with: axiom orchestration worker-show --dispatch ${dispatchId} --json — then retry worker-release with a fresh request ID (omit --retry-request to let the CLI generate one). Reusing the prior request ID only replays the confirmed remote receipt without reapplying the home projection. Never substitute a broad terminal close.`
 }
 
 function applyConfirmedFederatedReleaseHomeProjection(

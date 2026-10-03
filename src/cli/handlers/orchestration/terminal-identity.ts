@@ -211,6 +211,6 @@ export function throwNoActiveSenderTerminal(): never {
     'no_active_sender_terminal',
     'Could not determine the sender terminal for this orchestration command. ' +
       "Pass --from with your own terminal's handle — another pane's handle would act on its mailbox — " +
-      'or run the command inside a live Orca terminal with ORCA_TERMINAL_HANDLE set.'
+      'or run the command inside a live Axiom terminal with ORCA_TERMINAL_HANDLE set.'
   )
 }

@@ -423,7 +423,7 @@ describe('listReleaseBuilds', () => {
     )
 
     await expect(listReleaseBuilds('hourly', 'darwin')).rejects.toThrow(
-      "GitHub rate limit reached. Try again in about 28 minutes, or run `gh auth login` so Orca can use your account's higher limit."
+      "GitHub rate limit reached. Try again in about 28 minutes, or run `gh auth login` so Axiom can use your account's higher limit."
     )
   })
 

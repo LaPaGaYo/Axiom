@@ -138,7 +138,7 @@ export class WebRuntimeConnectionTransport {
     this.clearConnectTimer()
     this.clearHandshakeTimer()
     this.heartbeat.clear()
-    this.requestRegistry.rejectAll('Remote Orca runtime connection interrupted.')
+    this.requestRegistry.rejectAll('Remote Axiom runtime connection interrupted.')
     this.subscriptionRegistry.handleInterrupted()
     if (this.intentionallyClosed || this.state === 'auth-failed') {
       this.setState(this.state === 'auth-failed' ? 'auth-failed' : 'disconnected')

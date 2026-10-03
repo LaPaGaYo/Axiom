@@ -36,7 +36,7 @@ export async function stopStructuredWorkerForRelease(args: {
       processAction: stop.closeAttempted ? 'closed_agent_terminal' : 'none',
       archive: { source: args.archiveSource, status: args.archiveStatus },
       lastError: unknown.release_error ?? stop.reason,
-      recovery: `Inspect with: orca orchestration worker-show --dispatch ${dispatchId} --json — then repeat worker-release with the same --retry-request.`
+      recovery: `Inspect with: axiom orchestration worker-show --dispatch ${dispatchId} --json — then repeat worker-release with the same --retry-request.`
     }
   }
   const settled = db.settleWorkerTerminalRelease(resource.id)

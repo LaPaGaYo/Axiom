@@ -70,7 +70,7 @@ export async function main(
   if (argv.length === 1 && (argv[0] === '--version' || argv[0] === '-v')) {
     const version = readOrcaCliVersion()
     if (!version) {
-      process.stderr.write('Could not determine the Orca version for this build.\n')
+      process.stderr.write('Could not determine the Axiom version for this build.\n')
       process.exitCode = 1
       return
     }

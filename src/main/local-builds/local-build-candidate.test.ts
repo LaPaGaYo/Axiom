@@ -168,6 +168,6 @@ describe('loadLocalBuildCandidate', () => {
       loadLocalBuildCandidate(manifestPath, 'x64', {
         readCompatibility: async () => compatibility()
       })
-    ).rejects.toThrow('exactly one x64 Orca ZIP')
+    ).rejects.toThrow('exactly one x64 Axiom ZIP')
   })
 })

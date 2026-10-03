@@ -88,7 +88,7 @@ describe('formatCliError', () => {
     expect(output).toContain('Next step: Run `orca computer list-apps --json`')
     expect(output).toContain('desktop browser app/window')
     expect(output).toContain('--app <web app>')
-    expect(output).not.toContain('orca goto')
+    expect(output).not.toContain('axiom goto')
   })
 
   it('prints runtime next steps for structured lineage errors', () => {
@@ -469,7 +469,7 @@ describe('formatComputerAction', () => {
     })
 
     expect(output).toContain(
-      `Use \`orca computer get-app-state --app ${quoteCliCommandArgument('Text Editor')} --worktree id:repo::/tmp/repo --window-id 99\``
+      `Use \`axiom computer get-app-state --app ${quoteCliCommandArgument('Text Editor')} --worktree id:repo::/tmp/repo --window-id 99\``
     )
     expect(output).toContain('5 visible elements in current window')
     expect(output).toContain(
@@ -498,7 +498,7 @@ describe('formatComputerAction', () => {
     })
 
     expect(output).toContain(
-      'Use `orca computer get-app-state --app com.apple.finder --session manual --window-index 1`'
+      'Use `axiom computer get-app-state --app com.apple.finder --session manual --window-index 1`'
     )
   })
 
@@ -532,7 +532,7 @@ describe('formatComputerAction', () => {
     expect(output).toContain('Screenshot failed (screenshot_failed)')
     expect(output).toContain('payload cap')
     expect(output).toContain(
-      'Use `orca computer get-app-state --app com.apple.finder --window-id 42`'
+      'Use `axiom computer get-app-state --app com.apple.finder --window-id 42`'
     )
     expect(output).not.toContain('Click completed')
   })
@@ -623,7 +623,7 @@ describe('formatComputerAction', () => {
     })
 
     expect(output).toContain(
-      'Use `orca computer get-app-state --app com.apple.finder --session manual --window-id 42`'
+      'Use `axiom computer get-app-state --app com.apple.finder --session manual --window-id 42`'
     )
     expect(output).toContain('Click attempted via synthetic, unverified (window changed)')
     expect(output).toContain(
@@ -655,7 +655,7 @@ describe('formatComputerAction', () => {
     const output = formatComputerAction('click', result)
 
     expect(output).toContain(
-      `Use \`orca computer get-app-state --app ${quoteCliCommandArgument('Linux Browser')} --window-index 2\``
+      `Use \`axiom computer get-app-state --app ${quoteCliCommandArgument('Linux Browser')} --window-index 2\``
     )
     expect(output).not.toContain('--window-id')
   })
@@ -683,7 +683,7 @@ describe('formatComputerAction', () => {
     const output = formatComputerAction('click', result)
 
     expect(output).toContain(
-      `Use \`orca computer get-app-state --app ${quoteCliCommandArgument('Linux Browser')} --window-index 2\``
+      `Use \`axiom computer get-app-state --app ${quoteCliCommandArgument('Linux Browser')} --window-index 2\``
     )
     expect(output).not.toContain('--window-index 4')
     expect(output).not.toContain('--window-id')

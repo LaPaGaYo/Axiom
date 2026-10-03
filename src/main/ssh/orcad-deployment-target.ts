@@ -10,7 +10,7 @@ export function parseOrcadLinuxLibc(output: string): 'glibc' | 'musl' {
   if (/\b(?:glibc|GNU libc|GNU C Library)\b/i.test(output)) {
     return 'glibc'
   }
-  throw new Error('Could not identify the host C library for the bundled Orca runtime')
+  throw new Error('Could not identify the host C library for the bundled Axiom runtime')
 }
 
 export async function resolveOrcadDeploymentTarget(options: {

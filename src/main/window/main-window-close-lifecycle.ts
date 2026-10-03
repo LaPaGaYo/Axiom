@@ -75,10 +75,10 @@ export function installMainWindowCloseLifecycle(args: {
     if (store.getUI().trayMinimizeNoticeShown !== true) {
       try {
         new Notification({
-          title: 'Orca',
+          title: 'Axiom',
           body: translateMain(
             'tray.minimizeNotice.body',
-            'Orca is still running in the system tray'
+            'Axiom is still running in the system tray'
           )
         }).show()
       } catch {

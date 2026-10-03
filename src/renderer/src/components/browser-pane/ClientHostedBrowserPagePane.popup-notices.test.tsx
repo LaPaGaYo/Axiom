@@ -82,7 +82,7 @@ describe('ClientHostedBrowserPagePane popup notices', () => {
     emitPopup()
 
     expect(toastMocks.message).toHaveBeenCalledWith(
-      'https://accounts.example.com tried to open a popup Orca does not support here.',
+      'https://accounts.example.com tried to open a popup Axiom does not support here.',
       { id: 'browser-popup:page-a:blocked:https://accounts.example.com' }
     )
   })

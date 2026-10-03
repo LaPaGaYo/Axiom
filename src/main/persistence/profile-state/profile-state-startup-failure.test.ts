@@ -16,7 +16,7 @@ describe('profile-state startup failure formatting', () => {
     const error = new ProfileStateDatabaseOpenError('newer-schema', 'Newer schema: 999')
     expect(profileStateStartupFailureClass(error)).toBe('newer-schema')
     const message = formatProfileStateStartupFailure(error)
-    expect(message).toContain('newer version of Orca')
+    expect(message).toContain('newer version of Axiom')
     expect(message).not.toContain('rollback')
     expect(message).not.toContain('unreadable')
   })
@@ -32,7 +32,7 @@ describe('profile-state startup failure formatting', () => {
     )
 
     expect(formatProfileStateStartupFailure(error)).toContain(
-      'orca profile state rollback --revision <revision>'
+      'axiom profile state rollback --revision <revision>'
     )
     expect(formatProfileStateStartupFailure(error)).toContain('/profile/profile-state.db')
     expect(profileStateStartupFailureClass(error)).toBe('recovery-required')
@@ -44,13 +44,13 @@ describe('profile-state startup failure formatting', () => {
     )
 
     expect(message).toContain(
-      'Orca cannot safely choose a profile-state authority: both profile stores are present'
+      'Axiom cannot safely choose a profile-state authority: both profile stores are present'
     )
     expect(message).toContain('neither is selected automatically')
-    expect(message).toContain('orca profile state rollback --current-json')
+    expect(message).toContain('axiom profile state rollback --current-json')
     expect(message).toContain('does not merge')
-    expect(message).toContain('orca profile state exports')
-    expect(message).toContain('orca profile state rollback --backup <id>')
+    expect(message).toContain('axiom profile state exports')
+    expect(message).toContain('axiom profile state rollback --backup <id>')
     expect(
       profileStateStartupFailureClass(new ProfileStateAuthorityBootstrapError('ambiguous'))
     ).toBe('ambiguous-authority')
@@ -67,7 +67,7 @@ describe('profile-state startup failure formatting', () => {
     expect(message).toContain(
       'Retained SQLite backups:\n  /profile/profile-state.db.backup.latest.db'
     )
-    expect(message).toContain('orca profile state rollback --backup <id>')
+    expect(message).toContain('axiom profile state rollback --backup <id>')
   })
 
   it('leaves unrelated startup errors on the existing fatal path', () => {
@@ -84,13 +84,13 @@ describe('profile-state startup failure formatting', () => {
     )
     expect(profileStateStartupFailureClass(error)).toBe('writer-unavailable')
     expect(formatProfileStateStartupFailure(error)).toBe(
-      'Orca could not start profile persistence. Restart Orca; if the problem continues, repair or reinstall this build.'
+      'Axiom could not start profile persistence. Restart Axiom; if the problem continues, repair or reinstall this build.'
     )
   })
 
   it('reports an admission race as a conflicting writer', () => {
     const error = new ProfileStateRevisionConflictError(2, 3)
     expect(profileStateStartupFailureClass(error)).toBe('revision-conflict')
-    expect(formatProfileStateStartupFailure(error)).toContain('Close other Orca processes')
+    expect(formatProfileStateStartupFailure(error)).toContain('Close other Axiom processes')
   })
 })

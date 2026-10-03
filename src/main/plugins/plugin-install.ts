@@ -209,7 +209,7 @@ export async function rollbackInstalledPlugin(input: {
   }
   const blockedReason = input.blockedPluginReason?.(input.pluginKey)
   if (blockedReason) {
-    return { ok: false, error: `plugin is blocked by Orca's safety list: ${blockedReason}` }
+    return { ok: false, error: `plugin is blocked by Axiom's safety list: ${blockedReason}` }
   }
   return serializePluginMutation(input.pluginsDir, async () => {
     const pluginDir = join(input.pluginsDir, input.pluginKey)

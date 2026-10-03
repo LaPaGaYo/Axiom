@@ -37,7 +37,7 @@ export async function preflightBundledOrcadStartup(): Promise<void> {
   })
   if (result.code !== 0 || result.timedOut || result.outputTruncated) {
     const Failure = result.code === 78 ? OrcadBundledRuntimeError : Error
-    throw new Failure(`The bundled Orca runtime failed readiness: ${result.stderr}`)
+    throw new Failure(`The bundled Axiom runtime failed readiness: ${result.stderr}`)
   }
   try {
     parseOrcadProfilePreflight(result.stdout, nonce, ORCAD_BUN_VERSION, identity)
@@ -58,7 +58,7 @@ export async function runOrcadProfilePreflight(
   try {
     artifactVersion = await readOrcadArtifactIdentity(resolveOrcadInstallRoot())
   } catch (cause) {
-    throw new OrcadBundledRuntimeError('The bundled Orca artifacts are incomplete or altered', {
+    throw new OrcadBundledRuntimeError('The bundled Axiom artifacts are incomplete or altered', {
       cause
     })
   }
@@ -84,7 +84,7 @@ async function readInstalledVersion(directory: string): Promise<string> {
     )
   } catch (cause) {
     throw new OrcadBundledRuntimeError(
-      'The installed Orca artifact version is missing or invalid',
+      'The installed Axiom artifact version is missing or invalid',
       {
         cause
       }

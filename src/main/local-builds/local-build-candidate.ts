@@ -251,7 +251,7 @@ export async function loadLocalBuildCandidate(
     .filter((entry) => entry.compatibility.architecture === architecture)
   if (matching.length !== 1) {
     await Promise.all(validated.map((entry) => entry.file.close()))
-    throw new Error(`The manifest must contain exactly one ${architecture} Orca ZIP.`)
+    throw new Error(`The manifest must contain exactly one ${architecture} Axiom ZIP.`)
   }
   const target = matching[0]
   await Promise.all(

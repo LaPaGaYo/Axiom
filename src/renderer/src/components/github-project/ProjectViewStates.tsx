@@ -70,7 +70,7 @@ function ProjectViewTab({
           ? view.name
           : translate(
               'auto.components.github.project.ProjectViewWrapper.2edf5e7e77',
-              "{{value0}} — Orca doesn't support {{value1}} project views yet. File a feature request at {{value2}}.",
+              "{{value0}} — Axiom doesn't support {{value1}} project views yet. File a feature request at {{value2}}.",
               { value0: view.name, value1: layoutLabel, value2: ORCA_FEATURE_REQUEST_URL }
             )
       }
@@ -90,7 +90,7 @@ function ProjectViewTab({
   if (supported) {
     return tab
   }
-  const message = `Orca doesn't support ${layoutLabel} project views yet.`
+  const message = `Axiom doesn't support ${layoutLabel} project views yet.`
   return (
     <HoverCard openDelay={200} closeDelay={100}>
       <HoverCardTrigger asChild>
@@ -112,7 +112,7 @@ function ProjectViewTab({
             {message}{' '}
             {translate(
               'auto.components.github.project.ProjectViewStates.ac83c45672',
-              'Switch to a Table or Roadmap view to work with this project in Orca.'
+              'Switch to a Table or Roadmap view to work with this project in Axiom.'
             )}
           </p>
           <Button
@@ -157,13 +157,13 @@ export function ProjectViewErrorState({
   }
   const copy =
     error.type === 'too_large'
-      ? `This view has ${totalCount ?? 'many'} items — too large to render in Orca. Narrow the view's filter on GitHub.`
+      ? `This view has ${totalCount ?? 'many'} items — too large to render in Axiom. Narrow the view's filter on GitHub.`
       : error.type === 'unsupported_layout'
         ? // Why: an older paired host still reports roadmaps as unsupported, so this
           // copy must not name the layout — the tab strip already does that.
           translate(
             'auto.components.github.project.ProjectViewStates.e4cc8b14f2',
-            'Orca renders table and roadmap project views. This view uses a layout it cannot render yet.'
+            'Axiom renders table and roadmap project views. This view uses a layout it cannot render yet.'
           )
         : error.type === 'not_found'
           ? 'Could not find this project or view.'

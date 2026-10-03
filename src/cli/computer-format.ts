@@ -221,7 +221,7 @@ function formatComputerFollowUpCommand(
   target: ComputerActionFollowUpTarget
 ): string {
   const args = [
-    'orca',
+    'axiom',
     'computer',
     'get-app-state',
     '--app',

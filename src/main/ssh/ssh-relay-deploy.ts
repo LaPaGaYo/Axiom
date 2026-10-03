@@ -408,7 +408,7 @@ async function deployAndLaunchRelayAttempt(
   const hostPlatform = await detectRemoteHostPlatform(conn, { signal: deploySignal })
   if (!hostPlatform) {
     throw new Error(
-      'Unsupported remote platform. Orca relay supports: linux-x64, linux-arm64, darwin-x64, darwin-arm64, win32-x64, win32-arm64.'
+      'Unsupported remote platform. Axiom relay supports: linux-x64, linux-arm64, darwin-x64, darwin-arm64, win32-x64, win32-arm64.'
     )
   }
   const platform = hostPlatform.relayPlatform
@@ -418,7 +418,7 @@ async function deployAndLaunchRelayAttempt(
   if (!localRelayDir) {
     throw new Error(
       `Relay package for ${platform} not found locally. ` +
-        `This may be a packaging issue — try reinstalling Orca.`
+        `This may be a packaging issue — try reinstalling Axiom.`
     )
   }
   // Why: content-hashed version doubles as remote dir name and wire-handshake version; throws on missing rather than falling back (see docs/ssh-relay-versioned-install-dirs.md).
@@ -755,7 +755,7 @@ async function uploadRelay(
   if (!localRelayDir || !existsSync(localRelayDir)) {
     throw new Error(
       `Relay package for ${platform} not found. Searched: ${getLocalRelayCandidates(platform).join(', ')}. ` +
-        `This may be a packaging issue — try reinstalling Orca.`
+        `This may be a packaging issue — try reinstalling Axiom.`
     )
   }
 

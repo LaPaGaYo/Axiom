@@ -20,8 +20,8 @@ export function taskNotFoundRefusal(
     data: {
       ...detail,
       nextSteps: [
-        'Run orca orchestration task-list --json in the bound Run to find the intended Task id.',
-        'If the Task does not exist yet, create it with orca orchestration task-create --spec <text> --json.'
+        'Run axiom orchestration task-list --json in the bound Run to find the intended Task id.',
+        'If the Task does not exist yet, create it with axiom orchestration task-create --spec <text> --json.'
       ]
     }
   }
@@ -48,17 +48,17 @@ export function taskNotStartableRefusal(
 function taskNotStartableNextSteps(detail: TaskNotStartableDetail): string[] {
   if (detail.retryOf) {
     return [
-      `--retry-of must name the latest settled Dispatch of a failed or blocked Task; check orca orchestration dispatch-show --task ${detail.taskId} --json and orca orchestration worker-show --dispatch ${detail.retryOf} --json.`
+      `--retry-of must name the latest settled Dispatch of a failed or blocked Task; check axiom orchestration dispatch-show --task ${detail.taskId} --json and axiom orchestration worker-show --dispatch ${detail.retryOf} --json.`
     ]
   }
   if (detail.unmetDependencies.length > 0) {
     return [
-      `Dependencies ${detail.unmetDependencies.join(', ')} are not completed. Wait for running ones with orca orchestration check --wait --json; retry or unblock failed ones before dispatching again.`
+      `Dependencies ${detail.unmetDependencies.join(', ')} are not completed. Wait for running ones with axiom orchestration check --wait --json; retry or unblock failed ones before dispatching again.`
     ]
   }
   if (detail.status === 'dispatched') {
     return [
-      `The Task already has an active Dispatch; inspect it with orca orchestration dispatch-show --task ${detail.taskId} --json.`
+      `The Task already has an active Dispatch; inspect it with axiom orchestration dispatch-show --task ${detail.taskId} --json.`
     ]
   }
   return [
@@ -75,7 +75,7 @@ const RECOGNIZED_AGENT_PROCESS_NAMES = [
 export function buildInjectRejectionMessage(terminal: string): string {
   return (
     `Cannot dispatch --inject to terminal ${terminal}: no recognized agent detected. ` +
-    `Orca detects these agent CLIs (${RECOGNIZED_AGENT_PROCESS_NAMES.join(', ')}). ` +
+    `Axiom detects these agent CLIs (${RECOGNIZED_AGENT_PROCESS_NAMES.join(', ')}). ` +
     'Start one in the terminal and let it finish launching, ' +
     'or dispatch without --inject and send the prompt manually.'
   )
@@ -95,7 +95,7 @@ export function injectRejectedRefusal(
       reason,
       nextSteps: [
         'Start a recognized agent CLI in that terminal and wait for it to finish launching, or pick a terminal that already runs one.',
-        'Alternatively dispatch without --inject and deliver the prompt with orca terminal send --terminal <handle> --text <prompt> --enter --json.'
+        'Alternatively dispatch without --inject and deliver the prompt with axiom terminal send --terminal <handle> --text <prompt> --enter --json.'
       ]
     }
   }

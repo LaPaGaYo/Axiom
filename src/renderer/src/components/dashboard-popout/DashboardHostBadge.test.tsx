@@ -40,7 +40,7 @@ describe('DashboardHostBadge', () => {
       </TooltipProvider>
     )
 
-    const badge = screen.getByLabelText('Remote Orca host · Build Mac')
+    const badge = screen.getByLabelText('Remote Axiom host · Build Mac')
     expect(badge).toHaveAttribute('data-dashboard-host-badge', 'remote')
     expect(badge.querySelector('.lucide-server')).toBeInTheDocument()
 

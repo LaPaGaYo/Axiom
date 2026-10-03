@@ -127,7 +127,7 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
     }
     setIsRestartingOrca(true)
     toast.info(
-      translate('auto.components.sidebar.SidebarSettingsHelpMenu.5161eef55d', 'Restarting Orca…')
+      translate('auto.components.sidebar.SidebarSettingsHelpMenu.5161eef55d', 'Restarting Axiom…')
     )
     void window.api.app.restart().catch((error) => {
       if (mountedRef.current) {
@@ -135,7 +135,7 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
         toast.error(
           translate(
             'auto.components.sidebar.SidebarSettingsHelpMenu.4e8f5710d3',
-            "Couldn't restart Orca."
+            "Couldn't restart Axiom."
           ),
           {
             description: error instanceof Error ? error.message : undefined
@@ -321,7 +321,7 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
               <RotateCw className="size-3.5" />
               {translate(
                 'auto.components.sidebar.SidebarSettingsHelpMenu.ad3d3ed7f1',
-                'Restart Orca'
+                'Restart Axiom'
               )}
             </DropdownMenuItem>
           </DropdownMenuContent>

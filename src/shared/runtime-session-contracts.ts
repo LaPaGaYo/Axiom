@@ -38,7 +38,7 @@ export const BROWSER_UNAVAILABLE_ERROR_CODE = 'browser_unavailable' as const
 // renders these so an older client still shows an accurate reason it cannot decode.
 const BROWSER_UNAVAILABLE_MESSAGES: Record<RuntimeBrowserUnavailableReason, string> = {
   unconfigured:
-    'Browser automation has no backend on this host. Install the Orca desktop app, or set ORCA_BROWSER_EXECUTABLE to a Chromium executable.',
+    'Browser automation has no backend on this host. Install the Axiom desktop app, or set ORCA_BROWSER_EXECUTABLE to a Chromium executable.',
   driver_missing:
     'ORCA_BROWSER_EXECUTABLE is set, but the bundled agent-browser driver is missing or not executable on this host, so Chromium cannot be driven.',
   executable_not_found: 'ORCA_BROWSER_EXECUTABLE points at a path that does not exist.',

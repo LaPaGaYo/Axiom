@@ -466,7 +466,7 @@ describe('connectPanePty', () => {
 
     expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(
       1,
-      expect.stringContaining('Orca attempts background recovery for managed local and WSL homes')
+      expect.stringContaining('Axiom attempts background recovery for managed local and WSL homes')
     )
   })
 

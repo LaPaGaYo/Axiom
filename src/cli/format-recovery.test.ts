@@ -19,7 +19,7 @@ describe('worktree selector recovery', () => {
       worktreeSelector: 'id:github:stablyai/orca'
     })
 
-    expect(output).toContain('No Orca workspace matched the worktree selector')
+    expect(output).toContain('No Axiom workspace matched the worktree selector')
     expect(output).toContain('id:github:stablyai/orca')
     expect(output).toContain('Did you mean: id:github:stablyai/orca::<absolute-path>')
     expect(output).toContain('Valid selector forms:')
@@ -160,6 +160,6 @@ describe('CLI error recovery', () => {
     const output = formatCliError(error)
 
     expect(output).toContain('--retry-request mutation_1')
-    expect(output).not.toContain('orca open')
+    expect(output).not.toContain('axiom open')
   })
 })

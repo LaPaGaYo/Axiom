@@ -31,7 +31,7 @@ export async function runSkillCloudOperation<T>(input: {
       current.profile.cloud?.cloudProfileId !== stamp.cloudProfileId ||
       (current.profile.cloud?.activeOrgId ?? '') !== stamp.organizationId
     ) {
-      throw new Error('The signed-in Orca account changed during the skill request.')
+      throw new Error('The signed-in Axiom account changed during the skill request.')
     }
   }
   const override = input.options.authToken?.trim() || process.env.ORCA_CLOUD_AUTH_TOKEN?.trim()

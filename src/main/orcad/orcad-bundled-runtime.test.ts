@@ -57,19 +57,19 @@ describe('bundled Orca runtime handoff', () => {
 
   it('refuses an incomplete slot before starting a process', () => {
     fixture.exists.mockImplementation((path) => path.endsWith('.build-target'))
-    expect(() => handoffToBundledOrcad()).toThrow('bundled Orca runtime is missing')
+    expect(() => handoffToBundledOrcad()).toThrow('bundled Axiom runtime is missing')
     expect(fixture.spawn).not.toHaveBeenCalled()
   })
 
   it('refuses a versioned slot missing both its runtime and target marker', () => {
     fixture.exists.mockImplementation((path) => path.endsWith(ORCAD_VERSION_FILENAME))
-    expect(() => handoffToBundledOrcad()).toThrow('bundled Orca runtime target is missing')
+    expect(() => handoffToBundledOrcad()).toThrow('bundled Axiom runtime target is missing')
     expect(fixture.spawn).not.toHaveBeenCalled()
   })
 
   it('refuses a remaining bundled runtime without its target marker', () => {
     fixture.exists.mockImplementation((path) => !path.endsWith('.build-target'))
-    expect(() => handoffToBundledOrcad()).toThrow('bundled Orca runtime target is missing')
+    expect(() => handoffToBundledOrcad()).toThrow('bundled Axiom runtime target is missing')
     expect(fixture.realpath).toHaveBeenCalledExactlyOnceWith('/slot/orcad.js')
     expect(fixture.spawn).not.toHaveBeenCalled()
   })

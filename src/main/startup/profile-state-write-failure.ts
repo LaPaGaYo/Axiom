@@ -4,8 +4,8 @@ import { mainProcessState } from './main-process-state'
 
 /** Report a retired writer without treating unacknowledged state as safe to overwrite. */
 export function reportProfileStateWriteFailure(error: Error): void {
-  const message = 'Orca has stopped saving this profile.'
-  const detail = 'Recent changes may not be saved. Restart Orca before continuing.'
+  const message = 'Axiom has stopped saving this profile.'
+  const detail = 'Recent changes may not be saved. Restart Axiom before continuing.'
   console.error(`[persistence] ${message} ${detail}`, error)
   if (mainProcessState.isServeMode || isBackgroundLaunch()) {
     return

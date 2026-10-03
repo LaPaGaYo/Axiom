@@ -25,7 +25,7 @@ export function parseSharedControlFrame(
   if (!sharedKey) {
     return {
       type: 'error',
-      error: invalidRemoteRuntimeResponseError('Remote Orca runtime returned a frame before E2EE.')
+      error: invalidRemoteRuntimeResponseError('Remote Axiom runtime returned a frame before E2EE.')
     }
   }
   const plaintext = decrypt(frame, sharedKey)
@@ -33,7 +33,7 @@ export function parseSharedControlFrame(
     return {
       type: 'error',
       error: invalidRemoteRuntimeResponseError(
-        'Remote Orca runtime returned an undecryptable frame.'
+        'Remote Axiom runtime returned an undecryptable frame.'
       )
     }
   }

@@ -32,7 +32,7 @@ class TestSocket extends EventEmitter {
 }
 
 const RESTART_OR_ABSENT_ADVICE =
-  /Restart Orca and try again|Orca is not running|Run 'orca open' first/
+  /Restart Axiom and try again|Axiom is not running|Run 'orca open' first/
 
 let socket: TestSocket
 
@@ -78,9 +78,9 @@ describe('runtime access denied', () => {
     expect(socket.write).not.toHaveBeenCalled()
     const human = formatCliError(error)
     expect(human).toContain(
-      `Permission denied connecting to Orca (${code}). Orca may be running normally`
+      `Permission denied connecting to Axiom (${code}). Axiom may be running normally`
     )
-    expect(human).toContain("Next step: Do not restart Orca or run 'orca open'")
+    expect(human).toContain("Next step: Do not restart Axiom or run 'axiom open'")
     expect(human).not.toMatch(RESTART_OR_ABSENT_ADVICE)
     expect(human).not.toContain('private-runtime')
   })
@@ -89,7 +89,7 @@ describe('runtime access denied', () => {
     vi.stubEnv('CODEX_SANDBOX', 'seatbelt')
     const human = formatCliError(await deniedRequest('EPERM'))
 
-    expect(human).toContain('The Codex sandbox blocked this command from connecting to Orca')
+    expect(human).toContain('The Codex sandbox blocked this command from connecting to Axiom')
     expect(human).toContain('escalated permissions, outside the Codex sandbox')
     expect(human).not.toMatch(RESTART_OR_ABSENT_ADVICE)
   })
@@ -114,7 +114,7 @@ describe('runtime access denied', () => {
     mockKill('ESRCH')
     const human = formatCliError(await deniedRequest('EPERM'))
 
-    expect(human).toContain("Orca is not running. Run 'orca open' first.")
+    expect(human).toContain("Axiom is not running. Run 'axiom open' first.")
     expect(human).not.toContain('Do not restart')
     const pending = getCliStatus('/test')
     failConnect('EPERM')

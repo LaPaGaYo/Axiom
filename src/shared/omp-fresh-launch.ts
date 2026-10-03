@@ -54,7 +54,7 @@ export function withFreshOmpLaunch(command: string, shell: AgentStartupShell, su
         : `"$${ORCA_OMP_FRESH_CONFIG_ENV}"`
   const launch = `${command} --config ${path}${suffix}`
   const error =
-    'Orca: fresh OMP settings are unavailable on this host. Restart the terminal after updating Orca.'
+    'Axiom: fresh OMP settings are unavailable on this host. Restart the terminal after updating Axiom.'
   if (shell === 'powershell') {
     return `if (${path} -and (Test-Path -LiteralPath ${path} -PathType Leaf)) { ${launch} } else { $global:LASTEXITCODE = 1; Write-Error '${error}' }`
   }

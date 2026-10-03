@@ -292,7 +292,7 @@ async function assertAccountImportSupported({ client }: HandlerContext): Promise
   if (!status.result.capabilities?.includes(ACCOUNT_IMPORT_RUNTIME_CAPABILITY)) {
     throw new RuntimeClientError(
       'incompatible_runtime',
-      'The running Orca runtime is too old to add accounts from the CLI. Update or restart Orca and try again.'
+      'The running Axiom runtime is too old to add accounts from the CLI. Update or restart Axiom and try again.'
     )
   }
 }
@@ -316,14 +316,14 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
         `Unsupported --agent "${agent}". Use "claude" or "codex".`
       )
     }
-    rejectAccountRemoteSelectionFlags(ctx, 'orca account add')
+    rejectAccountRemoteSelectionFlags(ctx, 'axiom account add')
     // Why: fail on runtime version skew before burning a full OAuth round trip.
     await assertAccountImportSupported(ctx)
     await ctx.client.call('accounts.list', { refreshUsage: false })
     await (agent === 'claude' ? addClaudeAccount(ctx) : addCodexAccount(ctx))
   },
   'account list': async (ctx) => {
-    rejectAccountRemoteSelectionFlags(ctx, 'orca account list')
+    rejectAccountRemoteSelectionFlags(ctx, 'axiom account list')
     const { client, json } = ctx
     // Why: this command renders no usage numbers, so skip the forced provider
     // refresh — it is one serial network round-trip per managed account.

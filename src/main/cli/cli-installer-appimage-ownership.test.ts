@@ -145,7 +145,7 @@ describe.skipIf(process.platform === 'win32')('AppImage CLI ownership', () => {
     })
 
     await expect(installer.getStatus()).resolves.toMatchObject({ state: 'conflict' })
-    await expect(installer.install()).rejects.toThrow('Refusing to replace non-Orca command')
+    await expect(installer.install()).rejects.toThrow('Refusing to replace non-Axiom command')
     await expect(readlink(fixture.commandPath)).resolves.toBe(foreignTarget)
     expect(extract).not.toHaveBeenCalled()
   })
@@ -251,7 +251,7 @@ describe.skipIf(process.platform === 'win32')('AppImage CLI ownership', () => {
     }
 
     await expect(new RacedInstaller(installerOptions(fixture)).install()).rejects.toThrow(
-      'Refusing to replace non-Orca command'
+      'Refusing to replace non-Axiom command'
     )
     await expect(readlink(fixture.commandPath)).resolves.toBe(foreignTarget)
     expect((await readdir(fixture.commandDirectory)).some((name) => name.includes('.orca-'))).toBe(

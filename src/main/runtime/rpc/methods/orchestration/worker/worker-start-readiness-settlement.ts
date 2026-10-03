@@ -121,9 +121,9 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
       ...(deliveredPrompt ? { prompt: deliveredPrompt } : {}),
       residualResources: JSON.parse(worker.residual_resources) as unknown[],
       nextCommands: [
-        `orca orchestration worker-show --dispatch ${args.dispatchId} --json`,
-        `orca terminal read --terminal ${terminalHandle} --screen`,
-        `orca orchestration worker-abandon --dispatch ${args.dispatchId} --json`
+        `axiom orchestration worker-show --dispatch ${args.dispatchId} --json`,
+        `axiom terminal read --terminal ${terminalHandle} --screen`,
+        `axiom orchestration worker-abandon --dispatch ${args.dispatchId} --json`
       ],
       ...(args.terminalRevealWarning ? { warning: args.terminalRevealWarning } : {})
     }

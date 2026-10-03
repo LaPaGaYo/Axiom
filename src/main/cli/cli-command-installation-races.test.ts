@@ -194,7 +194,7 @@ describe.skipIf(process.platform === 'win32')('CLI command filesystem races', ()
       }
     })
 
-    await expect(installer.install()).rejects.toThrow('Refusing to replace non-Orca command')
+    await expect(installer.install()).rejects.toThrow('Refusing to replace non-Axiom command')
     await expect(readlink(fixture.commandPath)).resolves.toBe(foreignTarget)
     expect(
       (await readdir(fixture.commandDirectory)).some((name) => name.startsWith('.orca-cli-'))
@@ -225,7 +225,7 @@ describe.skipIf(process.platform === 'win32')('CLI command filesystem races', ()
       }
     })
 
-    await expect(installer.install()).rejects.toThrow('Refusing to replace non-Orca command')
+    await expect(installer.install()).rejects.toThrow('Refusing to replace non-Axiom command')
     await expect(readFile(fixture.commandPath, 'utf8')).resolves.toBe(
       'foreign command written into the inspected inode'
     )
@@ -247,7 +247,7 @@ describe.skipIf(process.platform === 'win32')('CLI command filesystem races', ()
       }
     })
 
-    await expect(installer.remove()).rejects.toThrow('Refusing to remove non-Orca command')
+    await expect(installer.remove()).rejects.toThrow('Refusing to remove non-Axiom command')
     await expect(readlink(fixture.commandPath)).resolves.toBe(foreignTarget)
   })
 

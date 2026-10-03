@@ -50,7 +50,7 @@ describe.each(SHELLS)('WSL_MANAGED_CLI_PATH_RESTORE in $name', (shell) => {
   it.skipIf(!shell.enabled)('warns and keeps PATH when the CLI cannot run', () => {
     const result = run(shell, { ORCA_WSL_CLI_DIR: root, ORCA_CLI_COMMAND: 'orca-ide' })
     expect(result).toMatchObject({ code: 0, stdout: '/usr/bin:/bin' })
-    expect(result.stderr).toContain('Orca CLI unavailable')
+    expect(result.stderr).toContain('Axiom CLI unavailable')
   })
 
   it.skipIf(!shell.enabled)('does nothing without a managed directory', () => {

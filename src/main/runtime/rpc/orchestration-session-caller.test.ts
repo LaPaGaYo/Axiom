@@ -247,12 +247,12 @@ describe('orchestration session callers at the dispatch entry', () => {
       await expectRefusedWithNoEffects(
         'ffffffff-0000-4000-8000-000000000000',
         CODES.unknown,
-        /No Orca agent session .* exists on this host/
+        /No Axiom agent session .* exists on this host/
       )
     })
 
     it('a terminal handle presented as a session id', async () => {
-      await expectRefusedWithNoEffects('term_4f2c9a0b', CODES.unknown, /not an Orca session id/)
+      await expectRefusedWithNoEffects('term_4f2c9a0b', CODES.unknown, /not an Axiom session id/)
     })
 
     it("a provider's session id, with a hint naming the Orca id", async () => {
@@ -263,7 +263,7 @@ describe('orchestration session callers at the dispatch entry', () => {
         ok: false,
         error: {
           code: CODES.providerId,
-          message: expect.stringContaining(`This session's Orca id is ${SESSION_X}`),
+          message: expect.stringContaining(`This session's Axiom id is ${SESSION_X}`),
           data: { orcaSessionId: SESSION_X, effectsApplied: false }
         }
       })
