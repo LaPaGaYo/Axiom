@@ -36,7 +36,7 @@ their own config, so a coordinator wanting a same-model opencode worker relies
 on that config.
 
 `--effort` requires `--model`; neither option combines with `--terminal`. A
-connected worker server must advertise launch-preference support before Orca
+connected worker server must advertise launch-preference support before Axiom
 forwards either field. Compare `launch.requested` with `launch.effective`; never
 claim a model or effort from requested arguments alone.
 

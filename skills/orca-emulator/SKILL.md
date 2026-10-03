@@ -1,7 +1,7 @@
 ---
 name: orca-emulator
 description: >-
-  iOS Simulator control from inside Orca, with the live device view in Orca's
+  iOS Simulator control from inside Axiom, with the live device view in Axiom's
   emulator pane. Use when driving a booted Apple Simulator on macOS: taps,
   gestures, typing, hardware buttons, rotation, and the accessibility tree, or
   when an iOS change needs simulator evidence. For an Android device or emulator

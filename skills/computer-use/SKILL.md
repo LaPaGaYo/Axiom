@@ -6,7 +6,7 @@ description: >-
   browser windows (Chrome, Edge, Safari) or webviews. Prefer a programmatic path
   (shell, filesystem, git, HTTP, existing CLIs) whenever it can complete the task.
   Use only when a visible window needs GUI control those cannot reach. Do not use
-  for Orca's embedded browser (`orca-cli`).
+  for Axiom's embedded browser (`orca-cli`).
 ---
 
 # Computer Use

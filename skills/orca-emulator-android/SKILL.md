@@ -1,8 +1,8 @@
 ---
 name: orca-emulator-android
 description: >-
-  Android device and emulator control from inside Orca over adb, with the live
-  device view in Orca's emulator pane. Use when driving an adb-connected emulator
+  Android device and emulator control from inside Axiom over adb, with the live
+  device view in Axiom's emulator pane. Use when driving an adb-connected emulator
   or phone on Windows, Linux, or macOS: booting AVDs, taps, swipes, typing,
   hardware buttons, rotation, app install and launch, runtime permissions, the
   accessibility tree, and logcat. For an iOS simulator use the iOS emulator
