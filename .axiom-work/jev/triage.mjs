@@ -20,7 +20,9 @@ const ENDPOINT = 'https://api.typesafe.ai/v1/systemone'
 
 function readKey() {
   const p = join(homedir(), '.config', 'axiom', 'typesafe.env')
-  if (!existsSync(p)) return null
+  if (!existsSync(p)) {
+    return null
+  }
   const m = readFileSync(p, 'utf8').match(/^TYPESAFE_API_KEY=(\S+)/m)
   return m ? m[1] : null
 }
@@ -36,7 +38,8 @@ const latest = (prefix, suffix) =>
     .sort()
     .at(-1)
 const clip = (s, n) => (s.length > n ? `${s.slice(0, n)}\n…[truncated ${s.length - n} chars]` : s)
-const strip = (s) => s.replace(/\x1b\[[0-9;]*m/g, '')
+const ANSI_ESCAPE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g')
+const strip = (s) => s.replace(ANSI_ESCAPE, '')
 const readIf = (p) => (existsSync(p) ? readFileSync(p, 'utf8') : '')
 
 const summaryFile = latest(`attempt-${ID}-${SEQ}-`, '.summary')
@@ -53,9 +56,13 @@ const failures = []
 const lines = verifyLog.split('\n')
 for (let i = 0; i < lines.length; i++) {
   const m = lines[i].match(/^ FAIL {2}(\S+)(?: > (.*))?$/)
-  if (!m) continue
+  if (!m) {
+    continue
+  }
   const [, file, name = ''] = m
-  if (failures.some((f) => f.file === file && f.name === name)) continue
+  if (failures.some((f) => f.file === file && f.name === name)) {
+    continue
+  }
   const error = (lines.slice(i + 1, i + 6).find((l) => /Error|expected|Timed out|EPERM|ENOENT/.test(l)) ?? '').trim()
   failures.push({ file, name, error: error.slice(0, 400) })
 }
@@ -189,4 +196,6 @@ for (const [k, v] of Object.entries(json.answers ?? {})) {
         : `score ${Number(v.score).toFixed(2)} of ${questions[k].criteria.length - 1} (confidence ${Number(v.confidence).toFixed(2)})`
   console.log(`  ${k}: ${text}`)
 }
-if (json.usage) console.log(`  usage: ${JSON.stringify(json.usage)}`)
+if (json.usage) {
+  console.log(`  usage: ${JSON.stringify(json.usage)}`)
+}
