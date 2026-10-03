@@ -15,7 +15,10 @@ describe('V1 product egress policy', () => {
       cloudAuth: null,
       pushGatewayOrigin: null,
       artifactShareApiOrigin: null,
-      skillShareHosts: []
+      skillShareHosts: [],
+      officialPluginMarketplace: null,
+      skillsRepositoryUrl: 'https://github.com/LaPaGaYo/Axiom',
+      starPromptRepository: null
     })
     expect(productReleaseRepositorySlug()).toBe('LaPaGaYo/Axiom')
   })

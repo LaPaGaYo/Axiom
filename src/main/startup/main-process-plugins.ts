@@ -1,4 +1,5 @@
 import { app, BrowserWindow } from 'electron'
+import { PRODUCT_EGRESS_POLICY } from '../../shared/product-egress-policy'
 import { performance } from 'node:perf_hooks'
 import { PluginService } from '../plugins/plugin-service'
 import { PluginKillListService } from '../plugins/plugin-kill-list-service'
@@ -39,7 +40,10 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     getKillListEntry: (pluginKey) => state.pluginKillListService?.find(pluginKey) ?? null
   })
   const requestOfficialMarketplaceSeed = (): void => {
-    if (store.getSettings().pluginSystemEnabled !== true) {
+    if (
+      PRODUCT_EGRESS_POLICY.officialPluginMarketplace === null ||
+      store.getSettings().pluginSystemEnabled !== true
+    ) {
       return
     }
     void state.pluginMarketplaceService

@@ -1,7 +1,22 @@
+vi.mock(import('../../shared/product-egress-policy'), async (importOriginal) => {
+  const original = await importOriginal()
+  return {
+    ...original,
+    PRODUCT_EGRESS_POLICY: {
+      ...original.PRODUCT_EGRESS_POLICY,
+      officialPluginMarketplace: {
+        owner: 'fixture',
+        repository: 'plugin-marketplace',
+        gitUrl: 'https://github.com/fixture/plugin-marketplace.git'
+      }
+    }
+  }
+})
+
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PluginInstallSource } from '../../shared/plugins/plugin-install-lockfile'
 import {
   installBundledPlugin,
@@ -46,12 +61,12 @@ describe('plugin install trust', () => {
         url: 'https://github.com/attacker/orca-secrets.git',
         ref: 'main'
       },
-      'reserved plugin identity community.orca-secrets must resolve to the stablyai organization'
+      'reserved plugin identity community.orca-secrets must resolve to the configured official organization'
     ],
     [
       {
         kind: 'git',
-        url: 'git@github.com:stablyai/orca-secrets.git',
+        url: 'git@github.com:fixture/orca-secrets.git',
         ref: 'main'
       },
       null
@@ -63,13 +78,13 @@ describe('plugin install trust', () => {
   it('rejects locally installed reserved identities before publication', async () => {
     const sourcePath = await tempRoot('orca-reserved-plugin-')
     const pluginsDir = await tempRoot('orca-plugin-installs-')
-    await writePlugin(sourcePath, 'stablyai', 'orca-skills')
+    await writePlugin(sourcePath, 'fixture', 'orca-skills')
 
     await expect(
       installPluginFromLocalPath({ pluginsDir, sourcePath, hostVersion: '1.4.0' })
     ).resolves.toEqual({
       ok: false,
-      error: 'reserved plugin identity stablyai.orca-skills cannot be installed from a local path'
+      error: 'reserved plugin identity fixture.orca-skills cannot be installed from a local path'
     })
     await expect(readPluginLockfile(pluginsDir)).resolves.toEqual({ version: 1, plugins: {} })
   })
@@ -77,20 +92,20 @@ describe('plugin install trust', () => {
   it('allows the app-bundled path only for the complete official identity', async () => {
     const sourcePath = await tempRoot('orca-bundled-plugin-')
     const pluginsDir = await tempRoot('orca-plugin-installs-')
-    await writePlugin(sourcePath, 'stablyai', 'orca-skills')
+    await writePlugin(sourcePath, 'fixture', 'orca-skills')
 
     const result = await installBundledPlugin({
       pluginsDir,
       sourcePath,
       hostVersion: '1.4.0',
-      expectedPluginKey: 'stablyai.orca-skills'
+      expectedPluginKey: 'fixture.orca-skills'
     })
 
-    expect(result).toMatchObject({ ok: true, pluginKey: 'stablyai.orca-skills' })
+    expect(result).toMatchObject({ ok: true, pluginKey: 'fixture.orca-skills' })
     const lock = await readPluginLockfile(pluginsDir)
-    expect(lock.plugins['stablyai.orca-skills']?.source).toEqual({
+    expect(lock.plugins['fixture.orca-skills']?.source).toEqual({
       kind: 'bundled',
-      bundleId: 'stablyai.orca-skills'
+      bundleId: 'fixture.orca-skills'
     })
   })
 

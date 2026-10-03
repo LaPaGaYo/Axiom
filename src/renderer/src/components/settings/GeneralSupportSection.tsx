@@ -1,4 +1,5 @@
 import type React from 'react'
+import { PRODUCT_EGRESS_POLICY } from '../../../../shared/product-egress-policy'
 import { useEffect, useState } from 'react'
 import { ExternalLink, Loader2, Star } from 'lucide-react'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -10,7 +11,10 @@ import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 
 // Do not deep-link to /stargazers: GitHub 404s that page for users without repo write access.
-const ORCA_GITHUB_URL = 'https://github.com/stablyai/orca'
+const ORCA_GITHUB_URL =
+  PRODUCT_EGRESS_POLICY.starPromptRepository === null
+    ? null
+    : `https://github.com/${PRODUCT_EGRESS_POLICY.starPromptRepository}`
 
 type SupportState =
   | 'loading'
@@ -25,7 +29,11 @@ type GeneralSupportSectionProps = {
   hasPrecedingSections: boolean
 }
 
-export function GeneralSupportSection({
+export function GeneralSupportSection(props: GeneralSupportSectionProps): React.JSX.Element | null {
+  return ORCA_GITHUB_URL === null ? null : <EnabledGeneralSupportSection {...props} />
+}
+
+function EnabledGeneralSupportSection({
   hasPrecedingSections
 }: GeneralSupportSectionProps): React.JSX.Element {
   const mountedRef = useMountedRef()
@@ -57,6 +65,9 @@ export function GeneralSupportSection({
   }, [])
 
   const handleStarClick = async (): Promise<void> => {
+    if (ORCA_GITHUB_URL === null) {
+      return
+    }
     if (starState === 'web-fallback') {
       setStarState('opening-github')
       await window.api.shell.openUrl(ORCA_GITHUB_URL)

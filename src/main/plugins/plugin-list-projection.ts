@@ -10,6 +10,7 @@ import type { PluginService } from './plugin-service'
 import { listPluginVmRecipeCommands } from '../../shared/plugins/plugin-vm-recipe-artifact'
 import type { PluginCommandAliasActionId } from '../../shared/plugins/plugin-command-actions'
 import {
+  OFFICIAL_MARKETPLACE_OWNER,
   isOfficialMarketplaceGitSource,
   isOfficialOrganizationGitSource,
   isOfficialPluginIdentity
@@ -147,11 +148,12 @@ export async function buildPluginList(
           : undefined
       const bundled = lockEntry?.source.kind === 'bundled'
       const official =
-        bundled ||
-        (lockEntry?.source.kind === 'marketplace' &&
-          isOfficialPluginIdentity(plugin.pluginKey) &&
-          isOfficialMarketplaceGitSource(lockEntry.source.marketplace.url) &&
-          isOfficialOrganizationGitSource(lockEntry.source.plugin.url))
+        OFFICIAL_MARKETPLACE_OWNER !== null &&
+        (bundled ||
+          (lockEntry?.source.kind === 'marketplace' &&
+            isOfficialPluginIdentity(plugin.pluginKey) &&
+            isOfficialMarketplaceGitSource(lockEntry.source.marketplace.url) &&
+            isOfficialOrganizationGitSource(lockEntry.source.plugin.url)))
       return {
         pluginKey: plugin.pluginKey,
         consentFingerprint: plugin.consentFingerprint,

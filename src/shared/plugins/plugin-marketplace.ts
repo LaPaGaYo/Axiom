@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import bundledPluginIndex from '../../../resources/plugins/launch/bundled-plugins.json'
+import { PRODUCT_EGRESS_POLICY } from '../product-egress-policy'
 import { isAllowedPluginGitUrl } from './plugin-install-lockfile'
 import { isQualifiedPluginKey } from './plugin-manifest'
 
@@ -6,10 +8,17 @@ export const PLUGIN_MARKETPLACE_FILENAME = 'orca-marketplace.json'
 export const PLUGIN_MARKETPLACE_ENTRY_LIMIT = 2_048
 export const PLUGIN_MARKETPLACE_CATEGORY_LIMIT = 16
 
-export const OFFICIAL_PLUGIN_PUBLISHER = 'stablyai'
+// Resource identities remain compatible without granting their publisher any network trust.
+const bundledPluginPublishers = new Set(
+  bundledPluginIndex.plugins.map((plugin) => plugin.pluginKey.split('.')[0])
+)
+export const OFFICIAL_PLUGIN_PUBLISHER =
+  PRODUCT_EGRESS_POLICY.officialPluginMarketplace?.owner.toLowerCase() ?? null
 export const OFFICIAL_PLUGIN_ID_PREFIX = 'orca-'
-export const OFFICIAL_MARKETPLACE_OWNER = 'stablyai'
-export const OFFICIAL_MARKETPLACE_REPOSITORY = 'orca-plugins'
+export const OFFICIAL_MARKETPLACE_OWNER =
+  PRODUCT_EGRESS_POLICY.officialPluginMarketplace?.owner.toLowerCase() ?? null
+export const OFFICIAL_MARKETPLACE_REPOSITORY =
+  PRODUCT_EGRESS_POLICY.officialPluginMarketplace?.repository.toLowerCase() ?? null
 
 // Why: theme/icon/skill contributions were deferred, so `contributes` now
 // rejects them and any plugin declaring one fails to install wholesale. The
@@ -99,26 +108,20 @@ export const pluginMarketplaceSchema = z
   })
 
 /** Host-derived trust metadata. Marketplace JSON cannot self-award either bit. */
-export const pluginMarketplaceTrustMetadataSchema = z
-  .strictObject({
-    official: z.boolean(),
-    bundled: z.boolean()
-  })
-  .refine((metadata) => !metadata.bundled || metadata.official, {
-    message: 'bundled plugins must be official',
-    path: ['bundled']
-  })
+export const pluginMarketplaceTrustMetadataSchema = z.strictObject({
+  official: z.boolean(),
+  bundled: z.boolean()
+})
 
 export type PluginMarketplace = z.infer<typeof pluginMarketplaceSchema>
 export type PluginMarketplaceEntry = z.infer<typeof pluginMarketplaceEntrySchema>
 export type PluginMarketplaceGitSource = z.infer<typeof pluginMarketplaceGitSourceSchema>
 export type PluginMarketplaceTrustMetadata = z.infer<typeof pluginMarketplaceTrustMetadataSchema>
 
-export const OFFICIAL_MARKETPLACE_GIT_SOURCE: PluginMarketplaceGitSource = {
-  kind: 'git',
-  url: 'https://github.com/stablyai/orca-plugins.git',
-  ref: 'main'
-}
+export const OFFICIAL_MARKETPLACE_GIT_SOURCE: PluginMarketplaceGitSource | null =
+  PRODUCT_EGRESS_POLICY.officialPluginMarketplace === null
+    ? null
+    : { kind: 'git', url: PRODUCT_EGRESS_POLICY.officialPluginMarketplace.gitUrl, ref: 'main' }
 
 export function splitQualifiedPluginKey(pluginKey: string): {
   publisher: string
@@ -139,6 +142,7 @@ export function isReservedPluginIdentity(pluginKey: string): boolean {
   return (
     identity !== null &&
     (identity.publisher === OFFICIAL_PLUGIN_PUBLISHER ||
+      bundledPluginPublishers.has(identity.publisher) ||
       identity.id.startsWith(OFFICIAL_PLUGIN_ID_PREFIX))
   )
 }
@@ -147,7 +151,8 @@ export function isOfficialPluginIdentity(pluginKey: string): boolean {
   const identity = splitQualifiedPluginKey(pluginKey)
   return (
     identity !== null &&
-    identity.publisher === OFFICIAL_PLUGIN_PUBLISHER &&
+    (identity.publisher === OFFICIAL_PLUGIN_PUBLISHER ||
+      bundledPluginPublishers.has(identity.publisher)) &&
     identity.id.startsWith(OFFICIAL_PLUGIN_ID_PREFIX)
   )
 }
@@ -194,12 +199,18 @@ function repositoryIdentity(host: string, repositoryPath: string): GitRepository
 
 export function isOfficialOrganizationGitSource(url: string): boolean {
   const source = parseGitRepositoryIdentity(url)
-  return source?.host === 'github.com' && source.owner.toLowerCase() === OFFICIAL_PLUGIN_PUBLISHER
+  return (
+    OFFICIAL_MARKETPLACE_OWNER !== null &&
+    source?.host === 'github.com' &&
+    source.owner.toLowerCase() === OFFICIAL_MARKETPLACE_OWNER
+  )
 }
 
 export function isOfficialMarketplaceGitSource(url: string): boolean {
   const source = parseGitRepositoryIdentity(url)
   return (
+    OFFICIAL_MARKETPLACE_OWNER !== null &&
+    OFFICIAL_MARKETPLACE_REPOSITORY !== null &&
     source?.host === 'github.com' &&
     source.owner.toLowerCase() === OFFICIAL_MARKETPLACE_OWNER &&
     source.repository.toLowerCase() === OFFICIAL_MARKETPLACE_REPOSITORY

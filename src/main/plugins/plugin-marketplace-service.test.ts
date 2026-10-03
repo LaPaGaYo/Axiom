@@ -1,3 +1,18 @@
+vi.mock(import('../../shared/product-egress-policy'), async (importOriginal) => {
+  const original = await importOriginal()
+  return {
+    ...original,
+    PRODUCT_EGRESS_POLICY: {
+      ...original.PRODUCT_EGRESS_POLICY,
+      officialPluginMarketplace: {
+        owner: 'fixture',
+        repository: 'plugin-marketplace',
+        gitUrl: 'https://github.com/fixture/plugin-marketplace.git'
+      }
+    }
+  }
+})
+
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,7 +21,6 @@ import type {
   PluginMarketplace,
   PluginMarketplaceGitSource
 } from '../../shared/plugins/plugin-marketplace'
-import { OFFICIAL_MARKETPLACE_GIT_SOURCE } from '../../shared/plugins/plugin-marketplace'
 import type { PluginMarketplaceFetchResult } from './plugin-marketplace-fetch'
 import { PluginMarketplaceService } from './plugin-marketplace-service'
 import {
@@ -150,13 +164,13 @@ describe('PluginMarketplaceService', () => {
   it('derives the Official badge only from the canonical marketplace and source organization', async () => {
     const officialMarketplace: PluginMarketplace = {
       name: 'Orca Plugins',
-      owner: 'stablyai',
+      owner: 'fixture',
       plugins: [
         {
-          id: 'stablyai.orca-shortcuts',
+          id: 'fixture.orca-shortcuts',
           source: {
             kind: 'git',
-            url: 'git@github.com:stablyai/orca-shortcuts.git',
+            url: 'git@github.com:fixture/orca-shortcuts.git',
             ref: 'main'
           },
           categories: ['keybindings']
@@ -168,10 +182,10 @@ describe('PluginMarketplaceService', () => {
       fetcher: async () => fetched(officialMarketplace)
     })
 
-    await service.addSource(source('https://github.com/stablyai/orca-plugins.git'))
+    await service.addSource(source('https://github.com/fixture/plugin-marketplace.git'))
 
     await expect(service.listPlugins()).resolves.toEqual([
-      expect.objectContaining({ pluginKey: 'stablyai.orca-shortcuts', official: true })
+      expect.objectContaining({ pluginKey: 'fixture.orca-shortcuts', official: true })
     ])
   })
 
@@ -216,10 +230,10 @@ describe('PluginMarketplaceService', () => {
     const root = await tempRoot()
     const officialMarketplace = marketplace(
       'Orca Plugins',
-      'stablyai.orca-notes',
-      'https://github.com/stablyai/orca-notes.git'
+      'fixture.orca-notes',
+      'https://github.com/fixture/orca-notes.git'
     )
-    officialMarketplace.owner = 'stablyai'
+    officialMarketplace.owner = 'fixture'
     const fetcher = vi.fn(async () => fetched(officialMarketplace))
     const first = new PluginMarketplaceService({ pluginsDataDir: root, fetcher })
 
@@ -247,22 +261,25 @@ describe('PluginMarketplaceService', () => {
     const seeded = await service.seedOfficialSource()
 
     expect(seeded).toMatchObject({ official: true, stale: true, marketplace: null })
+    if (!seeded) {
+      throw new Error('Expected configured official source')
+    }
     await expect(service.removeSource(seeded.id)).rejects.toThrow('cannot be removed')
     await expect(service.listSources()).resolves.toEqual([seeded])
   })
 
   it('keeps reads usable and allows retry after official seeding rejects', async () => {
     const registered: PluginMarketplaceRegisteredSource = {
-      id: marketplaceSourceId(OFFICIAL_MARKETPLACE_GIT_SOURCE),
-      source: OFFICIAL_MARKETPLACE_GIT_SOURCE,
+      id: marketplaceSourceId(source('https://github.com/fixture/plugin-marketplace.git')),
+      source: source('https://github.com/fixture/plugin-marketplace.git'),
       addedAt: 1
     }
     const officialMarketplace = marketplace(
       'Orca Plugins',
-      'stablyai.orca-notes',
-      'https://github.com/stablyai/orca-notes.git'
+      'fixture.orca-notes',
+      'https://github.com/fixture/orca-notes.git'
     )
-    officialMarketplace.owner = 'stablyai'
+    officialMarketplace.owner = 'fixture'
     const listSources = vi
       .fn<() => Promise<readonly PluginMarketplaceRegisteredSource[]>>()
       .mockRejectedValueOnce(new Error('source store temporarily unavailable'))
@@ -304,10 +321,10 @@ describe('PluginMarketplaceService', () => {
     )
     const officialMarketplace = marketplace(
       'Orca Plugins',
-      'stablyai.orca-notes',
-      'https://github.com/stablyai/orca-notes.git'
+      'fixture.orca-notes',
+      'https://github.com/fixture/orca-notes.git'
     )
-    officialMarketplace.owner = 'stablyai'
+    officialMarketplace.owner = 'fixture'
     const service = new PluginMarketplaceService({
       pluginsDataDir: root,
       store,

@@ -1,5 +1,16 @@
 // @vitest-environment happy-dom
 
+vi.mock(import('../../../shared/product-egress-policy'), async (importOriginal) => {
+  const original = await importOriginal()
+  return {
+    ...original,
+    PRODUCT_EGRESS_POLICY: {
+      ...original.PRODUCT_EGRESS_POLICY,
+      starPromptRepository: 'example/application'
+    }
+  }
+})
+
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

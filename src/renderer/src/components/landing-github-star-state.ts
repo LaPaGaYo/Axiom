@@ -1,4 +1,5 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
+import { PRODUCT_EGRESS_POLICY } from '../../../shared/product-egress-policy'
 
 export type LandingStarState = 'loading' | 'starred' | 'not-starred' | 'web-fallback' | 'hidden'
 
@@ -16,9 +17,14 @@ export function useLandingOrcaStarState(): [
   LandingStarState,
   Dispatch<SetStateAction<LandingStarState>>
 ] {
-  const [state, setState] = useState<LandingStarState>('loading')
+  const [state, setState] = useState<LandingStarState>(
+    PRODUCT_EGRESS_POLICY.starPromptRepository === null ? 'hidden' : 'loading'
+  )
 
   useEffect(() => {
+    if (PRODUCT_EGRESS_POLICY.starPromptRepository === null) {
+      return
+    }
     let cancelled = false
     void window.api.gh.checkOrcaStarred().then((result) => {
       if (cancelled) {

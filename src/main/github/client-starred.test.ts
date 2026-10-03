@@ -1,4 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock(import('../../shared/product-egress-policy'), async (importOriginal) => {
+  const original = await importOriginal()
+  return {
+    ...original,
+    PRODUCT_EGRESS_POLICY: {
+      ...original.PRODUCT_EGRESS_POLICY,
+      starPromptRepository: 'example/application'
+    }
+  }
+})
 import type * as GithubApiRepositoryModule from './github-api-repository'
 import type * as GitHubEnterpriseRepositoryModule from './github-enterprise-repository'
 
@@ -55,7 +66,7 @@ describe('checkOrcaStarred', () => {
     await expect(checkOrcaStarred()).resolves.toBe(true)
 
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      ['api', '--include', 'user/starred/stablyai/orca'],
+      ['api', '--include', 'user/starred/example/application'],
       expect.objectContaining({ encoding: 'utf-8' })
     )
   })
@@ -157,7 +168,7 @@ describe('starOrca', () => {
 
     expect(execFileAsyncMock).not.toHaveBeenCalled()
     const [args, options] = ghExecFileAsyncMock.mock.calls[0]
-    expect(args).toEqual(['api', '-X', 'PUT', 'user/starred/stablyai/orca'])
+    expect(args).toEqual(['api', '-X', 'PUT', 'user/starred/example/application'])
     expect(options.timeout).toBeGreaterThan(0)
     expect(releaseMock).toHaveBeenCalledTimes(1)
   })

@@ -38,7 +38,7 @@ describe('Phase 1 launch plugin content', () => {
         (plugin) =>
           isOfficialPluginIdentity(plugin.id) && isOfficialOrganizationGitSource(plugin.source.url)
       ).length
-    ).toBeGreaterThanOrEqual(2)
+    ).toBe(0)
 
     const localPluginDirectories = (await readdir(launchRoot, { withFileTypes: true }))
       .filter((entry) => entry.isDirectory())
