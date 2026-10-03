@@ -199,3 +199,8 @@ vendor-egress ratchet（Codex attempt `axiom/attempt/M0-01/1`，候选 `7115f1cb
 **备选**：(a) 仅置 `TELEMETRY_ENABLED=false` 并保留依赖——打包产物仍含 PostHog SDK，与 orca-mapping §7 验证策略（`package.json` 无 `posthog-node`）冲突；(b) 保留同意 UI 但无后端——开关无实际作用，误导用户。
 **后果**：事件词表成为"预留接口"而非实时数据源；未来若要启用自有遥测需新 Decision 与新的 sink 实现 + 同意 UI。M0-04 按此实施。
 **取代规则**：启用任何遥测传输需新 Decision，并重新引入同意 UI。
+
+## D26 · M0-04 集成记录 — ACCEPTED（事实记录）
+
+去遥测（D25）由 Codex 经 4 次 Attempt 完成（`axiom/attempt/M0-04/1..4`：1 = 实现；2 = 修 `no-useless-return` 并按授权撤掉同意 IPC 全链路；3 = 重生成运行时 catalog 后发现生成器会把孤儿字符串（含 `posthog` 关键字）搬进启动 bundle、被 ratchet 拦下，Worker 正确停下报告范围冲突；4 = 按上游做法 `ea102a9eb8` 用脚本从六个 locale 文件精确删除 34 个孤儿 key，运行时 catalog 与 main 字节一致），候选 `d02fab2ea` 经独立验证（`.axiom-work/verifications/M0-04-4.md`）后以 `--no-ff` 合入 main（`cf07b00a2`）。实现：`posthog-node` 从 `package.json`/lockfile/打包模块表移除；`src/main/telemetry/client.ts` 的 `track()` = 校验 → burst-cap → 丢弃；`ORCA_POSTHOG_WRITE_KEY` 常量、CI secret 注入与打包后校验脚本删除；首启同意横幅与 Privacy 面板的用量开关移除，同意 IPC 撤掉，`settings.telemetry` 数据模型保留。验证事实：ratchet 652 → 636；焦点测试、`tc` ×3、changed-code 质量门、`pnpm install --frozen-lockfile --offline`、完整 `pnpm lint` PASS；全量 vitest 失败集 = 已知 15 个（13 环境性 + 2 上游问题），无新失败。
+**保留的风险/后续**：少量用户可见文案仍提及 telemetry/用量数据（M0-05）；打包启动的零遥测由 M0-08 出口抓包确认。
