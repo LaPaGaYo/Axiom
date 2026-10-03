@@ -237,6 +237,9 @@ jobs:
       - name: Boot orcad and round-trip a terminal
         run: pnpm run smoke:orcad-terminal
 
+      - name: Enforce vendor-egress ratchet
+        run: pnpm run check:vendor-egress-ratchet
+
       - name: Verify the generated RPC params catalog
         run: pnpm run verify:rpc-params-catalog
 
