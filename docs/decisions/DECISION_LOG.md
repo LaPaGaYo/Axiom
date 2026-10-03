@@ -216,3 +216,15 @@ cloud 服务置于产品出口策略之后，由 Codex 经 2 次 Attempt 完成�
 **边界**：本节只收窄"怎么写"，不削弱架构不变量、边界处 schema 校验、`SAFETY:` 断言规则、`max-lines` 与模块命名规则、验证证据与 Decision 记录；"一个可运行检查"在本仓库等于一个聚焦的 vitest 测试；带上限的刻意简化要加 `ponytail:` 注释，属于架构层面的还要记 Decision 或后续 Task。Claude 侧同一规则以账号技能 `ponytail` 安装（原文 + Axiom 约束附注）。
 **动机**（Henry）：避免把小任务做成大工程、反复造轮子。
 **取代规则**：移除或放宽本节需新 Decision。
+
+## D29 · 开发流水线引入 Jev 作为纯建议性分诊（M5 校准数据起点） — ACCEPTED（Henry 2026-10-03）
+
+**决定**：在 A-lite 流水线的每次 Attempt 验证之后，调用 TypeSafe System One（`jev-latest`，HTTP API，Node 内置 `fetch`，无新依赖）对固定的类型化问题给出判断：每个失败测试"是否可能由候选 diff 引起"（Noul）、Worker 报告相对提交合同的完整性（Score 0–3）、是否越界（Noul）、每条建议 follow-up 的 replan 分级（Choice：NO_REPLAN / MINOR_ADJUSTMENT / MAJOR_REPLAN / NOT_A_WORK_ITEM）。结果写入 `.axiom-work/logs/jev-<ID>-<seq>-<ts>.json`，附 `human_verdict` 槽位由验证者填写人工裁定。
+**边界**：纯建议，任何门禁、判定或合入都不依赖它（章程 Decision Engine Boundary；与产品代码无关，不经 `DecisionEngine` 抽象，因为它不在产品内）；API key 只存放于 Mac 的 `~/.config/axiom/typesafe.env`（mode 600，仓库之外，Codex 沙盒不可见），脚本不打印、不提交；无 key 时静默跳过；仅在 Mac 上运行（Codex 沙盒与 Claude 容器无该域名出口）。盲测 fixture（G8）不参与。
+**动机**：Henry 希望借 Jev 更好地判断进度与方向；评估结论是它适合窄判断而非方向判断，故限定为分诊 + 提前积累 (状态, 问题, 答案, 人工裁定) 校准集供 M5 使用。首次运行（M0-06b attempt 2）：报告完整性 2.99/3、越界概率 0.20（将 addendum 授权纳入状态后从 0.48 降至 0.20）、三条 follow-up 均判 NO_REPLAN，与验证者判断一致。
+**取代规则**：让 Jev 的输出影响任何门禁或自动决定需新 Decision，且必须经产品侧 `DecisionEngine` 抽象。
+
+## D30 · M0-06b 集成记录 — ACCEPTED（事实记录）
+
+marketplace 官方源禁用 / skills 安装源改 `LaPaGaYo/Axiom` / star 提示禁用，由 Codex 经 2 次 Attempt 完成（`axiom/attempt/M0-06b/1..2`：attempt 1 确定性门全过，但全量 suite 抓到 `src/shared/plugins/plugin-marketplace.ts` 在模块加载时 import `resources/**` 的真实回归；attempt 2 改为由 `plugin-bundled-bootstrap.ts` 运行时读取的索引作为"bundled 身份即在索引中"的信任依据、以参数传入 install 链路，publisher 不再授予信任），候选 `686034b92` 经独立验证（`.axiom-work/verifications/M0-06b-2.md`，含全量 suite：回归消失，失败集 = 已知 15 + 2 个负载性抖动）后以 `--no-ff` 合入 main（`7043764a3`），合并树回归（`verify-merged.sh M0-06b`）PASS，基线 620 → 594 对。
+**保留的风险/后续**：`resources/plugins/**` 内置插件仍沿用上游 publisher 身份（仅资源标识）；用户自行添加的 marketplace 源按请求刷新；Landing/support 等 GitHub 链接文案归 M0-05a。卫生项：`.github/workflows/pr.yml` 自 M0-01 起缺少 `check-vendor-egress-ratchet` 步骤（`pr-workflow-lint-parity` 一直失败的真实原因）→ 新开 M0-HYG 任务与上游测试稳定性问题一并处理。
