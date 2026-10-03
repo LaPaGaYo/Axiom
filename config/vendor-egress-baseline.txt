@@ -415,7 +415,6 @@ src/main/startup/browser-process-user-agent-ordering.test.ts:orca.dev:1
 src/main/startup/cli-launch-redirect.test.ts:stablyai:2
 src/main/startup/configure-process.ts:stablyai:1
 src/main/startup/hydrate-shell-path.ts:stablyai:1
-src/main/startup/skill-share-deep-link-state.test.ts:orca.dev:3
 src/main/telemetry/burst-cap.ts:posthog:1
 src/main/telemetry/client-lifecycle.test.ts:posthog:17
 src/main/telemetry/client-test-harness.ts:posthog:8

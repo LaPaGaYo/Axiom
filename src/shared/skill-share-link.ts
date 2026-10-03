@@ -8,9 +8,6 @@ export function parseSkillShareId(value: string): string | null {
   if (SHARE_ID_PATTERN.test(trimmed)) {
     return trimmed
   }
-  if (PRODUCTION_HOSTS.size === 0) {
-    return null
-  }
   let url: URL
   try {
     url = new URL(trimmed)
@@ -20,6 +17,9 @@ export function parseSkillShareId(value: string): string | null {
   if (url.protocol === 'axiom:') {
     const match = `${url.host}${url.pathname}`.match(/^skills\/share\/([A-Za-z0-9_-]{1,128})\/?$/)
     return match?.[1] ?? null
+  }
+  if (PRODUCTION_HOSTS.size === 0) {
+    return null
   }
   const developmentHost = url.hostname === 'localhost' || url.hostname === '127.0.0.1'
   if (url.protocol !== 'https:' && !(developmentHost && url.protocol === 'http:')) {
