@@ -1,9 +1,11 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import { BrowserWindow } from 'electron'
+import { PRODUCT_EGRESS_POLICY } from '../../shared/product-egress-policy'
+import { registerStarNagHandlers } from './disabled-handlers'
 import { STAR_NAG_INITIAL_THRESHOLD } from '../../shared/constants'
 import { checkOrcaStarred } from '../github/client'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
-import { track } from '../telemetry/client'
+import { trackStarNagAlreadyStarred } from './already-starred-telemetry'
 import type {
   StarNagOutcome,
   StarNagPromptMode,
@@ -63,6 +65,9 @@ export class StarNagService {
   }
 
   start(): void {
+    if (PRODUCT_EGRESS_POLICY.starPromptRepository === null) {
+      return
+    }
     ensureStarNagBaseline(this.store, this.stats)
     this.disposeStatsListener = this.stats.onAgentStarted((total) => {
       this.handleAgentSpawned(total)
@@ -75,16 +80,18 @@ export class StarNagService {
   }
 
   registerIpcHandlers(): void {
-    ipcMain.handle('star-nag:dismiss', () => this.dismiss())
-    ipcMain.handle('star-nag:later', () => this.defer('later'))
-    ipcMain.handle('star-nag:complete', () => this.markCompleted())
-    ipcMain.handle('star-nag:disable', () => this.disable())
-    ipcMain.handle('star-nag:openWeb', () => this.openWeb())
-    ipcMain.handle('star-nag:starOrca', () => this.starOrcaFromNag())
-    ipcMain.handle('star-nag:forceShow', () => this.forceShow())
-    ipcMain.handle('star-nag:agentValueMoment', () => this.prepareAgentValueMoment())
-    ipcMain.handle('star-nag:showAgentValueMoment', () => this.showPreparedAgentValueMoment())
-    ipcMain.handle('star-nag:onboardingCompleted', () => this.onboardingCompleted())
+    registerStarNagHandlers({
+      'star-nag:dismiss': () => this.dismiss(),
+      'star-nag:later': () => this.defer('later'),
+      'star-nag:complete': () => this.markCompleted(),
+      'star-nag:disable': () => this.disable(),
+      'star-nag:openWeb': () => this.openWeb(),
+      'star-nag:starOrca': () => this.starOrcaFromNag(),
+      'star-nag:forceShow': () => this.forceShow(),
+      'star-nag:agentValueMoment': () => this.prepareAgentValueMoment(),
+      'star-nag:showAgentValueMoment': () => this.showPreparedAgentValueMoment(),
+      'star-nag:onboardingCompleted': () => this.onboardingCompleted()
+    })
   }
 
   // ── State helpers ─────────────────────────────────────────────────
@@ -209,10 +216,7 @@ export class StarNagService {
   }
 
   private trackAlreadyStarredSuppressed(source: StarNagPromptSource): void {
-    track('star_nag_outcome', {
-      ...createStarNagPromptContext(this.store, this.stats, source, 'gh'),
-      outcome: 'already_starred_suppressed'
-    })
+    trackStarNagAlreadyStarred(this.store, this.stats, source)
   }
 
   // ── Public actions (invoked from IPC) ─────────────────────────────

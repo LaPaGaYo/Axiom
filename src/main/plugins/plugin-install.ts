@@ -91,6 +91,7 @@ export async function installBundledPlugin(input: {
   sourcePath: string
   hostVersion: string
   expectedPluginKey: string
+  bundledPluginKeys: readonly string[]
   blockedPluginReason?: (pluginKey: string) => string | null
 }): Promise<PluginInstallResult> {
   return serializePluginMutation(input.pluginsDir, () =>
@@ -101,6 +102,7 @@ export async function installBundledPlugin(input: {
       source: { kind: 'bundled', bundleId: input.expectedPluginKey },
       resolvedCommit: null,
       expectedPluginKey: input.expectedPluginKey,
+      bundledPluginKeys: input.bundledPluginKeys,
       repairCorruptedVersion: true,
       blockedPluginReason: input.blockedPluginReason
     })

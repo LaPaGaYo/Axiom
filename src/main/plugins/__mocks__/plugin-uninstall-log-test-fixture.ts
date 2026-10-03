@@ -106,7 +106,7 @@ export async function createUninstallFixture() {
     const manifest = {
       manifestVersion: 1,
       id,
-      publisher: official ? 'stablyai' : 'memory-audit',
+      publisher: official ? 'fixture' : 'memory-audit',
       name: id,
       version: '1.0.0',
       engines: { orca: '>=1.0.0' },
@@ -125,7 +125,11 @@ export async function createUninstallFixture() {
           pluginsDir: getUserPluginsDir(root),
           stagingDir: sourcePath,
           hostVersion: '1.4.0',
-          source: { kind: 'git', url: 'https://github.com/stablyai/orca-plugins.git', ref: 'main' },
+          source: {
+            kind: 'git',
+            url: 'https://github.com/fixture/plugin-marketplace.git',
+            ref: 'main'
+          },
           resolvedCommit: '1'.repeat(40)
         })
       : await installPluginFromLocalPath({
@@ -232,7 +236,8 @@ export async function publishBundledUninstallSuccessor(root: string, id: string,
     pluginsDir: getUserPluginsDir(root),
     sourcePath,
     hostVersion: '1.4.0',
-    expectedPluginKey: key
+    expectedPluginKey: key,
+    bundledPluginKeys: [key]
   })
   if (!result.ok) {
     throw new Error(result.error)

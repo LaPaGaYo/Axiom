@@ -20,10 +20,22 @@ export type ProductEgressPolicy = {
   readonly artifactShareApiOrigin: string | null
   /** Empty means only bare skill-share identifiers are accepted. */
   readonly skillShareHosts: readonly string[]
+  /** Official plugin marketplace git source seeded at startup; null = no official source. */
+  readonly officialPluginMarketplace: {
+    readonly owner: string
+    readonly repository: string
+    readonly gitUrl: string
+  } | null
+  /** Repository agents install the bundled skills from. */
+  readonly skillsRepositoryUrl: string
+  /** Repository the star prompt targets; null = no star prompt. */
+  readonly starPromptRepository: string | null
 }
 
+const updateFeed = { owner: 'LaPaGaYo', repo: 'Axiom' }
+
 export const PRODUCT_EGRESS_POLICY: ProductEgressPolicy = {
-  updateFeed: { owner: 'LaPaGaYo', repo: 'Axiom' },
+  updateFeed,
   automaticUpdateChecks: false,
   changelogJsonUrl: null,
   changelogPageUrl: null,
@@ -34,7 +46,10 @@ export const PRODUCT_EGRESS_POLICY: ProductEgressPolicy = {
   cloudAuth: null,
   pushGatewayOrigin: null,
   artifactShareApiOrigin: null,
-  skillShareHosts: []
+  skillShareHosts: [],
+  officialPluginMarketplace: null,
+  skillsRepositoryUrl: `https://github.com/${updateFeed.owner}/${updateFeed.repo}`,
+  starPromptRepository: null
 }
 
 export const productReleaseRepositorySlug = (): string =>

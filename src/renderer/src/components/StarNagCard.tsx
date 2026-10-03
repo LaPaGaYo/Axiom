@@ -1,3 +1,4 @@
+import { PRODUCT_EGRESS_POLICY } from '../../../shared/product-egress-policy'
 import { useCallback, useEffect, useState } from 'react'
 import { ExternalLink, Star, X } from 'lucide-react'
 import { Card } from './ui/card'
@@ -5,7 +6,10 @@ import { Button } from './ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 
-const ORCA_REPO_URL = 'https://github.com/stablyai/orca'
+const ORCA_REPO_URL =
+  PRODUCT_EGRESS_POLICY.starPromptRepository === null
+    ? null
+    : `https://github.com/${PRODUCT_EGRESS_POLICY.starPromptRepository}`
 type StarNagMode = 'gh' | 'web'
 
 /**
@@ -20,6 +24,10 @@ type StarNagMode = 'gh' | 'web'
  * component does no threshold math or gh-CLI checks locally.
  */
 export function StarNagCard(): React.JSX.Element | null {
+  return PRODUCT_EGRESS_POLICY.starPromptRepository === null ? null : <EnabledStarNagCard />
+}
+
+function EnabledStarNagCard(): React.JSX.Element | null {
   const [visible, setVisible] = useState(false)
   const [busy, setBusy] = useState(false)
   const [mode, setMode] = useState<StarNagMode>('gh')
@@ -85,7 +93,7 @@ export function StarNagCard(): React.JSX.Element | null {
     'min-w-0 flex-1 gap-1.5 border-amber-400/60 bg-amber-400/15 text-amber-800 hover:bg-amber-400/25 dark:text-amber-100'
 
   const handleStar = async (): Promise<void> => {
-    if (busy) {
+    if (busy || ORCA_REPO_URL === null) {
       return
     }
     const openGithubFallback = async (): Promise<boolean> => {

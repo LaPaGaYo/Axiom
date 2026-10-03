@@ -115,10 +115,13 @@ export class PluginMarketplaceService {
     return removed
   }
 
-  seedOfficialSource(): Promise<PluginMarketplaceSourceState> {
+  seedOfficialSource(): Promise<PluginMarketplaceSourceState | null> {
+    if (OFFICIAL_MARKETPLACE_GIT_SOURCE === null) {
+      return Promise.resolve(null)
+    }
     this.officialSeedRequested = true
     if (!this.officialSeedPromise) {
-      const seed = this.performOfficialSeed()
+      const seed = this.performOfficialSeed(OFFICIAL_MARKETPLACE_GIT_SOURCE)
       this.officialSeedPromise = seed
       void seed.catch(() => {
         if (this.officialSeedPromise === seed) {
@@ -209,11 +212,12 @@ export class PluginMarketplaceService {
     }
   }
 
-  private async performOfficialSeed(): Promise<PluginMarketplaceSourceState> {
+  private async performOfficialSeed(
+    officialSource: PluginMarketplaceGitSource
+  ): Promise<PluginMarketplaceSourceState> {
     const sources = await this.store.listSources()
     const existing = sources.find((source) => isOfficialMarketplaceGitSource(source.source.url))
-    const source =
-      existing ?? (await this.store.addSource(OFFICIAL_MARKETPLACE_GIT_SOURCE, Date.now()))
+    const source = existing ?? (await this.store.addSource(officialSource, Date.now()))
     const snapshot = await this.store.readSnapshot(source.id).catch(() => null)
     if (snapshot) {
       return this.stateFromSnapshot(source, snapshot, false)
@@ -267,6 +271,7 @@ export class PluginMarketplaceService {
     entry: PluginMarketplaceEntry
   ): PluginMarketplaceListing {
     const official =
+      OFFICIAL_MARKETPLACE_OWNER !== null &&
       isOfficialMarketplaceGitSource(source.source.url) &&
       snapshot.marketplace.owner.toLowerCase() === OFFICIAL_MARKETPLACE_OWNER &&
       isOfficialPluginIdentity(entry.id) &&

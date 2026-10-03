@@ -45,6 +45,31 @@ function serviceWith(
 }
 
 describe('buildPluginList consent identity', () => {
+  it('preserves bundled provenance without an official badge when the source is disabled', async () => {
+    const plugin: ValidDiscoveredPlugin = {
+      pluginKey: 'orca-samples.demo',
+      rootDir: join(tmpdir(), 'plugins', 'demo'),
+      manifest,
+      consentFingerprint: 'sha256-current',
+      contentHash: 'b'.repeat(64),
+      isDev: false
+    }
+    const lock = emptyPluginLockfile()
+    lock.plugins[plugin.pluginKey] = {
+      pluginKey: plugin.pluginKey,
+      version: '1.0.0',
+      source: { kind: 'bundled', bundleId: plugin.pluginKey },
+      resolvedCommit: null,
+      contentHash: plugin.contentHash!,
+      consentFingerprint: plugin.consentFingerprint,
+      installedAt: 1
+    }
+    expect((await buildPluginList(serviceWith(plugin), lock))[0]).toMatchObject({
+      official: false,
+      bundled: true
+    })
+  })
+
   it('projects the exact current fingerprint for an optimistic consent write', async () => {
     const plugin: ValidDiscoveredPlugin = {
       pluginKey: 'orca-samples.demo',

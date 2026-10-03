@@ -1,4 +1,19 @@
-import { describe, expect, it } from 'vitest'
+vi.mock(import('../product-egress-policy.js'), async (importOriginal) => {
+  const original = await importOriginal()
+  return {
+    ...original,
+    PRODUCT_EGRESS_POLICY: {
+      ...original.PRODUCT_EGRESS_POLICY,
+      officialPluginMarketplace: {
+        owner: 'fixture',
+        repository: 'plugin-marketplace',
+        gitUrl: 'https://github.com/fixture/plugin-marketplace.git'
+      }
+    }
+  }
+})
+
+import { describe, expect, it, vi } from 'vitest'
 import {
   OFFICIAL_MARKETPLACE_REPOSITORY,
   PLUGIN_MARKETPLACE_CATEGORY_LIMIT,
@@ -125,8 +140,8 @@ describe('pluginMarketplaceSchema', () => {
 
 describe('marketplace provenance contracts', () => {
   it.each([
-    ['stablyai.orca-skills', true, true],
-    ['stablyai.skills', true, false],
+    ['fixture.orca-skills', true, true],
+    ['fixture.skills', true, false],
     ['community.orca-skills', true, false],
     ['community.skills', false, false],
     ['invalid', false, false]
@@ -136,27 +151,27 @@ describe('marketplace provenance contracts', () => {
   })
 
   it.each([
-    'https://github.com/stablyai/orca-skills.git',
-    'ssh://git@github.com/stablyai/orca-skills.git',
-    'git@github.com:stablyai/orca-skills.git'
+    'https://github.com/fixture/orca-skills.git',
+    'ssh://git@github.com/fixture/orca-skills.git',
+    'git@github.com:fixture/orca-skills.git'
   ])('accepts official organization source %s', (source) => {
     expect(isOfficialOrganizationGitSource(source)).toBe(true)
   })
 
   it('does not trust lookalike organizations or hosts', () => {
-    expect(isOfficialOrganizationGitSource('https://github.com/stablyai-fakes/orca-skills')).toBe(
+    expect(isOfficialOrganizationGitSource('https://github.com/fixture-fakes/orca-skills')).toBe(
       false
     )
-    expect(isOfficialOrganizationGitSource('https://gitlab.com/stablyai/orca-skills')).toBe(false)
+    expect(isOfficialOrganizationGitSource('https://gitlab.com/fixture/orca-skills')).toBe(false)
   })
 
   it('recognizes only the canonical official marketplace repository', () => {
     expect(
       isOfficialMarketplaceGitSource(
-        `git@github.com:stablyai/${OFFICIAL_MARKETPLACE_REPOSITORY}.git`
+        `git@github.com:fixture/${OFFICIAL_MARKETPLACE_REPOSITORY}.git`
       )
     ).toBe(true)
-    expect(isOfficialMarketplaceGitSource('git@github.com:stablyai/plugins.git')).toBe(false)
+    expect(isOfficialMarketplaceGitSource('git@github.com:fixture/plugins.git')).toBe(false)
   })
 
   it('parses nested repository paths without confusing the repository name', () => {
@@ -174,7 +189,7 @@ describe('marketplace provenance contracts', () => {
     })
     expect(
       pluginMarketplaceTrustMetadataSchema.safeParse({ official: false, bundled: true }).success
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it('marks listings with a deferred contribution category as unsupported', () => {

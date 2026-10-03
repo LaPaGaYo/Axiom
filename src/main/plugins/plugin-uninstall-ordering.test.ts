@@ -1,3 +1,18 @@
+vi.mock(import('../../shared/product-egress-policy'), async (importOriginal) => {
+  const original = await importOriginal()
+  return {
+    ...original,
+    PRODUCT_EGRESS_POLICY: {
+      ...original.PRODUCT_EGRESS_POLICY,
+      officialPluginMarketplace: {
+        owner: 'fixture',
+        repository: 'plugin-marketplace',
+        gitUrl: 'https://github.com/fixture/plugin-marketplace.git'
+      }
+    }
+  }
+})
+
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'

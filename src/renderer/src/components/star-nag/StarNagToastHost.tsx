@@ -1,10 +1,14 @@
+import { PRODUCT_EGRESS_POLICY } from '../../../../shared/product-egress-policy'
 import { useEffect, useRef, useState } from 'react'
 import { Check, ExternalLink, Loader2, Star, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 
-const ORCA_REPO_URL = 'https://github.com/stablyai/orca'
+const ORCA_REPO_URL =
+  PRODUCT_EGRESS_POLICY.starPromptRepository === null
+    ? null
+    : `https://github.com/${PRODUCT_EGRESS_POLICY.starPromptRepository}`
 type StarNagMode = 'gh' | 'web'
 type StarNagToastStatus = 'idle' | 'busy' | 'starred' | 'opened'
 
@@ -42,7 +46,7 @@ function StarNagToast({
   }
 
   const act = async (): Promise<void> => {
-    if (busy || status === 'starred') {
+    if (busy || status === 'starred' || ORCA_REPO_URL === null) {
       return
     }
     setStatus('busy')
@@ -168,7 +172,11 @@ function StarNagToast({
   )
 }
 
-export function StarNagToastHost(): null {
+export function StarNagToastHost(): React.JSX.Element | null {
+  return PRODUCT_EGRESS_POLICY.starPromptRepository === null ? null : <EnabledStarNagToastHost />
+}
+
+function EnabledStarNagToastHost(): null {
   const activeToastIdRef = useRef<string | number | null>(null)
   const activeToastResolvedRef = useRef<(() => void) | null>(null)
 

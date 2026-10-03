@@ -124,6 +124,7 @@ export async function installStagedPluginTree(input: {
   expectedPluginKey?: string
   /** Trusted bundled bytes may restore an immutable directory damaged on disk. */
   repairCorruptedVersion?: boolean
+  bundledPluginKeys?: readonly string[]
   blockedPluginReason?: (pluginKey: string) => string | null
 }): Promise<PluginInstallResult> {
   const sourceInspection = await inspectPluginInstallTree({
@@ -134,7 +135,11 @@ export async function installStagedPluginTree(input: {
   if (!sourceInspection.ok) {
     return sourceInspection
   }
-  const trustError = pluginInstallTrustError(sourceInspection.pluginKey, input.source)
+  const trustError = pluginInstallTrustError(
+    sourceInspection.pluginKey,
+    input.source,
+    input.bundledPluginKeys
+  )
   if (trustError) {
     return { ok: false, error: trustError }
   }

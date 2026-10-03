@@ -171,6 +171,27 @@ afterEach(() => {
 })
 
 describe('PluginMarketplaceBrowser', () => {
+  it('renders an empty marketplace without an official section or badge', async () => {
+    installApi({
+      listMarketplaces: vi.fn().mockResolvedValue([]),
+      listMarketplacePlugins: vi.fn().mockResolvedValue([])
+    })
+    const { root, container } = await renderBrowser()
+    expect(container.textContent).toContain(
+      'Add an official, community, or private Git marketplace'
+    )
+    expect(container.querySelector('[aria-label="Official"]')).toBeNull()
+    expect(window.api.plugins.addMarketplace).not.toHaveBeenCalled()
+    act(() => root.unmount())
+  })
+
+  it('shows a manually added listing without an official badge', async () => {
+    const { root, container } = await renderBrowser()
+    expect(container.textContent).toContain('Notes for active worktrees.')
+    expect(container.querySelector('[aria-label="Official"]')).toBeNull()
+    act(() => root.unmount())
+  })
+
   it('reviews exact bytes and hands a successful install to the consent flow', async () => {
     const { root, container, onInstalled } = await renderBrowser()
 

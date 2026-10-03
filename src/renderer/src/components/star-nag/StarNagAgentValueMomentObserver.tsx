@@ -1,3 +1,4 @@
+import { PRODUCT_EGRESS_POLICY } from '../../../../shared/product-egress-policy'
 import { useCallback, useEffect, useRef } from 'react'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { useAppStore } from '@/store'
@@ -49,7 +50,13 @@ function isTypingKeyEvent(event: KeyboardEvent): boolean {
   return !NON_TYPING_MODIFIER_KEYS.has(event.key)
 }
 
-export function StarNagAgentValueMomentObserver(): null {
+export function StarNagAgentValueMomentObserver(): React.JSX.Element | null {
+  return PRODUCT_EGRESS_POLICY.starPromptRepository === null ? null : (
+    <EnabledStarNagAgentValueMomentObserver />
+  )
+}
+
+function EnabledStarNagAgentValueMomentObserver(): null {
   // Why: agentStatusByPaneKey is re-spread to a new object on every status ping
   // (including high-frequency still-working pings that never change what we
   // detect), so subscribing to the map re-rendered this always-mounted observer

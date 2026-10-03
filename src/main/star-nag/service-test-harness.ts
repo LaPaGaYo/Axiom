@@ -30,6 +30,7 @@ export type TestHarness = {
   service: StarNagService
   store: Store
   ui: PersistedUIState
+  onAgentStarted: StatsCollector['onAgentStarted']
   emitAgentStarted: (totalAgentsSpawned: number) => void
 }
 
@@ -89,6 +90,7 @@ export function createHarness(initialUI: Partial<PersistedUIState> = {}): TestHa
     service: new StarNagService(store, stats),
     store,
     ui,
+    onAgentStarted: stats.onAgentStarted,
     emitAgentStarted: (nextTotal: number) => {
       totalAgentsSpawned = nextTotal
       for (const listener of listeners) {

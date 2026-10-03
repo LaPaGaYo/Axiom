@@ -1,5 +1,6 @@
 import { ghExecFileAsync, acquire, release } from '../../gh-utils'
-export const ORCA_REPO = 'stablyai/orca'
+import { PRODUCT_EGRESS_POLICY } from '../../../../shared/product-egress-policy'
+export const ORCA_REPO: string | null = PRODUCT_EGRESS_POLICY.starPromptRepository
 
 /**
  * Deadline for the two star-nag gh calls.
@@ -16,9 +17,12 @@ let inFlightStarCheck: Promise<boolean | null> | null = null
 
 /**
  * Check if the authenticated user has starred the Orca repo.
- * Returns true if starred, false if not, null if unable to determine (gh unavailable).
+ * Returns true if starred, false if not, null when disabled or unavailable.
  */
 export function checkOrcaStarred(): Promise<boolean | null> {
+  if (ORCA_REPO === null) {
+    return Promise.resolve(null)
+  }
   // Why: five independent callers (landing button, settings section, threshold
   // nag, agent-value moment, force-show) can ask at once and none of them knows
   // about the others. Without coalescing, each forks its own `gh`, and four
@@ -63,6 +67,10 @@ async function runOrcaStarredCheck(): Promise<boolean | null> {
  * Star the Orca repo for the authenticated user.
  */
 export async function starOrca(): Promise<boolean> {
+  // Keep the boolean IPC contract while disabling all star-related GitHub work.
+  if (ORCA_REPO === null) {
+    return false
+  }
   await acquire()
   try {
     await ghExecFileAsync(['api', '-X', 'PUT', `user/starred/${ORCA_REPO}`], {
