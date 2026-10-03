@@ -1,8 +1,4 @@
-README.md:SignPath Foundation:1
-README.md:onorca.dev:28
-README.md:orca.dev:28
-README.md:signpath.io:1
-README.md:stablyai:12
+README.md:stablyai:1
 cloud/README.md:stablyai:1
 cloud/apps/push/src/apns-client.test.ts:com.stably.orca:6
 cloud/apps/push/src/config.test.ts:com.stably.orca:2
@@ -276,8 +272,6 @@ src/cli/index-automation-source-context.test.ts:stablyai:2
 src/cli/index-automation-target.test.ts:stablyai:6
 src/cli/index-project-setup.test.ts:stablyai:29
 src/cli/index-worktree-create-target.test.ts:stablyai:5
-src/cli/specs/core.ts:stablyai:1
-src/cli/specs/project.ts:stablyai:9
 src/main/artifacts/artifact-cloud-recovery.test.ts:onorca.dev:4
 src/main/artifacts/artifact-cloud-recovery.test.ts:orca.dev:4
 src/main/artifacts/artifact-cloud-service-races.test.ts:onorca.dev:1
@@ -408,7 +402,6 @@ src/main/window/renderer-document-navigation.test.ts:stablyai:1
 src/relay/git-exec-validator.test.ts:stablyai:9
 src/relay/git-handler-push-target.test.ts:stablyai:2
 src/relay/git-handler-remote-sync.test.ts:stablyai:1
-src/renderer/src/components/Landing.tsx:stablyai:1
 src/renderer/src/components/LinuxPackageInstallRecoveryCard.test.tsx:stablyai:1
 src/renderer/src/components/WorktreeJumpPalette.linear-url.test.tsx:stablyai:9
 src/renderer/src/components/artifacts/ArtifactCollection.test.tsx:onorca.dev:2
@@ -435,18 +428,11 @@ src/renderer/src/components/automations/automation-run-context.test.ts:stablyai:
 src/renderer/src/components/automations/automation-source-display.test.ts:stablyai:8
 src/renderer/src/components/automations/automation-target-availability.test.ts:stablyai:6
 src/renderer/src/components/github-project/ProjectRoadmap.test.tsx:stablyai:2
-src/renderer/src/components/github-project/ProjectViewStates.tsx:stablyai:1
 src/renderer/src/components/github-project/github-project-picker-filter.test.ts:stablyai:8
 src/renderer/src/components/github-project/project-dialog-state.test.ts:stablyai:10
 src/renderer/src/components/github-project/project-visible-table-cache.test.ts:stablyai:1
 src/renderer/src/components/landing-preflight-dismissal.test.ts:stablyai:10
 src/renderer/src/components/landing-preflight-issues.test.ts:stablyai:3
-src/renderer/src/components/link-routing-preference-dialog.tsx:stablyai:1
-src/renderer/src/components/mobile/MobilePage.test.tsx:onorca.dev:1
-src/renderer/src/components/mobile/MobilePage.test.tsx:orca.dev:1
-src/renderer/src/components/mobile/mobile-platform-copy.ts:onorca.dev:1
-src/renderer/src/components/mobile/mobile-platform-copy.ts:orca.dev:1
-src/renderer/src/components/mobile/mobile-platform-copy.ts:stablyai:1
 src/renderer/src/components/new-workspace/ProjectCombobox.test.tsx:stablyai:17
 src/renderer/src/components/new-workspace/SetProjectLocationDialog.test.tsx:stablyai:5
 src/renderer/src/components/new-workspace/project-combobox-matching.test.ts:stablyai:2
@@ -458,7 +444,6 @@ src/renderer/src/components/right-sidebar/source-control-branch-context-row.test
 src/renderer/src/components/right-sidebar/source-control-manual-review-url.test.ts:stablyai:12
 src/renderer/src/components/right-sidebar/use-hosted-review-actions.test.tsx:stablyai:6
 src/renderer/src/components/right-sidebar/useHostedReviewStackParent.test.tsx:stablyai:2
-src/renderer/src/components/settings/MobileSettingsPane.tsx:stablyai:1
 src/renderer/src/components/settings/PluginSettingsRow.test.tsx:onorca.dev:1
 src/renderer/src/components/settings/PluginSettingsRow.test.tsx:orca.dev:1
 src/renderer/src/components/settings/PluginSettingsRow.test.tsx:stablyai:3
@@ -468,10 +453,6 @@ src/renderer/src/components/settings/RepositoryIconPicker.github-avatar-refresh.
 src/renderer/src/components/settings/local-network-connection-history.ts:orca.dev:1
 src/renderer/src/components/settings/repository-icon-github.test.ts:stablyai:15
 src/renderer/src/components/sidebar/CommentMarkdown.test.tsx:stablyai:9
-src/renderer/src/components/sidebar/SidebarFeedbackDialog.tsx:stablyai:1
-src/renderer/src/components/sidebar/SidebarSettingsHelpMenu.tsx:onorca.dev:2
-src/renderer/src/components/sidebar/SidebarSettingsHelpMenu.tsx:orca.dev:2
-src/renderer/src/components/sidebar/SidebarSettingsHelpMenu.tsx:stablyai:1
 src/renderer/src/components/sidebar/folder-workspace-composer-submit.test.ts:stablyai:6
 src/renderer/src/components/sidebar/folder-workspace-linked-startup-plan.test.ts:stablyai:1
 src/renderer/src/components/sidebar/project-header-color.test.ts:stablyai:1
@@ -484,14 +465,10 @@ src/renderer/src/components/sidebar/worktree-list-groups-test-fixtures.ts:stably
 src/renderer/src/components/sidebar/worktree-meta-updates.test.ts:stablyai:4
 src/renderer/src/components/skills/SkillFreshnessUpdateDialog.test.tsx:stablyai:2
 src/renderer/src/components/skills/SkillInstallManagementDialog.test.tsx:orca.dev:1
-src/renderer/src/components/skills/SkillInstallReviewContent.tsx:orca.dev:1
 src/renderer/src/components/skills/SkillSharedLinkRow.test.tsx:onorca.dev:1
 src/renderer/src/components/skills/SkillSharedLinkRow.test.tsx:orca.dev:1
-src/renderer/src/components/skills/SkillsPage.tsx:orca.dev:1
 src/renderer/src/components/skills/skill-share-link.test.ts:onorca.dev:1
 src/renderer/src/components/skills/skill-share-link.test.ts:orca.dev:3
-src/renderer/src/components/stats/ShareUsageButton.tsx:stablyai:1
-src/renderer/src/components/stats/share-card-utils.tsx:stablyai:1
 src/renderer/src/components/status-bar/ResourceUsageStatusSegment.rows.test.tsx:orca.dev:1
 src/renderer/src/components/status-bar/mergeSnapshotAndSessions.test.ts:orca.dev:1
 src/renderer/src/components/task-page-cache-selectors.test.ts:stablyai:4
@@ -499,7 +476,6 @@ src/renderer/src/components/task-page-default-repo-selection.test.ts:stablyai:38
 src/renderer/src/components/task-page-github-status-actions.test.ts:stablyai:1
 src/renderer/src/components/task-source-context-summary.test.ts:stablyai:27
 src/renderer/src/components/task-source-provider-availability.test.ts:stablyai:1
-src/renderer/src/components/terminal-pane/TerminalErrorToast.tsx:stablyai:1
 src/renderer/src/components/terminal-pane/pty-connection-ssh-startup-draft-delivery.test.ts:stablyai:4
 src/renderer/src/components/terminal-pane/repro-8832-url-next-line.test.ts:stablyai:4
 src/renderer/src/components/terminal-pane/terminal-http-url-extraction.test.ts:stablyai:2
@@ -508,17 +484,6 @@ src/renderer/src/components/terminal-pane/terminal-url-link-click.test.ts:stably
 src/renderer/src/hooks/useComposerState-host-context-boundaries.test.ts:stablyai:5
 src/renderer/src/hooks/useComposerState-host-retarget.test.ts:stablyai:1
 src/renderer/src/hooks/useGitHubSlugMetadata.test.tsx:stablyai:8
-src/renderer/src/i18n/locales/en.json:orca.dev:1
-src/renderer/src/i18n/locales/en.json:stablyai:1
-src/renderer/src/i18n/locales/es.json:stablyai:1
-src/renderer/src/i18n/locales/fr.json:orca.dev:1
-src/renderer/src/i18n/locales/fr.json:stablyai:1
-src/renderer/src/i18n/locales/ja.json:orca.dev:1
-src/renderer/src/i18n/locales/ja.json:stablyai:1
-src/renderer/src/i18n/locales/ko.json:orca.dev:1
-src/renderer/src/i18n/locales/ko.json:stablyai:1
-src/renderer/src/i18n/locales/zh.json:orca.dev:1
-src/renderer/src/i18n/locales/zh.json:stablyai:1
 src/renderer/src/lib/agent-paste-draft-submit-retry.test.ts:stablyai:1
 src/renderer/src/lib/agent-paste-draft.test.ts:stablyai:1
 src/renderer/src/lib/cmd-j-github-url-lookup.test.ts:stablyai:3

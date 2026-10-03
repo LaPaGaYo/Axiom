@@ -4,6 +4,7 @@ import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { PRODUCT_EGRESS_POLICY } from '../../../../shared/product-egress-policy'
 import { SidebarSettingsHelpMenu } from './SidebarSettingsHelpMenu'
 
 const mocks = vi.hoisted(() => ({
@@ -166,7 +167,10 @@ function findMenuItem(container: HTMLElement, label: string): HTMLButtonElement 
     container.querySelectorAll<HTMLButtonElement>('[data-testid="menu-item"]')
   ).find((element) => element.textContent?.includes(label))
   expect(button).toBeDefined()
-  return button as HTMLButtonElement
+  if (!button) {
+    throw new Error(`Missing menu item: ${label}`)
+  }
+  return button
 }
 
 describe('SidebarSettingsHelpMenu', () => {
@@ -251,37 +255,28 @@ describe('SidebarSettingsHelpMenu', () => {
     expect(html).toContain('Docs')
   })
 
-  it('renders Changelog link', () => {
+  it('hides the disabled changelog and unconfigured community links', () => {
     const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
-    expect(html).toContain('Changelog')
+    expect(html).not.toContain('Changelog')
+    expect(html).not.toContain('Discord')
+    expect(html).not.toContain('>X<')
   })
 
-  it('renders GitHub link', () => {
-    const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
-    expect(html).toContain('GitHub')
-  })
-
-  it('renders Discord link', () => {
-    const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
-    expect(html).toContain('Discord')
-    expect(html).toContain('viewBox="0 0 20 20"')
-    expect(html).toContain('M16.0742 4.45014C14.9244 3.92097 13.7106 3.54556 12.4638 3.3335')
-  })
-
-  it('opens Discord invite through the shell bridge', async () => {
+  it.each([
+    ['Docs', 'https://github.com/LaPaGaYo/Axiom#readme'],
+    ['GitHub', 'https://github.com/LaPaGaYo/Axiom']
+  ])('opens %s through the shell bridge', async (label, url) => {
     const container = await renderMenu()
-    const discordButton = findMenuItem(container, 'Discord')
-
-    await act(async () => {
-      discordButton.click()
-    })
-
-    expect(mocks.shellOpenUrl).toHaveBeenCalledWith('https://discord.gg/fzjDKHxv8Q')
+    await act(async () => findMenuItem(container, label).click())
+    expect(mocks.shellOpenUrl).toHaveBeenCalledWith(url)
   })
 
-  it('renders X link', () => {
+  it('hides Docs when the product has no documentation entry point', () => {
+    const docsUrl = PRODUCT_EGRESS_POLICY.docsUrl
+    Object.assign(PRODUCT_EGRESS_POLICY, { docsUrl: null })
     const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
-    expect(html).toContain('>X<')
+    Object.assign(PRODUCT_EGRESS_POLICY, { docsUrl })
+    expect(html).not.toContain('Docs')
   })
 
   it('renders Check for Updates menu item', () => {

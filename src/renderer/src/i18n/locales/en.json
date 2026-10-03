@@ -355,7 +355,7 @@
         "b411ec0069": "Connect",
         "2cf9e5a294": "Clear saved server",
         "4a4c017be1": "Endpoint:",
-        "27393856e4": "orca://pair?code=...",
+        "27393856e4": "axiom://pair?code=...",
         "7a566540de": "Pairing URL or code",
         "cb4d287238": "Server name",
         "3affe7de3a": "Paste a pairing URL from an Orca server that this browser can reach.",
@@ -3261,7 +3261,7 @@
             "missing": {
               "tui": {
                 "title": "This ZCode build has no terminal UI",
-                "description": "Orca's hooks installed correctly \u2014 the zcode on your PATH just cannot open a session. The ZCode desktop app bundles the agent runtime without its terminal UI. Install a zcode that ships the TUI, then run zcode outside Orca to confirm."
+                "description": "Orca's hooks installed correctly — the zcode on your PATH just cannot open a session. The ZCode desktop app bundles the agent runtime without its terminal UI. Install a zcode that ships the TUI, then run zcode outside Orca to confirm."
               }
             }
           },
@@ -4321,7 +4321,6 @@
         "share": {
           "card": {
             "utils": {
-              "19f4b4dc75": "github.com/stablyai/orca",
               "d864fc5f98": "output",
               "5d66fdd7c2": "input",
               "7080aeaebb": "Reasoning",
@@ -4711,10 +4710,10 @@
           "157de228b4": "Inspect skill",
           "69236de8d6": "Checking…",
           "27672470d9": "Opening the link does not install anything. Review the immutable version first.",
-          "66cff7a804": "https://app.orca.dev/skills/share/…",
           "93eb0fe8c7": "Orca skill link",
           "releaseNotes": "Release notes:",
-          "targetHeader": "Installation Target"
+          "targetHeader": "Installation Target",
+          "66cff7a804": "axiom://skills/share/<id>"
         },
         "SkillInstallTargetFields": {
           "8e6a972229": "No workspaces are known on this machine.",
@@ -5382,8 +5381,6 @@
           "5b120b9634": "Submit anonymously",
           "c9e5ea0791": "GitHub:",
           "d46ddd66fc": "What could we improve?",
-          "3460258a54": "Follow on X",
-          "26108d3699": "Join Discord",
           "d245c4ef6c": "GitHub issues",
           "9b33530b3d": "Other ways to reach us",
           "a828fa4aee": "Share what's working, what's broken, or what Orca should do next.",
@@ -5460,9 +5457,7 @@
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Restart Orca",
           "29c56f30ee": "Check for Updates",
-          "eb9884e55b": "Discord",
           "5687ab246a": "GitHub",
-          "5f83d86d92": "Changelog",
           "cdc87f897e": "Docs",
           "e565171a7c": "Keyboard Shortcuts",
           "4cf5b868d7": "Send Feedback",
@@ -5472,8 +5467,7 @@
           "5161eef55d": "Restarting Orca…",
           "d396773ef0": "checking",
           "f8a2c91d4e": "Milestones",
-          "b7e4d2a19c": "Onboarding",
-          "c4f8e1b72a": "X"
+          "b7e4d2a19c": "Onboarding"
         },
         "SidebarToolbar": {
           "87d0064026": "Workspace board moved to the bottom bar",
@@ -6236,7 +6230,7 @@
           "serverName": "Server name",
           "serverNamePlaceholder": "Dev box",
           "pairingCode": "Pairing code",
-          "pairingCodePlaceholder": "orca://pair?code=...",
+          "pairingCodePlaceholder": "axiom://pair?code=...",
           "pairingHelpPrefix": "Run",
           "pairingCommand": "orca serve --pairing-address <host>",
           "pairingHelpSuffix": "on the server and paste the printed pairing URL.",
@@ -7758,7 +7752,6 @@
           "b5a2ed83ff": "App Store",
           "installIntro": "Install Orca Mobile from the",
           "installOutro": ", then pair below.",
-          "androidApkLabel": "Android APK",
           "c8491c17ef": "Control Orca from your phone by scanning a QR code. Beta / early preview - expect bugs and breaking changes. Get the iOS app from the",
           "e7a3ae8c4e": "Mobile",
           "174f4a3c6d": "Control terminals and agents from your phone.",
@@ -8216,7 +8209,7 @@
           "55fcc964cd": "on the server and paste the printed pairing URL.",
           "960e901ae4": "orca serve --pairing-address <host>",
           "163671f7b5": "Run",
-          "c3d772c514": "orca://pair?code=...",
+          "c3d772c514": "axiom://pair?code=...",
           "9bc9b83474": "Pairing code",
           "e038625857": "Dev box",
           "54ebacc600": "Server name",
@@ -11822,7 +11815,7 @@
           "namePlaceholder": "Linux workstation",
           "nameHelp": "This only changes how the computer appears in Orca.",
           "accessLink": "Access link",
-          "accessLinkPlaceholder": "orca://pair?code=...",
+          "accessLinkPlaceholder": "axiom://pair?code=...",
           "accessLinkHelp": "Orca shows the destination before connecting. Credentials stay hidden.",
           "destination": "Link destination",
           "loopbackTitle": "This link points back to this device",

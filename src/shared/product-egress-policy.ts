@@ -1,6 +1,13 @@
 export type ProductEgressPolicy = {
   /** GitHub repository that serves release assets and the prerelease feed. */
   readonly updateFeed: { readonly owner: string; readonly repo: string }
+  /** Public source repository of this product, derived from updateFeed. */
+  readonly repositoryUrl: string
+  readonly issuesUrl: string
+  /** Product documentation entry point; null means no docs link is rendered. */
+  readonly docsUrl: string | null
+  /** Community links; empty means none are rendered. */
+  readonly communityLinks: readonly { readonly label: string; readonly url: string }[]
   /** When false, automatic checks are disabled; menu-initiated checks still run. */
   readonly automaticUpdateChecks: boolean
   readonly changelogJsonUrl: string | null
@@ -33,9 +40,14 @@ export type ProductEgressPolicy = {
 }
 
 const updateFeed = { owner: 'LaPaGaYo', repo: 'Axiom' }
+const repositoryUrl = `https://github.com/${updateFeed.owner}/${updateFeed.repo}`
 
 export const PRODUCT_EGRESS_POLICY: ProductEgressPolicy = {
   updateFeed,
+  repositoryUrl,
+  issuesUrl: `${repositoryUrl}/issues`,
+  docsUrl: `${repositoryUrl}#readme`,
+  communityLinks: [],
   automaticUpdateChecks: false,
   changelogJsonUrl: null,
   changelogPageUrl: null,
@@ -48,7 +60,7 @@ export const PRODUCT_EGRESS_POLICY: ProductEgressPolicy = {
   artifactShareApiOrigin: null,
   skillShareHosts: [],
   officialPluginMarketplace: null,
-  skillsRepositoryUrl: `https://github.com/${updateFeed.owner}/${updateFeed.repo}`,
+  skillsRepositoryUrl: repositoryUrl,
   starPromptRepository: null
 }
 

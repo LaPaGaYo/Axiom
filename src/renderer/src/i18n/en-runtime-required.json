@@ -1449,7 +1449,7 @@
           "9bc9b83474": "Pairing code",
           "9f7665a01b": "Removing the active server first switches Orca back to Local desktop. Existing host sessions are left alone.",
           "b2fda48c39": "Removing the active server disconnects this browser from that host. Existing host sessions are left alone.",
-          "c3d772c514": "orca://pair?code=...",
+          "c3d772c514": "axiom://pair?code=...",
           "e038625857": "Dev box",
           "f3a3d6d834": "{{value0}} capabilities",
           "f75ce1c7a5": "Local keeps today's desktop behavior. Saved servers route supported client calls through the remote runtime.",

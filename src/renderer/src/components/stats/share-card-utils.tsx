@@ -1,3 +1,4 @@
+import { PRODUCT_EGRESS_POLICY } from '../../../../shared/product-egress-policy'
 import type {
   ClaudeUsageDailyPoint,
   ClaudeUsageSummary
@@ -213,10 +214,7 @@ export function CardFooter(props: {
             marginLeft: 5
           }}
         >
-          {translate(
-            'auto.components.stats.share.card.utils.19f4b4dc75',
-            'github.com/stablyai/orca'
-          )}
+          {PRODUCT_EGRESS_POLICY.repositoryUrl.replace(/^https:\/\//, '')}
         </span>
       </div>
     </div>

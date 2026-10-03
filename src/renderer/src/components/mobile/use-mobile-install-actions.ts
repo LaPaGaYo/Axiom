@@ -1,9 +1,10 @@
+import { PRODUCT_EGRESS_POLICY } from '../../../../shared/product-egress-policy'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import type { Platform } from './MobileHero'
-import { ANDROID_INSTALL_GUIDE_URL, getInstallCopy, type IosChannel } from './mobile-platform-copy'
+import { getInstallCopy, type IosChannel } from './mobile-platform-copy'
 
 export function useMobileInstallActions(
   platform: Platform,
@@ -16,16 +17,25 @@ export function useMobileInstallActions(
   const mountedRef = useMountedRef()
 
   const openInstallUrl = useCallback((): void => {
-    void window.api.shell.openUrl(getInstallCopy(platform, iosChannel).url)
+    const installCopy = getInstallCopy(platform, iosChannel)
+    if (installCopy) {
+      void window.api.shell.openUrl(installCopy.url)
+    }
   }, [iosChannel, platform])
 
   const openAndroidInstallGuide = useCallback((): void => {
-    void window.api.shell.openUrl(ANDROID_INSTALL_GUIDE_URL)
+    if (PRODUCT_EGRESS_POLICY.docsUrl !== null) {
+      void window.api.shell.openUrl(PRODUCT_EGRESS_POLICY.docsUrl)
+    }
   }, [])
 
   const copyInstallUrl = useCallback(async (): Promise<void> => {
+    const installCopy = getInstallCopy(platform, iosChannel)
+    if (!installCopy) {
+      return
+    }
     try {
-      await window.api.ui.writeClipboardText(getInstallCopy(platform, iosChannel).url)
+      await window.api.ui.writeClipboardText(installCopy.url)
       if (mountedRef.current) {
         toast.success(
           translate('auto.components.mobile.MobilePage.fad833de8d', 'Install link copied')

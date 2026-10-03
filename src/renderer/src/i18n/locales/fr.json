@@ -338,7 +338,7 @@
         "b411ec0069": "Se connecter",
         "2cf9e5a294": "Effacer le serveur enregistré",
         "4a4c017be1": "Point de terminaison :",
-        "27393856e4": "orca://pair?code=...",
+        "27393856e4": "axiom://pair?code=...",
         "7a566540de": "URL ou code d'appairage",
         "cb4d287238": "Nom du serveur",
         "3affe7de3a": "Collez une URL d'appairage provenant d'un serveur Orca accessible depuis ce navigateur.",
@@ -4268,7 +4268,6 @@
         "share": {
           "card": {
             "utils": {
-              "19f4b4dc75": "github.com/stablyai/orca",
               "d864fc5f98": "sortie",
               "5d66fdd7c2": "entrée",
               "7080aeaebb": "Raisonnement",
@@ -4658,10 +4657,10 @@
           "157de228b4": "Inspecter le skill",
           "69236de8d6": "Vérification…",
           "27672470d9": "Ouvrir le lien n'installe rien. Examinez d'abord la version immuable.",
-          "66cff7a804": "https://app.orca.dev/skills/share/…",
           "93eb0fe8c7": "Lien de skill Orca",
           "releaseNotes": "Notes de version :",
-          "targetHeader": "Cible d'installation"
+          "targetHeader": "Cible d'installation",
+          "66cff7a804": "axiom://skills/share/<id>"
         },
         "SkillInstallTargetFields": {
           "8e6a972229": "Aucun espace de travail connu sur cette machine.",
@@ -5329,8 +5328,6 @@
           "5b120b9634": "Envoyer anonymement",
           "c9e5ea0791": "GitHub :",
           "d46ddd66fc": "Que pouvons-nous améliorer ?",
-          "3460258a54": "Suivre sur X",
-          "26108d3699": "Rejoindre Discord",
           "d245c4ef6c": "Issues GitHub",
           "9b33530b3d": "Autres moyens de nous contacter",
           "a828fa4aee": "Partagez ce qui fonctionne, ce qui est cassé, ou ce qu'Orca devrait faire ensuite.",
@@ -5407,9 +5404,7 @@
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Redémarrer Orca",
           "29c56f30ee": "Rechercher des mises à jour",
-          "eb9884e55b": "Discord",
           "5687ab246a": "GitHub",
-          "5f83d86d92": "Journal des modifications",
           "cdc87f897e": "Docs",
           "e565171a7c": "Raccourcis clavier",
           "4cf5b868d7": "Envoyer un commentaire",
@@ -5419,8 +5414,7 @@
           "5161eef55d": "Redémarrage d'Orca…",
           "d396773ef0": "vérification",
           "f8a2c91d4e": "Jalons",
-          "b7e4d2a19c": "Prise en main",
-          "c4f8e1b72a": "X"
+          "b7e4d2a19c": "Prise en main"
         },
         "SidebarToolbar": {
           "87d0064026": "Tableau des espaces de travail déplacé dans la barre inférieure",
@@ -6183,7 +6177,7 @@
           "serverName": "Nom du serveur",
           "serverNamePlaceholder": "Machine de dev",
           "pairingCode": "Code d'appairage",
-          "pairingCodePlaceholder": "orca://pair?code=...",
+          "pairingCodePlaceholder": "axiom://pair?code=...",
           "pairingHelpPrefix": "Exécution",
           "pairingCommand": "orca serve --pairing-address <host>",
           "pairingHelpSuffix": "sur le serveur et collez l'URL d'appairage affichée.",
@@ -7700,7 +7694,6 @@
           "b5a2ed83ff": "App Store",
           "installIntro": "Installez Orca Mobile depuis",
           "installOutro": ", puis appairez ci-dessous.",
-          "androidApkLabel": "APK Android",
           "c8491c17ef": "Contrôlez Orca depuis votre téléphone en scannant un QR code. Bêta / avant-première — attendez-vous à des bugs et à des changements incompatibles. Obtenez l'app iOS depuis",
           "e7a3ae8c4e": "Mobile",
           "174f4a3c6d": "Contrôlez les terminaux et les agents depuis votre téléphone.",
@@ -8158,7 +8151,7 @@
           "55fcc964cd": "sur le serveur et collez l'URL d'appairage affichée.",
           "960e901ae4": "orca serve --pairing-address <host>",
           "163671f7b5": "Exécution",
-          "c3d772c514": "orca://pair?code=...",
+          "c3d772c514": "axiom://pair?code=...",
           "9bc9b83474": "Code d'appairage",
           "e038625857": "Machine de dev",
           "54ebacc600": "Nom du serveur",
@@ -11764,7 +11757,7 @@
           "namePlaceholder": "Station de travail Linux",
           "nameHelp": "Cela change uniquement la façon dont l'ordinateur apparaît dans Orca.",
           "accessLink": "Lien d'accès",
-          "accessLinkPlaceholder": "orca://pair?code=...",
+          "accessLinkPlaceholder": "axiom://pair?code=...",
           "accessLinkHelp": "Orca affiche la destination avant de se connecter. Les identifiants restent masqués.",
           "destination": "Destination du lien",
           "loopbackTitle": "Ce lien pointe vers cet appareil lui-même",

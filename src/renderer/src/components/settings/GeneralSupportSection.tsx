@@ -12,9 +12,7 @@ import { translate } from '@/i18n/i18n'
 
 // Do not deep-link to /stargazers: GitHub 404s that page for users without repo write access.
 const ORCA_GITHUB_URL =
-  PRODUCT_EGRESS_POLICY.starPromptRepository === null
-    ? null
-    : `https://github.com/${PRODUCT_EGRESS_POLICY.starPromptRepository}`
+  PRODUCT_EGRESS_POLICY.starPromptRepository === null ? null : PRODUCT_EGRESS_POLICY.repositoryUrl
 
 type SupportState =
   | 'loading'

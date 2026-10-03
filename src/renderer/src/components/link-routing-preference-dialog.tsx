@@ -1,3 +1,4 @@
+import { PRODUCT_EGRESS_POLICY } from '../../../shared/product-egress-policy'
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { ExternalLink, Settings } from 'lucide-react'
 
@@ -101,7 +102,7 @@ export function LinkRoutingPreferenceDialogProvider({
     void requestPreference({
       openLinksInAppDefault: previewDefault === 'orca',
       preview: true,
-      url: 'https://github.com/stablyai/orca/pull/1234'
+      url: PRODUCT_EGRESS_POLICY.repositoryUrl
     })
   }, [requestPreference])
 

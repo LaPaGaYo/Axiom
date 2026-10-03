@@ -239,7 +239,7 @@
         "b411ec0069": "连接",
         "2cf9e5a294": "清除已保存的服务器",
         "4a4c017be1": "端点：",
-        "27393856e4": "orca://pair?code=...",
+        "27393856e4": "axiom://pair?code=...",
         "7a566540de": "配对 URL 或代码",
         "cb4d287238": "服务器名称",
         "3affe7de3a": "粘贴来自该浏览器可以访问的 Orca 服务器的配对 URL。",
@@ -4165,7 +4165,6 @@
         "share": {
           "card": {
             "utils": {
-              "19f4b4dc75": "github.com/stablyai/orca",
               "d864fc5f98": "输出",
               "5d66fdd7c2": "输入",
               "7080aeaebb": "推理",
@@ -4670,10 +4669,10 @@
           "157de228b4": "检验技能",
           "69236de8d6": "检查…",
           "27672470d9": "打开链接不会安装任何东西。首先查看不可变版本。",
-          "66cff7a804": "https://app.orca.dev/skills/share/…",
           "93eb0fe8c7": "Orca 技能链接",
           "releaseNotes": "发行说明：",
-          "targetHeader": "安装目标"
+          "targetHeader": "安装目标",
+          "66cff7a804": "axiom://skills/share/<id>"
         },
         "SkillInstallTargetFields": {
           "8e6a972229": "这台机器上没有已知的工作区。",
@@ -5192,8 +5191,6 @@
           "5b120b9634": "匿名提交",
           "c9e5ea0791": "GitHub：",
           "d46ddd66fc": "我们可以改进什么？",
-          "3460258a54": "关注 X",
-          "26108d3699": "加入 Discord",
           "d245c4ef6c": "GitHub 议题",
           "9b33530b3d": "其他联系我们的方式",
           "a828fa4aee": "分享什么是有效的、什么是有问题的，或者 Orca 接下来应该做什么。",
@@ -5270,9 +5267,7 @@
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "重启 Orca",
           "29c56f30ee": "检查更新",
-          "eb9884e55b": "Discord",
           "5687ab246a": "GitHub",
-          "5f83d86d92": "变更日志",
           "cdc87f897e": "文档",
           "e565171a7c": "键盘快捷键",
           "4cf5b868d7": "发送反馈",
@@ -5282,8 +5277,7 @@
           "5161eef55d": "正在重启 Orca…",
           "d396773ef0": "检查中",
           "f8a2c91d4e": "里程碑",
-          "b7e4d2a19c": "入门引导",
-          "c4f8e1b72a": "X"
+          "b7e4d2a19c": "入门引导"
         },
         "SidebarToolbar": {
           "19e32d0e5f": "打开文件夹选择器以添加项目",
@@ -6105,7 +6099,7 @@
           "serverName": "服务器名称",
           "serverNamePlaceholder": "开发机",
           "pairingCode": "配对码",
-          "pairingCodePlaceholder": "orca://pair?code=...",
+          "pairingCodePlaceholder": "axiom://pair?code=...",
           "pairingHelpPrefix": "在服务器上运行",
           "pairingCommand": "orca serve --pairing-address <host>",
           "pairingHelpSuffix": "，然后粘贴打印出的配对 URL。",
@@ -7555,8 +7549,7 @@
           "682293cadf": "在左侧边栏顶部显示 Orca 手机端按钮。",
           "d4f2b65f30": "在边栏中显示 Orca 手机端 快捷入口。",
           "installIntro": "从以下应用商店安装 Orca Mobile",
-          "installOutro": "，然后在下方配对。",
-          "androidApkLabel": "Android APK"
+          "installOutro": "，然后在下方配对。"
         },
         "NotificationsPane": {
           "906b4afebf": "发送测试通知",
@@ -7995,7 +7988,7 @@
           "55fcc964cd": "在服务器上运行，并粘贴输出的配对 URL。",
           "960e901ae4": "orca serve --pairing-address <host>",
           "163671f7b5": "运行",
-          "c3d772c514": "orca://pair?code=...",
+          "c3d772c514": "axiom://pair?code=...",
           "9bc9b83474": "配对码",
           "e038625857": "开发环境",
           "54ebacc600": "服务器名称",
@@ -11669,7 +11662,7 @@
           "namePlaceholder": "Linux 工作站",
           "nameHelp": "这仅更改计算机在 Orca 中的显示方式。",
           "accessLink": "访问链接",
-          "accessLinkPlaceholder": "orca://pair?code=...",
+          "accessLinkPlaceholder": "axiom://pair?code=...",
           "accessLinkHelp": "Orca 会在连接前显示目标。凭据保持隐藏。",
           "destination": "链接目标",
           "loopbackTitle": "此链接指向此设备",
