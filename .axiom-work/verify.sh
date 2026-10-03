@@ -24,6 +24,9 @@ run typecheck-cli pnpm tc:cli
 run typecheck-web pnpm tc:web
 run code-quality-changed pnpm run check:code-quality:changed
 IFS=';' read -ra EXTRAS <<< "${VERIFY_EXTRA:-}"
-for extra in "${EXTRAS[@]}"; do [ -n "$extra" ] && run "extra" bash -c "$extra"; done
+# An assertion whose command is missing on this host (e.g. `! rg …` without ripgrep) must not pass vacuously:
+# bash -c returns 127, `!` inverts it, and the check would look green. Treat "command not found" as a failed check.
+run_extra() { local cmd="$1"; echo; echo "---- CHECK extra :: $cmd"; local t0=$(date +%s); local out; out=$(bash -c "$cmd" 2>&1); local rc=$?; [ -n "$out" ] && printf '%s\n' "$out"; if printf '%s' "$out" | grep -q "command not found"; then echo "---- extra INVALID: a command in this assertion is not installed on this host"; rc=127; fi; local t1=$(date +%s); echo "---- RESULT extra rc=$rc duration=$((t1-t0))s"; [ $rc -eq 0 ] || FAIL=1; }
+for extra in "${EXTRAS[@]}"; do [ -n "$extra" ] && run_extra "$extra"; done
 run full-lint pnpm lint
 echo; echo "== verify $ID seq=$SEQ end $(date) OVERALL=$([ $FAIL -eq 0 ] && echo PASS || echo FAIL)"
