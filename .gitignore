@@ -206,6 +206,7 @@ ci-shards/
 .axiom-work/fullsuite.target
 .axiom-work/queue.txt
 .axiom-work/verify-main.target
+.axiom-work/secrets/
 
 # Axiom: durable product docs must be tracked despite the upstream docs/** ignore (see AGENTS.md Required Reading)
 !docs/PROJECT_CHARTER.md
