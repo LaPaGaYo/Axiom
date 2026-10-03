@@ -228,3 +228,8 @@ cloud 服务置于产品出口策略之后，由 Codex 经 2 次 Attempt 完成�
 
 marketplace 官方源禁用 / skills 安装源改 `LaPaGaYo/Axiom` / star 提示禁用，由 Codex 经 2 次 Attempt 完成（`axiom/attempt/M0-06b/1..2`：attempt 1 确定性门全过，但全量 suite 抓到 `src/shared/plugins/plugin-marketplace.ts` 在模块加载时 import `resources/**` 的真实回归；attempt 2 改为由 `plugin-bundled-bootstrap.ts` 运行时读取的索引作为"bundled 身份即在索引中"的信任依据、以参数传入 install 链路，publisher 不再授予信任），候选 `686034b92` 经独立验证（`.axiom-work/verifications/M0-06b-2.md`，含全量 suite：回归消失，失败集 = 已知 15 + 2 个负载性抖动）后以 `--no-ff` 合入 main（`7043764a3`），合并树回归（`verify-merged.sh M0-06b`）PASS，基线 620 → 594 对。
 **保留的风险/后续**：`resources/plugins/**` 内置插件仍沿用上游 publisher 身份（仅资源标识）；用户自行添加的 marketplace 源按请求刷新；Landing/support 等 GitHub 链接文案归 M0-05a。卫生项：`.github/workflows/pr.yml` 自 M0-01 起缺少 `check-vendor-egress-ratchet` 步骤（`pr-workflow-lint-parity` 一直失败的真实原因）→ 新开 M0-HYG 任务与上游测试稳定性问题一并处理。
+
+## D31 · M0-05a 集成记录 — ACCEPTED（事实记录）
+
+产品链接 / README / 署名 / `orca://` 文案由 Codex 经 2 次 Attempt 完成（`axiom/attempt/M0-05a/1..2`；attempt 2 仅把 `MobilePage.test.tsx` 超出 800 行的用例拆到 `MobilePage.install-links.test.tsx`），候选 `0062a1873` 经独立验证（`.axiom-work/verifications/M0-05a-2.md`，含全量 suite：失败集 = 已知集合，无新失败）后以 `--no-ff` 合入 main（`50b4301b1`），基线 594 → 559 对。实现：policy 新增 `repositoryUrl`/`issuesUrl`（由 `updateFeed` 推导）、`docsUrl`（仓库 README）、`communityLinks`（空）；渲染层/CLI 的上游仓库链接、文档站链接、Discord/X 链接、`https://app.orca.dev/skills/share/…` 形式、移动端 APK 下载链接全部改为读 policy 或不渲染；29 处 `orca://pair` 文案改为 `axiom://pair`（六个 locale 只替换子串，key 不变）；`README.md` 重写为 Axiom（使命、状态、Based on Orca 署名、Developing、Documentation、License）；新增 `NOTICE.md`（MIT，Lovecast Inc. 版权与修改声明）；`LICENSE` 未动。
+**保留的风险/后续**：UI 字符串与 i18n 值里的产品名 "Orca"、`docs/site/**`、内置 skill 指南文案归 M0-05b（会改变 i18n key hash，需要 Henry 决定翻译回退与 `docs/site/` 去留）；移动端面板本身由 M0-07 移出构建。
