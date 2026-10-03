@@ -193,7 +193,7 @@ vendor-egress ratchet（Codex attempt `axiom/attempt/M0-01/1`，候选 `7115f1cb
 产品出口策略由 Codex 经 2 次 Attempt 完成（`axiom/attempt/M0-03/1..2`；attempt 2 仅修复 `updater-test-harness.ts` 的 max-lines 违规），候选 `07f1d3aac` 经独立验证（`.axiom-work/verifications/M0-03-2.md`）后以 `--no-ff` 合入 main（`aefbf5b5b`）。实现：新增 `src/shared/product-egress-policy.ts`（纯常量，main/renderer/CLI 共用，配套测试钉死 V1 取值）；updater feed 改为 GitHub `LaPaGaYo/Axiom`（四个发布通道常量同指一个仓库），**自动/后台/唤醒检查关闭**，菜单手动检查保留；changelog、nudge、plugin kill-list、feedback/crash 上传、官方构建 diagnostics 上传全部为 `null` → 不发起任何请求（测试断言 mocked `net.fetch` 未被调用）；`ORCA_DIAGNOSTICS_TOKEN_URL` 编译期常量与 CI 注入删除。验证事实：ratchet PASS 且基线 687 → 652 对；焦点测试、`tc` ×3、changed-code 质量门、完整 `pnpm lint` PASS；全量 vitest 16 个失败文件 = 13 个已知环境性 + 2 个已知上游问题 + `ssh-remote-commands` 一次负载超时（焦点复跑 3/3 通过）。
 **保留的风险/后续**：dev 通道共用一个仓库后 GitHub Atom feed 条目有限，若将来发布高频 dev tag 可能挤掉 stable/RC 条目（V1 不发布 dev 通道；通道枚举收敛另立任务）；真实打包与运行时代理抓包未演练（M0-08 / M0 出口）；crash 对话框与 diagnostics 设置的文案仍提及上传（M0-05）。
 
-## D25 · V1 无产品遥测：移除 PostHog 传输与依赖，`track()` 保留为本地校验空操作 — PROPOSED
+## D25 · V1 无产品遥测：移除 PostHog 传输与依赖，`track()` 保留为本地校验空操作 — ACCEPTED（Henry 2026-10-02）
 
 **提议**：Axiom V1 不采集产品遥测。删除 `posthog-node` 依赖、PostHog 传输、`ORCA_POSTHOG_WRITE_KEY` 编译期常量、CI secret 注入与打包后常量校验脚本；`src/main/telemetry/client.ts` 的 `track()` 继续做事件 schema 校验与 burst-cap（保住 27+ 调用点与事件词表/validator 测试），然后丢弃；首启遥测同意横幅与"分享匿名使用数据"开关从 UI 移除，`settings.telemetry` 持久化字段保留（向后兼容，未来可接自有 sink）。本地 diagnostics（bundle 收集、crash minidump、Privacy 面板的 diagnostics 区）不是遥测，原样保留。
 **备选**：(a) 仅置 `TELEMETRY_ENABLED=false` 并保留依赖——打包产物仍含 PostHog SDK，与 orca-mapping §7 验证策略（`package.json` 无 `posthog-node`）冲突；(b) 保留同意 UI 但无后端——开关无实际作用，误导用户。
