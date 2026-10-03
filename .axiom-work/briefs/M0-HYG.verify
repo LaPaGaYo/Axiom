@@ -1,0 +1,2 @@
+targets: config/scripts/pr-workflow-lint-parity tests/e2e/e2e-worker-env-isolation config/scripts/mobile-release-check-scope
+extra: test -d tests/e2e/.cross-version-checkouts
