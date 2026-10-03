@@ -73,10 +73,7 @@ describe('web preload API composition', () => {
       'gitBash',
       'agentStatus',
       'mobile',
-      'telemetryTrack',
-      'telemetrySetOptIn',
-      'telemetryGetConsentState',
-      'telemetryAcknowledgeBanner'
+      'telemetryTrack'
     ])
     expect(Object.keys(globals.window.api.projects)).toEqual([])
     const projects: Record<string, unknown> = globals.window.api.projects

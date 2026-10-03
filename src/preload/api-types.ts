@@ -94,10 +94,7 @@ export type PreloadApi = {
   jira: JiraApi
   starNag: StarNagApi
   telemetryTrack: TelemetryApi['telemetryTrack']
-  telemetrySetOptIn: TelemetryApi['telemetrySetOptIn']
   diagnostics: DiagnosticsApi
-  telemetryGetConsentState: TelemetryApi['telemetryGetConsentState']
-  telemetryAcknowledgeBanner: TelemetryApi['telemetryAcknowledgeBanner']
   settings: SettingsApi
   agentAwake: AgentAwakeApi
   localhostWorktreeLabels: LocalhostWorktreeLabelsApi

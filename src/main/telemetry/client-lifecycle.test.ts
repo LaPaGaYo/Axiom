@@ -1,165 +1,97 @@
-import type { PostHog } from 'posthog-node'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { _getBurstCapStateForTests } from './burst-cap'
 import {
-  _enableTransportForTests,
-  _setPostHogClientForTests,
-  _setShuttingDownForTests,
+  _setStoreForTests,
+  initTelemetry,
   persistBannerAcknowledgeWithoutEmitting,
   setOptIn,
-  shouldOptOutSdkAtInit,
-  shutdownTelemetry
+  shutdownTelemetry,
+  track,
+  trackAppOpenedOnce
 } from './client'
 import {
-  BASE_COMMON,
+  INSTALL_ID,
   cleanupTelemetryClientTest,
-  makeMockPostHog,
   setupTelemetryClientTest,
-  type MockPostHog,
   type TelemetryClientTestState
 } from './client-test-harness'
 
-describe('setOptIn()', () => {
+describe('telemetry lifecycle without a transport', () => {
   let state: TelemetryClientTestState
-  let mock: MockPostHog
-
   beforeEach(() => {
     state = setupTelemetryClientTest()
-    mock = state.mock
   })
+  afterEach(cleanupTelemetryClientTest)
 
-  afterEach(() => {
-    cleanupTelemetryClientTest(state.envStash)
-  })
-
-  // Ordering invariant: the opt-out event is the one signal that transmits
-  // against the user's new preference. It must reach the SDK queue before
-  // posthog.optOut(), otherwise posthog-node drops it at enqueue time.
-  it('waits for telemetry_opted_out to enqueue before posthog.optOut()', async () => {
-    const order: string[] = []
-    mock.capture.mockImplementation((message: { event?: string; uuid?: string }) => {
-      order.push('capture called')
-      queueMicrotask(() => {
-        order.push('sdk enqueue')
-        mock.emitForTests('capture', {
-          event: message.event,
-          uuid: message.uuid
-        })
-      })
-    })
-    mock.optOut.mockImplementation(async () => {
-      order.push('optOut')
-    })
-    await setOptIn('settings', false)
-    expect(order).toEqual(['capture called', 'sdk enqueue', 'optOut'])
-  })
-
-  it('fires telemetry_opted_in after posthog.optIn without app_opened for settings opt-in', async () => {
-    state.settings.telemetry!.optedIn = false
-    const order: string[] = []
-    mock.optIn.mockImplementation(async () => order.push('optIn'))
-    mock.capture.mockImplementation((message: { event?: string }) => {
-      order.push(`capture:${message.event}`)
-    })
-    await setOptIn('settings', true)
-    expect(order).toEqual(['optIn', 'capture:telemetry_opted_in'])
-  })
-
-  it('drops telemetry_opted_in silently in non-official builds', async () => {
-    state.settings.telemetry!.optedIn = false
-    _setPostHogClientForTests(null)
-    _enableTransportForTests(false)
-
-    await setOptIn('settings', true)
-
-    expect(mock.capture).not.toHaveBeenCalled()
-    expect(console.debug).not.toHaveBeenCalled()
-  })
-
-  it('fires app_opened once after pending-banner opt-in enables the SDK', async () => {
+  it.each([true, false])('persists optedIn=%s without processing any event', async (optedIn) => {
     state.settings.telemetry = {
-      optedIn: null,
-      installId: BASE_COMMON.install_id,
-      existedBeforeTelemetryRelease: true
+      installId: INSTALL_ID,
+      existedBeforeTelemetryRelease: true,
+      optedIn: null
     }
-    const order: string[] = []
-    mock.optIn.mockImplementation(async () => order.push('optIn'))
-    mock.capture.mockImplementation((message: { event?: string }) => {
-      order.push(`capture:${message.event}`)
+    await setOptIn('settings', optedIn)
+    expect(state.store.updateSettings).toHaveBeenCalledWith({
+      telemetry: { installId: INSTALL_ID, existedBeforeTelemetryRelease: true, optedIn }
     })
-
-    await setOptIn('settings', true)
-
-    expect(order).toEqual(['optIn', 'capture:app_opened', 'capture:telemetry_opted_in'])
-  })
-})
-
-describe('persistBannerAcknowledgeWithoutEmitting()', () => {
-  let state: TelemetryClientTestState
-  let mock: MockPostHog
-
-  beforeEach(() => {
-    state = setupTelemetryClientTest({
-      optedIn: null,
-      installId: BASE_COMMON.install_id,
-      existedBeforeTelemetryRelease: true
-    })
-    mock = state.mock
+    expect(state.settings.telemetry.optedIn).toBe(optedIn)
+    expect(_getBurstCapStateForTests().perSessionCount).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
   })
 
-  afterEach(() => {
-    cleanupTelemetryClientTest(state.envStash)
-  })
-
-  it('fires app_opened after re-enabling the SDK and does not emit telemetry_opted_in', async () => {
-    const order: string[] = []
-    mock.optIn.mockImplementation(async () => order.push('optIn'))
-    mock.capture.mockImplementation((message: { event?: string }) => {
-      order.push(`capture:${message.event}`)
-    })
-
+  it('persists banner acknowledgment silently for compatibility', async () => {
     await persistBannerAcknowledgeWithoutEmitting()
-
-    expect(order).toEqual(['optIn', 'capture:app_opened'])
-    expect(state.settings.telemetry?.optedIn).toBe(true)
-  })
-})
-
-// Pin the init-time SDK opt-out decision. The bug this prevents: if
-// initTelemetry flipped the SDK optedOut flag for pending_banner, the direct
-// posthog.capture(telemetry_opted_out) on the Turn-off path would be dropped.
-describe('shouldOptOutSdkAtInit()', () => {
-  it('opts out the SDK for every disabled-reason', () => {
-    for (const reason of ['user_opt_out', 'ci', 'do_not_track', 'orca_disabled'] as const) {
-      expect(shouldOptOutSdkAtInit({ effective: 'disabled', reason })).toBe(true)
-    }
+    expect(state.settings.telemetry).toEqual({
+      installId: INSTALL_ID,
+      existedBeforeTelemetryRelease: false,
+      optedIn: true
+    })
+    expect(_getBurstCapStateForTests().perSessionCount).toBe(0)
   })
 
-  it('does NOT opt out the SDK for pending_banner', () => {
-    expect(shouldOptOutSdkAtInit({ effective: 'pending_banner' })).toBe(false)
+  it('preserves the missing-settings fallback without emitting', async () => {
+    state.settings.telemetry = undefined
+    await setOptIn('settings', false)
+    expect(state.settings.telemetry).toEqual({
+      installId: '',
+      existedBeforeTelemetryRelease: true,
+      optedIn: false
+    })
   })
 
-  it('does NOT opt out the SDK for enabled', () => {
-    expect(shouldOptOutSdkAtInit({ effective: 'enabled' })).toBe(false)
-  })
-})
-
-describe('shutdownTelemetry()', () => {
-  afterEach(() => {
-    _setShuttingDownForTests(false)
-    _setPostHogClientForTests(null)
+  it('ignores preference writes before initialization', async () => {
+    _setStoreForTests(null)
+    await setOptIn('settings', false)
+    await persistBannerAcknowledgeWithoutEmitting()
+    expect(state.store.updateSettings).not.toHaveBeenCalled()
   })
 
-  it('sets the shutdown gate and calls posthog.shutdown(2000)', async () => {
-    const mock = makeMockPostHog()
-    _setPostHogClientForTests(mock as unknown as PostHog)
-    _setShuttingDownForTests(false)
+  it('initializes local state and resets shutdown, burst caps, and the app-opened gate', async () => {
+    trackAppOpenedOnce()
     await shutdownTelemetry()
-    expect(mock.shutdown).toHaveBeenCalledWith(2_000)
-    _setPostHogClientForTests(null)
+    initTelemetry(state.store)
+    expect(state.store.getSettings).toHaveBeenCalled()
+    expect(_getBurstCapStateForTests().perSessionCount).toBe(0)
+    trackAppOpenedOnce()
+    expect(_getBurstCapStateForTests().perSessionCount).toBe(1)
+    expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('is a no-op when no client is initialized', async () => {
-    _setPostHogClientForTests(null)
+  it('warns when the install id is missing and still permits settings persistence', async () => {
+    state.settings.telemetry = undefined
+    initTelemetry(state.store)
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining('[telemetry] installId missing after migration')
+    )
+    await setOptIn('settings', false)
+    expect(state.store.getSettings().telemetry?.optedIn).toBe(false)
+  })
+
+  it('shuts down immediately and idempotently without pending timers', async () => {
+    track('app_opened', {})
     await expect(shutdownTelemetry()).resolves.toBeUndefined()
+    await expect(shutdownTelemetry()).resolves.toBeUndefined()
+    expect(vi.getTimerCount()).toBe(0)
+    track('app_opened', {})
+    expect(_getBurstCapStateForTests().perSessionCount).toBe(1)
   })
 })
