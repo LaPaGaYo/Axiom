@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import bundledPluginIndex from '../../../resources/plugins/launch/bundled-plugins.json'
 import { PRODUCT_EGRESS_POLICY } from '../product-egress-policy'
 import { isAllowedPluginGitUrl } from './plugin-install-lockfile'
 import { isQualifiedPluginKey } from './plugin-manifest'
@@ -8,10 +7,6 @@ export const PLUGIN_MARKETPLACE_FILENAME = 'orca-marketplace.json'
 export const PLUGIN_MARKETPLACE_ENTRY_LIMIT = 2_048
 export const PLUGIN_MARKETPLACE_CATEGORY_LIMIT = 16
 
-// Resource identities remain compatible without granting their publisher any network trust.
-const bundledPluginPublishers = new Set(
-  bundledPluginIndex.plugins.map((plugin) => plugin.pluginKey.split('.')[0])
-)
 export const OFFICIAL_PLUGIN_PUBLISHER =
   PRODUCT_EGRESS_POLICY.officialPluginMarketplace?.owner.toLowerCase() ?? null
 export const OFFICIAL_PLUGIN_ID_PREFIX = 'orca-'
@@ -142,7 +137,6 @@ export function isReservedPluginIdentity(pluginKey: string): boolean {
   return (
     identity !== null &&
     (identity.publisher === OFFICIAL_PLUGIN_PUBLISHER ||
-      bundledPluginPublishers.has(identity.publisher) ||
       identity.id.startsWith(OFFICIAL_PLUGIN_ID_PREFIX))
   )
 }
@@ -151,8 +145,7 @@ export function isOfficialPluginIdentity(pluginKey: string): boolean {
   const identity = splitQualifiedPluginKey(pluginKey)
   return (
     identity !== null &&
-    (identity.publisher === OFFICIAL_PLUGIN_PUBLISHER ||
-      bundledPluginPublishers.has(identity.publisher)) &&
+    identity.publisher === OFFICIAL_PLUGIN_PUBLISHER &&
     identity.id.startsWith(OFFICIAL_PLUGIN_ID_PREFIX)
   )
 }

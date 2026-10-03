@@ -236,7 +236,8 @@ export async function publishBundledUninstallSuccessor(root: string, id: string,
     pluginsDir: getUserPluginsDir(root),
     sourcePath,
     hostVersion: '1.4.0',
-    expectedPluginKey: key
+    expectedPluginKey: key,
+    bundledPluginKeys: [key]
   })
   if (!result.ok) {
     throw new Error(result.error)

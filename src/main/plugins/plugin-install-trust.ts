@@ -1,18 +1,19 @@
 import type { PluginInstallSource } from '../../shared/plugins/plugin-install-lockfile'
 import {
   isOfficialOrganizationGitSource,
-  isOfficialPluginIdentity,
   isReservedPluginIdentity
 } from '../../shared/plugins/plugin-marketplace'
 
 export function pluginInstallTrustError(
   pluginKey: string,
-  source: PluginInstallSource
+  source: PluginInstallSource,
+  bundledPluginKeys: readonly string[] = []
 ): string | null {
   if (source.kind === 'bundled') {
-    return source.bundleId === pluginKey && isOfficialPluginIdentity(pluginKey)
+    // Only the host's release index can authorize a bundled identity; publishers grant no trust.
+    return source.bundleId === pluginKey && bundledPluginKeys.includes(pluginKey)
       ? null
-      : 'bundled plugins must use an official bundled resource identity'
+      : 'bundled plugins must use an identity listed in the bundled resource index'
   }
   if (!isReservedPluginIdentity(pluginKey)) {
     return null

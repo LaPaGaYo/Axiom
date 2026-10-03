@@ -3,7 +3,6 @@ import { isAbsolute, join, relative, sep } from 'node:path'
 import { z } from 'zod'
 import { isQualifiedPluginKey } from '../../shared/plugins/plugin-manifest'
 import { pluginRelativeDirectorySchema } from '../../shared/plugins/plugin-manifest-fields'
-import { isOfficialPluginIdentity } from '../../shared/plugins/plugin-marketplace'
 import { getUserPluginsDir } from './plugin-discovery'
 import { installBundledPlugin, readPluginLockfile } from './plugin-install'
 import { inspectPluginInstallTree } from './plugin-install-staging'
@@ -20,10 +19,7 @@ const bundledPluginIndexSchema = z
       .array(
         z
           .object({
-            pluginKey: z
-              .string()
-              .refine(isQualifiedPluginKey, 'invalid qualified plugin identity')
-              .refine(isOfficialPluginIdentity, 'bundled plugins must use an official identity'),
+            pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin identity'),
             path: pluginRelativeDirectorySchema,
             contentHash: z.string().regex(/^[0-9a-f]{64}$/)
           })
@@ -105,6 +101,7 @@ export async function bootstrapBundledPlugins(options: {
   blockedPluginReason?: (pluginKey: string) => string | null
 }): Promise<PluginBundledBootstrapResult> {
   const index = await readBundledPluginIndex(options.root)
+  const bundledPluginKeys = index.plugins.map((entry) => entry.pluginKey)
   const pluginsDir = getUserPluginsDir(options.userDataPath)
   const lock = await readPluginLockfile(pluginsDir)
   const result: PluginBundledBootstrapResult = { installed: [], unchanged: [], errors: [] }
@@ -137,6 +134,7 @@ export async function bootstrapBundledPlugins(options: {
         sourcePath,
         hostVersion: options.hostVersion,
         expectedPluginKey: entry.pluginKey,
+        bundledPluginKeys,
         blockedPluginReason: options.blockedPluginReason
       })
       if (!installed.ok) {

@@ -355,7 +355,6 @@ src/main/persistence-initial-load.test.ts:stablyai:5
 src/main/persistence-repo-lifecycle.test.ts:stablyai:5
 src/main/persistence-update-repo.test.ts:stablyai:14
 src/main/plugins/plugin-bundled-bootstrap-coordinator.test.ts:stablyai:2
-src/main/plugins/plugin-bundled-bootstrap.test.ts:stablyai:10
 src/main/plugins/plugin-launch-content.test.ts:stablyai:4
 src/main/providers/ssh-git-provider-remote-sync.test.ts:stablyai:1
 src/main/rate-limits/codex-fetcher-runtime-pairing.test.ts:stablyai:1

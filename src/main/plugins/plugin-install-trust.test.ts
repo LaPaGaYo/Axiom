@@ -89,7 +89,7 @@ describe('plugin install trust', () => {
     await expect(readPluginLockfile(pluginsDir)).resolves.toEqual({ version: 1, plugins: {} })
   })
 
-  it('allows the app-bundled path only for the complete official identity', async () => {
+  it('allows only the exact identity supplied by the bundled index', async () => {
     const sourcePath = await tempRoot('orca-bundled-plugin-')
     const pluginsDir = await tempRoot('orca-plugin-installs-')
     await writePlugin(sourcePath, 'fixture', 'orca-skills')
@@ -98,7 +98,8 @@ describe('plugin install trust', () => {
       pluginsDir,
       sourcePath,
       hostVersion: '1.4.0',
-      expectedPluginKey: 'fixture.orca-skills'
+      expectedPluginKey: 'fixture.orca-skills',
+      bundledPluginKeys: ['fixture.orca-skills']
     })
 
     expect(result).toMatchObject({ ok: true, pluginKey: 'fixture.orca-skills' })
@@ -107,6 +108,32 @@ describe('plugin install trust', () => {
       kind: 'bundled',
       bundleId: 'fixture.orca-skills'
     })
+  })
+
+  it('rejects unlisted bundled identities even when their publisher is official', () => {
+    expect(
+      pluginInstallTrustError('fixture.orca-skills', {
+        kind: 'bundled',
+        bundleId: 'fixture.orca-skills'
+      })
+    ).not.toBeNull()
+    expect(
+      pluginInstallTrustError(
+        'fixture.orca-unlisted',
+        { kind: 'bundled', bundleId: 'fixture.orca-unlisted' },
+        ['fixture.orca-skills']
+      )
+    ).not.toBeNull()
+  })
+
+  it('rejects a bundle ID that differs from the indexed plugin identity', () => {
+    expect(
+      pluginInstallTrustError(
+        'fixture.orca-skills',
+        { kind: 'bundled', bundleId: 'fixture.orca-other' },
+        ['fixture.orca-skills']
+      )
+    ).not.toBeNull()
   })
 
   it('blocks a killed plugin even when the caller bypasses marketplace UI', async () => {
