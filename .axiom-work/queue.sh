@@ -13,7 +13,8 @@ while IFS= read -r line || [ -n "$line" ]; do
   line="${line%%#*}"; line="$(echo "$line" | xargs)"; [ -z "$line" ] && continue
   echo; echo "== queue item: $line  ($(date))"
   # shellcheck disable=SC2086
-  bash .axiom-work/attempt.sh $line; echo "== queue item rc=$?"
+  # stdin is the queue file itself: give the attempt /dev/null so no child can swallow the remaining lines
+  bash .axiom-work/attempt.sh $line </dev/null; echo "== queue item rc=$?"
   git switch -q main 2>/dev/null || true
 done < "$Q"
 echo; echo "== queue end $(date)"; ls -t .axiom-work/logs/attempt-*.summary 2>/dev/null | head -5 | while read -r s; do echo "---- $s"; cat "$s"; done
