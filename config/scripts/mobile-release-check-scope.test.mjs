@@ -53,7 +53,6 @@ it.each([
   'package.json',
   'pnpm-lock.yaml',
   '.github/workflows/mobile.yml',
-  '.github/workflows/mobile-ios-release.yml',
   '.github/actions/install-node-dependencies/action.yml',
   'config/scripts/mobile-release-check-scope.mjs',
   'config/scripts/mobile-release-check-scope.test.mjs'
