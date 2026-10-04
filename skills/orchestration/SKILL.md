@@ -10,26 +10,26 @@ description: >-
   Axiom worktree management, and reading or waiting on terminals.
 ---
 
-# Orca Orchestration
+# Axiom Orchestration
 
-This file is a discovery stub, not the usage guide. The full, version-matched Orca
+This file is a discovery stub, not the usage guide. The full, version-matched Axiom
 orchestration reference is served by the `axiom` binary itself — kept out of this file on
 purpose so it can never drift from the binary that will actually run your commands.
 
-Engage Orca orchestration whenever you need structured multi-agent coordination: threaded
+Engage Axiom orchestration whenever you need structured multi-agent coordination: threaded
 messages, blocking ask/reply flows, task dispatch, worker_done/escalation waits, task DAGs,
 decision gates, coordinator loops, or decomposing work across agents. Use the orca-cli skill
 instead for full ownership handoffs ("hand off", "handoff", "handover", "give this to
 another agent", "another worktree") when the user did not ask to supervise, monitor, wait
 for results, or coordinate a DAG — and for ordinary terminal control, shell commands,
-worktree management, and the built-in browser. Coordination requires real Orca runtime
-state; never substitute a non-Orca subagent tool.
+worktree management, and the built-in browser. Coordination requires real Axiom runtime
+state; never substitute a non-Axiom subagent tool.
 
 ## Resolve the CLI for this session
 
 Choose the executable once and reuse it for every later command:
 
-- If the `ORCA_CLI_COMMAND` environment variable is set, use its value. Orca exports this
+- If the `ORCA_CLI_COMMAND` environment variable is set, use its value. Axiom exports this
   for managed WSL sessions.
 - Otherwise, in a dev checkout whose session exposes `ORCA_DEV_REPO_ROOT`, use `axiom-dev`.
 - Otherwise, use `axiom`.
@@ -39,9 +39,9 @@ running anything; do not create a shell variable or run `ORCA` literally. This w
 same way in POSIX shells, PowerShell, and cmd.exe.
 
 If the selected executable cannot run, report its exact error and stop. Do not fall through
-to another executable, which could silently target a different Orca build.
+to another executable, which could silently target a different Axiom build.
 
-## Load the version-matched guide before running Orca commands
+## Load the version-matched guide before running Axiom commands
 
 ```text
 ORCA skills get orchestration
@@ -56,8 +56,8 @@ reference that gate names with
 `ORCA skills get orchestration --full` and read the named bundled reference before acting.
 
 Prefer `--json`. Use the selected executable's `--help` for commands or flags the guide does
-not cover. If a command reports that Orca is not running, start it with `ORCA open --json`
+not cover. If a command reports that Axiom is not running, start it with `ORCA open --json`
 and retry. If it fails with `runtime_access_denied`, your sandbox blocked the connection:
-re-run it with escalated permissions, and do not run `ORCA open` or restart Orca. If
-`skills get` is unknown, explain that updating Orca restores the guide; use `--help` for
+re-run it with escalated permissions, and do not run `ORCA open` or restart Axiom. If
+`skills get` is unknown, explain that updating Axiom restores the guide; use `--help` for
 read-only discovery and do not guess unsupported commands.
