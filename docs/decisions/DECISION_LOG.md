@@ -255,3 +255,13 @@ marketplace 官方源禁用 / skills 安装源改 `LaPaGaYo/Axiom` / star 提示
 - `mobile/` **不**从 ratchet 排除（撤回 attempt 1 的排除；基线只减 cloud 的 pair）；保留 `mobile.yml` 检查、`install-mobile-dependencies` 及其所有使用、`pr.yml` 的 `mobile_web_app` 作业；只删 `mobile-android-release.yml` 与 `mobile-ios-release.yml`（原生 App 不构建不发布）。
 - 是否把"手机 companion"整体从桌面端移除（连同 web bundle、配对 UI、relay/push 客户端）是另一个产品决定，不在 M0 内。
 **取代规则**：取代 D33 中关于 mobile ratchet 排除与 mobile CI 的部分；cloud/ 删除部分不变。
+
+## D34 · M0-05b-2 集成记录 — ACCEPTED（事实记录）
+
+文档站与内置 skill 文案由 Codex 经 2 次 Attempt 完成（attempt 1 `fa480d1e6`：54 页文档站 + `skill-guides/**` 改完、三页删除、`@axiom/docs`，但 `skills/*/SKILL.md` 是从 `skill-stubs/` 生成的——brief 漏列了源目录，Worker 正确地拒绝手改生成物并报告；attempt 2 `f141c24ca`：改 9 个 stub 源文件（30 处产品名 + 3 处命令名）后用仓库命令重生成，生成器按原文剥掉的 Linux 读屏段落保持逐字不变），经独立验证（`.axiom-work/verifications/M0-05b-2-2.md`：ratchet、焦点测试、`tc` ×3、changed-code 质量门、九条 `git grep` 断言、`node --test` 文档站 13 项、`verify:bundled-skill-guides`、manifest 校验、完整 `pnpm lint` 全部 PASS）后合入 main（`fde906de9`，plumbing 合并以免占用正在跑队列的工作树）。基线 559 对不变：`docs/**` 与 skill 路径不在 ratchet 扫描根内，brief 的"必须缩小"写错。
+**保留的风险/后续**：文档页仍有描述上游行为之处（首页已注明"继承自 Orca、修订中"）；`skill-stubs/_shared/cli-resolution.md` 的 Linux 读屏段落与 `generate-bundled-skill-guides.mjs` 里剥它的正则应一起删除（MINOR_ADJUSTMENT，`config/scripts` 小任务）；`docs/site/public/docs/**` 媒体文件名仍含 `orca`（资源名，非文案）。合并树全量回归见 D36。
+
+## D35 · M0-05b-1 集成记录 — ACCEPTED（事实记录）
+
+应用与 CLI 的产品名（D32）由 Codex 经 4 次 Attempt 完成（1 = 改名本身，948 个文件，仅 `max-lines` 一处不过；2 = 两条提示语缩短，完整 lint 过，但**全量** suite 抓到 49 个 `src/main`/`src/shared`/`config/scripts` 测试文件断言旧文案——brief 的焦点测试目标没盖到这些目录；3 = 更新 48 个测试文件的 59 处期望值、重生成 6 个 shell wrapper 快照、两处 `as Error` 改为无断言匹配器，全量 suite 只剩 14 个已知环境性文件 + `macos-tcc-prompt-localization`，Worker 正确地拒绝把该测试改弱；4 = 授权后改 `config/scripts/locale-macos-tcc-key-overrides.mjs` 的 12 条翻译值（catalog 修复策略的源头，不改会被回写成 Orca）），候选 `a90f4070d` 经独立验证（`.axiom-work/verifications/M0-05b-1-4.md`：全量 suite 14 失败 = 已知环境性集合、ratchet、`tc` ×3、changed-code 质量门、三条非空转 extra、完整 `pnpm lint` PASS）后合入 main（`f16d28587`，plumbing 合并）。实现：渲染层 876 段、CLI 742、main 454、shared 140、六个 catalog 值（en 782 / es 608 / fr 779 / ja 771 / ko 778 / zh 789）、运行时 catalog 77；**key 全部不动**（六个 catalog 叶子数不变，翻译全部保留，`en.json` 里剩下的 9 个 "Orca" 都是 key）；extraction drift 52 = main；基线 559 不变。
+**保留的风险/后续**：`# Orca-generated …` shell 标记串与 `orca.yaml`/`Orca.app` 路径字面量有意保留（兼容旧版本写出的文件）；流水线教训已记入 `claude/workflow-a-lite-v1.md`（仓库范围文本改动的 sidecar 目标必须是全 suite；`! rg …` 断言在这台 Mac 上空转，已改 `git grep` 并让 `verify.sh` 对缺命令判失败）。合并树全量回归见 D36。
