@@ -11,7 +11,6 @@ tests/e2e/cross-version-wire/cross-version-session-tabs-retirement-proof.unit.te
 tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts
 tests/e2e/cross-version-wire/cross-version-worktree-identity-downgrade.unit.test.ts
 tests/e2e/cross-version-wire/release-checkout.unit.test.ts
-tests/e2e/relay-region-correction.unit.test.ts
 # Timing-sensitive (pass focused; fail under full-suite load)
 src/main/ipc/pty-runtime-hidden-at-spawn-mark.test.ts
 config/scripts/build-native-for-platform.test.mjs
