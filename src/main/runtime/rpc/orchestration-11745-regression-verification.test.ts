@@ -719,7 +719,7 @@ describe('#11745 M5 — binding an unclaimed adopted Run', () => {
         code: 'consumer_fenced',
         data: {
           effectsApplied: false,
-          recoveryCommand: `orca orchestration run-use --id ${adoptedRunId} --takeover-legacy`
+          recoveryCommand: `axiom orchestration run-use --id ${adoptedRunId} --takeover-legacy`
         }
       })
     )

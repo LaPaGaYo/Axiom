@@ -167,7 +167,7 @@ describe('RuntimeFileCommands', () => {
         expect(() => child.emit('error', error)).not.toThrow()
       }
 
-      await expect(resultPromise).rejects.toThrow("Orca's bundled search tool (ripgrep)")
+      await expect(resultPromise).rejects.toThrow("Axiom's bundled search tool (ripgrep)")
       expect(wslAwareSpawnMock).toHaveBeenCalledTimes(1)
       expect(child.listenerCount('error')).toBe(0)
       expect(child.listenerCount('close')).toBe(0)
@@ -215,7 +215,7 @@ describe('RuntimeFileCommands', () => {
     await flushRuntimeSearchMicrotasks()
     child.emit('close', 127, null)
 
-    await expect(resultPromise).rejects.toThrow("Orca's bundled search tool (ripgrep)")
+    await expect(resultPromise).rejects.toThrow("Axiom's bundled search tool (ripgrep)")
   })
 
   it('routes runtime rg searches through the registered WSL project runtime', async () => {

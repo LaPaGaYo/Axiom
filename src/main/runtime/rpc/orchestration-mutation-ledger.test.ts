@@ -347,7 +347,7 @@ describe('durable orchestration mutation ledger', () => {
         data: {
           requestId: 'mutation_worker_start',
           dispatchId: started.dispatch.id,
-          recoveryCommand: `orca orchestration worker-show --dispatch ${started.dispatch.id} --json`
+          recoveryCommand: `axiom orchestration worker-show --dispatch ${started.dispatch.id} --json`
         }
       }
     })
