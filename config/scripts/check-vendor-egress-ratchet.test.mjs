@@ -80,10 +80,10 @@ describe('collectCurrentVendorEgress', () => {
   it('scans every specified root and only supplied tracked files', () => {
     const allowed = [
       'src/a.ts',
+      'src/mobile/a.ts',
       'config/a.cjs',
       'mobile/app.json',
-      'mobile/nested/node_modules/reference.js',
-      'cloud/apps/a.ts',
+      'mobile/src/a.ts',
       'resources/a.txt',
       'skills/a.md',
       'skill-guides/a.md',
@@ -101,11 +101,10 @@ describe('collectCurrentVendorEgress', () => {
     expect(scan().map(({ file }) => file)).toEqual([...allowed].sort())
   })
 
-  it('excludes dependencies, self files, documentation and out-of-scope paths', () => {
+  it('excludes dependencies, self files and out-of-scope paths', () => {
     for (const file of [
       'mobile/node_modules/a.js',
-      'cloud/node_modules/a.js',
-      'cloud/apps/a/node_modules/b/index.js',
+      'mobile/nested/node_modules/reference.js',
       'docs/a.md',
       'LICENSE',
       'pnpm-lock.yaml',

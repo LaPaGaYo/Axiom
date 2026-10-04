@@ -13,7 +13,6 @@ const SCAN_ROOTS = [
   'src/',
   'config/',
   'mobile/',
-  'cloud/',
   'resources/',
   'skills/',
   'skill-guides/',
@@ -52,7 +51,7 @@ function isScannedPath(file) {
   if (SELF_FILES.has(file)) {
     return false
   }
-  if (file.startsWith('mobile/node_modules/') || /^cloud\/(?:.*\/)?node_modules\//.test(file)) {
+  if (/^mobile\/(?:.*\/)?node_modules\//.test(file)) {
     return false
   }
   // The positive root list also excludes docs/**, LICENSE and pnpm-lock.yaml.
