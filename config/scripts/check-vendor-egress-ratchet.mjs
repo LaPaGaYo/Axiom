@@ -9,11 +9,10 @@ import { pathToFileURL } from 'node:url'
 // Counts grandfather matching lines without coupling the baseline to unrelated line shifts.
 // After initialization the baseline may only shrink, including in --write-baseline mode.
 const BASELINE_PATH = 'config/vendor-egress-baseline.txt'
-// mobile/** is non-shipped in V1 (D33); its root lint gates still apply.
 const SCAN_ROOTS = [
   'src/',
   'config/',
-  'cloud/',
+  'mobile/',
   'resources/',
   'skills/',
   'skill-guides/',
@@ -52,7 +51,7 @@ function isScannedPath(file) {
   if (SELF_FILES.has(file)) {
     return false
   }
-  if (/^cloud\/(?:.*\/)?node_modules\//.test(file)) {
+  if (/^mobile\/(?:.*\/)?node_modules\//.test(file)) {
     return false
   }
   // The positive root list also excludes docs/**, LICENSE and pnpm-lock.yaml.

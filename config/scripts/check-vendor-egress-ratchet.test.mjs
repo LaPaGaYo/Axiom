@@ -82,7 +82,8 @@ describe('collectCurrentVendorEgress', () => {
       'src/a.ts',
       'src/mobile/a.ts',
       'config/a.cjs',
-      'cloud/apps/a.ts',
+      'mobile/app.json',
+      'mobile/src/a.ts',
       'resources/a.txt',
       'skills/a.md',
       'skill-guides/a.md',
@@ -100,14 +101,10 @@ describe('collectCurrentVendorEgress', () => {
     expect(scan().map(({ file }) => file)).toEqual([...allowed].sort())
   })
 
-  it('excludes non-shipped mobile code, dependencies, self files and out-of-scope paths', () => {
+  it('excludes dependencies, self files and out-of-scope paths', () => {
     for (const file of [
-      'mobile/app.json',
-      'mobile/src/a.ts',
       'mobile/node_modules/a.js',
       'mobile/nested/node_modules/reference.js',
-      'cloud/node_modules/a.js',
-      'cloud/apps/a/node_modules/b/index.js',
       'docs/a.md',
       'LICENSE',
       'pnpm-lock.yaml',
