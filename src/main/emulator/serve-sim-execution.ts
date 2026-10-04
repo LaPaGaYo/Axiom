@@ -218,7 +218,7 @@ export async function execServeSimCommand(
     if (/no serve-sim server|not running/i.test(message)) {
       throw new EmulatorError(
         'emulator_no_active',
-        'No active emulator for this worktree — use orca emulator list/attach or open the pane'
+        'No active emulator for this worktree — use axiom emulator list/attach or open the pane'
       )
     }
     throw new EmulatorError('emulator_error', message)

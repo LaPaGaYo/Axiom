@@ -213,7 +213,7 @@ describe('browser process user-agent startup ordering', () => {
         runMainProcessPreflight({ focusExistingWindow: vi.fn(), requestDesktopActivation: vi.fn() })
       ).toBe(false)
       expect(mocks.showErrorBox).toHaveBeenCalledWith(
-        'Orca could not start',
+        'Axiom could not start',
         expect.stringContaining('Stop Orca and orcad before retrying profile recovery')
       )
       expect(mocks.app.isReady).not.toHaveBeenCalled()
@@ -350,7 +350,7 @@ it('defers a Linux desktop startup failure until Electron is ready', async () =>
     await ready
     await Promise.resolve()
     expect(mocks.showErrorBox).toHaveBeenCalledWith(
-      'Orca could not start',
+      'Axiom could not start',
       expect.stringContaining('Linux pre-ready failure')
     )
     expect(mocks.app.exit).toHaveBeenCalledWith(1)

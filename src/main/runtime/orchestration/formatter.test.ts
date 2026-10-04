@@ -73,14 +73,14 @@ describe('formatMessageBanner', () => {
   it('includes reply hint with message ID', () => {
     const banner = formatMessageBanner(makeMessage({ id: 'msg_xyz789' }))
     expect(banner).toContain(
-      '[Reply: orca orchestration reply --id msg_xyz789 --from term_coord --body "..."]'
+      '[Reply: axiom orchestration reply --id msg_xyz789 --from term_coord --body "..."]'
     )
   })
 
   it('lets the CLI resolve the live sender for Run and Dispatch addresses', () => {
     for (const to_handle of ['run:run_test', 'dispatch:dispatch_test']) {
       const banner = formatMessageBanner(makeMessage({ to_handle }))
-      expect(banner).toContain('[Reply: orca orchestration reply --id msg_test1 --body "..."]')
+      expect(banner).toContain('[Reply: axiom orchestration reply --id msg_test1 --body "..."]')
       expect(banner).not.toContain(`--from ${to_handle}`)
     }
   })

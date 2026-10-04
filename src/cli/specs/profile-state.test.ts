@@ -24,6 +24,6 @@ describe('profile state rollback discovery', () => {
     const spec = PROFILE_STATE_COMMAND_SPECS.find((item) => item.path.at(-1) === 'rollback')
     expect(spec?.usage).toContain('--current-json')
     expect(spec?.notes?.join('\n')).toContain('without merging; both copies are archived')
-    expect(spec?.examples).toContain('orca profile state rollback --current-json')
+    expect(spec?.examples).toContain('axiom profile state rollback --current-json')
   })
 })

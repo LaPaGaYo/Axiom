@@ -146,7 +146,7 @@ async function getCreateRepoSelector(
   }
   throw new RuntimeClientError(
     'invalid_argument',
-    'Missing repo selector. Pass --repo or run from inside an Orca-managed worktree.'
+    'Missing repo selector. Pass --repo or run from inside an Axiom-managed worktree.'
   )
 }
 
@@ -279,7 +279,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     if (!hostId) {
       throw new RuntimeClientError(
         'worktree_host_unresolved',
-        'Orca cannot tell which host owns this workspace. Refresh projects and try again.'
+        'Axiom cannot tell which host owns this workspace. Refresh projects and try again.'
       )
     }
     // Why (#19334): the waiver only ever applies to a hook that ran, so without --run-hooks it

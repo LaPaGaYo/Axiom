@@ -39,7 +39,7 @@ export async function resumeInterruptedServeUpdate(
     await recordServeUpdateHandoffFailure(
       args.handoffPath,
       args.handoff,
-      `Timed out waiting for Orca ${args.handoff.targetVersion} to be installed.`
+      `Timed out waiting for Axiom ${args.handoff.targetVersion} to be installed.`
     )
   }
   const child = args.spawnChild(args.executable, args.childArgs, args.spawnOptions)
@@ -97,7 +97,7 @@ export async function superviseForegroundServe(
       await recordServeUpdateHandoffFailure(
         args.handoffPath!,
         handoff,
-        `Timed out waiting for Orca ${handoff.targetVersion} to be installed.`
+        `Timed out waiting for Axiom ${handoff.targetVersion} to be installed.`
       )
       expectedHandoff = null
     } else {

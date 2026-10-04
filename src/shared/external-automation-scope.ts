@@ -54,7 +54,7 @@ const SCOPE_MESSAGES: Record<ExternalAutomationScopeCode, string> = {
   [EXTERNAL_AUTOMATION_SCOPE_CODES.authorityNotSupported]:
     'External automation managers are available only on this computer and its SSH hosts.',
   [EXTERNAL_AUTOMATION_SCOPE_CODES.targetHidden]:
-    'That host is managed by Orca and does not expose external automations.',
+    'That host is managed by Axiom and does not expose external automations.',
   [EXTERNAL_AUTOMATION_SCOPE_CODES.runsUnsupported]:
     'This host does not report external automation run history.'
 }

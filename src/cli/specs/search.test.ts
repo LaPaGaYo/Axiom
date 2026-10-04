@@ -83,8 +83,8 @@ describe('orca search command spec', () => {
   })
 
   it('shows both the query and the index report in its usage', () => {
-    expect(searchSpec.usage).toContain('orca search <query>')
-    expect(searchSpec.usage).toContain('orca search --index-status')
+    expect(searchSpec.usage).toContain('axiom search <query>')
+    expect(searchSpec.usage).toContain('axiom search --index-status')
   })
 })
 
@@ -92,9 +92,9 @@ describe('orca search discovery surfaces', () => {
   it('is listed in the root help', () => {
     expect(ROOT_HELP_TEXT_PRIMARY).toContain('Agent Sessions:')
     expect(ROOT_HELP_TEXT_PRIMARY).toContain(
-      '  search                    Search the full text of agent sessions on one Orca host'
+      '  search                    Search the full text of agent sessions on one Axiom host'
     )
-    expect(ROOT_HELP_TEXT_SECONDARY).toContain('  orca search --index-status [--json]')
+    expect(ROOT_HELP_TEXT_SECONDARY).toContain('  axiom search --index-status [--json]')
   })
 
   it('prints its own help for `orca search --help`', () => {
@@ -106,7 +106,7 @@ describe('orca search discovery surfaces', () => {
     } finally {
       console.log = restore
     }
-    expect(lines.join('\n')).toContain('Usage: orca search <query>')
+    expect(lines.join('\n')).toContain('Usage: axiom search <query>')
   })
 
   it('resolves for dispatch', () => {

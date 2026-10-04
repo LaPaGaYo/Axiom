@@ -5,7 +5,7 @@ export const PROFILE_STATE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['profile', 'state', 'exports'],
     summary: 'List retained SQLite backups and JSON exports for profile-state recovery',
-    usage: 'orca profile state exports [--json]',
+    usage: 'axiom profile state exports [--json]',
     allowedFlags: [...GLOBAL_FLAGS]
   },
   {
@@ -14,20 +14,20 @@ export const PROFILE_STATE_COMMAND_SPECS: CommandSpec[] = [
     summary:
       'Restore a SQLite backup or retained JSON export, or keep the current JSON or SQLite profile',
     usage:
-      'orca profile state rollback (--backup <id> | --revision <revision> | --current-json | --current-sqlite) [--json]',
+      'axiom profile state rollback (--backup <id> | --revision <revision> | --current-json | --current-sqlite) [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'revision', 'backup', 'current-json', 'current-sqlite'],
     notes: [
-      'Orca must be stopped. Recovery validates the selected artifact and archives the current database family, JSON, and retained recovery artifacts before replacing state.',
+      'Axiom must be stopped. Recovery validates the selected artifact and archives the current database family, JSON, and retained recovery artifacts before replacing state.',
       '--backup restores SQLite authority; --revision restores a JSON export for an older compatible runtime.',
       '--current-json keeps the current orca-data.json, including edits from an older build. It replaces SQLite state without merging; both copies are archived. The next SQLite-capable start imports the selected JSON.',
       '--current-sqlite keeps the current SQLite state and discards JSON edits from an older build. The JSON is archived, then rewritten from SQLite.'
     ],
     examples: [
-      'orca profile state exports',
-      'orca profile state rollback --backup <id>',
-      'orca profile state rollback --revision 1',
-      'orca profile state rollback --current-json',
-      'orca profile state rollback --current-sqlite'
+      'axiom profile state exports',
+      'axiom profile state rollback --backup <id>',
+      'axiom profile state rollback --revision 1',
+      'axiom profile state rollback --current-json',
+      'axiom profile state rollback --current-sqlite'
     ]
   }
 ]

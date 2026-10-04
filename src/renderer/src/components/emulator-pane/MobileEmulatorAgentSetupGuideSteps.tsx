@@ -54,13 +54,13 @@ export function MobileEmulatorAgentSetupGuideSteps({
           <p className="text-sm font-medium">
             {translate(
               'auto.components.emulator.pane.MobileEmulatorAgentSetupGuideSteps.9b49d892e3',
-              'Enable Orca CLI'
+              'Enable Axiom CLI'
             )}
           </p>
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.emulator.pane.MobileEmulatorAgentSetupGuideSteps.3d8dc52c93',
-              'Registers the orca command for emulator control in agent shells.'
+              'Registers the axiom command for emulator control in agent shells.'
             )}
           </p>
           {setup.cliInstallStatus?.commandPath && setup.cliEnabled ? (
@@ -83,7 +83,7 @@ export function MobileEmulatorAgentSetupGuideSteps({
             <p className="text-[11px] leading-snug text-muted-foreground">
               {translate(
                 'auto.components.emulator.pane.MobileEmulatorAgentSetupGuideSteps.3d34423e88',
-                'Registering the Orca CLI'
+                'Registering the Axiom CLI'
               )}{' '}
               {setup.cliInstallStatus?.commandPath ? (
                 <code className="rounded bg-muted px-1 py-0.5">
@@ -140,7 +140,7 @@ export function MobileEmulatorAgentSetupGuideSteps({
           <p className="text-sm font-medium">
             {translate(
               'auto.components.emulator.pane.MobileEmulatorAgentSetupGuideSteps.21f5687c07',
-              'Orca CLI skill'
+              'Axiom CLI skill'
             )}
           </p>
           <AgentSkillSetupPanel
@@ -149,20 +149,20 @@ export function MobileEmulatorAgentSetupGuideSteps({
             className="min-w-0"
             title={translate(
               'auto.components.emulator.pane.MobileEmulatorAgentSetupGuideSteps.21f5687c07',
-              'Orca CLI skill'
+              'Axiom CLI skill'
             )}
             description={translate(
               'auto.components.emulator.pane.MobileEmulatorAgentSetupGuideSteps.64fb057667',
-              'Teaches agents the orca emulator commands for this worktree.'
+              'Teaches agents the axiom emulator commands for this worktree.'
             )}
             command={skillInstallCommand}
             terminalTitle={translate(
               'auto.components.emulator.pane.MobileEmulatorAgentSetupGuideSteps.5c59ea96ca',
-              'Mobile emulator Orca CLI skill setup'
+              'Mobile emulator Axiom CLI skill setup'
             )}
             terminalAriaLabel={translate(
               'auto.components.emulator.pane.MobileEmulatorAgentSetupGuideSteps.bff5341ac3',
-              'Mobile emulator Orca CLI skill install terminal'
+              'Mobile emulator Axiom CLI skill install terminal'
             )}
             terminalWorktreeId={terminalWorktreeId}
             terminalShellOverride={activeSkillRuntime.terminalShellOverride}
@@ -177,7 +177,7 @@ export function MobileEmulatorAgentSetupGuideSteps({
             }
             openingHint={translate(
               'auto.components.emulator.pane.MobileEmulatorAgentSetupGuideSteps.3941719a56',
-              'Checking Orca CLI before opening skill setup.'
+              'Checking Axiom CLI before opening skill setup.'
             )}
             onBeforeOpenTerminal={async () => {
               recordFeatureInteraction('mobile-emulator-agent-setup')

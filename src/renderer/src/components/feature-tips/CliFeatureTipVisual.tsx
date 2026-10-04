@@ -8,10 +8,10 @@ import { usePrefersReducedMotion } from '@/components/feature-wall/feature-wall-
 import { translate } from '@/i18n/i18n'
 
 const CLI_AGENT_COMMANDS = [
-  'orca worktree create --name auth-pr-1',
-  'orca worktree create --name auth-pr-2',
-  'orca orchestration dispatch --task pr1 --to w1',
-  'orca orchestration dispatch --task pr2 --to w2'
+  'axiom worktree create --name auth-pr-1',
+  'axiom worktree create --name auth-pr-2',
+  'axiom orchestration dispatch --task pr1 --to w1',
+  'axiom orchestration dispatch --task pr2 --to w2'
 ]
 
 export function CliFeatureTipVisual(): JSX.Element {

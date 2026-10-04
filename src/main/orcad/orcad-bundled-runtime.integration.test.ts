@@ -118,7 +118,7 @@ describe.skipIf(process.platform === 'win32')('bundled handoff process lifecycle
       timeoutMs: 5_000
     })
     expect(result.code).toBe(78)
-    expect(result.stderr).toContain('bundled Orca runtime target is missing')
+    expect(result.stderr).toContain('bundled Axiom runtime target is missing')
     expect(result.stdout).not.toContain('ready:')
   })
 

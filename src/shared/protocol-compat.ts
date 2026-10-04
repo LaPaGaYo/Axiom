@@ -58,9 +58,9 @@ export function describeRuntimeCompatBlock(verdict: RuntimeCompatVerdict): strin
     return 'Runtime client and server are compatible.'
   }
   if (verdict.reason === 'client-too-old') {
-    return `This Orca client is too old for the selected server. Update Orca on this machine. Client protocol ${verdict.clientProtocolVersion}, server requires client protocol ${verdict.requiredClientProtocolVersion}.`
+    return `This Axiom client is too old for the selected server. Update Axiom on this machine. Client protocol ${verdict.clientProtocolVersion}, server requires client protocol ${verdict.requiredClientProtocolVersion}.`
   }
-  return `The selected Orca server is too old for this client. Update Orca on the server. Server protocol ${verdict.serverProtocolVersion}, client requires server protocol ${verdict.requiredServerProtocolVersion}.`
+  return `The selected Axiom server is too old for this client. Update Axiom on the server. Server protocol ${verdict.serverProtocolVersion}, client requires server protocol ${verdict.requiredServerProtocolVersion}.`
 }
 
 export type CompatVerdict =

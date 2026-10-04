@@ -42,7 +42,7 @@ function authContext(
         !isArtifactShareLifecycleCurrent(active.profile.id, userDataPath, lifecycleGeneration)
       ) {
         throw new Error(
-          'The signed-in Orca account changed while the artifact request was running.'
+          'The signed-in Axiom account changed while the artifact request was running.'
         )
       }
     }
@@ -55,7 +55,7 @@ export function storedSessionAuthContext(
   userDataPath: string
 ): ArtifactAuthContext {
   if (!active.profile.cloud) {
-    throw new Error('The active Orca profile is not linked to a cloud account.')
+    throw new Error('The active Axiom profile is not linked to a cloud account.')
   }
   return authContext(
     active,

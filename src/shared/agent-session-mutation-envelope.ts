@@ -137,7 +137,7 @@ function refuseUnlessWriterAdmitted(lease: AgentSessionLease): AgentSessionWireR
           ? terminalOwnerRefusalMessage(lease)
           : lease.handoffStage === 'new-owner-proving'
             ? 'The chat is still starting.'
-            : "Orca has not yet confirmed that this chat's previous agent process stopped. Reopen the chat to check again."
+            : "Axiom has not yet confirmed that this chat's previous agent process stopped. Reopen the chat to check again."
     }
   }
   return {

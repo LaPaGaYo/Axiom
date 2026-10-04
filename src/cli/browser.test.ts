@@ -380,7 +380,7 @@ describe('orca cli browser identity', () => {
     await main(['browser', 'identity', 'get'], '/tmp/not-an-orca-worktree')
 
     expect(callMock).toHaveBeenCalledTimes(1)
-    expect(error).toHaveBeenCalledWith(expect.stringContaining('Update or restart Orca'))
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('Update or restart Axiom'))
   })
 })
 

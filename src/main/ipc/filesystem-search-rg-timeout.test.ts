@@ -93,7 +93,7 @@ function createMockProcess(): ChildProcess {
   return p
 }
 
-const BUNDLED_ERROR = "Orca's bundled search tool (ripgrep) could not start"
+const BUNDLED_ERROR = "Axiom's bundled search tool (ripgrep) could not start"
 
 async function flushMicrotasks(): Promise<void> {
   for (let index = 0; index < 8; index++) {

@@ -40,7 +40,7 @@ function getLocaleValue(path: string): unknown {
 describe('Korean UI semantic mistranslation fixes', () => {
   it('keeps the corrected values in the Korean catalog', () => {
     for (const [path, expected] of Object.entries(correctedValues)) {
-      expect(getLocaleValue(path), path).toBe(expected)
+      expect(getLocaleValue(path), path).toBe(expected.replaceAll('Orca', 'Axiom'))
     }
   })
 

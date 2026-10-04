@@ -11,7 +11,7 @@ export const SKILL_INSTALL_PROGRESS_CAPABILITY = 'skills.install-progress.v1' as
 export const SKILL_INSTALL_PROVIDERS_CAPABILITY = 'skills.install-providers.v1' as const
 
 export const SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE =
-  'Update Orca on the selected machine to install shared skills.'
+  'Update Axiom on the selected machine to install shared skills.'
 
 /** Why capability-gated rather than Rule 1: `skills.delete` is a new RPC method,
  *  and an old host answers method-not-found, which surfaces as an unexplained
@@ -19,4 +19,4 @@ export const SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE =
 export const SKILL_DELETE_CAPABILITY = 'skills.delete.v1' as const
 
 export const SKILL_DELETE_UPDATE_REQUIRED_MESSAGE =
-  'Update Orca on the selected machine to delete skills.'
+  'Update Axiom on the selected machine to delete skills.'

@@ -27,15 +27,15 @@ export function handoffToBundledOrcad(): boolean {
     return false
   }
   if (!hasTarget) {
-    throw new OrcadBundledRuntimeError('The bundled Orca runtime target is missing')
+    throw new OrcadBundledRuntimeError('The bundled Axiom runtime target is missing')
   }
   if (!hasRuntime) {
-    throw new OrcadBundledRuntimeError('The bundled Orca runtime is missing')
+    throw new OrcadBundledRuntimeError('The bundled Axiom runtime is missing')
   }
   if (realpathSync(process.execPath) === realpathSync(runtime)) {
     if (process.versions.bun !== ORCAD_BUN_VERSION) {
       throw new OrcadBundledRuntimeError(
-        `The bundled Orca runtime must be Bun ${ORCAD_BUN_VERSION}`
+        `The bundled Axiom runtime must be Bun ${ORCAD_BUN_VERSION}`
       )
     }
     return false

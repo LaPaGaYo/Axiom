@@ -39,7 +39,7 @@ export function resolvePackagedWindowsCompatibilityCommand():
   }
   throw new RuntimeClientError(
     'invalid_argument',
-    'The packaged Orca launcher did not provide a valid resume command. No question was created.'
+    'The packaged Axiom launcher did not provide a valid resume command. No question was created.'
   )
 }
 

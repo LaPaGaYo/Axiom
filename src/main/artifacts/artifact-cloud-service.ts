@@ -125,7 +125,7 @@ export class ArtifactCloudService {
             auth.scope
           )
           if (!record) {
-            throw new Error('This file has not been shared from the active Orca profile.')
+            throw new Error('This file has not been shared from the active Axiom profile.')
           }
           return this.publisher.runForSlug(record.slug, auth, async () => {
             auth.assertCurrent()
@@ -168,7 +168,7 @@ export class ArtifactCloudService {
           auth.scope
         )
         if (!record) {
-          throw new Error('This file has not been shared from the active Orca profile.')
+          throw new Error('This file has not been shared from the active Axiom profile.')
         }
         return this.publisher.runForSlug(record.slug, auth, async () => {
           auth.assertCurrent()

@@ -132,7 +132,7 @@ function SupportSection({
             <SettingsSubsectionHeader
               title={translate(
                 'auto.components.settings.GeneralSupportSection.55a87e5fd1',
-                'Support Orca'
+                'Support Axiom'
               )}
             />
             {state === 'loading' ? <SupportRowSkeleton /> : null}
@@ -169,7 +169,7 @@ function SupportRow({
     <SearchableSetting
       title={translate(
         'auto.components.settings.GeneralSupportSection.6922c1fa2b',
-        'Star Orca on GitHub'
+        'Star Axiom on GitHub'
       )}
       description={translate(
         'auto.components.settings.GeneralSupportSection.511782265b',
@@ -181,7 +181,7 @@ function SupportRow({
       <Label>
         {translate(
           'auto.components.settings.GeneralSupportSection.6922c1fa2b',
-          'Star Orca on GitHub'
+          'Star Axiom on GitHub'
         )}
       </Label>
       {state === 'starred' ? (

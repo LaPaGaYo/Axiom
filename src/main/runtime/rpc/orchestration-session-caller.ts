@@ -110,7 +110,7 @@ export async function resolveOrchestrationSessionCaller(
   const claimed: unknown = evidence?.agentSessionId
   if (route?.pairedDeviceId !== undefined) {
     throw hostBoundary(
-      'This request reached Orca from a paired client, and an agent session id identifies a caller only on the host that runs that session.'
+      'This request reached Axiom from a paired client, and an agent session id identifies a caller only on the host that runs that session.'
     )
   }
   if (evidence?.host) {
@@ -121,7 +121,7 @@ export async function resolveOrchestrationSessionCaller(
   if (typeof claimed !== 'string' || !isOrcaSessionId(claimed)) {
     throw new OrchestrationError(
       CODES.unknown,
-      'The caller named an agent session id that is not an Orca session id. No effects were applied.',
+      'The caller named an agent session id that is not an Axiom session id. No effects were applied.',
       NO_EFFECTS
     )
   }
@@ -159,7 +159,7 @@ async function readSessionRecord(
   if (!store) {
     throw new OrchestrationError(
       CODES.notLive,
-      `Agent session ${sessionId} cannot be verified: this Orca is not running its agent-session host. No effects were applied.`,
+      `Agent session ${sessionId} cannot be verified: this Axiom is not running its agent-session host. No effects were applied.`,
       NO_EFFECTS
     )
   }
@@ -171,13 +171,13 @@ async function readSessionRecord(
   if (owner) {
     throw new OrchestrationError(
       CODES.providerId,
-      `${sessionId} is the provider's own session id, which changes on /clear. This session's Orca id is ${owner.sessionId}; use that instead. No effects were applied.`,
+      `${sessionId} is the provider's own session id, which changes on /clear. This session's Axiom id is ${owner.sessionId}; use that instead. No effects were applied.`,
       { ...NO_EFFECTS, orcaSessionId: owner.sessionId }
     )
   }
   throw new OrchestrationError(
     CODES.unknown,
-    `No Orca agent session ${sessionId} exists on this host. No effects were applied.`,
+    `No Axiom agent session ${sessionId} exists on this host. No effects were applied.`,
     NO_EFFECTS
   )
 }

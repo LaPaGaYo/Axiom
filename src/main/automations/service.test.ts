@@ -708,7 +708,7 @@ describe('AutomationService', () => {
     const poisonRun = reloaded.listAutomationRuns(poison.id)[0]
     expect(poisonRun?.status).toBe('skipped_unavailable')
     expect(poisonRun?.error).toBe(
-      'Orca could not evaluate this automation and skipped the occurrence.'
+      'Axiom could not evaluate this automation and skipped the occurrence.'
     )
     expect(logged).toHaveBeenCalled()
   })
@@ -765,7 +765,7 @@ describe('AutomationService', () => {
     expect(payload.automation.id).toBe(healthy.id)
     expect(reloaded.listAutomationRuns(healthy.id)[0]?.status).toBe('dispatching')
     expect(reloaded.listAutomationRuns(poison.id)[0]?.error).toBe(
-      'Orca could not evaluate this automation and skipped the occurrence.'
+      'Axiom could not evaluate this automation and skipped the occurrence.'
     )
     expect(logged).toHaveBeenCalled()
   })

@@ -154,7 +154,7 @@ describe('describeInstallDirAclPoison', () => {
   it('offers the copyable commands, and drops them once the repair lands', async () => {
     await probeThenRecover(() => [ORPHAN_PACKAGE_ACE])
     const repaired = describeInstallDirAclPoison()
-    expect(repaired?.detail).toContain('Orca repaired the permissions')
+    expect(repaired?.detail).toContain('Axiom repaired the permissions')
     expect(repaired?.detail).not.toContain('Administrator Command Prompt')
     expect(repaired?.commands).toEqual([
       `icacls "${INSTALL_DIR}" /grant "*S-1-15-2-2:(OI)(CI)(RX)"`,

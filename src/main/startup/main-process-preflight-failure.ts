@@ -20,7 +20,7 @@ export function handleMainProcessPreflightFailure(error: unknown): void {
 
   const showDialogAndExit = (): void => {
     try {
-      dialog.showErrorBox('Orca could not start', message)
+      dialog.showErrorBox('Axiom could not start', message)
     } catch (dialogError) {
       console.warn('[startup] Could not show startup failure:', dialogError)
     } finally {

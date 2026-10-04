@@ -71,7 +71,7 @@ describe('serveSignalExitError', () => {
     for (const platform of ['linux', 'win32'] as const) {
       const error = serveSignalExitError('SIGABRT', platform)
 
-      expect(error.message).toBe('Orca serve exited via SIGABRT.')
+      expect(error.message).toBe('Axiom serve exited via SIGABRT.')
       expect(error.data).toBeUndefined()
     }
   })
@@ -79,13 +79,13 @@ describe('serveSignalExitError', () => {
   it('does not claim the macOS cause for other darwin signals', () => {
     const error = serveSignalExitError('SIGKILL', 'darwin')
 
-    expect(error.message).toBe('Orca serve exited via SIGKILL.')
+    expect(error.message).toBe('Axiom serve exited via SIGKILL.')
     expect(error.data).toBeUndefined()
   })
 
   it('stays clear when neither a code nor a signal is reported', () => {
     expect(serveSignalExitError(null, 'darwin').message).toBe(
-      'Orca serve exited without reporting an exit code or signal.'
+      'Axiom serve exited without reporting an exit code or signal.'
     )
   })
 })
@@ -116,7 +116,7 @@ describe('superviseForegroundServe signal exits', () => {
     expect(child.kill).toHaveBeenCalledTimes(2)
 
     child.emit('exit', null, 'SIGKILL')
-    await expect(supervised).rejects.toThrow('Orca serve exited via SIGKILL.')
+    await expect(supervised).rejects.toThrow('Axiom serve exited via SIGKILL.')
   })
 
   it('lets a shared-console Windows child handle Ctrl-C gracefully', async () => {
@@ -210,7 +210,7 @@ describe('superviseForegroundServe signal exits', () => {
     setPlatform('linux')
 
     await expect(superviseUntilExit(null, 'SIGABRT')).rejects.toThrow(
-      'Orca serve exited via SIGABRT.'
+      'Axiom serve exited via SIGABRT.'
     )
   })
 

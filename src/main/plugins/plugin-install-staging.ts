@@ -145,7 +145,7 @@ export async function installStagedPluginTree(input: {
   }
   const blockedReason = input.blockedPluginReason?.(sourceInspection.pluginKey)
   if (blockedReason) {
-    return { ok: false, error: `plugin is blocked by Orca's safety list: ${blockedReason}` }
+    return { ok: false, error: `plugin is blocked by Axiom's safety list: ${blockedReason}` }
   }
   let manifest = sourceInspection.manifest
   const pluginKey = sourceInspection.pluginKey

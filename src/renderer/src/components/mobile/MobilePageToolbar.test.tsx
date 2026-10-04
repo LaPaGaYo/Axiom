@@ -21,7 +21,7 @@ describe('MobilePageToolbar', () => {
     expect(html).toContain('Hide from sidebar')
     expect(html).toContain('mp-page-toolbar-primary')
     expect(html).toContain('Configure in Settings')
-    expect(html).not.toContain('Remove Orca Mobile')
+    expect(html).not.toContain('Remove Axiom Mobile')
   })
 
   it('labels the restore action explicitly when Orca Mobile is hidden from the sidebar', () => {

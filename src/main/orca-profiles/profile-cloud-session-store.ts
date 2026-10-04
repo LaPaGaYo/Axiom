@@ -240,13 +240,13 @@ export function readOrcaCloudSession(
       return {
         status: 'unreadable',
         persistence: 'none',
-        error: 'Cannot read the saved Orca account session: the read failed.'
+        error: 'Cannot read the saved Axiom account session: the read failed.'
       }
     }
     return {
       status: 'decrypt-failed',
       persistence: 'none',
-      error: 'Could not decrypt saved Orca account session.'
+      error: 'Could not decrypt saved Axiom account session.'
     }
   }
 }

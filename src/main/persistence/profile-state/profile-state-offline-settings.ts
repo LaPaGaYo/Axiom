@@ -122,7 +122,7 @@ export function updateAgentHookSettingsFromProfileState(
 export function assertOfflineProfileStateMutationRuntime(): void {
   if (!isProfileStateSqliteAvailable()) {
     throw new Error(
-      'Changing agent hooks offline requires the bundled Orca CLI. Run that launcher, or start Orca and retry this command.'
+      'Changing agent hooks offline requires the bundled Axiom CLI. Run that launcher, or start Axiom and retry this command.'
     )
   }
 }

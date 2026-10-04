@@ -44,7 +44,7 @@ export function parseReadyFrame(frame: string): RemoteRuntimeClientError | null 
     ready = parseRemoteRuntimeJsonText(frame)
   } catch {
     return invalidRemoteRuntimeResponseError(
-      'Remote Orca runtime returned an invalid E2EE handshake frame.'
+      'Remote Axiom runtime returned an invalid E2EE handshake frame.'
     )
   }
   if (
@@ -53,7 +53,7 @@ export function parseReadyFrame(frame: string): RemoteRuntimeClientError | null 
     (ready as { type?: unknown }).type !== 'e2ee_ready'
   ) {
     return invalidRemoteRuntimeResponseError(
-      'Remote Orca runtime returned an unexpected E2EE handshake frame.'
+      'Remote Axiom runtime returned an unexpected E2EE handshake frame.'
     )
   }
   return null
@@ -65,7 +65,7 @@ export function parseAuthenticatedFrame(plaintext: string): RemoteRuntimeClientE
     authenticated = parseRemoteRuntimeJsonText(plaintext)
   } catch {
     return invalidRemoteRuntimeResponseError(
-      'Remote Orca runtime returned an invalid E2EE auth frame.'
+      'Remote Axiom runtime returned an invalid E2EE auth frame.'
     )
   }
   const type = (authenticated as { type?: unknown }).type
@@ -78,7 +78,7 @@ export function parseAuthenticatedFrame(plaintext: string): RemoteRuntimeClientE
     (authenticated as { error?: { code?: unknown } }).error?.code === 'unauthorized'
       ? 'unauthorized'
       : 'invalid_runtime_response'
-  return new RemoteRuntimeClientError(code, 'Remote Orca runtime rejected the pairing token.')
+  return new RemoteRuntimeClientError(code, 'Remote Axiom runtime rejected the pairing token.')
 }
 
 export function parseRemoteRuntimeRpcFrame(plaintext: string): ParsedRemoteRuntimeFrame {
@@ -89,7 +89,7 @@ export function parseRemoteRuntimeRpcFrame(plaintext: string): ParsedRemoteRunti
     return {
       type: 'error',
       error: invalidRemoteRuntimeResponseError(
-        'Remote Orca runtime returned an invalid response frame.'
+        'Remote Axiom runtime returned an invalid response frame.'
       )
     }
   }
@@ -101,7 +101,7 @@ export function parseRemoteRuntimeRpcFrame(plaintext: string): ParsedRemoteRunti
     return {
       type: 'error',
       error: invalidRemoteRuntimeResponseError(
-        'Remote Orca runtime returned an invalid response frame.'
+        'Remote Axiom runtime returned an invalid response frame.'
       )
     }
   }
