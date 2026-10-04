@@ -44,7 +44,7 @@ describe('orchestration skill routing', () => {
       '"another worktree"',
       'lightweight terminal prompts',
       'shell commands',
-      'Orca worktree management',
+      'Axiom worktree management',
       'reading or waiting on terminals'
     ]) {
       expect(description).toContain(trigger)
@@ -94,7 +94,7 @@ describe('orchestration kernel', () => {
     expect(kernel).toContain('Compatibility operator')
     expect(kernel).toContain('Ordinary terminal agent')
     expect(kernel).toContain('Model or effort selection does not make a handoff supervised')
-    expect(squash(kernel)).toContain('Never substitute a non-Orca subagent tool')
+    expect(squash(kernel)).toContain('Never substitute a non-Axiom subagent tool')
   })
 
   it('makes Dispatch identity, remote uncertainty, folders, and mixed versions a safety floor', () => {
@@ -340,7 +340,7 @@ describe('owned orchestration references', () => {
 
     expect(reference).toContain('--worktree current --agent codex')
     expect(squash(reference)).toContain(
-      'A worktree selector needs the full `<repo-id>::<path>` value Orca returned, passed as `id:<newFullWorktreeId>`; a bare repo id is not a worktree id'
+      'A worktree selector needs the full `<repo-id>::<path>` value Axiom returned, passed as `id:<newFullWorktreeId>`; a bare repo id is not a worktree id'
     )
     expect(reference).toContain('--worktree new-child')
     expect(reference).toContain('--worktree new-top-level')

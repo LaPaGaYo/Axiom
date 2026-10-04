@@ -27,7 +27,7 @@ describe('computer-use skill guidance', () => {
       'Use only when a visible window needs GUI control those cannot reach.'
     )
     expect(description).toContain('external browser windows')
-    expect(description).toContain("Do not use for Orca's embedded browser (`orca-cli`)")
+    expect(description).toContain("Do not use for Axiom's embedded browser (`orca-cli`)")
     expect(description).not.toMatch(/Playwright/iu)
     expect(description).not.toContain('page-only')
     expect(description).not.toContain('OS/window-level')
