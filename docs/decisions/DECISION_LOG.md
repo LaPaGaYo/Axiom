@@ -246,3 +246,12 @@ marketplace 官方源禁用 / skills 安装源改 `LaPaGaYo/Axiom` / star 提示
 **备选**：按 orca-mapping §7 原表述"保留目录但移出默认构建"同时保留 cloud/——cloud 与桌面产品零耦合，保留只剩噪音与误导；或连 mobile/ 一起删——需要改动 6+ 个根级配置与脚本，且桌面端配对功能的去留是产品决定，留待 V1 之后。
 **后果**：ratchet 基线减少约 205 对（cloud ~126 + mobile ~79）；上游针对 onorca 基础设施的工作流不再存在于本仓库。
 **取代规则**：恢复 cloud/ 或删除 mobile/ 需新 Decision。
+
+## D33a · 修正 D33：`mobile/` 仍是交付代码（桌面包内含 mobile web bundle），保留在 ratchet 与 CI 中；只删原生发布工作流 — ACCEPTED（Henry 2026-10-04）
+
+**背景**：M0-07 attempt 1 的 Worker 正确地停下并提交了部分结果（`.axiom-work/reports/M0-07-1.md`）：(a) brief 里"`src/`、`config/`、`tests/` 不依赖 `cloud/`"不成立——`src/main/runtime/push/push-host-proof-vector.test.ts` 从 `cloud/packages/push-contract` 引入 fixture，`tests/e2e/relay-region-{correction,compatibility}.unit.test.ts` 测的是 cloud relay 代码，`config/reliability-gates.jsonc` 有四条门禁引用 cloud 路径，`config/scripts/source-tree-walk-benchmark.mjs` 扫描 `cloud/apps`；(b) D33 把 `mobile/` 当作不交付代码排除出 ratchet 的前提是错的——`config/electron-builder.config.cjs` 在打包时把 `mobile/` 构建出的 **mobile web bundle**（`out/mobile-web`，桌面端配对手机时提供的网页版 companion）装进桌面应用，所以 `mobile/` 的代码随桌面产品交付，其中的厂商出口 needle 必须继续受 ratchet 约束；打包工作流里的 `install-mobile-dependencies` 步骤也因此不能删。
+**决定**：
+- `cloud/` 照删，先处理依赖：push-contract 的 proof-vector fixture 移入 `src/main/runtime/push/__fixtures__/`；删除两个 cloud relay 的 e2e 测试；reliability gates 中以 cloud 文件为测试对象的两条（`relay.control-activation-ownership`、`relay.assignment-headroom-scope`）移除，另两条（`mobile-relay.endpoint-recovery`、`desktop-relay.assignment-backpressure`）只去掉 cloud 源码链接；benchmark 去掉 `cloud/apps`；lint/scope 配置里的 cloud 忽略模式与注释留作后续清理。
+- `mobile/` **不**从 ratchet 排除（撤回 attempt 1 的排除；基线只减 cloud 的 pair）；保留 `mobile.yml` 检查、`install-mobile-dependencies` 及其所有使用、`pr.yml` 的 `mobile_web_app` 作业；只删 `mobile-android-release.yml` 与 `mobile-ios-release.yml`（原生 App 不构建不发布）。
+- 是否把"手机 companion"整体从桌面端移除（连同 web bundle、配对 UI、relay/push 客户端）是另一个产品决定，不在 M0 内。
+**取代规则**：取代 D33 中关于 mobile ratchet 排除与 mobile CI 的部分；cloud/ 删除部分不变。
