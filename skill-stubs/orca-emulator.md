@@ -1,13 +1,13 @@
-# Orca Emulator
+# Axiom Emulator
 
-This discovery stub loads the version-matched guide from the Orca executable used for this session.
+This discovery stub loads the version-matched guide from the Axiom executable used for this session.
 
-Prefer Orca over raw `serve-sim` or direct `simctl` for simulator control inside Orca; it
+Prefer Axiom over raw `serve-sim` or direct `simctl` for simulator control inside Axiom; it
 handles device scoping, helper lifecycle, and worktree context.
 
 <!-- shared: resolver -->
 
-## Load the version-matched guide before running Orca commands
+## Load the version-matched guide before running Axiom commands
 
 ```text
 ORCA skills get orca-emulator

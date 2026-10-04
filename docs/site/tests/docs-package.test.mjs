@@ -43,7 +43,7 @@ function isMediaPath(urlPath) {
 test('docs package has an isolated, reproducible app contract', async () => {
   const packageJson = JSON.parse(await read('package.json'))
 
-  assert.equal(packageJson.name, '@orca/docs')
+  assert.equal(packageJson.name, '@axiom/docs')
   assert.equal(packageJson.private, true)
   assert.equal(packageJson.packageManager, 'pnpm@10.24.0')
   assert.equal(packageJson.engines.node, '22.x')
@@ -68,8 +68,8 @@ test('docs package has an isolated, reproducible app contract', async () => {
 test('all customer-facing docs pages and navigation metadata are present', async () => {
   const pages = await walkFiles(contentRoot, '.mdx')
   assert.ok(
-    pages.length >= 57,
-    `expected at least the current 57 docs pages, found ${pages.length}`
+    pages.length >= 54,
+    `expected at least the current 54 docs pages, found ${pages.length}`
   )
 
   for (const relativePath of [

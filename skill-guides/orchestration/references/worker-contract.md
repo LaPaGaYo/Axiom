@@ -18,7 +18,7 @@ liveness, never completion.
 
 ## Ask and resume
 
-Use Orca `ask` whenever the coordinator must answer. Never open a local question
+Use Axiom `ask` whenever the coordinator must answer. Never open a local question
 TUI the coordinator cannot answer.
 
 ```text
