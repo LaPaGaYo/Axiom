@@ -1,2 +1,2 @@
-targets: config/scripts/pr-workflow-lint-parity config/scripts/check-vendor-egress-ratchet
-extra: test ! -d cloud; ! ls .github/workflows | grep -E "^(cloud-|mobile)"; ! git grep -n -E "install-mobile-dependencies|mobile_web_app|mobile_dependencies" -- .github
+targets: config/scripts/pr-workflow-lint-parity config/scripts/check-vendor-egress-ratchet config/scripts/electron-builder-config src/main/runtime/push
+extra: test ! -d cloud; ! ls .github/workflows | grep -E "^(cloud-|mobile-.*-release)"; test -f .github/workflows/mobile.yml; test -d .github/actions/install-mobile-dependencies; ! git grep -n -E "(^|[^A-Za-z-])cloud/" -- src tests package.json pnpm-workspace.yaml | grep -v -E "^(src/shared/mobile-push-contract.ts|src/main/runtime/push/push-gateway-client.ts|src/main/runtime/push/push-host-proof.ts|src/main/runtime/relay/relay-renewal-jitter.ts):"; pnpm run check:reliability-gates
