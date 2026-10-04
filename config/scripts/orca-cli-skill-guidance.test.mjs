@@ -37,18 +37,18 @@ describe('orca CLI skill guidance', () => {
     )
     expect(description).not.toMatch(/Playwright/iu)
     expect(skill).toContain(
-      'For external Chrome/Safari/webviews or Orca app chrome/settings, use the Computer Use skill/tool only when the task requires OS/window-level control'
+      'For external Chrome/Safari/webviews or Axiom app chrome/settings, use the Computer Use skill/tool only when the task requires OS/window-level control'
     )
     expect(skill).toContain(
-      "Use `orca-cli` for Orca's embedded pages and a page-automation tool such as Playwright or CDP for external pages"
+      "Use `orca-cli` for Axiom's embedded pages and a page-automation tool such as Playwright or CDP for external pages"
     )
   })
 
   it('keeps independent worktree lineage separate from Git base selection', () => {
     const skill = readSkill()
 
-    expect(skill).toContain('`--no-parent` only controls Orca lineage')
-    expect(skill).toContain('omit `--base-branch` so Orca uses the repo default base')
+    expect(skill).toContain('`--no-parent` only controls Axiom lineage')
+    expect(skill).toContain('omit `--base-branch` so Axiom uses the repo default base')
     expect(skill).toContain('Never base it on the current feature branch')
   })
 
