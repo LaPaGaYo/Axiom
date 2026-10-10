@@ -1,2 +1,2 @@
-targets: tests/e2e/helpers/recording-proxy src/shared/product-build-identity src/main/preflight src/main/rate-limits
-extra: ORCA_BACKGROUND_LAUNCH=1 pnpm run test:e2e:egress-cold-start
+targets: src/main/startup src/main/agent-hooks src/main/codex src/main/preflight src/main/rate-limits src/main/ipc src/main/provider-activation src/shared tests/e2e/helpers/recording-proxy
+extra: ORCA_BACKGROUND_LAUNCH=1 pnpm run test:e2e:egress-cold-start; ! git grep -n -E "chatgpt\.com|github\.com" -- tests/e2e/golden-egress-cold-start.spec.ts; test "$(git grep -l "vendor-egress-ratchet: allow" -- src tests | grep -v -E "^(tests/e2e/golden-egress-cold-start.spec.ts|tests/e2e/helpers/recording-proxy)" | wc -l)" -eq 0; grep -q "Attribution" docs/review-evidence/axiom-m0/M0-08-egress-capture.md
