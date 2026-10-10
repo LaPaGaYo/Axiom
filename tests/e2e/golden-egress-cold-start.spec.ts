@@ -1,5 +1,7 @@
+import { isIP } from 'node:net'
 import { expect, test as base } from './helpers/orca-app'
 import { RecordingProxy } from './helpers/recording-proxy'
+import { waitForSessionReady } from './helpers/store'
 
 const vendorHosts = [
   'onorca.dev', // vendor-egress-ratchet: allow -- assertion data
@@ -55,7 +57,17 @@ const test = base.extend<
         const forbidden = Object.keys(tally).filter((host) =>
           vendorHosts.some((vendor) => host.includes(vendor))
         )
-        expect(forbidden, `Vendor requests in full host tally:\n${body}`).toEqual([])
+        expect.soft(forbidden, `Vendor requests in full host tally:\n${body}`).toEqual([])
+        const nonLoopbackTally = Object.fromEntries(
+          Object.entries(tally).filter(
+            ([host]) =>
+              host !== 'localhost' &&
+              host !== '::1' &&
+              host !== '[::1]' &&
+              !(isIP(host) === 4 && host.startsWith('127.'))
+          )
+        )
+        expect(nonLoopbackTally, `Non-loopback requests in full host tally:\n${body}`).toEqual({})
       }
     },
     { auto: true }
@@ -78,7 +90,7 @@ test.describe('cold-start egress @egress-cold-start-golden', () => {
   })
 
   test('default profile reaches the main window then idles', async ({ orcaPage }) => {
-    await expect(orcaPage.getByRole('button', { name: 'Explorer', exact: true })).toBeVisible()
+    await waitForSessionReady(orcaPage)
     await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeHidden()
     await orcaPage.waitForTimeout(20_000)
   })

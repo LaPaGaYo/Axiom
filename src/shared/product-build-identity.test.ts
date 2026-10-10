@@ -1,9 +1,9 @@
 // @vitest-environment node
+import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import compatibilityContract from './local-build-compatibility-contract.json'
 import packageJson from '../../package.json'
 import { PRODUCT_EGRESS_POLICY } from './product-egress-policy'
 // Reuse the complete policy pin, including all disabled endpoints and empty host lists.
@@ -11,6 +11,16 @@ import './product-egress-policy.test'
 
 // The CLI build also compiles shared tests as CommonJS.
 const requireFromRepository = createRequire(path.join(process.cwd(), 'package.json'))
+const compatibilityContract = z
+  .object({ appId: z.string() })
+  .parse(
+    JSON.parse(
+      readFileSync(
+        path.join(process.cwd(), 'src/shared/local-build-compatibility-contract.json'),
+        'utf8'
+      )
+    )
+  )
 const buildIdentity = z
   .object({
     appId: z.string(),
