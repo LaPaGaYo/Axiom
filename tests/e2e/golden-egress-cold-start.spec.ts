@@ -54,6 +54,16 @@ const test = base.extend<
         const body = JSON.stringify(tally, null, 2)
         await testInfo.attach('egress-host-tally', { body, contentType: 'application/json' })
         console.log(`[egress-host-tally] ${testInfo.title}\n${body}`)
+        const attributedBody = JSON.stringify(
+          Object.fromEntries([...recordingProxy.proxy.attributedTally()].sort()),
+          null,
+          2
+        )
+        await testInfo.attach('egress-attributed-tally', {
+          body: attributedBody,
+          contentType: 'application/json'
+        })
+        console.log(`[egress-attributed-tally] ${testInfo.title}\n${attributedBody}`)
         const forbidden = Object.keys(tally).filter((host) =>
           vendorHosts.some((vendor) => host.includes(vendor))
         )
