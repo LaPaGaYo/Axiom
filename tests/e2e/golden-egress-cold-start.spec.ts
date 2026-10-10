@@ -3,6 +3,11 @@ import { expect, test as base } from './helpers/orca-app'
 import { RecordingProxy } from './helpers/recording-proxy'
 import { waitForSessionReady } from './helpers/store'
 
+const captureStack = process.env.AXIOM_EGRESS_CAPTURE_STACK ?? 'both'
+if (!['both', 'chromium', 'node'].includes(captureStack)) {
+  throw new Error('AXIOM_EGRESS_CAPTURE_STACK must be both, chromium, or node')
+}
+
 const vendorHosts = [
   'onorca.dev', // vendor-egress-ratchet: allow -- assertion data
   'orca.dev', // vendor-egress-ratchet: allow -- assertion data
@@ -31,15 +36,21 @@ const test = base.extend<
     { scope: 'worker' }
   ],
   orcaAppExtraArgs: async ({ recordingProxy }, provideFixture) => {
-    await provideFixture([`--proxy-server=${recordingProxy.url}`])
+    await provideFixture(captureStack === 'node' ? [] : [`--proxy-server=${recordingProxy.url}`])
   },
   orcaAppExtraEnv: async ({ recordingProxy }, provideFixture) => {
+    const envProxy = captureStack === 'chromium' ? '' : recordingProxy.url
     await provideFixture({
-      HTTP_PROXY: recordingProxy.url,
-      HTTPS_PROXY: recordingProxy.url,
-      ALL_PROXY: recordingProxy.url,
-      NODE_USE_ENV_PROXY: '1',
+      // Override inherited lowercase proxies too, so the selected stack is reproducible.
+      HTTP_PROXY: envProxy,
+      HTTPS_PROXY: envProxy,
+      ALL_PROXY: envProxy,
+      http_proxy: envProxy,
+      https_proxy: envProxy,
+      all_proxy: envProxy,
+      NODE_USE_ENV_PROXY: captureStack === 'chromium' ? '0' : '1',
       NO_PROXY: 'localhost,127.0.0.1,::1',
+      no_proxy: 'localhost,127.0.0.1,::1',
       ORCA_BACKGROUND_LAUNCH: '1'
     })
   },
@@ -53,7 +64,7 @@ const test = base.extend<
         const tally = Object.fromEntries([...recordingProxy.proxy.hostTally()].sort())
         const body = JSON.stringify(tally, null, 2)
         await testInfo.attach('egress-host-tally', { body, contentType: 'application/json' })
-        console.log(`[egress-host-tally] ${testInfo.title}\n${body}`)
+        console.log(`[egress-host-tally stack=${captureStack}] ${testInfo.title}\n${body}`)
         const attributedBody = JSON.stringify(
           Object.fromEntries([...recordingProxy.proxy.attributedTally()].sort()),
           null,
@@ -63,7 +74,9 @@ const test = base.extend<
           body: attributedBody,
           contentType: 'application/json'
         })
-        console.log(`[egress-attributed-tally] ${testInfo.title}\n${attributedBody}`)
+        console.log(
+          `[egress-attributed-tally stack=${captureStack}] ${testInfo.title}\n${attributedBody}`
+        )
         const forbidden = Object.keys(tally).filter((host) =>
           vendorHosts.some((vendor) => host.includes(vendor))
         )

@@ -2,7 +2,7 @@ import { request } from 'node:http'
 import { connect } from 'node:net'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as childProcess from '../../../src/shared/child-process/run-process'
-import { RecordingProxy } from './recording-proxy'
+import { RecordingProxy, resolvePeerProcess } from './recording-proxy'
 
 it('returns empty tallies before any request', () => {
   const proxy = new RecordingProxy()
@@ -18,19 +18,19 @@ it('groups each host by process and retains unknown attribution', () => {
       method: 'GET',
       url: 'http://Example.invalid:80/path',
       remotePort: 50001,
-      process: { pid: 10, command: 'client-a' }
+      process: { pid: 10, command: 'client-a', ppid: null, ps: null, parent: null }
     },
     {
       method: 'CONNECT',
       url: 'example.invalid:443',
       remotePort: 50002,
-      process: { pid: 10, command: 'client-a' }
+      process: { pid: 10, command: 'client-a', ppid: null, ps: null, parent: null }
     },
     {
       method: 'CONNECT',
       url: 'example.invalid:443',
       remotePort: 50003,
-      process: { pid: 20, command: 'client-b' }
+      process: { pid: 20, command: 'client-b', ppid: null, ps: null, parent: null }
     },
     { method: 'GET', url: 'http://example.invalid./path', remotePort: 50004, process: null },
     { method: 'GET', url: '/malformed', remotePort: null, process: null }
@@ -41,12 +41,12 @@ it('groups each host by process and retains unknown attribution', () => {
       [
         'example.invalid',
         [
-          { pid: 10, command: 'client-a', count: 2 },
-          { pid: 20, command: 'client-b', count: 1 },
-          { pid: null, command: null, count: 1 }
+          { pid: 10, command: 'client-a', ppid: null, ps: null, parent: null, count: 2 },
+          { pid: 20, command: 'client-b', ppid: null, ps: null, parent: null, count: 1 },
+          { pid: null, command: null, ppid: null, ps: null, parent: null, count: 1 }
         ]
       ],
-      ['/malformed', [{ pid: null, command: null, count: 1 }]]
+      ['/malformed', [{ pid: null, command: null, ppid: null, ps: null, parent: null, count: 1 }]]
     ])
   )
   expect(proxy.recorded).toEqual(entries)
@@ -128,10 +128,16 @@ describe('recording proxy', () => {
     for (const entry of proxy.recorded) {
       expect(entry.remotePort).toBeGreaterThan(0)
       if (lsof?.code === 0) {
-        expect(entry.process).toEqual({ pid: process.pid, command: expect.any(String) })
+        expect(entry.process).toMatchObject({
+          pid: process.pid,
+          command: expect.any(String),
+          ppid: process.ppid,
+          ps: expect.any(String),
+          parent: expect.objectContaining({ pid: process.ppid })
+        })
         expect(entry.process?.command).not.toBe('')
       } else {
-        expect(entry.process).toBeNull()
+        expect(entry.process?.pid ?? null).toBe(entry.process ? process.pid : null)
       }
     }
     expect(proxy.attributedTally()).toEqual(
@@ -140,8 +146,11 @@ describe('recording proxy', () => {
           'example.invalid',
           [
             {
-              pid: lsof?.code === 0 ? process.pid : null,
+              pid: proxy.recorded[0].process?.pid ?? null,
               command: proxy.recorded[0].process?.command ?? null,
+              ppid: proxy.recorded[0].process?.ppid ?? null,
+              ps: proxy.recorded[0].process?.ps ?? null,
+              parent: proxy.recorded[0].process?.parent ?? null,
               count: 2
             }
           ]
@@ -159,7 +168,12 @@ describe('recording proxy', () => {
     expect(proxy.recorded.every((entry) => entry.process === null)).toBe(true)
     expect(proxy.hostTally()).toEqual(new Map([['example.invalid', 2]]))
     expect(proxy.attributedTally()).toEqual(
-      new Map([['example.invalid', [{ pid: null, command: null, count: 2 }]]])
+      new Map([
+        [
+          'example.invalid',
+          [{ pid: null, command: null, ppid: null, ps: null, parent: null, count: 2 }]
+        ]
+      ])
     )
   })
 
@@ -173,26 +187,34 @@ describe('recording proxy', () => {
     expect(await send('CONNECT', 'example.invalid:443')).toBe(502)
     expect(proxy.recorded[0].process).toBeNull()
     expect(proxy.attributedTally()).toEqual(
-      new Map([['example.invalid', [{ pid: null, command: null, count: 1 }]]])
+      new Map([
+        [
+          'example.invalid',
+          [{ pid: null, command: null, ppid: null, ps: null, parent: null, count: 1 }]
+        ]
+      ])
     )
   })
 
   it('selects the client endpoint and looks up pipelined requests only once per connection', async () => {
     const socket = connect(Number(new URL(proxyUrl).port), '127.0.0.1')
-    const lookup = vi.spyOn(childProcess, 'runProcess').mockImplementation(async () => ({
+    const lookup = vi.spyOn(childProcess, 'runProcess').mockImplementation(async ({ program }) => ({
       code: 0,
       signal: null,
       timedOut: false,
       stderr: '',
-      stdout: [
-        'p999',
-        'cproxy',
-        `n127.0.0.1:${socket.remotePort}->127.0.0.1:${socket.localPort}`,
-        'p123',
-        'cclient',
-        `n127.0.0.1:${socket.localPort}->127.0.0.1:${socket.remotePort}`,
-        ''
-      ].join('\n')
+      stdout:
+        program !== 'lsof'
+          ? ''
+          : [
+              'p999',
+              'cproxy',
+              `n127.0.0.1:${socket.remotePort}->127.0.0.1:${socket.localPort}`,
+              'p123',
+              'cclient',
+              `n127.0.0.1:${socket.localPort}->127.0.0.1:${socket.remotePort}`,
+              ''
+            ].join('\n')
     }))
     let remotePort: number | undefined
     await new Promise<void>((resolve, reject) => {
@@ -208,13 +230,15 @@ describe('recording proxy', () => {
       socket.on('close', () => resolve())
     })
     const supportsLsof = process.platform === 'darwin' || process.platform === 'linux'
-    expect(lookup).toHaveBeenCalledTimes(supportsLsof ? 1 : 0)
+    expect(lookup.mock.calls.filter(([spec]) => spec.program === 'lsof')).toHaveLength(
+      supportsLsof ? 1 : 0
+    )
     if (supportsLsof) {
       expect(lookup).toHaveBeenCalledWith({
         program: 'lsof',
         args: ['-nP', '-a', `-iTCP:${remotePort}`, '-sTCP:ESTABLISHED', '-Fpcn'],
         timeoutMs: 1_000,
-        maxOutputBytes: 64 * 1024
+        maxOutputBytes: 1024 * 1024
       })
     }
     expect(proxy.recorded.map((entry) => entry.remotePort)).toEqual([remotePort, remotePort])
@@ -222,7 +246,16 @@ describe('recording proxy', () => {
       new Map([
         [
           'example.invalid',
-          [{ pid: supportsLsof ? 123 : null, command: supportsLsof ? 'client' : null, count: 2 }]
+          [
+            {
+              pid: supportsLsof ? 123 : null,
+              command: supportsLsof ? 'client' : null,
+              ppid: null,
+              ps: null,
+              parent: null,
+              count: 2
+            }
+          ]
         ]
       ])
     )
@@ -246,7 +279,174 @@ describe('recording proxy', () => {
       { method: 'GET', url: 'http://example.invalid/socket', remotePort, process: null }
     ])
     expect(proxy.attributedTally()).toEqual(
-      new Map([['example.invalid', [{ pid: null, command: null, count: 1 }]]])
+      new Map([
+        [
+          'example.invalid',
+          [{ pid: null, command: null, ppid: null, ps: null, parent: null, count: 1 }]
+        ]
+      ])
     )
   })
+})
+
+describe('process attribution without sockets', () => {
+  const peer = {
+    remoteAddress: '127.0.0.1',
+    remotePort: 50123,
+    localAddress: '127.0.0.1',
+    localPort: 50124
+  }
+  const lsof = 'p123\ncgit-remote-http\nn127.0.0.1:50123->127.0.0.1:50124\n'
+  const parentPs = '42 /usr/bin/git git fetch https://example.invalid/repo'
+  const peerPs = '456 /usr/bin/git-remote-http git-remote-http origin https://example.invalid/repo'
+  const oldTable = [
+    'Proto Recv-Q Send-Q Local Address Foreign Address (state) rhiwat shiwat pid epid state options',
+    `tcp4 0 0 127.0.0.1.50124 127.0.0.1.50123 ESTABLISHED 0 0 ${process.pid} 0 0 0`,
+    'tcp4 0 0 127.0.0.1.50123 127.0.0.1.50124 ESTABLISHED 0 0 123 0 0 0'
+  ].join('\n')
+  const modernTable = [
+    'Proto Recv-Q Send-Q Local Address Foreign Address (state) rxbytes txbytes rhiwat shiwat process:pid eprocess:epid state',
+    'tcp4 0 0 127.0.0.1.50123 127.0.0.1.50124 ESTABLISHED 0 0 0 0 Electron Helper:123 Electron Helper:123 0'
+  ].join('\n')
+
+  function mockCommands(outputs: { lsof?: string; netstat?: string; ps?: string } = {}) {
+    return vi.spyOn(childProcess, 'runProcess').mockImplementation(async ({ program, args }) => {
+      const stdout =
+        program === 'lsof'
+          ? (outputs.lsof ?? lsof)
+          : program === 'netstat'
+            ? (outputs.netstat ?? '')
+            : (outputs.ps ?? (args?.[1] === '456' ? parentPs : peerPs))
+      return { code: 0, stdout, stderr: '', timedOut: false, signal: null }
+    })
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  })
+
+  it('waits at least 300 ms and retains peer and parent ps evidence', async () => {
+    const calls = mockCommands()
+    let finished = false
+    const pending = resolvePeerProcess(peer).then((value) => {
+      finished = true
+      return value
+    })
+    await vi.advanceTimersByTimeAsync(299)
+    expect(finished).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(await pending).toEqual({
+      pid: 123,
+      command: 'git-remote-http',
+      ppid: 456,
+      ps: peerPs,
+      parent: { pid: 456, ppid: 42, ps: parentPs }
+    })
+    expect(calls.mock.calls.map(([spec]) => [spec.program, spec.args])).toEqual([
+      ['lsof', ['-nP', '-a', '-iTCP:50123', '-sTCP:ESTABLISHED', '-Fpcn']],
+      ['netstat', ['-anv', '-p', 'tcp']],
+      ['ps', ['-p', '123', '-o', 'ppid=,comm=,args=']],
+      ['ps', ['-p', '456', '-o', 'ppid=,comm=,args=']]
+    ])
+  })
+
+  it.each([oldTable, modernTable])(
+    'uses macOS netstat when lsof misses the peer',
+    async (netstat) => {
+      mockCommands({ lsof: '', netstat })
+      const pending = resolvePeerProcess(peer)
+      await vi.runAllTimersAsync()
+      expect(await pending).toMatchObject({ pid: 123, ppid: 456, ps: peerPs, parent: { pid: 456 } })
+    }
+  )
+
+  it('keeps the captured endpoint when socket properties change during lookup', async () => {
+    mockCommands()
+    const changingPeer = { ...peer }
+    const pending = resolvePeerProcess(changingPeer)
+    changingPeer.remotePort = 9
+    await vi.runAllTimersAsync()
+    expect(await pending).toMatchObject({ pid: 123 })
+  })
+
+  it('prefers a non-proxy netstat owner over lsof naming the proxy', async () => {
+    mockCommands({ lsof: lsof.replace('p123', `p${process.pid}`), netstat: modernTable })
+    const pending = resolvePeerProcess(peer)
+    await vi.runAllTimersAsync()
+    expect(await pending).toMatchObject({ pid: 123, command: 'Electron Helper' })
+  })
+
+  it.each(['CLOSE_WAIT', 'LISTEN'])('ignores non-established netstat rows (%s)', async (state) => {
+    mockCommands({ lsof: '', netstat: oldTable.replaceAll('ESTABLISHED', state) })
+    const pending = resolvePeerProcess(peer)
+    await vi.runAllTimersAsync()
+    expect(await pending).toBeNull()
+  })
+
+  it('does not attribute another socket that shares only one endpoint', async () => {
+    mockCommands({ lsof: '', netstat: oldTable.replaceAll('127.0.0.1.50124', '127.0.0.1.9') })
+    const pending = resolvePeerProcess(peer)
+    await vi.runAllTimersAsync()
+    expect(await pending).toBeNull()
+  })
+
+  it('retains socket identity when ps cannot identify an exited process', async () => {
+    mockCommands({ ps: '' })
+    const pending = resolvePeerProcess(peer)
+    await vi.runAllTimersAsync()
+    expect(await pending).toEqual({
+      pid: 123,
+      command: 'git-remote-http',
+      ppid: null,
+      ps: null,
+      parent: null
+    })
+  })
+
+  it('scrubs credentials from ps evidence while retaining the git operation', async () => {
+    mockCommands({
+      ps: '456 git git fetch https://user:password@example.invalid/repo --token=secret'
+    })
+    const pending = resolvePeerProcess(peer)
+    await vi.runAllTimersAsync()
+    const result = await pending
+    expect(result?.ps).toContain('git fetch https://[redacted]@example.invalid/repo')
+    expect(JSON.stringify(result)).not.toMatch(/password|=secret/)
+  })
+
+  it.each(['linux', 'win32'] as const)('uses only supported tools on %s', async (platform) => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+    const calls = mockCommands()
+    const pending = resolvePeerProcess(peer)
+    await vi.runAllTimersAsync()
+    expect((await pending)?.pid ?? null).toBe(platform === 'linux' ? 123 : null)
+    expect(calls.mock.calls.some(([spec]) => spec.program === 'netstat')).toBe(false)
+  })
+
+  it.each(['missing', 'timeout', 'truncated', 'nonzero'])(
+    'returns null for %s tools after the hold',
+    async (failure) => {
+      vi.spyOn(childProcess, 'runProcess').mockImplementation(async () => {
+        if (failure === 'missing') {
+          throw new Error('not installed')
+        }
+        return {
+          code: failure === 'nonzero' ? 1 : 0,
+          stdout: lsof,
+          stderr: '',
+          signal: null,
+          timedOut: failure === 'timeout',
+          outputTruncated: failure === 'truncated'
+        }
+      })
+      const pending = resolvePeerProcess(peer)
+      await vi.runAllTimersAsync()
+      expect(await pending).toBeNull()
+    }
+  )
 })
