@@ -1,3 +1,5 @@
+import { configurePreflightProviderActivation } from '../preflight/agent-detection'
+import { isProviderActivated } from '../provider-activation/provider-activation'
 import { app } from 'electron'
 import { RateLimitService } from '../rate-limits/service'
 import { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-service'
@@ -37,7 +39,11 @@ export function initializeMainProcessAccountServices(): void {
   ) {
     throw new Error('Usage stores must be initialized before account services')
   }
+  configurePreflightProviderActivation(store)
   state.rateLimits = new RateLimitService()
+  state.rateLimits.setProviderActivationResolver((provider) =>
+    isProviderActivated(store.getSettings(), provider)
+  )
   state.codexRuntimeHome = new CodexRuntimeHomeService(store)
   void startCodexStateDbBackfillRecoveryInBackground(getOrcaManagedCodexHomePath())
   // Why: an incapable trust-grant host must fall back to the managed home for
@@ -49,9 +55,10 @@ export function initializeMainProcessAccountServices(): void {
   // trust lane re-arms the sweep so downgrade, opt-out, and rollback converge.
   setSystemCodexHomeHookSweepSuppressed(
     () =>
-      state.codexRuntimeHome !== null &&
-      state.codexRuntimeHome.isHostSystemDefaultRealHome() &&
-      isAgentStatusHooksEnabled(state.store?.getSettings())
+      !isProviderActivated(store.getSettings(), 'codex') ||
+      (state.codexRuntimeHome !== null &&
+        state.codexRuntimeHome.isHostSystemDefaultRealHome() &&
+        isAgentStatusHooksEnabled(state.store?.getSettings()))
   )
   state.codexSessionMigration = createCodexSessionMigrationScheduler({
     isEligible: () =>
@@ -88,6 +95,9 @@ export function initializeMainProcessAccountServices(): void {
     store.getSettings()
   )
   store.onSettingsChanged((updates, settings) => {
+    if ('providerActivations' in updates) {
+      state.rateLimits?.updateProviderActivation()
+    }
     // Why: auto is a live policy; retarget only providers whose settings-derived runtime changed.
     void syncAccountRuntimeTargets(updates, settings).catch((error) =>
       console.warn('[rate-limits] Failed to apply account runtime target:', error)

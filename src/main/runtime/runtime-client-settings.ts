@@ -1,3 +1,4 @@
+import { recordProviderActivation } from '../provider-activation/provider-activation'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { isArtifactSharingEnabled } from '../../shared/artifact-sharing-gate'
 import { isAgentSkillSharingEnabled } from '../../shared/agent-skill-sharing-gate'
@@ -216,7 +217,22 @@ export class RuntimeClientSettingsController {
       if (!settings) {
         return
       }
+      if (
+        this.store?.updateSettings &&
+        settings.agentStatusHooksEnabled !== false &&
+        !settings.disabledTuiAgents?.includes('codex')
+      ) {
+        recordProviderActivation(
+          {
+            getSettings: () => settings,
+            updateSettings: this.store.updateSettings.bind(this.store)
+          },
+          'codex',
+          'settings-hook-install'
+        )
+      }
       await applyAgentStatusHooksEnabled(settings.agentStatusHooksEnabled !== false, settings, {
+        userInitiated: true,
         shouldHydrateShellPath: getAppEnvironment().isPackaged(),
         onInstallError: recordManagedHookInstallFailure,
         shouldContinue: (agent) => {

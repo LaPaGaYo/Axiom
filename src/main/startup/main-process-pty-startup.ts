@@ -1,3 +1,4 @@
+import { isProviderActivated } from '../provider-activation/provider-activation'
 import { app } from 'electron'
 import { classifyError } from '../telemetry/classify-error'
 import { track } from '../telemetry/client'
@@ -143,7 +144,7 @@ export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServ
           // Why (#16441): each retained home can run a codex app-server grant
           // session. Awaiting them here delayed the first window by N sessions;
           // a retained shell cannot invoke Codex before this provider serves.
-          if (hasRetainedManagedHostPane) {
+          if (hasRetainedManagedHostPane && isProviderActivated(settings, 'codex')) {
             void reconcileRetainedCodexHookHomes({
               hookService: codexHookService,
               hooksEnabled:

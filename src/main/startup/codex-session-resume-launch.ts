@@ -1,3 +1,4 @@
+import { recordProviderActivation } from '../provider-activation/provider-activation'
 import { app } from 'electron'
 import type { AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
@@ -49,6 +50,7 @@ export async function prepareCodexSessionResumeForLaunch(args: {
     // outrank the path-sorted account homes or a system-default selection resumes as an account.
     sharedRuntimeCodexHomePath: getOrcaManagedCodexHomePath(),
     resolveVerifiedResumeHome: async (sessionSource) => {
+      recordProviderActivation(store, 'codex', 'agent-launch')
       let migrated = { useRealCodexHome: false }
       try {
         migrated = await prepareLegacySharedCodexSessionResume(

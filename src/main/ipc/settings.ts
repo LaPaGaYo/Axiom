@@ -1,3 +1,4 @@
+import { recordProviderActivation } from '../provider-activation/provider-activation'
 import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import type { Store } from '../persistence'
 import type { GlobalSettings } from '../../shared/global-settings-types'
@@ -56,6 +57,7 @@ function sanitizeRendererSettingsUpdate(args: Partial<GlobalSettings>): Partial<
   // writes must pass the dedicated reviewed-fingerprint handlers.
   delete sanitizedArgs.pluginConsents
   delete sanitizedArgs.disabledPlugins
+  delete sanitizedArgs.providerActivations
   return sanitizedArgs
 }
 
@@ -237,6 +239,9 @@ export function registerSettingsHandlers(
       ('disabledTuiAgents' in sanitizedArgs &&
         !haveSameDisabledTuiAgents(before.disabledTuiAgents, result.disabledTuiAgents))
     if (hookSettingChanged) {
+      if (result.agentStatusHooksEnabled && !result.disabledTuiAgents.includes('codex')) {
+        recordProviderActivation(store, 'codex', 'settings-hook-install')
+      }
       try {
         await applyAgentStatusHooksEnabled(result.agentStatusHooksEnabled, result, {
           userInitiated: true,

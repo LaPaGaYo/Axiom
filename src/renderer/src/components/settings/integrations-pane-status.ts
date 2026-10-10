@@ -1,12 +1,32 @@
 import type { PreflightStatus } from '../../../../preload/api-types'
 
-export type GhStatus = 'checking' | 'connected' | 'not-installed' | 'not-authenticated'
+export type GhStatus =
+  | 'not-checked'
+  | 'checking'
+  | 'connected'
+  | 'not-installed'
+  | 'not-authenticated'
 // Why: parallel to GhStatus — GitLab uses glab and the same three failure
 // modes (probe in-flight / installed-but-unauth / missing entirely).
 export type GlabStatus = GhStatus
-export type BitbucketStatus = 'checking' | 'connected' | 'not-configured' | 'not-authenticated'
-export type AzureDevOpsStatus = 'checking' | 'configured' | 'not-configured' | 'not-authenticated'
-export type GiteaStatus = 'checking' | 'configured' | 'not-configured' | 'not-authenticated'
+export type BitbucketStatus =
+  | 'not-checked'
+  | 'checking'
+  | 'connected'
+  | 'not-configured'
+  | 'not-authenticated'
+export type AzureDevOpsStatus =
+  | 'not-checked'
+  | 'checking'
+  | 'configured'
+  | 'not-configured'
+  | 'not-authenticated'
+export type GiteaStatus =
+  | 'not-checked'
+  | 'checking'
+  | 'configured'
+  | 'not-configured'
+  | 'not-authenticated'
 export type PreflightRefreshProvider = 'gh' | 'glab' | 'bitbucket' | 'azureDevOps' | 'gitea'
 
 export type PreflightIntegrationStatuses = {
@@ -24,6 +44,7 @@ export type PreflightIntegrationStatuses = {
 
 type TokenApiPreflightStatus = {
   configured: boolean
+  checked?: boolean
   authenticated: boolean
   account: string | null
   baseUrl: string | null
@@ -32,6 +53,7 @@ type TokenApiPreflightStatus = {
 
 type GiteaPreflightStatus = {
   configured: boolean
+  checked?: boolean
   authenticated: boolean
   account: string | null
   baseUrl: string | null
@@ -41,6 +63,9 @@ type GiteaPreflightStatus = {
 export function tokenApiStatusFromPreflight(
   status: TokenApiPreflightStatus | undefined
 ): AzureDevOpsStatus {
+  if (status?.checked === false) {
+    return 'not-checked'
+  }
   if (!status?.configured) {
     return 'not-configured'
   }
@@ -54,6 +79,9 @@ export function tokenApiStatusFromPreflight(
 }
 
 export function giteaStatusFromPreflight(status: GiteaPreflightStatus | undefined): GiteaStatus {
+  if (status?.checked === false) {
+    return 'not-checked'
+  }
   if (!status?.configured) {
     return 'not-configured'
   }
@@ -67,6 +95,9 @@ function ghStatusFromPreflight(status: PreflightStatus['gh']): GhStatus {
   if (!status.installed) {
     return 'not-installed'
   }
+  if (status.checked === false) {
+    return 'not-checked'
+  }
   return status.authenticated ? 'connected' : 'not-authenticated'
 }
 
@@ -74,10 +105,16 @@ function glabStatusFromPreflight(status: PreflightStatus['glab']): GlabStatus {
   if (!status?.installed) {
     return 'not-installed'
   }
+  if (status.checked === false) {
+    return 'not-checked'
+  }
   return status.authenticated ? 'connected' : 'not-authenticated'
 }
 
 function bitbucketStatusFromPreflight(status: PreflightStatus['bitbucket']): BitbucketStatus {
+  if (status?.checked === false) {
+    return 'not-checked'
+  }
   if (!status?.configured) {
     return 'not-configured'
   }

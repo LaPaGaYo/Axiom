@@ -22,6 +22,9 @@ export function tokenProviderStatusLabel(input: {
   /** Gitea works read-only without a token, so its unconfigured state is softer. */
   optional?: boolean
 }): string {
+  if (input.status === 'not-checked') {
+    return translate('providerActivation.notChecked', 'Not checked')
+  }
   if (input.configured) {
     return input.hasAccount === false
       ? translate(`${NS}.statusConfigured`, 'Configured')

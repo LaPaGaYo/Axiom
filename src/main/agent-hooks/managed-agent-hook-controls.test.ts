@@ -66,6 +66,12 @@ function status(agent: 'claude' | 'codex', state: 'installed' | 'not_installed')
 }
 
 describe('managed agent hook controls', () => {
+  it('does not reconcile Codex at startup before profile activation', () => {
+    expect(shouldInstallStartupManagedAgentHook({}, 'codex')).toBe(false)
+    expect(shouldContinueManagedHookStartup(false, {}, 'codex')).toBe(false)
+    expect(shouldInstallStartupManagedAgentHook({}, 'claude')).toBe(true)
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.installClaude.mockReturnValue(status('claude', 'installed'))
@@ -324,7 +330,13 @@ describe('startup managed hook reconciliation (STA-5679)', () => {
     ).toBe(false)
     expect(
       shouldInstallStartupManagedAgentHook(
-        { agentStatusHooksEnabled: true, disabledTuiAgents: ['claude'] },
+        {
+          agentStatusHooksEnabled: true,
+          disabledTuiAgents: ['claude'],
+          providerActivations: {
+            codex: { activatedAt: '2026-10-10T00:00:00.000Z', source: 'agent-launch' }
+          }
+        },
         'codex'
       )
     ).toBe(true)
@@ -334,7 +346,10 @@ describe('startup managed hook reconciliation (STA-5679)', () => {
     const settings = {
       agentStatusHooksEnabled: true,
       agentCmdOverrides: {},
-      disabledTuiAgents: ['claude' as const]
+      disabledTuiAgents: ['claude' as const],
+      providerActivations: {
+        codex: { activatedAt: '2026-10-10T00:00:00.000Z', source: 'agent-launch' as const }
+      }
     }
     mocks.detect.mockResolvedValue({ codex: { state: 'found' } })
 

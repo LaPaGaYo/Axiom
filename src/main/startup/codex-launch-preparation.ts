@@ -1,3 +1,7 @@
+import {
+  isProviderActivated,
+  recordProviderActivation
+} from '../provider-activation/provider-activation'
 import { app } from 'electron'
 import type { CodexHomeLaunchContext } from '../ipc/pty'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
@@ -17,6 +21,9 @@ export async function prepareCodexRuntimeHomeForLaunch(
   if (!runtimeHome) {
     throw new Error('Codex runtime home service is not initialized')
   }
+  if (state.store && launchContext?.launchAgent === 'codex') {
+    recordProviderActivation(state.store, 'codex', 'agent-launch')
+  }
   if (
     target?.runtime !== 'wsl' &&
     launchContext?.launchAgent === 'codex' &&
@@ -29,8 +36,15 @@ export async function prepareCodexRuntimeHomeForLaunch(
       console.warn('[codex-project-trust] failed to pre-mark launch workspace:', error)
     }
   }
+  const mayPrepareHooks =
+    launchContext?.launchAgent === 'codex' ||
+    isProviderActivated(state.store?.getSettings(), 'codex')
   const ensureRealHomeHooksIfSelected = async (): Promise<boolean> => {
-    if (target?.runtime === 'wsl' || !runtimeHome.isHostSystemDefaultRealHomeSelected(launchEnv)) {
+    if (
+      !mayPrepareHooks ||
+      target?.runtime === 'wsl' ||
+      !runtimeHome.isHostSystemDefaultRealHomeSelected(launchEnv)
+    ) {
       return false
     }
     // Why (flag ON, system default): the hook entry must exist — appended last
@@ -65,6 +79,9 @@ export async function prepareCodexRuntimeHomeForLaunch(
     // Why: Codex runs on the user's real ~/.codex; the managed-home hook
     // install below would target a home Codex never reads on this lane.
     return null
+  }
+  if (!mayPrepareHooks) {
+    return runtimeHomePath
   }
   const hookTarget =
     target?.runtime === 'wsl'

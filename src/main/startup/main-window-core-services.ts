@@ -70,7 +70,8 @@ export function attachMainWindowCoreServices(
     window.webContents.id,
     automations,
     {
-      prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
+      prepareForCodexLaunch: (target) =>
+        prepareCodexRuntimeHomeForLaunch(target, undefined, { launchAgent: 'codex' }),
       prepareForClaudeLaunch: (target) => claudeRuntimeAuth.prepareForClaudeLaunch(target)
     },
     state.agentAwakeService ?? undefined,

@@ -193,7 +193,8 @@ export function configureRuntimeServices(runtime: OrcaRuntimeService): void {
   runtime.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
   runtime.setCommitMessageAgentEnvironmentResolvers({
     // Why: Codex hooks/auth live in Orca's managed runtime home even for the default path, so every launch must resolve CODEX_HOME via runtime-home.
-    prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
+    prepareForCodexLaunch: (target) =>
+      prepareCodexRuntimeHomeForLaunch(target, undefined, { launchAgent: 'codex' }),
     prepareForClaudeLaunch: (target) => state.claudeRuntimeAuth!.prepareForClaudeLaunch(target)
   })
 }

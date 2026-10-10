@@ -246,6 +246,13 @@ function BitbucketCardNote(props: {
   status: BitbucketStatus | 'unavailable'
   storedCredential: boolean
 }): React.JSX.Element {
+  if (props.status === 'not-checked') {
+    return (
+      <p className="text-xs text-muted-foreground">
+        {translate('providerActivation.notChecked', 'Not checked')}
+      </p>
+    )
+  }
   if (props.status === 'unavailable') {
     return (
       <p className="text-xs text-muted-foreground">

@@ -97,3 +97,36 @@ describe('getPreflightIntegrationStatuses', () => {
     })
   })
 })
+
+it('distinguishes deliberately unchecked authentication from an authentication failure', () => {
+  const status = getPreflightIntegrationStatuses(
+    {
+      git: { installed: true },
+      gh: { installed: true, authenticated: false, checked: false },
+      glab: { installed: true, authenticated: false, checked: false },
+      bitbucket: { configured: false, authenticated: false, checked: false, account: null },
+      azureDevOps: {
+        configured: false,
+        authenticated: false,
+        checked: false,
+        account: null,
+        baseUrl: null,
+        tokenConfigured: false
+      },
+      gitea: {
+        configured: false,
+        authenticated: false,
+        checked: false,
+        account: null,
+        baseUrl: null,
+        tokenConfigured: false
+      }
+    },
+    new Set()
+  )
+  expect(status.ghStatus).toBe('not-checked')
+  expect(status.glabStatus).toBe('not-checked')
+  expect(status.bitbucketStatus).toBe('not-checked')
+  expect(status.azureDevOpsStatus).toBe('not-checked')
+  expect(status.giteaStatus).toBe('not-checked')
+})

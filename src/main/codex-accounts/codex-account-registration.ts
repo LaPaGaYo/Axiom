@@ -1,3 +1,4 @@
+import { recordProviderActivation } from '../provider-activation/provider-activation'
 import { randomUUID } from 'node:crypto'
 import type {
   CodexManagedAccount,
@@ -207,6 +208,7 @@ export class CodexAccountRegistration {
       throw error
     }
 
+    recordProviderActivation(this.dependencies.store, 'codex', 'account-added')
     const outgoingAccountId = getSelectedCodexAccountIdForTarget(settings, targetSelection)
     // Why: switching activates the new account, so cache the outgoing account's usage for the
     // switcher — in the background, since the probe must never block or fail a durable add.

@@ -28,13 +28,7 @@ import {
 
 export type { PreflightRuntimeContext }
 import { hydrateShellPathForAgentDetection } from '../ipc/agent-detection-shell-path'
-import {
-  execCommandInWslOrThrow,
-  execLocalPreflightCommandOrThrow,
-  isCommandAvailable,
-  isCommandOnPath,
-  shellQuote
-} from '../ipc/preflight-command-exec'
+import { isCommandAvailable, isCommandOnPath } from '../ipc/preflight-command-exec'
 import {
   detectRemoteWindowsTerminalCapabilities,
   type RemoteWindowsTerminalCapabilities
@@ -47,33 +41,23 @@ import {
 import { invalidateWslGuestEnvironment } from '../wsl/wsl-guest-environment'
 import { prunePreflightWslCache } from '../preflight-wsl-cache'
 
-export type PreflightStatus = {
-  git: { installed: boolean }
-  gh: { installed: boolean; authenticated: boolean }
-  // Why: optional so existing renderer call sites that only render git/gh
-  // status keep typechecking. Consumers that surface GitLab-specific
-  // affordances (the GitLab tab in the source picker, MR list, etc.)
-  // gate on `glab?.authenticated`.
-  glab?: { installed: boolean; authenticated: boolean }
-  bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
-  azureDevOps?: {
-    configured: boolean
-    authenticated: boolean
-    account: string | null
-    baseUrl: string | null
-    tokenConfigured: boolean
-  }
-  gitea?: {
-    configured: boolean
-    authenticated: boolean
-    account: string | null
-    baseUrl: string | null
-    tokenConfigured: boolean
-  }
-}
+import type { PreflightStatus } from '../../shared/preflight-status'
+export type { PreflightStatus } from '../../shared/preflight-status'
 
 export { detectRemoteWindowsTerminalCapabilities }
 export type { RemoteWindowsTerminalCapabilities }
+
+import {
+  setPreflightActivationStore,
+  mayProbeAuthentication,
+  probeCliAuthentication
+} from './provider-authentication'
+import type { ProviderActivationStore } from '../provider-activation/provider-activation'
+
+export function configurePreflightProviderActivation(store: ProviderActivationStore | null): void {
+  setPreflightActivationStore(store)
+  _resetPreflightCache()
+}
 
 // Why: cache the result so repeated Landing mounts don't re-spawn processes.
 // The check only runs once per app session — relaunch to re-check.
@@ -253,41 +237,6 @@ export async function detectRemoteAgents(args: { connectionId: string }): Promis
   return uniqueAgentIds(result.agents)
 }
 
-async function isGhAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolean> {
-  try {
-    await (wslTarget
-      ? execCommandInWslOrThrow(wslTarget, `${shellQuote('gh')} auth status`)
-      : execLocalPreflightCommandOrThrow('gh', ['auth', 'status']))
-    // Why: for plain-text `gh auth status`, exit 0 means gh did not detect any
-    // authentication issues for the checked hosts/accounts.
-    return true
-  } catch (error) {
-    // Why: some environments may surface partial command output on the thrown
-    // error object. Keep a compatibility fallback so we avoid a false auth
-    // warning if success markers are present despite a non-zero result.
-    const stdout = (error as { stdout?: string }).stdout ?? ''
-    const stderr = (error as { stderr?: string }).stderr ?? ''
-    const output = `${stdout}\n${stderr}`
-    return output.includes('Logged in') || output.includes('Active account: true')
-  }
-}
-
-// Why: parallel to isGhAuthenticated for the glab CLI. glab writes auth
-// status to stderr in some versions and stdout in others; check both.
-async function isGlabAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolean> {
-  try {
-    await (wslTarget
-      ? execCommandInWslOrThrow(wslTarget, `${shellQuote('glab')} auth status`)
-      : execLocalPreflightCommandOrThrow('glab', ['auth', 'status']))
-    return true
-  } catch (error) {
-    const stdout = (error as { stdout?: string }).stdout ?? ''
-    const stderr = (error as { stderr?: string }).stderr ?? ''
-    const output = `${stdout}\n${stderr}`
-    return output.includes('Logged in')
-  }
-}
-
 export async function runPreflightCheck(
   force = false,
   context?: PreflightRuntimeContext
@@ -379,18 +328,30 @@ async function executePreflightCheck(
     detectCommandRuntime('glab', context)
   ])
 
+  const ghChecked = ghProbe.installed && mayProbeAuthentication(force, 'gh')
+  const glabChecked = glabProbe.installed && mayProbeAuthentication(force, 'glab')
+  const unchecked = { configured: false, authenticated: false, checked: false, account: null }
+  const uncheckedTokenApi = { ...unchecked, baseUrl: null, tokenConfigured: false }
   const [ghAuthenticated, glabAuthenticated, bitbucket, azureDevOps, gitea] = await Promise.all([
-    ghProbe.installed ? isGhAuthenticated(ghProbe.wslTarget) : Promise.resolve(false),
-    glabProbe.installed ? isGlabAuthenticated(glabProbe.wslTarget) : Promise.resolve(false),
-    getBitbucketAuthStatus(),
-    getAzureDevOpsAuthStatus(),
-    getGiteaAuthStatus()
+    ghChecked ? probeCliAuthentication('gh', ghProbe.wslTarget) : Promise.resolve(false),
+    glabChecked ? probeCliAuthentication('glab', glabProbe.wslTarget) : Promise.resolve(false),
+    mayProbeAuthentication(force, 'bitbucket') ? getBitbucketAuthStatus() : unchecked,
+    mayProbeAuthentication(force, 'azureDevOps') ? getAzureDevOpsAuthStatus() : uncheckedTokenApi,
+    mayProbeAuthentication(force, 'gitea') ? getGiteaAuthStatus() : uncheckedTokenApi
   ])
 
   const result = {
     git: { installed: gitProbe.installed },
-    gh: { installed: ghProbe.installed, authenticated: ghAuthenticated },
-    glab: { installed: glabProbe.installed, authenticated: glabAuthenticated },
+    gh: {
+      installed: ghProbe.installed,
+      authenticated: ghAuthenticated,
+      ...(ghChecked || !ghProbe.installed ? {} : { checked: false })
+    },
+    glab: {
+      installed: glabProbe.installed,
+      authenticated: glabAuthenticated,
+      ...(glabChecked || !glabProbe.installed ? {} : { checked: false })
+    },
     bitbucket,
     azureDevOps,
     gitea

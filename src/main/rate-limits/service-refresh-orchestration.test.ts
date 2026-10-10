@@ -69,8 +69,72 @@ function serviceInternals(service: RateLimitService): { fetchAll: () => Promise<
 }
 
 describe('RateLimitService', () => {
+  it('does not schedule or fetch automatic usage with no profile activations', async () => {
+    vi.useFakeTimers()
+    const service = new RateLimitService()
+    try {
+      service.start({ fetchImmediately: false })
+      expect(vi.getTimerCount()).toBe(0)
+      await serviceInternals(service).fetchAll()
+      expect(fetchCodexRateLimits).not.toHaveBeenCalled()
+      expect(fetchClaudeRateLimits).not.toHaveBeenCalled()
+      expect(fetchGeminiRateLimits).not.toHaveBeenCalled()
+      expect(fetchOpenCodeGoUsage).not.toHaveBeenCalled()
+      expect(fetchKimiRateLimits).not.toHaveBeenCalled()
+      expect(fetchMiniMaxRateLimits).not.toHaveBeenCalled()
+      expect(fetchGrokRateLimits).not.toHaveBeenCalled()
+    } finally {
+      service.stop()
+      vi.useRealTimers()
+    }
+  })
+
   beforeEach(() => {
     resetRateLimitProviderMocks()
+  })
+
+  it('fetches only the activated provider automatically, but preserves manual refresh of all providers', async () => {
+    const service = new RateLimitService()
+    service.setProviderActivationResolver((provider) => provider === 'codex')
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 18))
+    mockFreshBackgroundProviderFetches()
+    await serviceInternals(service).fetchAll()
+    expect(fetchCodexRateLimits).toHaveBeenCalledOnce()
+    expect(fetchClaudeRateLimits).not.toHaveBeenCalled()
+    expect(fetchGeminiRateLimits).not.toHaveBeenCalled()
+    expect(fetchOpenCodeGoUsage).not.toHaveBeenCalled()
+    expect(fetchKimiRateLimits).not.toHaveBeenCalled()
+    expect(fetchMiniMaxRateLimits).not.toHaveBeenCalled()
+    expect(fetchGrokRateLimits).not.toHaveBeenCalled()
+    expect(service.getState().claude).toBeNull()
+    await service.refresh()
+    expect(fetchCodexRateLimits).toHaveBeenCalledTimes(2)
+    expect(fetchClaudeRateLimits).toHaveBeenCalledOnce()
+    expect(fetchGeminiRateLimits).toHaveBeenCalledOnce()
+    // Manual refresh did not authorize later automatic reads of other providers.
+    await serviceInternals(service).fetchAll()
+    expect(fetchCodexRateLimits).toHaveBeenCalledTimes(3)
+    expect(fetchClaudeRateLimits).toHaveBeenCalledOnce()
+  })
+
+  it('starts polling only after activation, and stops scheduling when activation is removed', () => {
+    vi.useFakeTimers()
+    const service = new RateLimitService()
+    let activated = false
+    service.setProviderActivationResolver((provider) => activated && provider === 'codex')
+    try {
+      service.start({ fetchImmediately: false })
+      expect(vi.getTimerCount()).toBe(0)
+      activated = true
+      service.updateProviderActivation()
+      expect(vi.getTimerCount()).toBe(2)
+      activated = false
+      service.updateProviderActivation()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      service.stop()
+      vi.useRealTimers()
+    }
   })
 
   it('does not reread Grok auth when callers read state snapshots', () => {
@@ -86,6 +150,7 @@ describe('RateLimitService', () => {
       }
     })
     const service = new RateLimitService()
+    service.setProviderActivationResolver(() => true)
     vi.mocked(readGrokAuthSession).mockClear()
 
     expect(service.getState().grokAuthConfigured).toBe(true)
@@ -109,6 +174,7 @@ describe('RateLimitService', () => {
     vi.mocked(readGrokAuthSession).mockReturnValue(authReadResult)
     vi.mocked(fetchGrokRateLimits).mockResolvedValueOnce(okProvider('grok', 42))
     const service = new RateLimitService()
+    service.setProviderActivationResolver(() => true)
 
     await service.refreshGrok()
 
@@ -129,6 +195,7 @@ describe('RateLimitService', () => {
 
   it('does not refetch Claude when a Codex account switch is queued during fetchAll', async () => {
     const service = new RateLimitService()
+    service.setProviderActivationResolver(() => true)
     const firstClaude = deferred<ProviderRateLimits>()
     const firstCodex = deferred<ProviderRateLimits>()
 
@@ -155,6 +222,7 @@ describe('RateLimitService', () => {
 
   it('keeps recent stale data across repeated failures', async () => {
     const service = new RateLimitService()
+    service.setProviderActivationResolver(() => true)
     const internal = serviceInternals(service)
 
     vi.mocked(fetchClaudeRateLimits)
@@ -184,6 +252,7 @@ describe('RateLimitService', () => {
 
   it('bypasses the debounce for explicit manual refreshes', async () => {
     const service = new RateLimitService()
+    service.setProviderActivationResolver(() => true)
 
     vi.mocked(fetchClaudeRateLimits)
       .mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
@@ -202,6 +271,7 @@ describe('RateLimitService', () => {
 
   it('does not refetch fresh provider data for replayed mobile subscriptions', async () => {
     const service = new RateLimitService()
+    service.setProviderActivationResolver(() => true)
     vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 10))
     vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 20))
 
@@ -215,6 +285,7 @@ describe('RateLimitService', () => {
 
   it('does not queue a follow-up fetch when a mobile subscription replays mid-fetch', async () => {
     const service = new RateLimitService()
+    service.setProviderActivationResolver(() => true)
     const claude = deferred<ProviderRateLimits>()
     const codex = deferred<ProviderRateLimits>()
     vi.mocked(fetchClaudeRateLimits).mockReturnValue(claude.promise)
@@ -235,6 +306,7 @@ describe('RateLimitService', () => {
 
   it('waits for a queued explicit refresh when another fetch is already in flight', async () => {
     const service = new RateLimitService()
+    service.setProviderActivationResolver(() => true)
     const firstClaude = deferred<ProviderRateLimits>()
     const firstCodex = deferred<ProviderRateLimits>()
     const secondClaude = deferred<ProviderRateLimits>()
@@ -274,6 +346,7 @@ describe('RateLimitService', () => {
 
   it('publishes non-Grok provider results before a slow Grok fetch completes', async () => {
     const service = new RateLimitService()
+    service.setProviderActivationResolver(() => true)
     const grok = deferred<ProviderRateLimits>()
     let refreshResolved = false
 
@@ -310,6 +383,7 @@ describe('RateLimitService', () => {
 
   it('aborts the active fetch cycle and clears queued refreshes on stop', async () => {
     const service = new RateLimitService()
+    service.setProviderActivationResolver(() => true)
     const capturedSignals: { claude?: AbortSignal; codex?: AbortSignal; grok?: AbortSignal } = {}
 
     vi.mocked(fetchClaudeRateLimits).mockImplementation(
@@ -369,6 +443,7 @@ describe('RateLimitService', () => {
 
   it('fetches Gemini and OpenCode Go alongside Claude and Codex', async () => {
     const service = new RateLimitService()
+    service.setProviderActivationResolver(() => true)
     service.setOpenCodeGoConfigResolver(() => ({
       sessionCookie: 'session=abc123',
       workspaceIdOverride: '',
@@ -427,6 +502,7 @@ describe('RateLimitService', () => {
 
   it('passes the resolved Kimi home into each fetch cycle', async () => {
     const service = new RateLimitService()
+    service.setProviderActivationResolver(() => true)
     const home = {
       runtime: 'wsl' as const,
       wslDistro: 'Ubuntu',
@@ -447,6 +523,7 @@ describe('RateLimitService', () => {
 
   it('reads the host Kimi home when no resolver is wired', async () => {
     const service = new RateLimitService()
+    service.setProviderActivationResolver(() => true)
     mockFreshBackgroundProviderFetches()
     vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 10))
 
@@ -457,6 +534,7 @@ describe('RateLimitService', () => {
 
   it('preserves Gemini buckets through getState after fetch', async () => {
     const service = new RateLimitService()
+    service.setProviderActivationResolver(() => true)
 
     const geminiWithBuckets: ProviderRateLimits = {
       provider: 'gemini',
@@ -500,6 +578,7 @@ describe('RateLimitService', () => {
 
   it('isolates provider failures so one error does not block others', async () => {
     const service = new RateLimitService()
+    service.setProviderActivationResolver(() => true)
     service.setOpenCodeGoConfigResolver(() => ({
       sessionCookie: '',
       workspaceIdOverride: '',
@@ -524,6 +603,7 @@ describe('RateLimitService', () => {
 
   it('discards stale data when a provider becomes unavailable', async () => {
     const service = new RateLimitService()
+    service.setProviderActivationResolver(() => true)
     let cookie = 'session=valid'
     service.setOpenCodeGoConfigResolver(() => ({
       sessionCookie: cookie,
@@ -561,6 +641,7 @@ describe('RateLimitService', () => {
 
   it('discards stale data when Workspace ID override is changed', async () => {
     const service = new RateLimitService()
+    service.setProviderActivationResolver(() => true)
     let workspaceId = 'wrk_A'
     service.setOpenCodeGoConfigResolver(() => ({
       sessionCookie: 'session=valid',

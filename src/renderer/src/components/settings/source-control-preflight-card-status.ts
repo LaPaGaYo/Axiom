@@ -10,10 +10,12 @@ import {
 
 type CliStatus = {
   installed?: boolean
+  checked?: boolean
   authenticated?: boolean
 }
 
 export type CliProviderCardState =
+  | 'not-checked'
   | 'checking'
   | 'connected'
   | 'not-installed'
@@ -40,6 +42,9 @@ export function deriveCliProviderCardState(input: {
   }
   if (!input.cliStatus.installed) {
     return 'not-installed'
+  }
+  if (input.cliStatus.checked === false) {
+    return 'not-checked'
   }
   return input.cliStatus.authenticated ? 'connected' : 'not-authenticated'
 }

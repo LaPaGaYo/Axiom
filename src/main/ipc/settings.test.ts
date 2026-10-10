@@ -190,6 +190,15 @@ describe('registerSettingsHandlers', () => {
 
     await handler(settingsInvokeEvent, { disabledTuiAgents: ['claude'] })
 
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      {
+        providerActivations: {
+          codex: { activatedAt: expect.any(String), source: 'settings-hook-install' }
+        }
+      },
+      { notifyListeners: true }
+    )
+
     expect(applyAgentStatusHooksEnabledMock).toHaveBeenCalledWith(
       true,
       updated,

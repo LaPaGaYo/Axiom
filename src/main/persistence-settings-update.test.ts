@@ -73,6 +73,26 @@ describe('Store', () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
+  it('defaults provider activations to empty and round-trips an explicit activation', async () => {
+    const store = await createStore()
+    expect(store.getSettings().providerActivations).toEqual({})
+    const providerActivations = {
+      codex: { activatedAt: '2026-10-10T00:00:00.000Z', source: 'agent-launch' as const }
+    }
+    store.updateSettings({ providerActivations })
+    store.flushOrThrow()
+    await closeTestStores()
+    expect((await createStore()).getSettings().providerActivations).toEqual(providerActivations)
+  })
+
+  it('does not activate providers from malformed imported settings', async () => {
+    writeDataFile({
+      settings: { providerActivations: { codex: { activatedAt: 'yesterday', source: 'startup' } } }
+    })
+    const store = await createStore()
+    expect(store.getSettings().providerActivations).toEqual({})
+  })
+
   // ── 9. Settings: get/update ────────────────────────────────────────
 
   it('updateSettings merges partial updates', async () => {

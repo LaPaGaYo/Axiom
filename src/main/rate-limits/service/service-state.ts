@@ -112,6 +112,45 @@ export abstract class RateLimitServiceState {
   protected inactiveCodexAccountsGeneration = 0
   protected stateListeners = new Set<(state: RateLimitState) => void>()
 
+  protected providerActivationResolver: (provider: ActiveRateLimitProvider) => boolean = () => false
+  protected pollingStarted = false
+
+  protected hasActivatedProviders(): boolean {
+    return this.activeProviderIds().some((provider) => this.providerActivationResolver(provider))
+  }
+
+  private activeProviderIds(): ActiveRateLimitProvider[] {
+    return [
+      'claude',
+      'codex',
+      'gemini',
+      'opencode-go',
+      'kimi',
+      'minimax',
+      'grok',
+      'antigravity',
+      'cursor'
+    ]
+  }
+
+  protected fetchActivatedProvider(
+    provider: ActiveRateLimitProvider,
+    force: boolean | undefined,
+    fetch: () => Promise<ProviderRateLimits>
+  ): Promise<ProviderRateLimits> {
+    if (force || this.providerActivationResolver(provider)) {
+      return fetch()
+    }
+    return Promise.resolve({
+      provider,
+      status: 'idle',
+      session: null,
+      weekly: null,
+      updatedAt: 0,
+      error: null
+    })
+  }
+
   constructor() {}
 
   onStateChange(listener: (state: RateLimitState) => void): () => void {

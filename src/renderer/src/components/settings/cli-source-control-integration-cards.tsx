@@ -12,9 +12,17 @@ import { usePreflightCardStatuses } from './source-control-preflight-card-status
 import { translate } from '@/i18n/i18n'
 
 function integrationStatusLabel(
-  status: 'connected' | 'unavailable' | 'not-installed' | 'not-authenticated' | 'checking'
+  status:
+    | 'not-checked'
+    | 'connected'
+    | 'unavailable'
+    | 'not-installed'
+    | 'not-authenticated'
+    | 'checking'
 ): string {
   switch (status) {
+    case 'not-checked':
+      return translate('providerActivation.notChecked', 'Not checked')
     case 'connected':
       return translate(
         'auto.components.settings.cli.source.control.integration.cards.statusConnected',
@@ -98,7 +106,11 @@ export function GitHubIntegrationCard(): React.JSX.Element {
     >
       <ProviderAccountScopeDetails>
         {status !== 'checking' && !connected ? (
-          status === 'unavailable' ? (
+          status === 'not-checked' ? (
+            <Button variant="ghost" size="sm" onClick={refresh}>
+              {translate('providerActivation.connect', 'Connect / Re-check')}
+            </Button>
+          ) : status === 'unavailable' ? (
             <>
               <p className="text-xs text-muted-foreground">
                 {translate(
@@ -219,7 +231,11 @@ export function GitLabIntegrationCard(): React.JSX.Element {
     >
       <ProviderAccountScopeDetails>
         {status !== 'checking' && !connected ? (
-          status === 'unavailable' ? (
+          status === 'not-checked' ? (
+            <Button variant="ghost" size="sm" onClick={refresh}>
+              {translate('providerActivation.connect', 'Connect / Re-check')}
+            </Button>
+          ) : status === 'unavailable' ? (
             <>
               <p className="text-xs text-muted-foreground">
                 {translate(

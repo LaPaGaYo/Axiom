@@ -1,3 +1,4 @@
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -88,7 +89,12 @@ vi.mock('../gitea/client', () => ({
   getGiteaAuthStatus: getGiteaAuthStatusMock
 }))
 
-import { _resetPreflightCache, registerPreflightHandlers, runPreflightCheck } from './preflight'
+import {
+  _resetPreflightCache,
+  configurePreflightProviderActivation,
+  registerPreflightHandlers,
+  runPreflightCheck
+} from './preflight'
 import {
   defaultAzureDevOpsStatus,
   defaultBitbucketStatus,
@@ -127,6 +133,38 @@ describe('preflight', () => {
       configurable: true,
       value: originalPlatform
     })
+  })
+
+  it('leaves auth unchecked on an unactivated profile without running any auth probe', async () => {
+    configurePreflightProviderActivation(null)
+    execFileAsyncMock.mockResolvedValue({ stdout: 'version 1.0.0' })
+    const status = await runPreflightCheck()
+    expect(status.gh).toEqual({ installed: true, authenticated: false, checked: false })
+    expect(status.glab).toEqual({ installed: true, authenticated: false, checked: false })
+    expect(execFileAsyncMock).toHaveBeenCalledTimes(3)
+    expect(getBitbucketAuthStatusMock).not.toHaveBeenCalled()
+    expect(getAzureDevOpsAuthStatusMock).not.toHaveBeenCalled()
+    expect(getGiteaAuthStatusMock).not.toHaveBeenCalled()
+  })
+
+  it('forced re-check probes and activates installed integrations in this profile', async () => {
+    let settings: Pick<GlobalSettings, 'providerActivations'> = {}
+    configurePreflightProviderActivation({
+      getSettings: () => settings,
+      updateSettings: (updates) => {
+        settings = { ...settings, ...updates }
+      }
+    })
+    execFileAsyncMock.mockResolvedValue({ stdout: 'version 1.0.0' })
+    const status = await runPreflightCheck(true)
+    expect(status.gh.authenticated).toBe(true)
+    expect(status.glab?.authenticated).toBe(true)
+    expect(settings.providerActivations?.gh?.source).toBe('integrations-recheck')
+    expect(settings.providerActivations?.glab?.source).toBe('integrations-recheck')
+    expect(execFileAsyncMock).toHaveBeenCalledWith('gh', ['auth', 'status'], expect.anything())
+    expect(getBitbucketAuthStatusMock).toHaveBeenCalledOnce()
+    expect(getAzureDevOpsAuthStatusMock).toHaveBeenCalledOnce()
+    expect(getGiteaAuthStatusMock).toHaveBeenCalledOnce()
   })
 
   // Why: every preflight run probes (in order) `git --version`, `gh --version`,

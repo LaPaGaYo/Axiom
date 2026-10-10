@@ -19,6 +19,7 @@ import type {
 } from './service-types'
 
 export type FetchAllCyclePrepared = {
+  mayFetch: (provider: ProviderRateLimits['provider']) => boolean
   claudeTarget: NormalizedClaudeAccountSelectionTarget
   claudeGeneration: number
   claudeAuthPreparation: ClaudeRuntimeAuthPreparation | undefined
@@ -54,20 +55,28 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     if (signal.aborted) {
       return null
     }
+    const mayFetch = (provider: ProviderRateLimits['provider']): boolean =>
+      options?.force === true || this.providerActivationResolver(provider)
     const claudeTarget = this.claudeFetchTarget
     // Why: capture before the resolver await so an account switch during it invalidates both the snapshot and the state apply.
     const claudeGeneration = this.claudeFetchGeneration
-    const claudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
+    const claudeAuthPreparation = mayFetch('claude')
+      ? await this.claudeAuthPreparationResolver?.(claudeTarget)
+      : undefined
     if (signal.aborted) {
       return null
     }
-    this.rememberClaudeAuthSnapshot(claudeAuthPreparation, claudeGeneration, claudeTarget)
+    if (mayFetch('claude')) {
+      this.rememberClaudeAuthSnapshot(claudeAuthPreparation, claudeGeneration, claudeTarget)
+    }
     const claudeProvenance = claudeAuthPreparation?.provenance ?? 'system'
     const codexTarget = this.codexFetchTarget
     const previousState = this.state
     // Why: a skipped Codex poll must not stop the other providers' cycle, so gate
     // only the Codex slot instead of returning early (#STA-4422).
-    const codexHome = this.resolveCodexHome(codexTarget)
+    const codexHome = mayFetch('codex')
+      ? this.resolveCodexHome(codexTarget)
+      : { skip: true, homePath: null }
     const codexFetchGated = codexHome.skip
     const codexHomePath = codexHome.homePath
     const codexStateBeforeFetch =
@@ -113,7 +122,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const miniMaxGeneration = this.minimaxFetchGeneration
 
     // Mark all providers fetching while keeping previous data visible (Codex is cleared separately on account change).
-    this.updateState({
+    const fetchingState = {
       ...previousState,
       claude: this.withFetchingStatus(previousState.claude, 'claude'),
       // Why: a gated Codex cycle makes no attempt; a "fetching" chip would never settle.
@@ -131,33 +140,48 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
       grok: this.withFetchingStatus(previousState.grok, 'grok'),
       cursor: this.withFetchingStatus(previousState.cursor, 'cursor')
+    }
+
+    this.updateState({
+      claude: mayFetch('claude') ? fetchingState.claude : previousState.claude,
+      codex: mayFetch('codex') ? fetchingState.codex : previousState.codex,
+      gemini: mayFetch('gemini') ? fetchingState.gemini : previousState.gemini,
+      opencodeGo: mayFetch('opencode-go') ? fetchingState.opencodeGo : previousState.opencodeGo,
+      kimi: mayFetch('kimi') ? fetchingState.kimi : previousState.kimi,
+      minimax: mayFetch('minimax') ? fetchingState.minimax : previousState.minimax,
+      grok: mayFetch('grok') ? fetchingState.grok : previousState.grok,
+      cursor: mayFetch('cursor') ? fetchingState.cursor : previousState.cursor,
+      antigravity: mayFetch('antigravity') ? fetchingState.antigravity : previousState.antigravity
     })
 
     // Why: the Cursor probe reads the macOS Keychain, so it is awaited inside the
     // provider's own promise instead of blocking the rest of the cycle on it.
-    const cursorResultPromise = readCursorAuthSession()
-      .then((authReadResult) => {
+    const cursorResultPromise = this.fetchActivatedProvider('cursor', options?.force, () =>
+      readCursorAuthSession().then((authReadResult) => {
         this.cursorAuthConfigured = authReadResult.status === 'ok'
         return fetchCursorRateLimits({ signal, authReadResult })
       })
-      .then(
-        (value) => ({ status: 'fulfilled', value }) as const,
-        (reason) => ({ status: 'rejected', reason }) as const
-      )
+    ).then(
+      (value) => ({ status: 'fulfilled', value }) as const,
+      (reason) => ({ status: 'rejected', reason }) as const
+    )
 
     const missingWslCodexHome =
       codexFetchGated || codexHomePath ? null : this.getMissingWslCodexHomeResult(codexTarget)
-    const grokResultPromise = fetchGrokRateLimits({
-      signal,
-      authReadResult: grokAuthReadResult
-    }).then(
+    const grokResultPromise = this.fetchActivatedProvider('grok', options?.force, () =>
+      fetchGrokRateLimits({
+        signal,
+        authReadResult: grokAuthReadResult
+      })
+    ).then(
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
     )
 
     // Why: skip automated Claude fetches while a Retry-After window is open or a live session feed is fresher than the OAuth poll would be.
     const claudeFetchGated =
-      !options?.force && this.shouldSkipAutomatedClaudeFetch(previousState.claude)
+      !mayFetch('claude') ||
+      (!options?.force && this.shouldSkipAutomatedClaudeFetch(previousState.claude))
 
     const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
       await Promise.allSettled([
@@ -178,35 +202,42 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
               allowPtyFallback: this.shouldAllowCodexPtyFallback(),
               signal
             })),
-        fetchGeminiRateLimits(geminiCliOAuthEnabled),
-        fetchOpenCodeGoUsage({
-          settingsApiKey: openCodeGoApiKey,
-          // Why here: the key can also come from the environment or OpenCode's
-          // own store, so presence is only known once the fetch resolves it.
-          onApiKeyResolved: (resolution) => {
-            this.openCodeGoApiKeyConfigured = resolution.status === 'found'
-          },
-          cookie,
-          workspaceIdOverride: workspaceIdOverride || undefined,
-          networkProxySettings: this.networkProxySettingsResolver?.(),
-          signal
-        }),
-        this.fetchKimiWithResolvedHome(),
-        miniMaxConfigResult.error
-          ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
-          : fetchMiniMaxRateLimits({
-              cookie: miniMaxCookie,
-              groupId: miniMaxGroupId,
-              models: miniMaxModels,
-              endpointMode: miniMaxEndpoint,
-              apiKey: miniMaxApiKey
-            })
+        this.fetchActivatedProvider('gemini', options?.force, () =>
+          fetchGeminiRateLimits(geminiCliOAuthEnabled)
+        ),
+        this.fetchActivatedProvider('opencode-go', options?.force, () =>
+          fetchOpenCodeGoUsage({
+            settingsApiKey: openCodeGoApiKey,
+            // Why here: the key can also come from the environment or OpenCode's
+            // own store, so presence is only known once the fetch resolves it.
+            onApiKeyResolved: (resolution) => {
+              this.openCodeGoApiKeyConfigured = resolution.status === 'found'
+            },
+            cookie,
+            workspaceIdOverride: workspaceIdOverride || undefined,
+            networkProxySettings: this.networkProxySettingsResolver?.(),
+            signal
+          })
+        ),
+        this.fetchActivatedProvider('kimi', options?.force, () => this.fetchKimiWithResolvedHome()),
+        this.fetchActivatedProvider('minimax', options?.force, () =>
+          miniMaxConfigResult.error
+            ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
+            : fetchMiniMaxRateLimits({
+                cookie: miniMaxCookie,
+                groupId: miniMaxGroupId,
+                models: miniMaxModels,
+                endpointMode: miniMaxEndpoint,
+                apiKey: miniMaxApiKey
+              })
+        )
       ])
 
     if (signal.aborted) {
       return null
     }
     return {
+      mayFetch,
       claudeTarget,
       claudeGeneration,
       claudeAuthPreparation,

@@ -78,6 +78,33 @@ describe('CLI source-control integration card account scope', () => {
     mocks.preflight.refresh.mockClear()
   })
 
+  it.each(['gh', 'glab'] as const)(
+    'shows unchecked %s auth and probes only when the user clicks',
+    async (provider) => {
+      mocks.store.current = {
+        settings: { activeRuntimeEnvironmentId: null },
+        openSettingsPage: vi.fn(),
+        openSettingsTarget: vi.fn()
+      }
+      mocks.preflight.statuses.ghStatus = 'not-checked'
+      mocks.preflight.statuses.glabStatus = 'not-checked'
+      const rendered = await renderCard(
+        provider === 'gh' ? <GitHubIntegrationCard /> : <GitLabIntegrationCard />
+      )
+      expect(rendered.textContent).toContain('Not checked')
+      expect(rendered.textContent).not.toContain('not authenticated')
+      expect(mocks.preflight.refresh).not.toHaveBeenCalled()
+      const button = Array.from(rendered.querySelectorAll('button')).find(
+        (entry) => entry.textContent === 'Connect / Re-check'
+      )
+      expect(button).toBeDefined()
+      await act(async () => {
+        button?.click()
+      })
+      expect(mocks.preflight.refresh).toHaveBeenCalledOnce()
+    }
+  )
+
   it('shows local-client ownership for connected GitHub CLI credentials', async () => {
     const openSettingsPage = vi.fn()
     const openSettingsTarget = vi.fn()
