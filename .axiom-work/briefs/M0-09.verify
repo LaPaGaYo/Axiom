@@ -1,0 +1,2 @@
+targets: tests/e2e/helpers/recording-proxy src/shared/product-build-identity src/main/preflight src/main/rate-limits
+extra: ORCA_BACKGROUND_LAUNCH=1 pnpm run test:e2e:egress-cold-start
