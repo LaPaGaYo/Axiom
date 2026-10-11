@@ -132,6 +132,8 @@ function installRestartHarness(
     terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-old' }
   }
   const store = {
+    getSettings: vi.fn(() => ({})),
+    updateSettings: vi.fn(),
     getWorkspaceSession: vi.fn(() => session),
     setWorkspaceSession: vi.fn((next) => {
       session = next
@@ -198,6 +200,7 @@ describe('pty:spawn replacing a pane owner', () => {
 
     expect(spawned).toMatchObject({ id: 'pty-old', isReattach: true })
     expect(providerSpawn).toHaveBeenCalledTimes(1)
+    expect(store.updateSettings).not.toHaveBeenCalled()
   })
 
   it('stops the replaced owner and launches fresh instead of reattaching it', async () => {
@@ -212,6 +215,12 @@ describe('pty:spawn replacing a pane owner', () => {
     expect(spawned).toMatchObject({ id: 'pty-new' })
     expect(shutdown).toHaveBeenCalledWith('pty-old', expect.objectContaining({ immediate: true }))
     expect(spawned).not.toHaveProperty('isReattach', true)
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      {
+        providerActivations: { codex: { activatedAt: expect.any(String), source: 'agent-launch' } }
+      },
+      { notifyListeners: true }
+    )
     const freshLaunch = providerSpawn.mock.calls.find(([options]) => !options.attachOnly)?.[0]
     expect(freshLaunch).toMatchObject({ command: 'codex' })
     expect(shutdown.mock.invocationCallOrder[0]).toBeLessThan(

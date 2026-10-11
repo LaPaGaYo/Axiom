@@ -1,7 +1,9 @@
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
+import { providerActivationIdSchema } from '../../../../shared/provider-activation'
 import { agentHookServer } from '../../../agent-hooks/server'
 import { markClaudePtySpawned } from '../../../claude-accounts/live-pty-gate'
 import { registerPty } from '../../../memory/pty-registry'
+import { recordProviderActivation } from '../../../provider-activation/provider-activation'
 import type { PtySpawnResult } from '../../../providers/types'
 import { clearMigrationUnsupportedPtysForPaneKey } from '../../../agent-hooks/migration-unsupported-pty-state'
 import { recordPtySpawnTelemetry } from '../pane/spawn-telemetry'
@@ -100,6 +102,12 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
     ctx.pendingRegistrationPtyId = null
   }
   publishPtyIpcSpawnCommit(ctx, committedSize)
+  if (ctx.deps.store && !ctx.result.isReattach) {
+    const activationId = providerActivationIdSchema.safeParse(args.launchAgent)
+    if (activationId.success) {
+      recordProviderActivation(ctx.deps.store, activationId.data, 'agent-launch')
+    }
+  }
   // Admission must precede reflow: a replaced spawn cannot resize its successor's model.
   reflowHeadlessTerminalToCommittedGrid({
     result: ctx.result,
