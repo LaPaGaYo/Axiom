@@ -136,10 +136,10 @@ export abstract class RateLimitServiceState {
   protected fetchActivatedProvider(
     provider: ActiveRateLimitProvider,
     force: boolean | undefined,
-    fetch: () => Promise<ProviderRateLimits>
+    fetchProvider: () => Promise<ProviderRateLimits>
   ): Promise<ProviderRateLimits> {
     if (force || this.providerActivationResolver(provider)) {
-      return fetch()
+      return fetchProvider()
     }
     return Promise.resolve({
       provider,
