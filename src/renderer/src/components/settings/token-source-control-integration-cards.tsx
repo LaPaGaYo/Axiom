@@ -53,6 +53,8 @@ export function AzureDevOpsIntegrationCard(): React.JSX.Element {
                 'auto.components.settings.token.source.control.integration.cards.f3f47dc7de',
                 'Azure DevOps status is not available in this runtime yet.'
               )
+            ) : status === 'not-checked' ? (
+              translate('providerActivation.notChecked', 'Not checked')
             ) : status === 'not-configured' ? (
               <>
                 {translate(
@@ -177,6 +179,8 @@ export function GiteaIntegrationCard(): React.JSX.Element {
                 'auto.components.settings.token.source.control.integration.cards.0613928cb3',
                 'Gitea status is not available in this runtime yet.'
               )
+            ) : status === 'not-checked' ? (
+              translate('providerActivation.notChecked', 'Not checked')
             ) : status === 'not-configured' ? (
               <>
                 {translate(

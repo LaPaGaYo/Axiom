@@ -70,8 +70,32 @@ describe('RateLimitService', () => {
     resetRateLimitProviderMocks()
   })
 
+  it('keeps an unactivated foreground profile silent across focus and idle', async () => {
+    vi.useFakeTimers()
+    const service = new RateLimitService()
+    const window = new FakeRateLimitWindow()
+    try {
+      service.attach(asRateLimitWindow(window))
+      service.start({ fetchImmediately: false })
+      window.emit('focus')
+      window.emit('show')
+      window.emit('restore')
+      await vi.advanceTimersByTimeAsync(30 * 60 * 1000)
+      await service.refreshIfStale()
+      expect(vi.getTimerCount()).toBe(0)
+      expect(fetchCodexRateLimits).not.toHaveBeenCalled()
+      expect(fetchClaudeRateLimits).not.toHaveBeenCalled()
+      expect(fetchGeminiRateLimits).not.toHaveBeenCalled()
+      expect(fetchGrokRateLimits).not.toHaveBeenCalled()
+    } finally {
+      service.stop()
+      vi.useRealTimers()
+    }
+  })
+
   it('removes all window listeners when replacing the attached window', () => {
     const service = new RateLimitService()
+    service.setProviderActivationResolver(() => true)
     const firstWindow = new FakeRateLimitWindow()
     const secondWindow = new FakeRateLimitWindow()
 
@@ -107,6 +131,7 @@ describe('RateLimitService', () => {
       vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 12))
       vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))
       const service = new RateLimitService()
+      service.setProviderActivationResolver(() => true)
 
       service.setPollingInterval(Number.NaN)
       service.start()
@@ -129,6 +154,7 @@ describe('RateLimitService', () => {
     vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 12))
     vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))
     const service = new RateLimitService()
+    service.setProviderActivationResolver(() => true)
     const window = new FakeRateLimitWindow()
 
     service.attach(asRateLimitWindow(window))
@@ -154,6 +180,7 @@ describe('RateLimitService', () => {
       vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 12))
       vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))
       const service = new RateLimitService()
+      service.setProviderActivationResolver(() => true)
       const window = new FakeRateLimitWindow()
 
       service.attach(asRateLimitWindow(window))
@@ -182,6 +209,7 @@ describe('RateLimitService', () => {
       vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))
 
       const service = new RateLimitService()
+      service.setProviderActivationResolver(() => true)
       const window = new FakeRateLimitWindow()
       service.attach(asRateLimitWindow(window))
       service.start({ fetchImmediately: false })
@@ -215,6 +243,7 @@ describe('RateLimitService', () => {
       vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))
 
       const service = new RateLimitService()
+      service.setProviderActivationResolver(() => true)
       const window = new FakeRateLimitWindow()
       service.attach(asRateLimitWindow(window))
       service.start({ fetchImmediately: false })
@@ -271,6 +300,7 @@ describe('RateLimitService', () => {
       mockFreshBackgroundProviderFetches()
 
       const service = new RateLimitService()
+      service.setProviderActivationResolver(() => true)
       const window = new FakeRateLimitWindow()
       service.attach(asRateLimitWindow(window))
       service.start({ fetchImmediately: false })
@@ -327,6 +357,7 @@ describe('RateLimitService', () => {
       mockFreshBackgroundProviderFetches()
 
       const service = new RateLimitService()
+      service.setProviderActivationResolver(() => true)
       const window = new FakeRateLimitWindow()
       service.attach(asRateLimitWindow(window))
       service.start({ fetchImmediately: false })
@@ -375,6 +406,7 @@ describe('RateLimitService', () => {
       mockFreshBackgroundProviderFetches()
 
       const service = new RateLimitService()
+      service.setProviderActivationResolver(() => true)
       const window = new FakeRateLimitWindow()
       service.attach(asRateLimitWindow(window))
       service.start({ fetchImmediately: false })
@@ -418,6 +450,7 @@ describe('RateLimitService', () => {
       mockFreshBackgroundProviderFetches()
 
       const service = new RateLimitService()
+      service.setProviderActivationResolver(() => true)
 
       await service.refresh()
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
@@ -443,6 +476,7 @@ describe('RateLimitService', () => {
       mockFreshBackgroundProviderFetches()
 
       const service = new RateLimitService()
+      service.setProviderActivationResolver(() => true)
 
       await service.refresh()
       expect(service.getState().claude?.status).toBe('ok')
@@ -470,6 +504,7 @@ describe('RateLimitService', () => {
       vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))
 
       const service = new RateLimitService()
+      service.setProviderActivationResolver(() => true)
       const window = new FakeRateLimitWindow()
       const claudeStatuses: string[] = []
       service.onStateChange((state) => {
@@ -514,6 +549,7 @@ describe('RateLimitService', () => {
       vi.mocked(fetchKimiRateLimits).mockResolvedValue(errorProvider('kimi', 'token expired'))
 
       const service = new RateLimitService()
+      service.setProviderActivationResolver(() => true)
       const window = new FakeRateLimitWindow()
       service.attach(asRateLimitWindow(window))
       service.start({ fetchImmediately: false })
@@ -558,6 +594,7 @@ describe('RateLimitService', () => {
       vi.mocked(fetchKimiRateLimits).mockResolvedValue(unavailableProvider('kimi'))
 
       const service = new RateLimitService()
+      service.setProviderActivationResolver(() => true)
       const window = new FakeRateLimitWindow()
       service.attach(asRateLimitWindow(window))
       service.start({ fetchImmediately: false })
@@ -597,6 +634,7 @@ describe('RateLimitService', () => {
       vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))
 
       const service = new RateLimitService()
+      service.setProviderActivationResolver(() => true)
       const window = new FakeRateLimitWindow()
       service.attach(asRateLimitWindow(window))
       service.start({ fetchImmediately: false })

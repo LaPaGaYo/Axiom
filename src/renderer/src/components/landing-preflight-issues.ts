@@ -15,7 +15,7 @@ export type PreflightIssue = {
 
 export type LandingPreflightStatus = {
   git: { installed: boolean }
-  gh: { installed: boolean; authenticated: boolean }
+  gh: { installed: boolean; authenticated: boolean; checked?: boolean }
 }
 
 export type LandingPreflightIssueOptions = {
@@ -64,7 +64,7 @@ export function getLandingPreflightIssues(
       fixUrl: 'https://cli.github.com',
       dismissible: true
     })
-  } else if (!status.gh.authenticated) {
+  } else if (status.gh.checked !== false && !status.gh.authenticated) {
     issues.push({
       id: 'gh-auth',
       title: translate('auto.components.Landing.9f96d018b7', 'GitHub CLI is not authenticated'),

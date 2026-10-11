@@ -18384,5 +18384,9 @@
   },
   "common": {
     "retry": "重试"
+  },
+  "providerActivation": {
+    "notChecked": "未检查",
+    "connect": "连接 / 重新检查"
   }
 }

@@ -9,7 +9,12 @@ import { cn } from '@/lib/utils'
 import { OnboardingInlineCommandTerminal } from './OnboardingInlineCommandTerminal'
 import { translate } from '@/i18n/i18n'
 
-type GitHubSetupState = 'checking' | 'connected' | 'not-installed' | 'not-authenticated'
+type GitHubSetupState =
+  | 'not-checked'
+  | 'checking'
+  | 'connected'
+  | 'not-installed'
+  | 'not-authenticated'
 
 function getGitHubSetupState(
   status: ReturnType<typeof useAppStore.getState>['preflightStatus']
@@ -19,6 +24,9 @@ function getGitHubSetupState(
   }
   if (!status.gh.installed) {
     return 'not-installed'
+  }
+  if (status.gh.checked === false) {
+    return 'not-checked'
   }
   return status.gh.authenticated ? 'connected' : 'not-authenticated'
 }
@@ -56,6 +64,10 @@ export function GitHubRow(props: { compact?: boolean } = {}): React.JSX.Element 
                     'auto.components.onboarding.IntegrationsStep.5c115cb713',
                     'CLI not installed'
                   )}
+                </IntegrationStatusPill>
+              ) : state === 'not-checked' ? (
+                <IntegrationStatusPill tone="neutral">
+                  {translate('providerActivation.notChecked', 'Not checked')}
                 </IntegrationStatusPill>
               ) : state === 'not-authenticated' ? (
                 <IntegrationStatusPill tone="attention">

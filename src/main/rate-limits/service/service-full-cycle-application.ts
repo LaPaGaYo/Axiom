@@ -13,6 +13,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       return
     }
     const {
+      mayFetch,
       claudeTarget,
       claudeGeneration,
       claudeProvenance,
@@ -127,8 +128,12 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
             status: 'error'
           } satisfies ProviderRateLimits)
 
-    const latestCodexHome = this.resolveCodexHome(codexTarget)
-    const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
+    const latestCodexHome = mayFetch('codex')
+      ? this.resolveCodexHome(codexTarget)
+      : { skip: true, homePath: null }
+    const latestClaudeAuthPreparation = mayFetch('claude')
+      ? await this.claudeAuthPreparationResolver?.(claudeTarget)
+      : undefined
     if (signal.aborted) {
       return
     }
@@ -148,8 +153,10 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       claudeGeneration === this.claudeFetchGeneration &&
       claudeProvenance === latestClaudeProvenance &&
       this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
-    const shouldApplyOpencode = opencodeGeneration === this.opencodeFetchGeneration
-    const shouldApplyMiniMax = miniMaxGeneration === this.minimaxFetchGeneration
+    const shouldApplyOpencode =
+      mayFetch('opencode-go') && opencodeGeneration === this.opencodeFetchGeneration
+    const shouldApplyMiniMax =
+      mayFetch('minimax') && miniMaxGeneration === this.minimaxFetchGeneration
 
     if (shouldApplyClaude) {
       this.trackActiveFailureStreak('claude', claude)
@@ -178,14 +185,18 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         : codexBecameUnavailable
           ? codexStateBeforeFetch
           : this.state.codex,
-      gemini: this.applyStalePolicy(gemini, previousState.gemini),
+      gemini: mayFetch('gemini')
+        ? this.applyStalePolicy(gemini, previousState.gemini)
+        : this.state.gemini,
       opencodeGo: shouldApplyOpencode
         ? opencodeConfigChanged
           ? opencodeGo
           : this.applyStalePolicy(opencodeGo, previousState.opencodeGo)
         : this.state.opencodeGo,
-      kimi: this.applyStalePolicy(kimi, previousState.kimi),
-      antigravity: this.applyStalePolicy(antigravity, previousState.antigravity),
+      kimi: mayFetch('kimi') ? this.applyStalePolicy(kimi, previousState.kimi) : this.state.kimi,
+      antigravity: mayFetch('antigravity')
+        ? this.applyStalePolicy(antigravity, previousState.antigravity)
+        : this.state.antigravity,
       minimax: shouldApplyMiniMax
         ? miniMaxConfigChanged
           ? miniMax
@@ -214,8 +225,12 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     this.trackActiveFailureStreak('cursor', cursor)
     this.updateState({
       ...this.state,
-      grok: this.applyStalePolicy(grok, previousState.grok),
-      cursor: cursorAccountChanged ? cursor : this.applyStalePolicy(cursor, previousState.cursor)
+      grok: mayFetch('grok') ? this.applyStalePolicy(grok, previousState.grok) : this.state.grok,
+      cursor: mayFetch('cursor')
+        ? cursorAccountChanged
+          ? cursor
+          : this.applyStalePolicy(cursor, previousState.cursor)
+        : this.state.cursor
     })
   }
 }

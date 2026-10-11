@@ -102,6 +102,7 @@ describe('CodexAccountService config sync', () => {
     )
 
     await service.addAccount()
+    expect(store.getSettings().providerActivations?.codex?.source).toBe('account-added')
 
     expect(spawnMock).toHaveBeenCalledTimes(1)
     expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledTimes(1)
@@ -167,6 +168,7 @@ describe('CodexAccountService config sync', () => {
     )
 
     await service.addAccount()
+    expect(store.getSettings().providerActivations?.codex?.source).toBe('account-added')
 
     expect(spawnMock).toHaveBeenCalledTimes(1)
   })

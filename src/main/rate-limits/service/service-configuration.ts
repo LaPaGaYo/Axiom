@@ -3,6 +3,7 @@ import { hasMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { hasMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
 import { RateLimitServiceAccountRefresh } from './service-account-refresh'
 import {
+  type ActiveRateLimitProvider,
   type CodexAccountSelectionTarget,
   type CodexHomePathResolver,
   type KimiHomeResolver,
@@ -20,6 +21,25 @@ import {
 } from './service-types'
 
 export abstract class RateLimitServiceConfiguration extends RateLimitServiceAccountRefresh {
+  setProviderActivationResolver(resolver: (provider: ActiveRateLimitProvider) => boolean): void {
+    this.providerActivationResolver = resolver
+  }
+
+  updateProviderActivation(): void {
+    if (!this.pollingStarted) {
+      return
+    }
+    if (this.hasActivatedProviders()) {
+      if (!this.timer) {
+        this.scheduleDeferredStartupRefresh()
+        this.startTimer()
+      }
+    } else {
+      this.stopTimer()
+      this.clearDeferredStartupRefresh()
+    }
+  }
+
   setCodexHomePathResolver(resolver: CodexHomePathResolver): void {
     this.codexHomePathResolver = resolver
   }
@@ -96,6 +116,10 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
   }
 
   start(options: { fetchImmediately?: boolean } = {}): void {
+    this.pollingStarted = true
+    if (!this.hasActivatedProviders()) {
+      return
+    }
     if (options.fetchImmediately !== false) {
       void this.fetchAll()
     } else {
@@ -105,6 +129,7 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
   }
 
   stop(): void {
+    this.pollingStarted = false
     this.abortActiveFetchCycle()
     this.clearQueuedFetches()
     this.inactiveClaudeFetching.clear()

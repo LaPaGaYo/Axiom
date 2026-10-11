@@ -1,3 +1,4 @@
+import { isProviderActivated } from '../provider-activation/provider-activation'
 import type { AgentHookInstallStatus, AgentHookTarget } from '../../shared/agent-hook-types'
 import {
   getManagedAgentHookTarget,
@@ -21,7 +22,10 @@ export { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-registry'
 export { prepareManagedCodexHomeBeforeShellLaunch } from '../codex/managed-home-shell-preflight'
 
 type ManagedHookSettings = Partial<
-  Pick<GlobalSettings, 'agentCmdOverrides' | 'agentStatusHooksEnabled' | 'disabledTuiAgents'>
+  Pick<
+    GlobalSettings,
+    'agentCmdOverrides' | 'agentStatusHooksEnabled' | 'disabledTuiAgents' | 'providerActivations'
+  >
 > | null
 
 type InstallOptions = {
@@ -62,6 +66,7 @@ export function shouldInstallStartupManagedAgentHook(
 ): boolean {
   return (
     resolveStartupManagedHookAction(settings) === 'install' &&
+    (agent !== 'codex' || isProviderActivated(settings, 'codex')) &&
     !normalizeDisabledTuiAgents(settings?.disabledTuiAgents).includes(agent)
   )
 }
@@ -71,11 +76,7 @@ export function shouldContinueManagedHookStartup(
   settings: ManagedHookSettings,
   agent: AgentHookTarget
 ): boolean {
-  return (
-    !isQuitting &&
-    isAgentStatusHooksEnabled(settings) &&
-    !normalizeDisabledTuiAgents(settings?.disabledTuiAgents).includes(agent)
-  )
+  return !isQuitting && shouldInstallStartupManagedAgentHook(settings, agent)
 }
 
 function errorStatus(agent: AgentHookTarget, error: unknown): AgentHookInstallStatus {

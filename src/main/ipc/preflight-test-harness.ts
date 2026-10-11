@@ -1,6 +1,7 @@
 import path from 'node:path'
 import type { Mock } from 'vitest'
-import { _resetPreflightCache } from './preflight'
+import { _resetPreflightCache, configurePreflightProviderActivation } from './preflight'
+import type { ProviderActivations } from '../../shared/provider-activation'
 
 export type HandlerMap = Record<string, (_event?: unknown, args?: unknown) => Promise<unknown>>
 
@@ -94,6 +95,18 @@ export function resetPreflightMocks(mocks: PreflightMocks, handlers: HandlerMap)
   getBitbucketAuthStatusMock.mockResolvedValue(defaultBitbucketStatus)
   getAzureDevOpsAuthStatusMock.mockResolvedValue(defaultAzureDevOpsStatus)
   getGiteaAuthStatusMock.mockResolvedValue(defaultGiteaStatus)
+  // Existing auth-probe tests exercise a profile whose integrations have been activated.
+  const providerActivations: ProviderActivations = {}
+  for (const id of ['gh', 'glab', 'bitbucket', 'azureDevOps', 'gitea'] as const) {
+    providerActivations[id] = {
+      activatedAt: '2026-10-10T00:00:00.000Z',
+      source: 'integrations-recheck'
+    }
+  }
+  configurePreflightProviderActivation({
+    getSettings: () => ({ providerActivations }),
+    updateSettings: () => {}
+  })
   _resetPreflightCache()
   Object.defineProperty(process, 'platform', {
     configurable: true,

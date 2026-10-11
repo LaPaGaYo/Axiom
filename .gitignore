@@ -218,6 +218,9 @@ ci-shards/
 !docs/PROJECT_CONSTITUTION.md
 !docs/decisions/
 !docs/decisions/**
+!docs/review-evidence/
+!docs/review-evidence/axiom-m0/
+!docs/review-evidence/axiom-m0/**
 !docs/archive/
 !docs/archive/**
 !docs/reference/orca-mapping.md

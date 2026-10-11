@@ -253,6 +253,8 @@ Envelope 字段（`RpcRequest`，`rpc/core.ts:44`）：`orchestrationContractVer
 
 ## 7. M0 网络出口与身份清单
 
+M0-09 / D37：`orca-data.json` 的 GlobalSettings 增加可选 `providerActivations`（默认 `{}`）。`src/shared/provider-activation.ts` 的 zod schema 在设置加载与更新边界校验；缺失或无效记录按空处理，不从全局 CLI 凭据迁移。main 的 `provider-activation/provider-activation.ts` 记录用户动作；renderer settings 更新不能直接注入该字段。Codex hook 启动修复、preflight 认证与后台用量检查读取同一 profile 记录。现有 RPC 的 preflight 结果仅增加可选 `checked: false` 表示未检查，保留 boolean `authenticated`；旧 runtime 省略该字段时兼容原行为。无 orchestration DB migration 或新 RPC。提案与完整读写入口见 `.axiom-work/reports/M0-09-3.md`；实测归因见 [M0-08 出口证据](../review-evidence/axiom-m0/M0-08-egress-capture.md#attribution-m0-09)。
+
 | 类别 | 端点或标识 | 文件路径 | V1 处置 | 备注 |
 |---|---|---|---|---|
 | app id / AppUserModelID | `com.stablyai.orca` | `config/electron-builder.config.cjs:77`；`src/shared/local-build-compatibility-contract.json`；`src/main/startup/dev-instance-identity.ts:6` | `replace` | compatibility-contract 的 `appId` 影响 daemon/state 兼容性判定，改后旧数据目录不再互认 |
@@ -279,7 +281,11 @@ Envelope 字段（`RpcRequest`，`rpc/core.ts:44`）：`orchestrationContractVer
 | mobile / cloud | D21 mobile 身份；上游 mobile/cloud 服务标识 | `mobile/`；原 `cloud/` | D33a：删除 `cloud/` 及其 CI；原生 mobile 应用不构建、不发布，删除 Android/iOS 发布工作流 | mobile web bundle 仍以 `out/mobile-web` 随桌面应用交付；`mobile/` 保留根级门禁与 vendor-egress ratchet 覆盖，保留 mobile 验证 CI、依赖安装、缓存、web bundle 构建与桌面配对 UI |
 | 文档站/README 链接 | `repositoryUrl` / `issuesUrl` / `docsUrl`（Axiom README）；`communityLinks: []` | `src/shared/product-egress-policy.ts`；renderer / CLI 链接；`README.md`；`NOTICE.md` | `replace` — M0-05a | 保留 MIT attribution；隐藏 Changelog / community / Android APK 下载；`docs/site/**` 的保留或删除及 UI 品牌文案归 M0-05b |
 
-**验证策略**：(1) 构建期常量断言：vitest 用例读取上列文件，断言不含 `onorca.dev`、`stablyai`、`posthog`、`com.stablyai`（允许列表：`LICENSE`、`docs/audits/**`、本文件）；并断言 `package.json` 无 `posthog-node` 依赖、`electron-builder.config.cjs` 的 `appId/productName/protocols/publish` 等于 Axiom 常量。(2) 运行时出口断言：e2e 以 `ORCA_BACKGROUND_LAUNCH=1` 启动打包产物，Chromium 侧用 `--proxy-server` 指向本地记录代理（Electron `net.fetch` 走 Chromium 网络栈），Node 侧设 `HTTPS_PROXY`/`HTTP_PROXY`（`posthog-node`、`fetch` 走 Node 网络栈），冷启动 + 打开 Mission + 完成一次 Attempt 后断言对 `onorca.dev` / `stablyai` / `posthog.com` / `api.github.com` 的请求数为 0；代理日志作为 M0 交付物存档。(3) `pnpm lint` 内新增 `verify:egress-allowlist` 脚本，对 `src/**` 做 `rg` 扫描。
+**验证策略**（M0-08）：
+
+1. **已实现：构建期身份与出口策略断言。** `src/shared/product-build-identity.test.ts` 用 `createRequire` 读取 `config/electron-builder.config.cjs`，钉住 D21 的 `appId/productName/protocols/publish`，与 `local-build-compatibility-contract.json` 的 appId 对齐，检查 `package.json` 的各依赖区及 `pnpm.overrides` 无已移除的遥测 SDK；直接复用 `src/shared/product-egress-policy.test.ts` 的完整策略断言，避免重复维护禁用端点与空 host 列表。
+2. **已实现：冷启动出口捕获规格，实际运行证据状态见归档。** `tests/e2e/golden-egress-cold-start.spec.ts` 复用 `helpers/orca-app.ts`，以 `ORCA_BACKGROUND_LAUNCH=1` / `electron-headless` 启动 `globalSetup` 构建的桌面应用（非签名安装包）。两个全新 profile 分别到达 onboarding 与默认主窗口，各观察 20 秒。`tests/e2e/helpers/recording-proxy.ts` 仅记录并拒绝连接；Chromium 使用 `--proxy-server`，Node 全局 undici `fetch` 使用 `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` 与 `NODE_USE_ENV_PROXY=1`，loopback 走默认 bypass / `NO_PROXY`。规格附加并打印完整 host tally，拒绝任何厂商 host，其他非 loopback host 原样保留供验证者判读。运行 `ORCA_BACKGROUND_LAUNCH=1 pnpm run test:e2e:egress-cold-start`；证据及 raw HTTP、`ws`、native 等覆盖边界归档在 [M0-08-egress-capture.md](../review-evidence/axiom-m0/M0-08-egress-capture.md)。Mission/Attempt 流程不属于 M0 冷启动规格，后续里程碑另验。
+3. **已取代：不再新增 `verify:egress-allowlist`。** M0-01 的 `config/scripts/check-vendor-egress-ratchet.mjs` 已在 `pnpm lint` 中执行 `check:vendor-egress-ratchet`，覆盖“源代码不得新增厂商 needle”策略；基线只能缩减，断言数据使用逐行 allow 标记。
 
 ## 8. 代码落位与类型安全
 

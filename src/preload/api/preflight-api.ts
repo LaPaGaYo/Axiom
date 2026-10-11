@@ -5,27 +5,8 @@ import type {
   ShellHydrationFailureReason
 } from '../../shared/shell-path-hydration-types'
 
-export type PreflightStatus = {
-  git: { installed: boolean }
-  gh: { installed: boolean; authenticated: boolean }
-  /** Optional — older preload payloads predating GitLab support omit it; consumers gate on `glab?.installed`. */
-  glab?: { installed: boolean; authenticated: boolean }
-  bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
-  azureDevOps?: {
-    configured: boolean
-    authenticated: boolean
-    account: string | null
-    baseUrl: string | null
-    tokenConfigured: boolean
-  }
-  gitea?: {
-    configured: boolean
-    authenticated: boolean
-    account: string | null
-    baseUrl: string | null
-    tokenConfigured: boolean
-  }
-}
+import type { PreflightStatus } from '../../shared/preflight-status'
+export type { PreflightStatus } from '../../shared/preflight-status'
 
 export type RefreshAgentsResult = {
   agents: string[]

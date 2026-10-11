@@ -27,6 +27,8 @@
 
 ## 2. 分层与角色
 
+**Provider activation（provider 激活记录）**：当前 Axiom profile 中由用户动作产生的本地设置记录 `providerActivations`，保存 provider id、首次动作时间及来源。D37 用它约束启动与空闲认证/用量请求；默认 `{}`，不能由机器全局凭据、PATH 或既有 hook 推断。不是认证成功证明，也不是 Mission Approval。来源限 `agent-launch`、`settings-hook-install`、`integrations-recheck`、`account-added`；具体持久化提案见 `.axiom-work/reports/M0-09-3.md`。
+
 | 名称 | 类型 | 职责 | 不得做 |
 |---|---|---|---|
 | **Mission Experience Layer** | UI / CLI | Mission-first 界面与操作入口；投影 Control Plane 状态 | 持有权威状态；直接启动 shell；直接写 DB |

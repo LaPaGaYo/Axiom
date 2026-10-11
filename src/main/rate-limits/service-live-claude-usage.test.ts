@@ -75,6 +75,7 @@ describe('RateLimitService', () => {
       mockFreshBackgroundProviderFetches()
 
       const service = new RateLimitService()
+      service.setProviderActivationResolver(() => true)
       const window = new FakeRateLimitWindow()
       service.attach(asRateLimitWindow(window))
       service.start({ fetchImmediately: false })
@@ -129,6 +130,7 @@ describe('RateLimitService', () => {
       mockFreshBackgroundProviderFetches()
 
       const service = new RateLimitService()
+      service.setProviderActivationResolver(() => true)
       service.attach(asRateLimitWindow(new FakeRateLimitWindow()))
       service.start({ fetchImmediately: false })
       await vi.advanceTimersByTimeAsync(1000)
@@ -174,6 +176,7 @@ describe('RateLimitService', () => {
       mockFreshBackgroundProviderFetches()
 
       const service = new RateLimitService()
+      service.setProviderActivationResolver(() => true)
       service.attach(asRateLimitWindow(new FakeRateLimitWindow()))
       service.start({ fetchImmediately: false })
       await vi.advanceTimersByTimeAsync(1000)
@@ -208,6 +211,7 @@ describe('RateLimitService', () => {
       mockFreshBackgroundProviderFetches()
 
       const service = new RateLimitService()
+      service.setProviderActivationResolver(() => true)
       service.attach(asRateLimitWindow(new FakeRateLimitWindow()))
       service.start({ fetchImmediately: false })
       await vi.advanceTimersByTimeAsync(1000)
@@ -241,6 +245,7 @@ describe('RateLimitService', () => {
       mockFreshBackgroundProviderFetches()
 
       const service = new RateLimitService()
+      service.setProviderActivationResolver(() => true)
 
       // No fetch cycle has captured the selected account's config dir yet.
       service.ingestLiveClaudeRateLimits({
@@ -279,6 +284,7 @@ describe('RateLimitService', () => {
       mockFreshBackgroundProviderFetches()
 
       const service = new RateLimitService()
+      service.setProviderActivationResolver(() => true)
       await service.refresh()
 
       service.ingestLiveClaudeRateLimits({
@@ -310,6 +316,7 @@ describe('RateLimitService', () => {
       mockFreshBackgroundProviderFetches()
 
       const service = new RateLimitService()
+      service.setProviderActivationResolver(() => true)
       await service.refresh()
 
       const event = {
@@ -345,6 +352,7 @@ describe('RateLimitService', () => {
       mockFreshBackgroundProviderFetches()
 
       const service = new RateLimitService()
+      service.setProviderActivationResolver(() => true)
       await service.refresh()
 
       const secondRefresh = service.refresh()
@@ -388,6 +396,7 @@ describe('RateLimitService', () => {
       mockFreshBackgroundProviderFetches()
 
       const service = new RateLimitService()
+      service.setProviderActivationResolver(() => true)
       await service.refresh()
       expect(service.getState().claude?.weekly?.usedPercent).toBe(62)
 
@@ -418,6 +427,7 @@ describe('RateLimitService', () => {
       const authGate = deferred<void>()
       let resolverCalls = 0
       const service = new RateLimitService()
+      service.setProviderActivationResolver(() => true)
       service.setClaudeAuthPreparationResolver(async () => {
         resolverCalls += 1
         const outgoing = resolverCalls === 1
@@ -483,6 +493,7 @@ describe('RateLimitService', () => {
 
     it('refetches Claude usage when the current result was deferred by a live session', async () => {
       const service = new RateLimitService()
+      service.setProviderActivationResolver(() => true)
       vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(deferredClaudeResult())
       await service.refresh()
       expect(service.getState().claude?.usageMetadata?.deferredByLiveClaudeSession).toBe(true)
@@ -497,6 +508,7 @@ describe('RateLimitService', () => {
 
     it('does not refetch when the current Claude result was not deferred', async () => {
       const service = new RateLimitService()
+      service.setProviderActivationResolver(() => true)
       vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(
         errorProvider('claude', 'Token expired')
       )
@@ -510,6 +522,7 @@ describe('RateLimitService', () => {
 
     it('does not refetch when there is no Claude state yet', async () => {
       const service = new RateLimitService()
+      service.setProviderActivationResolver(() => true)
 
       await service.refreshAfterClaudeLivePtysDrained()
 

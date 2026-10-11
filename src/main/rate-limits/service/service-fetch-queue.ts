@@ -2,6 +2,9 @@ import { RateLimitServiceProviderCycles } from './service-provider-cycles'
 
 export abstract class RateLimitServiceFetchQueue extends RateLimitServiceProviderCycles {
   protected async fetchAll(options?: { force?: boolean }): Promise<void> {
+    if (!options?.force && !this.hasActivatedProviders()) {
+      return
+    }
     if (this.isFetching) {
       if (options?.force) {
         this.fullFetchQueued = true
@@ -64,6 +67,9 @@ export abstract class RateLimitServiceFetchQueue extends RateLimitServiceProvide
   }
 
   protected async fetchCodexOnly(options?: { force?: boolean }): Promise<void> {
+    if (!options?.force && !this.providerActivationResolver('codex')) {
+      return
+    }
     if (this.isFetching) {
       if (options?.force) {
         this.codexOnlyFetchQueued = true
@@ -123,6 +129,9 @@ export abstract class RateLimitServiceFetchQueue extends RateLimitServiceProvide
   }
 
   protected async fetchClaudeOnly(options?: { force?: boolean }): Promise<void> {
+    if (!options?.force && !this.providerActivationResolver('claude')) {
+      return
+    }
     if (this.isFetching) {
       if (options?.force) {
         this.claudeOnlyFetchQueued = true
@@ -185,6 +194,9 @@ export abstract class RateLimitServiceFetchQueue extends RateLimitServiceProvide
   }
 
   protected async fetchGrokOnly(options?: { force?: boolean }): Promise<void> {
+    if (!options?.force && !this.providerActivationResolver('grok')) {
+      return
+    }
     if (this.isFetching) {
       if (options?.force) {
         this.grokOnlyFetchQueued = true
