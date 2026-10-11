@@ -158,3 +158,15 @@ Implemented gate: additive, schema-validated `GlobalSettings.providerActivations
 The unforced preflight still detects binaries/versions locally, but returns additive `checked: false` for unactivated authentication. UI displays “Not checked” / “未检查” and the explicit Connect / Re-check action. Bitbucket, Azure DevOps and Gitea status functions can validate credentials through network API calls, so they share the same gate. Manual usage refresh remains an explicit one-time ask and does not persist activation; `probeCodexAuthPresence` remains the secondary credential guard. Without activated usage providers, no startup or background usage timer is scheduled; automatic cycles fetch only activated providers.
 
 The background e2e does not focus its window, so the foreground poller was not implicated by this capture. Focus/show/restore plus idle and stale-refresh unit tests cover the unactivated case; auth-probe tests cover unforced silence and forced activation. The original proxy coverage limitations still apply, and Linux/Windows/WSL are not exercised on this host. The verifier must append both final green host tallies and candidate identity below; **no final green tallies are claimed by this Worker**.
+
+## Green host runs after the gate (verifier, 2026-10-10)
+
+Independent host runs of `ORCA_BACKGROUND_LAUNCH=1 pnpm run test:e2e:egress-cold-start` (`electron-headless`, `AXIOM_EGRESS_CAPTURE_STACK=both`, same recording proxy and the same two scenarios as above), inside `attempt.sh` → `verify.sh`:
+
+| Candidate | Log | Fresh profile → onboarding, idle | Default profile → main window, idle | Result |
+|---|---|---|---|---|
+| `7ba9e158d` (M0-09 attempt 3) | `.axiom-work/logs/verify-M0-09-3-20261010-161407.log` | host tally `{}`, attributed tally `{}` | host tally `{}`, attributed tally `{}` | `2 passed (56.0s)` |
+| `ebb1360f5` (M0-09 attempt 4) | `.axiom-work/logs/attempt-M0-09-4-20261010-182428.log` (contains `verify-M0-09-4`) | host tally `{}`, attributed tally `{}` | host tally `{}`, attributed tally `{}` | `2 passed (57s)` |
+| `b1fba5f8e` (M0-09 attempt 5, the integrated candidate) | `.axiom-work/logs/attempt-M0-09-5-20261010-185034.log` (contains `verify-M0-09-5`) | host tally `{}`, attributed tally `{}` | host tally `{}`, attributed tally `{}` | `2 passed (56s)` |
+
+Both runs used the same host as the red captures (real `$HOME` with a signed-in Codex CLI and previously granted hooks in `~/.codex/config.toml`), so the only difference between `{ "chatgpt.com": 2, "github.com": 2 }` and `{}` is the provider-activation gate: with no activation in the Axiom profile, the startup managed-hook reconciliation no longer runs the two `codex app-server` trust-grant sessions, and no `codex` process is spawned before the user acts.
