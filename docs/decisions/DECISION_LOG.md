@@ -3,6 +3,7 @@
 更新日期：2026-09-26
 状态说明：`ACCEPTED` = Henry 已拍板；`PROPOSED` = 审查中提出、设计 v1.1 已按此撰写、**等待批准**；`REJECTED` = 提议被否决（保留记录）；`SUPERSEDED` = 被后续决策取代。带字母后缀的条目（如 D6a、D7a）是对已拍板决策的修正提议。
 本日志是「Decision 需有出处、备选、理由与取代规则」这条规则在文档层的落地；代码里的 `decisions` 表应从这里的条目起编号。
+延期到某个触发点再决定的事项登记在 `DEFERRED.md`（里程碑出口检查必须核对）。
 
 ---
 
@@ -313,7 +314,7 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **保留的风险/后续**：`CFBundleShortVersionString` 仍沿用上游版本线 1.4.214（首个 Axiom 发布版本需 Decision）；asar 内仍有 2 处 `stablyai` 字符串——`NOTICE.md` 归属（必须保留）与 mobile `ProtocolBlockScreen` 指向上游 releases / App Store 的用户可点链接（hygiene）；`orca-keyboard-layout` / `orca-notification-status` 可执行文件名、NSIS 文案、`package.json.name` 待 hygiene 决定；Windows/Linux 未在此打包；签名/公证不在 M0 范围。流水线教训（已记入 workflow 手册）：任何驱动真实 `afterPack` 的测试必须进 sidecar targets；`attempt.sh` 对 seq>1 现在尊重显式 `--base`（`fb4fbff0f`）；运行中的流水线脚本不能被改写（bash 边读边执行；全部脚本体已包进 `main()`，`5fa35dc7d`）；宿主装了 `mobile/node_modules` 之后全量 suite 还需要 Playwright 的 chromium + webkit（`launchers/playwright-install.command`）。
 
 **同期的 fixture 进展**（D39 的 FT-01）：`LaPaGaYo/flowtask-fixture` 两个 Attempt 后验收（`.axiom-work/verifications/FT-01-2.md`）：219 个受跟踪文件、61 个测试文件、214 + 17 个测试，`verify:fast` ≈ 2.5 s、`verify:full` ≈ 4 s、第二次 `verify:fast` 字节一致，每个导出都有直接测试并由契约测试机械保证；fixture `main` = `60f3824` 已推送。冻结为 v1 等 FT-02。
-## D41 · 托管 CI（GitHub Actions）在 fork 里的职责与裁剪 — PROPOSED（需 Henry 决定）
+## D41 · 托管 CI（GitHub Actions）在 fork 里的职责与裁剪 — ACCEPTED（Henry 2026-10-16：选项 A；B/C 延期到 M1 控制平面代码合入后复审）
 
 **背景**：A-lite 流水线的门禁在 Mac 上本地执行（`verify.sh` / `verify-merged.sh` / 全量 suite / 打包检查），推送 main 从不经过 PR。上游工作流清单（`.github/workflows/`，38 个）按触发方式分：
 - **只在 `pull_request` 跑的门禁**：`pr.yml`（lint、anti-slop、code-quality、changed-code 门、分片单测、e2e 等——真正的上游门禁）、`pr-test-loc.yml`、`bun-profile-tests.yml`、`git-command-termination-runtime.yml`、`pi-owner-runtime.yml`、`pi-provider-runtime.yml`、`release-ref-validation.yml`、`performance-contracts.yml`（+ schedule）、`computer-e2e.yml`（+ schedule）。**直接推 main 时一个都不跑。**
@@ -328,5 +329,6 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 - B：给 `pr.yml` 加 `push: branches: [main]`，让每次推送跑上游全套门禁。代价：`pr.yml` 的 changed-code 门用 `github.event.pull_request.base.sha`，push 事件要改用 `github.event.before`；分片单测与 e2e 在 GitHub runner 上每次推送约 1–2 小时、多台 runner；macOS runner 分钟数昂贵；而且上游 e2e 在 fork 环境的通过率未知（我们本地有 13 个已知环境性失败文件，runner 上会是另一组）。
 - C：删除全部上游工作流，只留一个 Axiom 自己的 `ci.yml`（lint + tc + 单测分片），在 M1 之后随控制平面代码一起设计。
 
-**建议**：先做 A（一个 hygiene attempt），B/C 等 M1 控制平面代码进来后再决定。无论选哪个，推送 main 之前的门禁仍是本地的 `verify-merged` + 全量 suite + 打包检查。
-**取代规则**：选定后改为 ACCEPTED 并记录选项；后续改 CI 策略需新 Decision。
+**决定**（Henry 2026-10-16）：**选项 A**。实施为 hygiene 任务 M0-14：10 个工作流去掉 `schedule:` 与 `push:` 触发（`ci-cache-warmup`、`mobile`、`skill-update-roundtrip`、`computer-e2e`、`e2e`、`node-next-compat`、`packaged-browser-e2e`、`performance-contracts`、`terminal-ime-e2e`、`terminal-perf`），保留 `workflow_dispatch` / `workflow_call` / `pull_request`，不删文件、不动 `pr.yml`；同步更新断言这些触发器的工作流自测（`ci-cache-warmup-workflow`、`skill-update-roundtrip-workflow`、`terminal-ime-e2e-workflow`、`computer-e2e-workflow` 等）。推送 main 之前的门禁仍是本地的 `verify-merged` + 全量 suite + 打包检查。
+**延期复审（登记在 `docs/decisions/DEFERRED.md`，不可遗忘）**：B（`pr.yml` 加 push 触发）与 C（Axiom 自己的 `ci.yml`）在 **M1 控制平面代码首次合入 main 之后、M1 出口之前**重新决定；届时需带上 fork 里托管 CI 的实际运行记录（Actions 页）与本地门禁的时长数据。
+**取代规则**：B/C 的复审结果以新 Decision（D41a 或独立编号）记录并取代本条的 CI 策略；在那之前任何新增工作流默认只允许 `workflow_dispatch` / `workflow_call` / `pull_request` 触发。
