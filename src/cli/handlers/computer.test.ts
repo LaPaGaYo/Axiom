@@ -129,7 +129,7 @@ describe('orca computer observation CLI handlers', () => {
       callMock,
       okFixture('req_permissions', {
         platform: 'darwin',
-        helperAppPath: '/Applications/Orca Computer Use.app',
+        helperAppPath: '/Applications/Axiom Computer Use.app',
         openedSettings: false,
         launchedHelper: true
       })
@@ -140,8 +140,8 @@ describe('orca computer observation CLI handlers', () => {
     expect(callMock).toHaveBeenCalledTimes(1)
     expect(callMock).toHaveBeenCalledWith('computer.permissions', {})
     const output = vi.mocked(console.log).mock.calls[0][0]
-    expect(output).toContain('Opened Orca Computer Use permission setup')
-    expect(output).toContain('/Applications/Orca Computer Use.app')
+    expect(output).toContain('Opened Axiom Computer Use permission setup')
+    expect(output).toContain('/Applications/Axiom Computer Use.app')
   })
 
   it('passes targeted computer permission setup id', async () => {
@@ -149,7 +149,7 @@ describe('orca computer observation CLI handlers', () => {
       callMock,
       okFixture('req_permissions', {
         platform: 'darwin',
-        helperAppPath: '/Applications/Orca Computer Use.app',
+        helperAppPath: '/Applications/Axiom Computer Use.app',
         openedSettings: true,
         launchedHelper: true
       })
