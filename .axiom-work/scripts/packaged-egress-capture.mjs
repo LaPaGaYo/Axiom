@@ -30,7 +30,11 @@ const record = (host, kind) => {
 }
 const proxy = createServer((req, res) => {
   let host = req.headers.host
-  try { host = new URL(req.url, 'http://x').host || host } catch {}
+  try {
+    host = new URL(req.url, 'http://x').host || host
+  } catch {
+    // keep the Host header
+  }
   record(host, 'http')
   res.statusCode = 502
   res.end('blocked by packaged-egress-capture')
@@ -69,13 +73,18 @@ const child = spawn(binary, [`--proxy-server=127.0.0.1:${port}`, '--proxy-bypass
 child.stdout.on('data', (d) => process.stdout.write(`[app] ${d}`))
 child.stderr.on('data', (d) => process.stdout.write(`[app:err] ${d}`))
 let exited = null
-child.on('exit', (code, signal) => { exited = { code, signal }; console.log(`[app] exited code=${code} signal=${signal}`) })
+child.on('exit', (code, signal) => {
+  exited = { code, signal }
+  console.log(`[app] exited code=${code} signal=${signal}`)
+})
 
 await new Promise((r) => setTimeout(r, seconds * 1000))
 if (!exited) {
   child.kill('SIGTERM')
   await new Promise((r) => setTimeout(r, 3000))
-  if (!exited) child.kill('SIGKILL')
+  if (!exited) {
+    child.kill('SIGKILL')
+  }
 }
 proxy.close()
 const result = Object.fromEntries([...tally.entries()].sort())
@@ -83,5 +92,9 @@ console.log('[egress-host-tally packaged]')
 console.log(JSON.stringify(result, null, 2))
 const vendor = Object.keys(result).filter((k) => /onorca\.dev|orca\.dev|stablyai|posthog|api\.github\.com|storage\.googleapis\.com/.test(k))
 console.log(`[verdict] vendor hosts: ${vendor.length === 0 ? 'none' : vendor.join(', ')}; non-loopback total: ${Object.values(result).reduce((a, b) => a + b, 0)}`)
-try { rmSync(userData, { recursive: true, force: true }) } catch {}
+try {
+  rmSync(userData, { recursive: true, force: true })
+} catch {
+  // best-effort cleanup
+}
 process.exit(vendor.length === 0 && Object.keys(result).length === 0 ? 0 : 1)
