@@ -73,6 +73,56 @@ describe('electron-builder config', () => {
     expect(packs('out/main/index.js')).toBe(true)
   })
 
+  it('keeps development pipelines, build outputs and root tooling out of app.asar', () => {
+    const matcher = new FileMatcher('/app', '/dest', (value) => value, electronBuilderConfig.files)
+    matcher.prependPattern('**/*')
+    const isPacked = matcher.createFilter()
+    for (const name of [
+      '.axiom-work',
+      'launchers',
+      'test-results',
+      '.anti-slop-plugin',
+      'dist',
+      'release',
+      'dist-electron',
+      'pr-evidence',
+      'orca.yaml',
+      'components.json',
+      'vite.web.config.ts',
+      'pnpm-workspace.yaml',
+      '.oxlintrc.json',
+      '.oxfmtrc.json'
+    ]) {
+      expect(
+        electronBuilderConfig.files.filter((entry) => entry === `!${name}{,/**/*}`)
+      ).toHaveLength(1)
+      expect(isPacked(join('/app', name), { isDirectory: () => true }), name).toBe(false)
+      expect(isPacked(join('/app', name), { isDirectory: () => false }), name).toBe(false)
+      expect(
+        isPacked(join('/app', name, 'nested', 'x.log'), { isDirectory: () => false }),
+        name
+      ).toBe(false)
+    }
+    for (const runtimePath of [
+      'out/main/index.js',
+      'out/mobile-web/index.html',
+      'resources/icon.png',
+      'package.json',
+      'LICENSE',
+      'NOTICE.md'
+    ]) {
+      expect(isPacked(join('/app', runtimePath), { isDirectory: () => false }), runtimePath).toBe(
+        true
+      )
+    }
+  })
+
+  it('verifies the app.asar contents in afterPack beside the plugin guard', () => {
+    expect(String(electronBuilderConfig.afterPack)).toMatch(
+      /verifyPackagedPluginResources\(resourcesDir\)\s+verifyPackagedAppAsarContents\(resourcesDir\)/
+    )
+  })
+
   // Why: `files` is an all-negation list, so electron-builder's default `**/*` packs
   // anything without an explicit `!` entry — examples/ landed without one and shipped
   // hostile-panel, the adversarial containment fixture, into 1.4.160-rc.3's app.asar.

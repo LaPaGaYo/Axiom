@@ -19,6 +19,7 @@ const {
   assertMobileWebBundleBuilt
 } = require('./scripts/verify-packaged-mobile-web-bundle.cjs')
 const { verifyPackagedPluginResources } = require('./scripts/verify-packaged-plugin-resources.cjs')
+const { verifyPackagedAppAsarContents } = require('./scripts/verify-packaged-app-asar-contents.cjs')
 const {
   assertBundledRipgrepInstalled,
   bundledRipgrepExtraResources,
@@ -173,6 +174,7 @@ module.exports = {
   directories: {
     buildResources: 'resources/build'
   },
+  // Keep exclusions aligned with the root allow-list in scripts/verify-packaged-app-asar-contents.cjs.
   files: [
     '!**/.vscode/*',
     // Why: these repo-only inputs are either bundled into out/ or copied via
@@ -191,6 +193,10 @@ module.exports = {
     '!skill-guides{,/**/*}',
     '!skill-stubs{,/**/*}',
     '!tests{,/**/*}',
+    '!test-results{,/**/*}',
+    '!dist{,/**/*}',
+    '!release{,/**/*}',
+    '!dist-electron{,/**/*}',
     // Why: examples/ is plugin authoring documentation with no runtime consumer —
     // bundled plugins ship via extraResources from resources/plugins/launch/. It also
     // carries hostile-panel, the adversarial fixture the containment tests point at,
@@ -200,6 +206,10 @@ module.exports = {
     // it is gitignored, but exclude it defensively so a stray local capture at
     // package time never bloats app.asar.
     '!pr-evidence{,/**/*}',
+    // Why: the development pipeline includes gitignored logs; electron-builder ignores .gitignore.
+    '!.axiom-work{,/**/*}',
+    '!launchers{,/**/*}',
+    '!.anti-slop-plugin{,/**/*}',
     // Why: local agent/tooling directories may contain worktree symlink loops;
     // they are never runtime inputs and must not be traversed by electron-builder.
     '!{.claude,.grok,.agents,.codex}{,/**/*}',
@@ -215,6 +225,12 @@ module.exports = {
     // CI never creates it, but packaging on a machine that has run dev would pack them all.
     '!out/electron-dev{,/**/*}',
     '!electron.vite.config.{js,ts,mjs,cjs}',
+    '!vite.web.config.ts{,/**/*}',
+    '!orca.yaml{,/**/*}',
+    '!components.json{,/**/*}',
+    '!pnpm-workspace.yaml{,/**/*}',
+    '!.oxlintrc.json{,/**/*}',
+    '!.oxfmtrc.json{,/**/*}',
     '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,CHANGELOG.md,README.md}',
     '!{.env,.env.*,.npmrc,pnpm-lock.yaml}',
     '!tsconfig.json',
@@ -387,6 +403,7 @@ module.exports = {
     // Why: inspect electron-builder's real output so a broken extraResources
     // mapping fails packaging before bundled content reaches users.
     verifyPackagedPluginResources(resourcesDir)
+    verifyPackagedAppAsarContents(resourcesDir)
     finalizePackagedRipgrep(resourcesDir)
     chmodUnixCliLaunchers(resourcesDir, context.electronPlatformName)
     chmodMacServeSimHelpers(resourcesDir, context.electronPlatformName)
