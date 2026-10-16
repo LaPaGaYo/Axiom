@@ -1,6 +1,6 @@
 # M0 exit evidence — packaged desktop app (identity, archive contents, cold-start egress)
 
-Status: **PASS** on the packaged macOS arm64 bundle — identity is Axiom's, `app.asar` contains only the five allowed root entries, and a 75-second foreground run of the packaged app under a recording proxy recorded **no network attempt to any non-loopback host**.
+Status: **PASS** on the packaged macOS arm64 bundle built from main `7d07bf3d3` — identity is Axiom's, `app.asar` contains only the five allowed root entries (guard enforced in `afterPack`), and two 75-second foreground runs of the packaged app under a recording proxy (before and after M0-13) recorded **no network attempt to any non-loopback host**.
 
 This complements `M0-08-egress-capture.md` (the headless e2e capture on the development build): the packaged app is what users run, and the e2e harness cannot observe a focused, visible window.
 
@@ -11,10 +11,12 @@ This complements `M0-08-egress-capture.md` (the headless e2e capture on the deve
 | Packaging A | main `ddb91bcdd` (after M0-12) | `launchers/pack-unpack.command` → `build:computer-macos` + `build:keyboard-layout-macos` + `build:notification-status-macos`, `pnpm run build:unpack` (electron-builder `--dir`, unsigned/ad-hoc) | `pack-unpack-20261016-003346.log` | bundle **895 MB**; `app.asar` 471,071,501 bytes with **15 root entries** — the pipeline tree (`.axiom-work/` 337 MB of logs), `launchers/`, `test-results/`, `.anti-slop-plugin/` and six tooling files were shipping (electron-builder's `files` is a deny-list; it ignores `.gitignore`). → task M0-13 |
 | Egress capture A | packaged app from Packaging A | `launchers/e2e-packaged-egress.command` → `node .axiom-work/scripts/packaged-egress-capture.mjs dist/mac-arm64/Axiom.app 75` | `packaged-egress-20261016-003836.log` | `[egress-host-tally packaged] {}` — vendor hosts: none; non-loopback total: 0; app exited code 0 |
 | Packaging B | candidate `a13675d04` (M0-13 attempt 1; merged to main as `7a7f17c3e`) | same as A | `pack-unpack-20261016-010021.log` | bundle **572 MB**; `[verify-packaged-app-asar-contents] OK — roots: LICENSE, NOTICE.md, out, package.json, resources`; `app.asar` 133,167,334 bytes, 5 roots, 4,424 entries, zero `.log` / `.axiom-work` / `launchers` / `test-results` / `.git` paths (independent header parse by the verifier) |
+| Packaging C | main `7d07bf3d3` (after the M0-13 attempt-2 merge `0c5e61560`) | same as A, run by `launchers/chain.command` after the merged-tree regression | `chain-20261016-130320.log` → `pack-unpack-20261016-130758.log` | bundle **572 MB**; `[verify-packaged-app-asar-contents] OK — roots: LICENSE, NOTICE.md, out, package.json, resources`; identity unchanged (table below); `onorca.dev` 0 / `posthog` 0 / `stablyai` 2 |
+| Egress capture B | packaged app from Packaging C | same as Egress capture A | `packaged-egress-20261016-130840.log` | `[egress-host-tally packaged] {}` — vendor hosts: none; non-loopback total: 0; app exited code 0 |
 
 Host: macOS arm64, Node v24.21.0, pnpm 12.0.0, Electron 43.7.0, Apple Swift 6.4 (Xcode 26), git 2.54.0 (Apple Git-157).
 
-## Identity of the packaged bundle (Packaging B, `dist/mac-arm64/Axiom.app`)
+## Identity of the packaged bundle (Packaging B and C, `dist/mac-arm64/Axiom.app`)
 
 | Key | Value |
 |---|---|
