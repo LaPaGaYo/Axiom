@@ -1,10 +1,7 @@
 name: Skill update round trip
 
-# Why the same paths on push as pull_request: GitHub evaluates each event's
-# filters independently. The PR already skipped README-only changes, but the
-# unfiltered `push` to main still started the 13-job matrix. Cancelling that
-# run marks the default-branch tip failed, so the repo shows a red X.
 on:
+  # Why no schedule/push: Axiom's gates run locally and main is pushed directly (D41, option A); hosted runs are manual only until DEF-1 is decided.
   pull_request:
     paths: &skill-roundtrip-paths
       - 'skills/**'
@@ -17,10 +14,6 @@ on:
   # Why unfiltered: GitHub ignores `paths` on merge_group. We do not run a merge
   # queue today; if one is added, gate the matrix on a path job first.
   merge_group:
-  push:
-    branches:
-      - main
-    paths: *skill-roundtrip-paths
 
 concurrency:
   group: skill-roundtrip-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}

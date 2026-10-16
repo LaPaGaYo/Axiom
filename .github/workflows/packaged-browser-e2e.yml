@@ -1,13 +1,12 @@
 name: Packaged browser compatibility
 on:
+  # Why no schedule/push: Axiom's gates run locally and main is pushed directly (D41, option A); hosted runs are manual only until DEF-1 is decided.
   workflow_dispatch:
     inputs:
       ref:
         description: Commit SHA or ref to validate (defaults to the selected revision)
         type: string
         required: false
-  schedule:
-    - cron: '20 8 * * 1'
   workflow_call:
     inputs:
       ref:

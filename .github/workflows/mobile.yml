@@ -1,6 +1,7 @@
 name: Mobile Checks
 
 on:
+  # Why no schedule/push: Axiom's gates run locally and main is pushed directly (D41, option A); hosted runs are manual only until DEF-1 is decided.
   pull_request:
     types:
       - opened
@@ -39,15 +40,6 @@ on:
       - 'config/scripts/mobile-release-check-scope*'
       - 'config/scripts/pr-code-change-scope.mjs'
       - 'config/scripts/mobile-recording-pin-checkout.test.mjs'
-  # Why main too: a behaviour-change branch legitimately pins its own last fenced commit, and that
-  # commit only stops being reachable when the branch squash-merges. The pull_request run cannot
-  # see that; this one is where the pin guard finds it.
-  push:
-    branches:
-      - main
-    paths:
-      - 'mobile/**'
-      - '.github/workflows/mobile.yml'
 
 concurrency:
   # Per commit on main, not per branch. GitHub cancels any PENDING run in a group when a new one

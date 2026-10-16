@@ -1,27 +1,8 @@
 name: Warm shared CI caches
 
 on:
-  schedule:
-    - cron: '41 * * * *'
+  # Why no schedule/push: Axiom's gates run locally and main is pushed directly (D41, option A); hosted runs are manual only until DEF-1 is decided.
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/ci-cache-warmup.yml'
-      - '.github/actions/install-node-dependencies/**'
-      - '.github/actions/prepare-git-compatibility/**'
-      - '.github/actions/prepare-linux-package-fixture/**'
-      - 'config/docker/headless-serve-shutdown/**'
-      - 'config/docker/cli-launch-contract/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - 'config/tsconfig*.json'
-      - 'config/scripts/ensure-native-runtime.mjs'
-      - 'config/scripts/rebuild-native-deps.mjs'
-      - 'config/patches/node-pty@1.1.0.patch'
-      - 'config/patches/@vscode__windows-process-tree@0.8.0.patch'
-      - 'native/windows-registry/**'
   pull_request:
     paths:
       - '.github/workflows/ci-cache-warmup.yml'

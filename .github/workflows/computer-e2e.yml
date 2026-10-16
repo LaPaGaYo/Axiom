@@ -1,6 +1,7 @@
 name: Computer-use e2e
 
 on:
+  # Why no schedule/push: Axiom's gates run locally and main is pushed directly (D41, option A); hosted runs are manual only until DEF-1 is decided.
   pull_request:
     paths:
       - '.github/workflows/computer-e2e.yml'
@@ -55,8 +56,6 @@ on:
       - 'tests/e2e/helpers/computer-driver.ts'
       - 'tests/e2e/vitest.config.ts'
   workflow_dispatch:
-  schedule:
-    - cron: '0 6 * * *'
 
 concurrency:
   group: computer-e2e-${{ github.event.pull_request.number || github.ref }}

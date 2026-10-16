@@ -8,8 +8,8 @@ const workflow = parse(
 const steps = workflow.jobs.compatibility.steps
 
 describe('packaged browser compatibility lane', () => {
-  it('runs weekly and supports immutable manual or reusable revisions', () => {
-    expect(workflow.on.schedule).toHaveLength(1)
+  it('supports immutable manual or reusable revisions without scheduled runs', () => {
+    expect(workflow.on.schedule).toBeUndefined()
     for (const trigger of ['workflow_dispatch', 'workflow_call']) {
       expect(workflow.on[trigger].inputs.ref).toMatchObject({ type: 'string', required: false })
     }
