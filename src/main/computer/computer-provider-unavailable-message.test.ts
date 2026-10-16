@@ -7,7 +7,7 @@ describe('computerProviderUnavailableMessage', () => {
       'run pnpm build:computer-macos and restart Axiom from this worktree'
     )
     expect(computerProviderUnavailableMessage('darwin')).toContain(
-      'Orca Computer Use.app was not found or this macOS version is unsupported'
+      'Axiom Computer Use.app was not found or this macOS version is unsupported'
     )
   })
 

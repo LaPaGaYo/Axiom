@@ -400,7 +400,7 @@ module.exports = {
       chmodSync(join(resourcesDir, filename), 0o755)
     }
     if (context.electronPlatformName === 'darwin') {
-      await signMacComputerUseHelper(join(resourcesDir, 'Orca Computer Use.app'), context.packager)
+      await signMacComputerUseHelper(join(resourcesDir, 'Axiom Computer Use.app'), context.packager)
       await signMacStandaloneHelper(
         join(resourcesDir, '..', 'MacOS', 'orca-notification-status'),
         'orca-notification-status',
@@ -469,19 +469,19 @@ module.exports = {
     signIgnore: bundledRipgrepMacSignIgnore,
     extendInfo: {
       NSAppleEventsUsageDescription:
-        'Orca allows terminal-launched developer tools to automate local apps when you request it.',
+        'Axiom allows terminal-launched developer tools to automate local apps when you request it.',
       NSBluetoothAlwaysUsageDescription:
-        'Orca allows terminal-launched developer tools to access Bluetooth devices when you request it.',
+        'Axiom allows terminal-launched developer tools to access Bluetooth devices when you request it.',
       NSBluetoothPeripheralUsageDescription:
-        'Orca allows terminal-launched developer tools to access Bluetooth devices when you request it.',
+        'Axiom allows terminal-launched developer tools to access Bluetooth devices when you request it.',
       NSCameraUsageDescription: "Application requests access to the device's camera.",
       NSLocationUsageDescription:
-        'Orca allows terminal-launched developer tools to access location when you request it.',
+        'Axiom allows terminal-launched developer tools to access location when you request it.',
       NSLocalNetworkUsageDescription:
-        'Orca allows terminal-launched developer tools to discover and connect to local development servers when you request it.',
+        'Axiom allows terminal-launched developer tools to discover and connect to local development servers when you request it.',
       NSMicrophoneUsageDescription: "Application requests access to the device's microphone.",
       NSAudioCaptureUsageDescription:
-        'Orca allows terminal-launched developer tools to capture desktop audio when you request it.',
+        'Axiom allows terminal-launched developer tools to capture desktop audio when you request it.',
       NSBonjourServices: ['_http._tcp', '_https._tcp'],
       NSDocumentsFolderUsageDescription:
         "Application requests access to the user's Documents folder.",
@@ -514,8 +514,8 @@ module.exports = {
         to: 'agent-browser-darwin-${arch}'
       },
       {
-        from: 'native/computer-use-macos/.build/release/Orca Computer Use.app',
-        to: 'Orca Computer Use.app'
+        from: 'native/computer-use-macos/.build/release/Axiom Computer Use.app',
+        to: 'Axiom Computer Use.app'
       },
       featureWallResources
     ],
@@ -699,7 +699,7 @@ function chmodMacServeSimHelpers(resourcesDir, electronPlatformName) {
 async function signMacComputerUseHelper(helperAppPath, packager) {
   if (!existsSync(helperAppPath)) {
     if (isMacRelease) {
-      throw new Error(`Missing Orca Computer Use helper app at ${helperAppPath}`)
+      throw new Error(`Missing Axiom Computer Use helper app at ${helperAppPath}`)
     }
     return
   }
@@ -713,7 +713,7 @@ async function signMacComputerUseHelper(helperAppPath, packager) {
     findInstalledMacSigningIdentity(codeSigningInfo?.keychainFile) ??
     (isMacRelease ? null : '-')
   if (!identity) {
-    throw new Error('Missing signing identity for Orca Computer Use helper app')
+    throw new Error('Missing signing identity for Axiom Computer Use helper app')
   }
   // Why: TCC grants attach to this nested app's code identity. Sign it before
   // the outer Orca.app is sealed so production builds preserve that identity.
