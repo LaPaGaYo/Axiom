@@ -41,12 +41,19 @@
     {
       "files": ["mobile/**/*.{ts,tsx}"],
       "rules": {
-        "react-hooks/exhaustive-deps": "warn",
-        // Why off: upstream CI runs audit:code-quality:native before the mobile install, so the
-        // cycle rule never resolves mobile/ there (see check-changed-code-quality.mjs, which
-        // --allow's it for the same reason). On a host with mobile/node_modules the full lint
-        // reported nine pre-existing mobile cycles; the rule is scoped off so `pnpm lint` does
-        // not depend on whether the mobile web bundle was built on this machine (D40).
+        "react-hooks/exhaustive-deps": "warn"
+      }
+    },
+    {
+      // Why the leading **/: override globs are rooted at this config file's directory (config/),
+      // so a bare "mobile/**" never matches ../mobile/... (verified against oxlint 1.85.0).
+      // Why off: upstream CI runs audit:code-quality:native before the mobile install, so the
+      // cycle rule never resolves mobile/ there (see check-changed-code-quality.mjs, which
+      // --allow's it for the same reason). On a host with mobile/node_modules the full lint
+      // reported nine pre-existing mobile cycles; the rule is scoped off so `pnpm lint` does
+      // not depend on whether the mobile web bundle was built on this machine (D40).
+      "files": ["**/mobile/**/*.{ts,tsx}"],
+      "rules": {
         "import/no-cycle": "off"
       }
     }
