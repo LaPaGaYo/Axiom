@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Launch one Codex Attempt for a brief: .axiom-work/run-codex.sh <BRIEF-ID> [seq]
 # Works on a branch axiom/attempt/<id>/<seq> in this worktree; logs to .axiom-work/logs/.
+# Why main(): bash reads a script lazily while it runs; wrapping the body in a function makes bash parse all of it
+# before executing, so editing this file during a run cannot corrupt the running instance (FT-01 attempt 1 lesson).
+main() {
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 ID="${1:?usage: run-codex.sh <BRIEF-ID> [seq]}"; SEQ="${2:-1}"
@@ -24,3 +27,5 @@ if [ -n "$(git status --porcelain)" ]; then
   git -c core.hooksPath=/dev/null commit -q -m "codex($ID): attempt $SEQ (launcher commit)" -m "Brief: $BRIEF" -m "Log: $LOG" && echo "== committed $(git rev-parse --short HEAD)" | tee -a "$LOG"
 fi
 { echo "== last commits"; git log --oneline -3; } | tee -a "$LOG"
+}
+main "$@"

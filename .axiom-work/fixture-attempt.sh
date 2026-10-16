@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # One Codex Attempt in the fixture repository (~/Documents/flowtask-fixture) for a brief kept in this repo, then the fixture's own checks with wall-clock timing.
 # Usage: .axiom-work/fixture-attempt.sh <ID> [seq]      (seq 1 branches from main; seq N stacks on N-1)
+# Why main(): bash reads a script lazily while it runs; wrapping the body in a function makes bash parse all of it
+# before executing, so editing this file during a run cannot corrupt the running instance (FT-01 attempt 1 lesson).
+main() {
 AX="$(cd "$(dirname "$0")/.." && pwd)"; FX="$HOME/Documents/flowtask-fixture"
 ID="${1:?usage: fixture-attempt.sh <ID> [seq]}"; SEQ="${2:-1}"; BRIEF="$AX/.axiom-work/briefs/$ID.md"
 [ -f "$BRIEF" ] || { echo "missing $BRIEF"; exit 2; }
@@ -30,3 +33,5 @@ git diff "main...$CAND" > "$AX/.axiom-work/logs/fixture-$ID-$SEQ-$TS.diff" 2>/de
 { echo "== files"; git ls-files; echo "== diff --stat vs main"; git diff --stat "main...$CAND" | tail -5; echo "== report"; cat REPORT-$ID.md 2>/dev/null || echo "(no REPORT-$ID.md)"; } >> "$LOG" 2>&1
 git switch -q main
 echo "== fixture attempt $ID seq=$SEQ end $(date) candidate=$CAND log=$LOG" | tee -a "$LOG"
+}
+main "$@"

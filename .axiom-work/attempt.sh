@@ -7,6 +7,9 @@
 # Branching policy: seq 1 starts from --base (default main); seq N>1 stacks on axiom/attempt/<ID>/<N-1> unless --base is given explicitly
 # (an explicit --base for seq N>1 is how a fix-up attempt starts from main after attempt N-1 was already merged).
 # Everything is logged to .axiom-work/logs/attempt-<ID>-<seq>-<ts>.log plus a one-screen .summary next to it.
+# Why main(): bash reads a script lazily while it runs; wrapping the body in a function makes bash parse all of it
+# before executing, so editing this file during a run cannot corrupt the running instance (FT-01 attempt 1 lesson).
+main() {
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 ID="${1:?usage: attempt.sh <BRIEF-ID> [seq] [--base <ref>]}"; shift
@@ -85,3 +88,5 @@ if [ -f .axiom-work/jev/triage.mjs ]; then
 fi
 echo; echo "== SUMMARY ($SUMMARY)"; cat "$SUMMARY"
 echo "== attempt $ID seq=$SEQ end $(date)"
+}
+main "$@"

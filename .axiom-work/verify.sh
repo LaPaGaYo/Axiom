@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Independent verification of an attempt on the Mac toolchain: .axiom-work/verify.sh <BRIEF-ID> <seq> [extra check commands...]
 # Runs the repository gates against the checked-out candidate and logs to .axiom-work/logs/verify-<id>-<seq>-<ts>.log
+# Why main(): bash reads a script lazily while it runs; wrapping the body in a function makes bash parse all of it
+# before executing, so editing this file during a run cannot corrupt the running instance (FT-01 attempt 1 lesson).
+main() {
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 ID="${1:?}"; SEQ="${2:?}"; shift 2
@@ -33,3 +36,5 @@ run_extra() { local cmd="$1"; echo; echo "---- CHECK extra :: $cmd"; local t0=$(
 for extra in "${EXTRAS[@]}"; do [ -n "$extra" ] && run_extra "$extra"; done
 run full-lint pnpm lint
 echo; echo "== verify $ID seq=$SEQ end $(date) OVERALL=$([ $FAIL -eq 0 ] && echo PASS || echo FAIL)"
+}
+main "$@"

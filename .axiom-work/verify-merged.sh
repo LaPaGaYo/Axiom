@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Merged-tree regression on main after integrating one or more tasks: .axiom-work/verify-merged.sh <ID> [<ID>...]
 # Runs verify.sh on the current main checkout with the union of the tasks' sidecar targets and extras.
+# Why main(): bash reads a script lazily while it runs; wrapping the body in a function makes bash parse all of it
+# before executing, so editing this file during a run cannot corrupt the running instance (FT-01 attempt 1 lesson).
+main() {
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 [ $# -ge 1 ] || { echo "usage: verify-merged.sh <ID> [<ID>...]"; exit 2; }
@@ -17,3 +20,5 @@ UNIQ=(); for t in ${TARGETS[@]+"${TARGETS[@]}"}; do case " ${UNIQ[*]:-} " in *" 
 export VERIFY_EXTRA="$EXTRAS"
 echo "== merged-tree verification on main $(git rev-parse --short HEAD) for: $*"
 bash .axiom-work/verify.sh merged "$(git rev-parse --short HEAD)" ${UNIQ[@]+"${UNIQ[@]}"}
+}
+main "$@"
