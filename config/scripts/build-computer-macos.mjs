@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import { chmodSync, copyFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import { detectsBuildSystemFlag, swiftBuildArgs } from './build-computer-macos-swift-args.mjs'
 
 const repoRoot = path.resolve(import.meta.dirname, '../..')
 const packagePath = path.join(repoRoot, 'native', 'computer-use-macos')
@@ -28,8 +29,10 @@ chmodSync(binaryPath, 0o755)
 createHelperApp()
 
 function buildUniversalBinary() {
+  const help = spawnSync('swift', ['build', '--help'], { encoding: 'utf8' })
+  const supportsBuildSystemFlag = detectsBuildSystemFlag(help.stdout ?? '')
   const builtBinaries = universalTriples.map((triple) => {
-    run('swift', ['build', '-c', 'release', '--package-path', packagePath, '--triple', triple])
+    run('swift', swiftBuildArgs({ packagePath, triple, supportsBuildSystemFlag }))
     return path.join(packagePath, '.build', triple, 'release', 'orca-computer-use-macos')
   })
   mkdirSync(path.dirname(binaryPath), { recursive: true })
