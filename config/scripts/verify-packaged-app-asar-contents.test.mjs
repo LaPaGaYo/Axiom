@@ -1,36 +1,18 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { allowedFiles, seedPackagedAppAsar } from './test-support/packaged-app-asar-fixture.mjs'
 
 const require = createRequire(import.meta.url)
-const { createPackageWithOptions } = require('@electron/asar')
 const { verifyPackagedAppAsarContents } = require('./verify-packaged-app-asar-contents.cjs')
-
-const allowedFiles = [
-  'out/main/index.js',
-  'out/mobile-web/index.html',
-  'resources/icon.png',
-  'package.json',
-  'LICENSE',
-  'NOTICE.md'
-]
 
 async function withArchive(files, run) {
   const scratch = await mkdtemp(join(tmpdir(), 'axiom-packaged-asar-'))
-  const sourceDir = join(scratch, 'source')
   const resourcesDir = join(scratch, 'resources')
   try {
-    await mkdir(resourcesDir)
-    for (const file of files) {
-      const filePath = join(sourceDir, file)
-      await mkdir(dirname(filePath), { recursive: true })
-      await writeFile(filePath, 'fixture\n')
-    }
-    await createPackageWithOptions(sourceDir, join(resourcesDir, 'app.asar'), {
-      unpack: 'resources/**'
-    })
+    await seedPackagedAppAsar(resourcesDir, files)
     await run(resourcesDir)
   } finally {
     await rm(scratch, { recursive: true, force: true })
