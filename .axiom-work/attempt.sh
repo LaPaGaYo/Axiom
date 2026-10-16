@@ -4,15 +4,16 @@
 # Verification inputs come from the brief's sidecar .axiom-work/briefs/<ID>.verify (optional):
 #   targets: <vitest files/dirs, space separated>
 #   extra: <shell commands separated by ';'>   (exported as VERIFY_EXTRA)
-# Branching policy: seq 1 starts from --base (default main); seq N>1 stacks on axiom/attempt/<ID>/<N-1>.
+# Branching policy: seq 1 starts from --base (default main); seq N>1 stacks on axiom/attempt/<ID>/<N-1> unless --base is given explicitly
+# (an explicit --base for seq N>1 is how a fix-up attempt starts from main after attempt N-1 was already merged).
 # Everything is logged to .axiom-work/logs/attempt-<ID>-<seq>-<ts>.log plus a one-screen .summary next to it.
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 ID="${1:?usage: attempt.sh <BRIEF-ID> [seq] [--base <ref>]}"; shift
-SEQ=1; BASE=main
+SEQ=1; BASE=main; BASE_SET=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --base) BASE="$2"; shift 2 ;;
+    --base) BASE="$2"; BASE_SET=1; shift 2 ;;
     *) SEQ="$1"; shift ;;
   esac
 done
@@ -29,7 +30,7 @@ BRANCH="axiom/attempt/$ID/$SEQ"
 if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
   echo "== branch $BRANCH exists; re-running on it"; git switch -q "$BRANCH" || exit 4
 else
-  START="$BASE"; [ "$SEQ" -gt 1 ] && START="axiom/attempt/$ID/$((SEQ-1))"
+  START="$BASE"; [ "$SEQ" -gt 1 ] && [ "$BASE_SET" -eq 0 ] && START="axiom/attempt/$ID/$((SEQ-1))"
   git switch -q "$START" || { echo "ERROR: cannot switch to start point $START"; exit 4; }
   echo "== starting from $START ($(git rev-parse --short HEAD))"
 fi
