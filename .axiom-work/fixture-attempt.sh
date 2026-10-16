@@ -25,5 +25,8 @@ CAND=$(git rev-parse HEAD)
   echo "== determinism: second verify:fast"; S=$(date +%s); pnpm run verify:fast >/dev/null 2>&1; echo "== second verify:fast rc=$? wall=$(( $(date +%s) - S ))s"
   echo "== tree after checks (must be clean except dist/ which is ignored):"; git status --porcelain | head
 } 2>&1 | tee -a "$LOG"
+# Review material for the verifier (the fixture checkout is not mounted in the verifier's VM): full diff vs main, file list, report.
+git diff "main...$CAND" > "$AX/.axiom-work/logs/fixture-$ID-$SEQ-$TS.diff" 2>/dev/null
+{ echo "== files"; git ls-files; echo "== diff --stat vs main"; git diff --stat "main...$CAND" | tail -5; echo "== report"; cat REPORT-$ID.md 2>/dev/null || echo "(no REPORT-$ID.md)"; } >> "$LOG" 2>&1
 git switch -q main
 echo "== fixture attempt $ID seq=$SEQ end $(date) candidate=$CAND log=$LOG" | tee -a "$LOG"
