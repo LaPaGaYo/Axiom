@@ -126,12 +126,6 @@ async function readSharedStubBlocks(repoRoot) {
     }
     throw error
   }
-  // Why: Axiom uses one release command on every platform; the upstream Linux
-  // screen-reader exception would incorrectly forbid our installed command.
-  markdown = markdown.replace(
-    /- Otherwise, on Linux outside an Orca-managed terminal,[\s\S]*?(?=- Otherwise, use)/u,
-    ''
-  )
   return parseSharedStubBlocks(renderProductCliGuidance(markdown), SHARED_STUB_SOURCE)
 }
 

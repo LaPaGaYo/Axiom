@@ -127,7 +127,7 @@ mobile/src/transport/pre-profile-pairing-coordinator.test.ts:onorca.dev:5
 mobile/src/transport/pre-profile-pairing-coordinator.test.ts:orca.dev:5
 mobile/src/transport/relay-host-signed-out-verdict.test.ts:onorca.dev:1
 mobile/src/transport/relay-host-signed-out-verdict.test.ts:orca.dev:1
-package.json:stablyai:3
+package.json:stablyai:1
 resources/plugins/launch/bundled-plugins.json:stablyai:2
 resources/plugins/launch/orca-marketplace.json:stablyai:7
 resources/plugins/launch/stablyai.orca-multipass-recipes/orca-plugin.json:stablyai:2
@@ -405,10 +405,6 @@ src/shared/cli-argument-boundary.test.ts:stablyai:2
 src/shared/cli-runtime-pairing-boundary.test.ts:stablyai:1
 src/shared/cloud-service-url.test.ts:onorca.dev:1
 src/shared/cloud-service-url.test.ts:orca.dev:1
-src/shared/feature-wall-tiles.ts:onorca.dev:12
-src/shared/feature-wall-tiles.ts:orca.dev:12
-src/shared/feature-wall-workflows.ts:onorca.dev:5
-src/shared/feature-wall-workflows.ts:orca.dev:5
 src/shared/feedback-image-limits.test.ts:onorca.dev:1
 src/shared/feedback-image-limits.test.ts:orca.dev:1
 src/shared/feedback-image-limits.ts:onorca.dev:1
