@@ -18,7 +18,10 @@ echo "node: $(node --version)  pnpm: $(pnpm --version)  git: $(git --version)"
 FAIL=0
 run() { local name="$1"; shift; echo; echo "---- CHECK $name :: $*"; local t0=$(date +%s); "$@"; local rc=$?; local t1=$(date +%s); echo "---- RESULT $name rc=$rc duration=$((t1-t0))s"; [ $rc -eq 0 ] || FAIL=1; }
 run vendor-egress-ratchet pnpm run check:vendor-egress-ratchet
-if [ ${#TEST_TARGETS[@]} -gt 0 ]; then run unit-tests pnpm test "${TEST_TARGETS[@]}"; fi
+# Why: this live-shell suite spawns real login shells synchronously and has hung the host run for 25+ minutes
+# (M0-10 attempt 1, 2026-10-15); it is on the known-environmental list, so keep it out of the focused step.
+HANGING_EXCLUDES=(--exclude "src/shared/startup-shell-portability.live-shell.test.ts")
+if [ ${#TEST_TARGETS[@]} -gt 0 ]; then run unit-tests pnpm test "${TEST_TARGETS[@]}" "${HANGING_EXCLUDES[@]}"; fi
 run typecheck-node pnpm tc:node
 run typecheck-cli pnpm tc:cli
 run typecheck-web pnpm tc:web
