@@ -105,13 +105,13 @@ describe('root directory guard', () => {
     expect(output).toContain('new-root.md')
   })
 
-  it('allows the reviewed cloud workspace directory', () => {
+  it('rejects reintroducing the removed cloud workspace directory', () => {
     const fixture = makeFixture()
     const head = commitFiles(fixture.root, [['cloud/package.json', '{}\n']])
 
     const result = runGuard({ ...fixture, head })
 
-    expect(result.status).toBe(0)
+    expect(result.status).toBe(1)
   })
 
   it('rejects a new top-level directory', () => {

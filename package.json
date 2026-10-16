@@ -1,9 +1,10 @@
 {
   "name": "orca",
   "version": "1.4.214",
-  "description": "Next-gen IDE for parallel agentic development",
-  "homepage": "https://github.com/stablyai/orca",
-  "author": "stablyai",
+  "description": "Goal-driven autonomous software engineering control plane",
+  "homepage": "https://github.com/LaPaGaYo/Axiom",
+  "license": "MIT",
+  "author": "LaPaGaYo",
   "bin": {
     "axiom": "./out/cli/index.js",
     "axiom-dev": "./config/scripts/orca-dev.mjs"

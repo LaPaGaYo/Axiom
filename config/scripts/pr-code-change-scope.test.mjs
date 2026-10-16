@@ -88,7 +88,7 @@ describe('docs-only path classification', () => {
     expect(shouldRunPrChecks(['mobile/src/App.tsx', 'mobile/package.json'])).toBe(false)
   })
 
-  it('does not start desktop PR Checks for cloud-only diffs', () => {
+  it('does not exempt the removed cloud tree from desktop PR Checks', () => {
     expect(
       shouldRunPrChecks([
         'cloud/apps/relay/src/index.ts',
@@ -96,7 +96,7 @@ describe('docs-only path classification', () => {
         'cloud/.gitleaks.toml',
         '.github/workflows/cloud-verify.yml'
       ])
-    ).toBe(false)
+    ).toBe(true)
   })
 })
 
@@ -422,7 +422,6 @@ describe('per-job path classification', () => {
 
   it('leaves diffs the audits never read out of static analysis', () => {
     expect(classifyPrJobs(['README.md']).static_analysis).toBe(false)
-    expect(classifyPrJobs(['cloud/apps/relay/src/index.ts']).static_analysis).toBe(false)
   })
 
   it('keeps unit-test-only diffs out of packaging', () => {

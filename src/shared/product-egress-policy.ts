@@ -6,6 +6,8 @@ export type ProductEgressPolicy = {
   readonly issuesUrl: string
   /** Product documentation entry point; null means no docs link is rendered. */
   readonly docsUrl: string | null
+  /** Hosted docs origin; null disables links to individual documentation pages. */
+  readonly docsSiteOrigin: string | null
   /** Community links; empty means none are rendered. */
   readonly communityLinks: readonly { readonly label: string; readonly url: string }[]
   /** When false, automatic checks are disabled; menu-initiated checks still run. */
@@ -47,6 +49,7 @@ export const PRODUCT_EGRESS_POLICY: ProductEgressPolicy = {
   repositoryUrl,
   issuesUrl: `${repositoryUrl}/issues`,
   docsUrl: `${repositoryUrl}#readme`,
+  docsSiteOrigin: null,
   communityLinks: [],
   automaticUpdateChecks: false,
   changelogJsonUrl: null,
@@ -66,3 +69,8 @@ export const PRODUCT_EGRESS_POLICY: ProductEgressPolicy = {
 
 export const productReleaseRepositorySlug = (): string =>
   `${PRODUCT_EGRESS_POLICY.updateFeed.owner}/${PRODUCT_EGRESS_POLICY.updateFeed.repo}`
+
+export function resolveProductDocsUrl(docsPath: string): string | null {
+  const origin = PRODUCT_EGRESS_POLICY.docsSiteOrigin
+  return origin === null ? null : new URL(docsPath, origin).href
+}

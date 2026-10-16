@@ -6,6 +6,7 @@ import {
   type FeatureWallWorkflow
 } from '../../../../shared/feature-wall-workflows'
 import type { FeatureWallOpenSourceTelemetry } from '../../../../shared/telemetry-events'
+import { resolveProductDocsUrl } from '../../../../shared/product-egress-policy'
 import { track } from '@/lib/telemetry'
 import { translate } from '@/i18n/i18n'
 
@@ -73,26 +74,35 @@ export function RelatedFeatures(props: {
         )}
       </h4>
       <ul className="flex flex-col gap-1" role="list">
-        {items.map((tile) => (
-          <li key={tile.id}>
-            <button
-              type="button"
-              onClick={() => {
-                track('feature_wall_docs_clicked', {
-                  group_id: workflow.id,
-                  tile_id: tile.id,
-                  source
-                })
-                track('feature_wall_tile_clicked', { tile_id: tile.id })
-                void window.api.shell.openUrl(tile.docsUrl)
-              }}
-              className="inline-flex items-center gap-1.5 text-left text-[13px] hover:underline hover:underline-offset-2"
-            >
-              {tile.title}
-              <ChevronRight className="size-3 text-muted-foreground" />
-            </button>
-          </li>
-        ))}
+        {items.map((tile) => {
+          const docsUrl = resolveProductDocsUrl(tile.docsPath)
+          return (
+            <li key={tile.id}>
+              <button
+                type="button"
+                disabled={docsUrl === null}
+                onClick={() => {
+                  if (docsUrl === null) {
+                    return
+                  }
+                  track('feature_wall_docs_clicked', {
+                    group_id: workflow.id,
+                    tile_id: tile.id,
+                    source
+                  })
+                  track('feature_wall_tile_clicked', { tile_id: tile.id })
+                  void window.api.shell.openUrl(docsUrl)
+                }}
+                className="inline-flex items-center gap-1.5 text-left text-[13px] enabled:hover:underline enabled:hover:underline-offset-2 disabled:text-muted-foreground"
+              >
+                {tile.title}
+                {docsUrl !== null ? (
+                  <ChevronRight className="size-3 text-muted-foreground" />
+                ) : null}
+              </button>
+            </li>
+          )
+        })}
       </ul>
     </div>
   )

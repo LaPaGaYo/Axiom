@@ -300,7 +300,6 @@ const WINDOWS_PACKAGE_TESTS = [
 
 const DESKTOP_IRRELEVANT_PREFIXES = [
   'mobile/',
-  'cloud/',
   '.github/workflows/cloud-',
   '.github/workflows/mobile.yml',
   '.github/workflows/mobile-ios-release.yml',
