@@ -147,6 +147,8 @@ Orca 九种类型在 Axiom 中的用途：
 
 ### 4c. 新增 `axiom.*` 方法清单
 
+M0 通过 `src/main/axiom/namespace-rpc.ts` 的 `axiom.namespace.get` 注册命名空间，保留的 RPC 命名空间、方法前缀与 CLI 顶层命令名统一定义在 `src/shared/axiom-contract/namespace.ts`。
+
 约定：参数 zod schema 在 `src/shared/axiom-contract/<ns>-params.ts`；所有 mutation 需 `orchestrationContractVersion === 1` 与 `orchestrationRequestId`（幂等）；Worker 侧方法另需 envelope `orchestrationCapability`。「M」= mutation。
 
 | 方法 | 参数要点 | 副作用 | M |
