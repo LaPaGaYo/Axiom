@@ -1,12 +1,11 @@
 name: Terminal IME E2E
 
 on:
+  # Why no schedule/push: Axiom's gates run locally and main is pushed directly (D41, option A); hosted runs are manual only until DEF-1 is decided.
   # Why workflow_call and not pull_request: pr.yml owns the path filter that decides when an IME
   # change is worth a real ibus session. A pull_request trigger here would run it on every PR.
   workflow_call:
   workflow_dispatch:
-  schedule:
-    - cron: '30 9 * * *'
 
 permissions:
   contents: read

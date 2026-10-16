@@ -19,13 +19,10 @@ const expectedPaths = [
 ]
 
 describe('skill-update-roundtrip workflow triggers', () => {
-  it('uses the same path filter on push to main as on pull_request', () => {
-    // Why: GitHub evaluates each event independently. An unfiltered `push` to
-    // main started the 13-job matrix on README-only merges; cancelling that
-    // run paints the default-branch tip red.
+  it('keeps the pull_request path filter and merge_group without push runs', () => {
     expect(workflow.on.pull_request.paths).toEqual(expectedPaths)
-    expect(workflow.on.push.branches).toEqual(['main'])
-    expect(workflow.on.push.paths).toEqual(workflow.on.pull_request.paths)
+    expect(workflow.on.push).toBeUndefined()
+    expect(workflow.on.merge_group).toBeNull()
   })
 
   it('does not claim a path filter on merge_group that GitHub would ignore', () => {

@@ -65,10 +65,11 @@ describe('Git binary compatibility PR gate', () => {
     )
   })
 
-  it('warms the same baseline on main so newly opened PRs can restore it', () => {
+  it('keeps manual baseline warming and pull_request coverage without push runs', () => {
     const warmer = parse(readFileSync('.github/workflows/ci-cache-warmup.yml', 'utf8'))
     expect(warmer.jobs.warm.steps.some((step) => step.uses === BASELINE_ACTION)).toBe(true)
-    expect(warmer.on.push.paths).toContain('.github/actions/prepare-git-compatibility/**')
+    expect(warmer.on.push).toBeUndefined()
+    expect(warmer.on.workflow_dispatch).toBeNull()
     expect(warmer.on.pull_request.paths).toContain('.github/actions/prepare-git-compatibility/**')
   })
 

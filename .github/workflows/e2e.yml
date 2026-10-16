@@ -7,6 +7,7 @@ permissions:
   contents: read
 
 on:
+  # Why no schedule/push: Axiom's gates run locally and main is pushed directly (D41, option A); hosted runs are manual only until DEF-1 is decided.
   workflow_call:
     inputs:
       ref:
@@ -31,10 +32,6 @@ on:
         description: JSON array of specs to run; empty runs the full suite
         required: false
         type: string
-  schedule:
-    # Why: GitHub cron uses UTC; these slots map to 10am and 3pm
-    # America/Phoenix for the default-branch E2E run.
-    - cron: '0 17,22 * * *'
 
 jobs:
   build:

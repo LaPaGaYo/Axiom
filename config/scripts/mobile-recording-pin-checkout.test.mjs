@@ -17,7 +17,8 @@ it('keeps full ancestry and credentials for lazy pinned-tree reads', () => {
   expect(checkout.with.filter).toBe('blob:none')
   expect(checkout.with['persist-credentials']).not.toBe(false)
   expect(job.if).toBeUndefined()
-  expect(workflow.on.push.branches).toEqual(['main'])
+  expect(workflow.on.push).toBeUndefined()
+  expect(workflow.on.pull_request.paths).toContain('mobile/**')
   expect(workflow.concurrency.group).toContain('github.sha')
   expect(job.steps.find((step) => step.name === 'Check the recording pin is reachable').run).toBe(
     'pnpm exec tsx scripts/rpc-recording-pin-guard.mts ancestry'

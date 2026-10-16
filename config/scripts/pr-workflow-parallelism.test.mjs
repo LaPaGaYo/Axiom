@@ -69,7 +69,7 @@ describe('PR workflow parallelism', () => {
     expect(workflow.permissions).toEqual({ contents: 'read' })
   })
 
-  it('runs Node 24 on PRs and the same eight-shard suite on Node 26 daily', () => {
+  it('runs Node 24 on PRs and the same eight-shard suite on Node 26 on manual dispatch', () => {
     const sharedTest = unitTestWorkflow.jobs.test
     const testStep = sharedTest.steps.find((step) => step.name === 'Test shard')
     const installStep = sharedTest.steps.find(
@@ -86,7 +86,7 @@ describe('PR workflow parallelism', () => {
     expect(JSON.parse(workflow.jobs.test.with.node_versions)).toEqual(['24'])
     expect(nodeNextWorkflow.jobs.test.uses).toBe('./.github/workflows/unit-tests.yml')
     expect(JSON.parse(nodeNextWorkflow.jobs.test.with.node_versions)).toEqual(['26'])
-    expect(nodeNextWorkflow.on.schedule).toHaveLength(1)
+    expect(nodeNextWorkflow.on.schedule).toBeUndefined()
     expect(nodeNextWorkflow.on.workflow_dispatch).toBeNull()
     expect(sharedTest.strategy.matrix.node).toBe('${{ fromJSON(inputs.node_versions) }}')
     expect(sharedTest.strategy.matrix.shard).toEqual(

@@ -1,5 +1,19 @@
 # CI efficiency and runner capacity
 
+## Fork policy (D41)
+
+Scheduled and push-triggered hosted runs are disabled in Axiom's ten workflows
+listed in [D41, option A](../decisions/DECISION_LOG.md). Gates run locally through
+the A-lite pipeline (`verify.sh`, `verify-merged.sh`, the full suite, and packaging
+checks), and `main` is pushed directly without a pull request. Existing manual,
+reusable, pull-request, and merge-group triggers are preserved; manual hosted
+runs remain an optional second signal. The upstream measurements below are
+historical context, not the fork's active CI policy.
+
+[DEF-1](../decisions/DEFERRED.md) requires revisiting hosted CI after the first M1
+Control Plane code lands on `main` and before the M1 exit, using actual Actions
+usage and local gate timings.
+
 ## Four follow-up changes
 
 - Keep the readiness event, but reuse required checks only after an Actions API
