@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CLI_COMMAND_NAMES } from '../main/startup/cli-command-names'
+import { AXIOM_CLI_COMMAND_NAMES } from '../shared/axiom-contract/namespace'
 import { COMMAND_SPECS } from './specs'
 
 const specCommandNames = [...new Set(COMMAND_SPECS.map((spec) => spec.path[0]))].sort()
@@ -21,5 +22,13 @@ describe('CLI command-name parity between COMMAND_SPECS and the launch redirect'
 
   it('stays sorted and free of duplicates so additions are easy to review', () => {
     expect([...CLI_COMMAND_NAMES]).toEqual([...new Set(CLI_COMMAND_NAMES)].sort())
+  })
+
+  it.each([
+    ['COMMAND_SPECS', specCommandNames],
+    ['CLI_COMMAND_NAMES', CLI_COMMAND_NAMES]
+  ])('keeps reserved Axiom CLI command names out of %s', (_source, names) => {
+    const reserved = new Set<string>(AXIOM_CLI_COMMAND_NAMES)
+    expect(names.filter((name) => reserved.has(name))).toEqual([])
   })
 })
