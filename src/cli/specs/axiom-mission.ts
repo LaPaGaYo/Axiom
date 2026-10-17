@@ -1,0 +1,83 @@
+import type { CommandSpec } from '../args'
+import { GLOBAL_FLAGS } from '../args'
+
+export const AXIOM_MISSION_COMMAND_SPECS: CommandSpec[] = [
+  {
+    path: ['mission', 'create'],
+    summary: 'Create a Mission for a repository',
+    usage:
+      'axiom mission create --repo <selector> --target-branch <branch> --goal-file <path.md|json> [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'target-branch', 'goal-file', 'retry-request'],
+    examples: [
+      'axiom mission create --repo path:/src/repository --target-branch main --goal-file GOAL.md --json'
+    ]
+  },
+  {
+    path: ['mission', 'show'],
+    summary: 'Show a Mission',
+    usage: 'axiom mission show --mission <id> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'mission'],
+    examples: ['axiom mission show --mission mission_123 --json']
+  },
+  {
+    path: ['mission', 'list'],
+    summary: 'List Missions',
+    usage: 'axiom mission list [--repo <selector>] [--status <status>] [--cursor <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'status', 'cursor'],
+    examples: ['axiom mission list --status EXECUTING --json']
+  },
+  {
+    path: ['mission', 'start'],
+    summary: 'Start execution of an approved Mission',
+    usage: 'axiom mission start --mission <id> [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'mission', 'retry-request'],
+    examples: ['axiom mission start --mission mission_123']
+  },
+  {
+    path: ['mission', 'pause'],
+    summary: 'Pause a Mission',
+    usage: 'axiom mission pause --mission <id> --reason <text> [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'mission', 'reason', 'retry-request'],
+    examples: ['axiom mission pause --mission mission_123 --reason "Review needed"']
+  },
+  {
+    path: ['mission', 'resume'],
+    summary: 'Resume a Mission',
+    usage: 'axiom mission resume --mission <id> --reason <text> [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'mission', 'reason', 'retry-request'],
+    examples: ['axiom mission resume --mission mission_123 --reason "Review finished"']
+  },
+  {
+    path: ['mission', 'cancel'],
+    summary: 'Cancel a Mission',
+    usage: 'axiom mission cancel --mission <id> --reason <text> [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'mission', 'reason', 'retry-request'],
+    examples: ['axiom mission cancel --mission mission_123 --reason "Goal withdrawn"'],
+    destructive: true
+  },
+  {
+    path: ['mission', 'goal', 'propose'],
+    summary: 'Propose a Goal revision',
+    usage:
+      'axiom mission goal propose --mission <id> --goal-file <path.md|json> [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'mission', 'goal-file', 'retry-request'],
+    examples: ['axiom mission goal propose --mission mission_123 --goal-file revised-goal.json']
+  },
+  {
+    path: ['mission', 'goal', 'activate'],
+    summary: 'Activate a proposed Goal revision',
+    usage: 'axiom mission goal activate --mission <id> --goal <id> [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'mission', 'goal', 'retry-request'],
+    examples: ['axiom mission goal activate --mission mission_123 --goal goalrev_456'],
+    notes: [
+      'Activation is available during ANALYZING or EXECUTING. An executing Mission enters REPLANNING; approval of a replacement plan is not available yet.'
+    ]
+  },
+  {
+    path: ['mission', 'goal', 'show'],
+    summary: 'Show a Goal revision',
+    usage: 'axiom mission goal show --mission <id> --goal <id> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'mission', 'goal'],
+    examples: ['axiom mission goal show --mission mission_123 --goal goalrev_456 --json']
+  }
+]

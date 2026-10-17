@@ -28,6 +28,11 @@ const RevisionsSchema = MissionSchema.pick({ id: true }).extend({
 
 export function missionsStore(db: OrchestrationDb) {
   return {
+    updateRunObjective(runId: string, objective: string): void {
+      db.db
+        .prepare('UPDATE runs SET objective = ? WHERE id = ?')
+        .run(z.string().min(1).parse(objective), AxiomIdSchema.parse(runId))
+    },
     insertMission(mission: Mission): void {
       const m = MissionSchema.parse(mission)
       db.db

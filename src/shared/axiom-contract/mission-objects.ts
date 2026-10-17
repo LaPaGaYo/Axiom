@@ -146,3 +146,14 @@ export type TaskEdge = z.infer<typeof TaskEdgeSchema>
 export type TaskStageRecord = z.infer<typeof TaskStageRecordSchema>
 export type AuditEvent = z.infer<typeof AuditEventSchema>
 export type Policy = z.infer<typeof PolicySchema>
+
+// Shared M1 defaults; budgets other than maxAttempts are enforced by M2 admission.
+export const DEFAULT_MISSION_POLICY: Policy = {
+  concurrencyLimit: 3,
+  budget: {},
+  readinessThreshold: 'INTEGRATED',
+  approvalRules: {},
+  verificationRules: {},
+  nestedWorkerMaxDepth: 1,
+  unverifiableToleranceMinutes: 30
+}

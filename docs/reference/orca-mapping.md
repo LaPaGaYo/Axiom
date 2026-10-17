@@ -153,20 +153,23 @@ M0 通过 `src/main/axiom/namespace-rpc.ts` 的 `axiom.namespace.get` 注册命�
 
 M1 参数契约位于 `src/shared/axiom-contract/mission-params.ts`、`goal-params.ts`、`plan-params.ts`、`task-params.ts`，RPC 注册与 envelope 栅栏由 M1-06 接入。
 
+M1-06 已注册下表标记「M1 已注册」的方法；其余方法留待后续里程碑。`axiom.namespace.get`（M0-11，只读）继续注册。
+
 | 方法 | 参数要点 | 副作用 | M |
 |---|---|---|---|
-| `axiom.mission.create` | repo selector、targetBranch、goal、policy | `missions` + `db.createRun`（合成 coordinator）+ `goal_revisions`(ACTIVE) + `mission_policies` + `audit_events` | M |
-| `axiom.mission.show` / `list` | missionId / 过滤、cursor | 无 | — |
-| `axiom.mission.pause` / `resume` / `cancel` | missionId、reason | `missions.status`；cancel 先停活跃 Attempt；按 policy 需 Approval | M |
+| `axiom.mission.create`（M1 已注册） | repo selector、targetBranch、goal、policy | `missions` + `db.createRun`（合成 coordinator）+ `goal_revisions`(ACTIVE) + `mission_policies` + `audit_events` | M |
+| `axiom.mission.show` / `list`（M1 已注册） | missionId / 过滤、cursor | 无 | — |
+| `axiom.mission.start`（M1 已注册） | missionId | 用户启动：`PLANNED → EXECUTING`，重算 Task readiness；M1 不启动 Attempt | M |
+| `axiom.mission.pause` / `resume` / `cancel`（M1 已注册） | missionId、reason | `missions.status`；M1 cancel 取消 Task；活跃 Attempt stop/abandon 留给 M2，按 policy 接入 Approval | M |
 | `axiom.mission.deliver` | missionId、approvalId | 集成基线合入目标分支（D6），成功 → `COMPLETED` | M |
 | `axiom.mission.completionReport` | missionId | 生成 Artifact `completion_report` | M |
-| `axiom.goal.propose` / `activate` / `show` | missionId、goal 正文 / goalRevisionId | PROPOSED / ACTIVE+SUPERSEDED 前版 + `MAJOR_REPLAN` 触发 | M/M/— |
-| `axiom.plan.propose` | missionId、planRevision（schema 校验）、provenance | `plan_revisions`(PROPOSED)，Mission → `PLAN_REVIEW` | M |
-| `axiom.plan.approve` / `reject` | planRevisionId、resolver | APPROVED：物化 `tasks`(deps=[]) + `task_stages`(DEFINED) + `mission_task_edges`；旧 Task `inherit/cancel/rebind` 记录 | M |
-| `axiom.plan.list` / `show` | missionId / planRevisionId | 无 | — |
-| `axiom.task.list` / `show` | missionId、stage / taskId | 联查 `task_stages` × `tasks` × attempts | — |
+| `axiom.goal.propose` / `activate` / `show`（M1 已注册） | missionId、goal 正文 / goalRevisionId | PROPOSED / ACTIVE+SUPERSEDED 前版 + `MAJOR_REPLAN` 触发 | M/M/— |
+| `axiom.plan.propose`（M1 已注册） | missionId、planRevision（schema 校验）、provenance | `plan_revisions`(PROPOSED)，Mission → `PLAN_REVIEW` | M |
+| `axiom.plan.approve` / `reject`（M1 已注册） | planRevisionId、resolver；reject 另需 reason | APPROVED：物化 `tasks`(deps=[]) + `task_stages` + `mission_task_edges`，重算 readiness；旧 Task `inherit/cancel/rebind` 留给 M5 | M |
+| `axiom.plan.list` / `show`（M1 已注册） | missionId / planRevisionId | 无 | — |
+| `axiom.task.list` / `show`（M1 已注册） | missionId、stage / taskId | 联查 `task_stages` × `tasks`；M1 返回 `TaskListItem`，尚无 Attempt 详情 | — |
 | `axiom.task.create` | missionId、spec、edges、rationale（`MINOR_ADJUSTMENT`/FIX_TASK） | 同 approve 的物化路径 | M |
-| `axiom.task.cancel` | taskId、authorized rationale | `CANCELED`；停活跃 Attempt | M |
+| `axiom.task.cancel`（M1 已注册） | taskId、authorized rationale | `CANCELED`；活跃 Attempt stop/abandon 留给 M2 | M |
 | `axiom.attempt.submit` | attemptId、taskId、report（summary/filesChanged/checksRun/artifacts/limitations/questions/followUps） | §5 编号步骤 | M |
 | `axiom.attempt.inform` / `request` / `blocked` / `handoff` / `requestSubtask` | attemptId、正文、相关 id | `verifyDispatchCapability` → `insertMessage`（§3c 类型）→ MessageRouter | M |
 | `axiom.attempt.ask` | attemptId、question、options、timeoutMs / resume | 复用 `createQuestion` + 长轮询；`answerQuestion` 由 `axiom.message.answer` 触发 | M |
@@ -186,7 +189,9 @@ M1 参数契约位于 `src/shared/axiom-contract/mission-params.ts`、`goal-para
 
 注册 5 步：(1) zod params 放 `src/shared/axiom-contract/<ns>-params.ts`（catalog 生成器只索引 `src/shared/**` 且被 `src/main/runtime/rpc/**` 相对导入的模块）；(2) `AXIOM_<NS>_METHODS = [defineMethod({ name: 'axiom.ns.verb', params, handler: (p, { runtime, orchestrationCapability }) => … })]` 放 `src/main/runtime/rpc/methods/axiom/<ns>.ts`，聚合为 `AXIOM_METHODS`（`methods/axiom.ts`）；(3) `...AXIOM_METHODS` 加入 `ALL_RPC_METHODS`（启动即验重名）；(4) `pnpm generate:rpc-params-catalog` 重新生成 `src/shared/rpc-contract/rpc-params-catalog.generated.ts`，`pnpm verify:rpc-params-catalog`（`pnpm lint` 内）必须通过；(5) CLI：spec 放 `src/cli/specs/axiom*.ts`，handler 放 `src/cli/handlers/axiom/`，顶层命令名加入 `CLI_COMMAND_NAMES`（`src/main/startup/cli-command-names.ts`，需保持排序；`src/cli/cli-command-name-parity.test.ts` 校验与 `COMMAND_SPECS` 一致）。
 
-Envelope 字段（`RpcRequest`，`rpc/core.ts:44`）：`orchestrationContractVersion`（mutation 栅栏，`rpc/orchestration-contract-fence.ts`；缺失 → `orchestration_migration_required(client_contract_missing)`）、`orchestrationCapability`（dispatch capability，dispatcher 对**所有**方法注入 `ctx.orchestrationCapability`）、`orchestrationRequestId`（幂等键，`OrchestrationMutationExecutor`）。两处必须 additive 扩展才能覆盖 `axiom.*`：`isOrchestrationMutation`（`src/shared/orchestration-rpc-contract.ts:21` 的 `ORCHESTRATION_MUTATION_METHODS` 集合驱动栅栏与 `isDurableMutation` 收据）和 CLI 的版本戳（`src/cli/runtime/client.ts:133` 仅对 `orchestration.` 前缀写 `orchestrationContractVersion`）。建议新增 runtime capability `axiom.control-plane.v1`（`src/shared/protocol-version.ts`）供客户端协商。
+Envelope 字段（`RpcRequest`，`rpc/core.ts:44`）：`orchestrationContractVersion`（mutation 栅栏，`rpc/orchestration-contract-fence.ts`；缺失 → `orchestration_migration_required(client_contract_missing)`）、`orchestrationCapability`（dispatch capability，dispatcher 对**所有**方法注入 `ctx.orchestrationCapability`）、`orchestrationRequestId`（幂等键，`OrchestrationMutationExecutor`）。M1-06 已完成两处 additive 扩展：`src/shared/axiom-contract/mutations.ts` 的 `AXIOM_MUTATION_METHODS` / `isAxiomMutation` 接入 `src/shared/orchestration-rpc-contract.ts` 的 `isOrchestrationMutation`，同一谓词驱动栅栏与 `isDurableMutation` 收据；`src/cli/runtime/client.ts` 对 `orchestration.` 与 `axiom.` 都写 `orchestrationContractVersion`。CLI compatibility envelope 与 session caller 解析仍仅用于 `orchestration.`。`src/shared/protocol-version.ts` 已公布 `AXIOM_CONTROL_PLANE_RUNTIME_CAPABILITY = axiom.control-plane.v1`。
+
+M1 响应契约见 `src/shared/axiom-contract/{mission,goal,plan,task}-params.ts`：单对象使用 `mission` / `goalRevision` / `planRevision` / `task`，列表使用 `missions` / `planRevisions` / `tasks`；mutation 另有内核 `mutation` 收据。Mission 返回 `MissionSummary`，Task 返回 `TaskListItem`（stage 是权威，orcaStatus 仅是执行投影）。`src/main/axiom/control-plane.ts` 按 `OrchestrationDb` WeakMap 惰性缓存 store/controller；不改变 runtime 类。Goal 激活仅允许 ANALYZING 或 EXECUTING，后者进入 REPLANNING 并记录 MAJOR_REPLAN；替换计划的批准仍是 M5。M1 不启动/停止 Attempt，M2 需接入 cancellation stop/abandon。
 
 ### 4d. 现有命名冲突清单（`rg` 于 `src/main/runtime/rpc/methods/` 与 `src/main/startup/cli-command-names.ts` 核实）
 

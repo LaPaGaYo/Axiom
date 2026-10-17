@@ -7,6 +7,21 @@ import {
   AiVaultSearchStatusRequestSchema,
   AiVaultSetSearchEnabledParamsSchema
 } from '../ai-vault-search-contract'
+import { GoalActivateParams, GoalProposeParams } from '../axiom-contract/goal-params'
+import {
+  MissionCancelParams,
+  MissionCreateParams,
+  MissionListParams,
+  MissionShowParams
+} from '../axiom-contract/mission-params'
+import {
+  PlanApproveParams,
+  PlanListParams,
+  PlanProposeParams,
+  PlanRejectParams,
+  PlanShowParams
+} from '../axiom-contract/plan-params'
+import { TaskCancelParams, TaskListParams, TaskShowParams } from '../axiom-contract/task-params'
 import {
   BrowserClientFileChannelAbortParams,
   BrowserClientFileChannelReadParams,
@@ -379,7 +394,7 @@ import {
   ReplyParams,
   ResetParams,
   TaskCreateParams,
-  TaskListParams
+  TaskListParams as TaskListParamsOfOrchestrationParams
 } from './orchestration-params'
 import { RequestShowParams } from './orchestration-runs-mutation-request-show-params'
 import {
@@ -616,7 +631,25 @@ export const RPC_PARAMS_BY_METHOD = {
   'automation.runs': AutomationRuns,
   'automation.show': AutomationId,
   'automation.update': AutomationUpdate,
+  'axiom.goal.activate': GoalActivateParams,
+  'axiom.goal.propose': GoalProposeParams,
+  'axiom.goal.show': GoalActivateParams,
+  'axiom.mission.cancel': MissionCancelParams,
+  'axiom.mission.create': MissionCreateParams,
+  'axiom.mission.list': MissionListParams,
+  'axiom.mission.pause': MissionCancelParams,
+  'axiom.mission.resume': MissionCancelParams,
+  'axiom.mission.show': MissionShowParams,
+  'axiom.mission.start': MissionShowParams,
   'axiom.namespace.get': null,
+  'axiom.plan.approve': PlanApproveParams,
+  'axiom.plan.list': PlanListParams,
+  'axiom.plan.propose': PlanProposeParams,
+  'axiom.plan.reject': PlanRejectParams,
+  'axiom.plan.show': PlanShowParams,
+  'axiom.task.cancel': TaskCancelParams,
+  'axiom.task.list': TaskListParams,
+  'axiom.task.show': TaskShowParams,
   'browser.back': BrowserTarget,
   'browser.capture.start': BrowserTarget,
   'browser.capture.stop': BrowserTarget,
@@ -1009,7 +1042,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.runStop': RunStopParams,
   'orchestration.runUse': RunUseParams,
   'orchestration.taskCreate': TaskCreateParams,
-  'orchestration.taskList': TaskListParams,
+  'orchestration.taskList': TaskListParamsOfOrchestrationParams,
   'orchestration.workerAbandon': WorkerDispatchParams,
   'orchestration.workerList': WorkerListParams,
   'orchestration.workerRead': WorkerReadParams,

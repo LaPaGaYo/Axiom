@@ -30,3 +30,8 @@ export const TaskListItemSchema = z.object({
   previousStage: TaskStageSchema.optional()
 })
 export type TaskListItem = z.infer<typeof TaskListItemSchema>
+
+export const TaskResponseSchema = z.object({ task: TaskListItemSchema })
+export const TaskListResponseSchema = z.object({ tasks: z.array(TaskListItemSchema) })
+export type TaskResponse = z.infer<typeof TaskResponseSchema>
+export type TaskListResponse = z.infer<typeof TaskListResponseSchema>

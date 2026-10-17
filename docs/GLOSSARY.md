@@ -16,7 +16,7 @@
 | **Control Plane / 控制平面** | Axiom 的确定性权威核心（见 §2）。不使用「Mission Control」作为 UI 标签，避免与 macOS Mission Control 混淆。 |
 | **Execution Kernel / 执行内核** | Orca 衍生运行时：终端、PTY、Git/worktree、Agent 会话、SSH/WSL、orchestration 原语。只回答「在哪里、以什么进程和工作区执行」。 |
 | **RPC 命名空间** | `axiom.mission.*`、`axiom.goal.*`、`axiom.plan.*`、`axiom.task.*`、`axiom.attempt.*`、`axiom.verification.*`、`axiom.integration.*`、`axiom.approval.*`、`axiom.decision.*`、`axiom.artifact.*`、`axiom.message.*`、`axiom.policy.*`。不得使用 `project.*`（Orca 已占用）。 |
-| **CLI** | 二进制 `axiom`。运维/用户命令：`axiom mission create|show|pause|resume|cancel`、`axiom plan propose|approve|list`、`axiom task list|show`、`axiom approval list|grant|deny` …；Worker 命令见 §5。 |
+| **CLI** | 二进制 `axiom`。M1 已交付：`axiom mission create|show|list|start|pause|resume|cancel`、`axiom mission goal propose|activate|show`、`axiom plan propose|approve|reject|list|show`、`axiom task list|show|cancel`；全部支持 `--json`，mutation 支持 `--retry-request`。`approval` / `attempt` 保留给后续里程碑；Worker 命令见 §5。 |
 | **分支命名（D6，含修正）** | 集成基线 `axiom/integration/<missionId>`；Attempt 分支 `axiom/attempt/<taskId>/<seq>`（seq = 该 Task 的 Attempt 序号，由 Control Plane 递增；D6 原文的 `<attemptId>` 因 dispatch id 在 worktree 创建后才存在而改为序号，`attempt_bindings` 记录 `dispatch_id ↔ seq ↔ branch`）；集成临时分支 `axiom/integrating/<batchId>`；目标分支 = 用户指定（默认仓库默认分支）。 |
 | **数据落位** | 权威状态：Orca `orchestration.db`（新增 Axiom side tables，迁移 v43 起）；证据/Artifact 内容：`<userData>/axiom/artifacts/<sha256>`（内容寻址，DB 只存引用与 hash，G4）。 |
 | **Controlled Acceptance Fixture** | V1 演示与验收用的冻结仓库（D18）：固定 commit / Node / 包管理器版本，确定性离线检查，硬门槛见章程 §9；基线只经 fixture-version Decision 变更。v1 = 自建 FlowTask，`LaPaGaYo/flowtask-fixture` tag `fixture-v1`（commit `a6a8413`），manifest `fixture-manifest.v1.json`（D39、D42）。 |

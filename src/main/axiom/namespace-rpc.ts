@@ -5,14 +5,12 @@ import {
 } from '../../shared/axiom-contract/namespace'
 import { defineMethod } from '../runtime/rpc/core'
 
-export const AXIOM_METHODS = [
-  defineMethod({
-    name: 'axiom.namespace.get',
-    params: null,
-    handler: () => ({
-      namespace: AXIOM_RPC_NAMESPACE,
-      methodPrefixes: AXIOM_RPC_METHOD_PREFIXES,
-      cliCommandNames: AXIOM_CLI_COMMAND_NAMES
-    })
+export const namespaceMethod = defineMethod({
+  name: 'axiom.namespace.get',
+  params: null,
+  handler: () => ({
+    namespace: AXIOM_RPC_NAMESPACE,
+    methodPrefixes: AXIOM_RPC_METHOD_PREFIXES,
+    cliCommandNames: AXIOM_CLI_COMMAND_NAMES
   })
-]
+})

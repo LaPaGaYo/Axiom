@@ -2,7 +2,13 @@ import { z } from 'zod'
 import { OptionalString, requiredString } from '../rpc-contract/rpc-param-primitives'
 import { RepoSelector } from '../rpc-contract/github-repo-target-params'
 import { MissionStatusSchema } from './lifecycle'
-import { AxiomIdSchema, GoalBodySchema, MissionSchema, PolicySchema } from './mission-objects'
+import {
+  AxiomIdSchema,
+  GoalBodySchema,
+  GoalRevisionSchema,
+  MissionSchema,
+  PolicySchema
+} from './mission-objects'
 
 export const MissionCreateParams = RepoSelector.extend({
   targetBranch: requiredString('Missing targetBranch'),
@@ -10,6 +16,7 @@ export const MissionCreateParams = RepoSelector.extend({
   policy: PolicySchema
 })
 export const MissionShowParams = z.object({ missionId: AxiomIdSchema })
+export const MissionStartParams = MissionShowParams
 export const MissionListParams = z.object({
   repo: OptionalString,
   status: MissionStatusSchema.optional(),
@@ -31,3 +38,13 @@ export const MissionSummarySchema = MissionSchema.pick({
   activePlanRevisionId: true
 })
 export type MissionSummary = z.infer<typeof MissionSummarySchema>
+
+export const MissionResponseSchema = z.object({ mission: MissionSummarySchema })
+export const MissionCreateResponseSchema = MissionResponseSchema.extend({
+  goalRevision: GoalRevisionSchema,
+  policy: PolicySchema
+})
+export const MissionListResponseSchema = z.object({ missions: z.array(MissionSummarySchema) })
+export type MissionResponse = z.infer<typeof MissionResponseSchema>
+export type MissionCreateResponse = z.infer<typeof MissionCreateResponseSchema>
+export type MissionListResponse = z.infer<typeof MissionListResponseSchema>
