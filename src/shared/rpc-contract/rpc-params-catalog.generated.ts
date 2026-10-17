@@ -7,6 +7,11 @@ import {
   AiVaultSearchStatusRequestSchema,
   AiVaultSetSearchEnabledParamsSchema
 } from '../ai-vault-search-contract'
+import {
+  ArtifactListParams,
+  ArtifactPutParams,
+  ArtifactReadParams
+} from '../axiom-contract/artifact-params'
 import { GoalActivateParams, GoalProposeParams } from '../axiom-contract/goal-params'
 import {
   MissionCancelParams,
@@ -631,6 +636,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'automation.runs': AutomationRuns,
   'automation.show': AutomationId,
   'automation.update': AutomationUpdate,
+  'axiom.artifact.list': ArtifactListParams,
+  'axiom.artifact.put': ArtifactPutParams,
+  'axiom.artifact.read': ArtifactReadParams,
   'axiom.goal.activate': GoalActivateParams,
   'axiom.goal.propose': GoalProposeParams,
   'axiom.goal.show': GoalActivateParams,

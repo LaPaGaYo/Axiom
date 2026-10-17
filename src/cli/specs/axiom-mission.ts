@@ -79,5 +79,40 @@ export const AXIOM_MISSION_COMMAND_SPECS: CommandSpec[] = [
     usage: 'axiom mission goal show --mission <id> --goal <id> [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'mission', 'goal'],
     examples: ['axiom mission goal show --mission mission_123 --goal goalrev_456 --json']
+  },
+  {
+    path: ['mission', 'artifact', 'put'],
+    summary: 'Store content-addressed Mission evidence',
+    usage:
+      'axiom mission artifact put --mission <id> --kind <kind> --file <path> [--related <ids>] [--media-type <type>] [--created-by <actor>] [--retry-request <id>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'mission',
+      'kind',
+      'file',
+      'related',
+      'media-type',
+      'created-by',
+      'retry-request'
+    ],
+    examples: [
+      'axiom mission artifact put --mission mission_123 --kind handoff --file handoff.md --related task_123'
+    ],
+    notes: ['Related ids are comma-separated. Maximum file size is 8 MiB.']
+  },
+  {
+    path: ['mission', 'artifact', 'read'],
+    summary: 'Read and verify a Mission artifact',
+    usage: 'axiom mission artifact read --artifact <id> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'artifact'],
+    examples: ['axiom mission artifact read --artifact art_123 --json'],
+    notes: ['Text output is UTF-8; JSON preserves binary content as contentBase64.']
+  },
+  {
+    path: ['mission', 'artifact', 'list'],
+    summary: 'List Mission evidence',
+    usage: 'axiom mission artifact list --mission <id> [--kind <kind>] [--related <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'mission', 'kind', 'related'],
+    examples: ['axiom mission artifact list --mission mission_123 --kind handoff --json']
   }
 ]

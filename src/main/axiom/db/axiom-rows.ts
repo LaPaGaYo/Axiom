@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import {
-  AuditEventSchema,
   AxiomIdSchema,
   GoalRevisionSchema,
   MissionSchema,
@@ -11,6 +10,10 @@ import {
 } from '../../../shared/axiom-contract/mission-objects'
 import { MissionStatusSchema, TaskStageSchema } from '../../../shared/axiom-contract/lifecycle'
 import { readJson } from './row-codec'
+import { AuditRowSchema } from './audit-rows'
+import { ArtifactRowSchema, ContextPackageRowSchema, DecisionRowSchema } from './artifact-rows'
+export { AuditRowCodec } from './audit-rows'
+export { ArtifactRowCodec, ContextPackageRowCodec, DecisionRowCodec } from './artifact-rows'
 
 const timestamps = { created_at: z.string().min(1), updated_at: z.string().min(1) }
 export const MissionRowSchema = z.object({
@@ -198,7 +201,9 @@ export const PolicyRowCodec = PolicyRowSchema.transform((row) =>
     nestedWorkerMaxDepth: row.nested_worker_max_depth,
     unverifiableToleranceMinutes: row.unverifiable_tolerance_minutes,
     budget: readJson(
-      PolicySchema.shape.budget,
+      PolicySchema.shape.budget
+        .extend({ contextTokens: z.number().int().nonnegative().optional() })
+        .transform(({ contextTokens: _contextTokens, ...budget }) => budget),
       row.budget,
       'mission_policies',
       row.mission_id,
@@ -221,43 +226,6 @@ export const PolicyRowCodec = PolicyRowSchema.transform((row) =>
   })
 )
 
-export const AuditRowSchema = z.object({
-  sequence: AuditEventSchema.shape.sequence,
-  mission_id: AxiomIdSchema,
-  actor: z.string(),
-  object_kind: z.string(),
-  object_id: AxiomIdSchema,
-  event: z.string(),
-  before: z.string().nullable(),
-  after: z.string().nullable(),
-  created_at: z.string().min(1)
-})
-export const AuditRowCodec = AuditRowSchema.transform((row) =>
-  AuditEventSchema.parse({
-    sequence: row.sequence,
-    missionId: row.mission_id,
-    actor: row.actor,
-    objectKind: row.object_kind,
-    objectId: row.object_id,
-    event: row.event,
-    before:
-      row.before === null
-        ? null
-        : readJson(
-            AuditEventSchema.shape.before,
-            row.before,
-            'audit_events',
-            row.sequence,
-            'before'
-          ),
-    after:
-      row.after === null
-        ? null
-        : readJson(AuditEventSchema.shape.after, row.after, 'audit_events', row.sequence, 'after'),
-    createdAt: row.created_at
-  })
-)
-
 // Enumerate the validated row keys, never a wildcard; schema tests pin these to migrated DDL.
 export const AXIOM_COLUMNS = {
   missions: Object.keys(MissionRowSchema.shape).join(', '),
@@ -266,5 +234,8 @@ export const AXIOM_COLUMNS = {
   task_stages: Object.keys(TaskStageRowSchema.shape).join(', '),
   mission_task_edges: Object.keys(EdgeRowSchema.shape).join(', '),
   mission_policies: Object.keys(PolicyRowSchema.shape).join(', '),
-  audit_events: Object.keys(AuditRowSchema.shape).join(', ')
+  audit_events: Object.keys(AuditRowSchema.shape).join(', '),
+  artifacts: Object.keys(ArtifactRowSchema.shape).join(', '),
+  context_packages: Object.keys(ContextPackageRowSchema.shape).join(', '),
+  decisions: Object.keys(DecisionRowSchema.shape).join(', ')
 }
