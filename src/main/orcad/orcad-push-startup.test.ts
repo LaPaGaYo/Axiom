@@ -66,6 +66,10 @@ vi.mock('../server/serve-readiness', () => ({
     async publish() {}
   }
 }))
+vi.mock('../axiom/control-plane-boot', () => ({
+  startAxiomControlPlane: vi.fn(),
+  stopAxiomControlPlane: vi.fn()
+}))
 vi.mock('../runtime/orca-runtime', () => ({
   OrcaRuntimeService: class {
     getRuntimeId() {
