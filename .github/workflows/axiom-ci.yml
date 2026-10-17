@@ -1,0 +1,79 @@
+name: Axiom CI
+
+# Why: main receives locally verified candidates directly; D45 adds a Linux second signal.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: axiom-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+
+      - name: Typecheck Node
+        run: pnpm tc:node
+
+      - name: Typecheck CLI
+        run: pnpm tc:cli
+
+      - name: Typecheck web
+        run: pnpm tc:web
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+
+      - name: Full lint chain
+        run: pnpm lint
+
+  axiom-tests:
+    name: Axiom tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+
+      - name: Axiom-scoped unit tests
+        run: |
+          ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts \
+            src/main/axiom \
+            src/shared/axiom-contract \
+            src/main/runtime/rpc/methods/axiom \
+            src/main/runtime/orchestration/db/schema \
+            src/cli/specs \
+            src/cli/handlers/axiom \
+            src/renderer/src/components/missions \
+            src/renderer/src/lib/axiom-client.test.ts \
+            src/renderer/src/lib/missions-view.test.ts \
+            tests/e2e/helpers/fixture-plan-proposal.unit.test.ts

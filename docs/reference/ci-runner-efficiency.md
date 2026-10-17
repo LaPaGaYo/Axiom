@@ -10,9 +10,14 @@ reusable, pull-request, and merge-group triggers are preserved; manual hosted
 runs remain an optional second signal. The upstream measurements below are
 historical context, not the fork's active CI policy.
 
-[DEF-1](../decisions/DEFERRED.md) requires revisiting hosted CI after the first M1
-Control Plane code lands on `main` and before the M1 exit, using actual Actions
-usage and local gate timings.
+[D45](../decisions/DECISION_LOG.md)
+resolves [DEF-1](../decisions/DEFERRED.md): hosted CI adds one Axiom workflow,
+`axiom-ci.yml`, on every push to `main` and manual dispatch. It runs typechecks,
+the full `pnpm lint` chain, and Axiom-scoped tests on Linux as a second signal;
+local launcher gates remain authoritative, and upstream workflows stay unchanged.
+Henry must enable Actions in the fork settings; the verifier records the first
+hosted run as verification. The e2e specs (`tests/e2e/mission-*.spec.ts`) remain
+host-only in M1/M2.
 
 ## Four follow-up changes
 
