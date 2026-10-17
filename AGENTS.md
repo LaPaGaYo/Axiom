@@ -20,6 +20,7 @@ Before making product or architecture changes, read:
 - `docs/PROJECT_CONSTITUTION.md`;
 - `docs/GLOSSARY.md`;
 - `docs/reference/orca-mapping.md` for anything touching orchestration, the runtime, or the Execution Kernel;
+- `docs/reference/control-plane.md` for anything touching the Control Plane (Missions, plans, Tasks, admission, recovery);
 - `docs/STYLEGUIDE.md` for UI work;
 - `docs/decisions/DECISION_LOG.md` (path per D13);
 - the relevant document under `docs/reference/` for any subsystem being changed (for example `docs/reference/ssh-execution-boundary.md`, `docs/reference/git-compatibility.md`).
