@@ -1,16 +1,57 @@
 import { describe, expect, it } from 'vitest'
 import {
+  AuditEventSchema,
   GoalRevisionSchema,
   MissionSchema,
   PlanRevisionSchema,
   PolicySchema,
   ProvenanceSchema,
   TaskEdgeSchema,
+  TaskStageRecordSchema,
   TaskSpecSchema
 } from './mission-objects'
 import { goal, makeProposal, mission, policy, provenance } from './contract-fixtures.test-support'
 
 describe('Mission objects', () => {
+  it('validates TaskStageRecord including previous stage and retry state', () => {
+    const record = {
+      taskId: 'T01',
+      missionId: 'm',
+      planRevisionId: 'p',
+      stage: 'BLOCKED',
+      previousStage: 'RUNNING',
+      spec: makeProposal().tasks[0],
+      retryPolicy: { maxAttempts: 2 },
+      attemptCount: 1,
+      updatedAt: '2026-10-17 12:00:00'
+    }
+    expect(TaskStageRecordSchema.parse(record)).toEqual(record)
+    for (const invalid of [
+      { stage: 'completed' },
+      { previousStage: 'ready' },
+      { attemptCount: -1 },
+      { retryPolicy: { maxAttempts: 0 } }
+    ]) {
+      expect(TaskStageRecordSchema.safeParse({ ...record, ...invalid }).success).toBe(false)
+    }
+  })
+  it('validates AuditEvent identity and JSON snapshots', () => {
+    const event = {
+      sequence: 1,
+      missionId: 'm',
+      actor: 'controller',
+      objectKind: 'mission',
+      objectId: 'm',
+      event: 'created',
+      before: null,
+      after: { status: 'DRAFT' },
+      createdAt: '2026-10-17 12:00:00'
+    }
+    expect(AuditEventSchema.parse(event)).toEqual(event)
+    for (const invalid of [{ sequence: 0 }, { actor: '' }, { after: { callback: () => true } }]) {
+      expect(AuditEventSchema.safeParse({ ...event, ...invalid }).success).toBe(false)
+    }
+  })
   it('parses persisted shapes and nullable inactive revisions', () => {
     expect(MissionSchema.safeParse(mission).success).toBe(true)
     expect(
