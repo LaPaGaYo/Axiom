@@ -34,7 +34,7 @@
 | **Mission Experience Layer** | UI / CLI | Mission-first 界面与操作入口；投影 Control Plane 状态 | 持有权威状态；直接启动 shell；直接写 DB |
 | **Mission Intelligence** | LLM（advisory） | 角色：**Planner**（需求理解、计划与 DAG proposal）、**Architect**（架构 Decision proposal）、**Reviewer**（语义 review、验收条件评估的 advisory 部分）、**Replanner**（失败诊断、replan 分级建议、新 PlanRevision proposal） | 改权威状态；标记 VERIFIED/INTEGRATED；授予权限；合并；推翻 deterministic FAIL |
 | **DecisionEngine** | 接口 | 对封闭候选集做 `choose / score / classify / rank`。实现：**RulesEngine**（基线，必备）、**Jev**（可选 typed decision model）、小型 classifier、frontier-LLM fallback | 覆盖依赖 readiness、权限范围、必需测试、Approval 要求、集成顺序、破坏性动作策略 |
-| **MissionController** | Control Plane 服务 | Mission/Goal/PlanRevision/Task 生命周期、DAG 校验与 readiness、replan 触发、completion gate；是 Orca `run:<runId>` mailbox 的**确定性消费者**（取代 Orca 已退役的 LLM coordinator） | 依赖某个长驻 LLM 会话；内存态调度 |
+| **MissionController** | Control Plane 服务（`src/main/axiom/mission-controller/mission-controller.ts`） | Mission/Goal/PlanRevision/Task 生命周期、DAG 校验与 readiness、replan 触发、completion gate；是 Orca `run:<runId>` mailbox 的**确定性消费者**（取代 Orca 已退役的 LLM coordinator） | 依赖某个长驻 LLM 会话；内存态调度 |
 | **Scheduler** | Control Plane 服务 | 从 READY Task 中按并发、预算、优先级选取并 admission；调用 AgentFactory 与 Execution Kernel 启动 Attempt | 越过 readiness；越过预算 |
 | **AgentFactory** | Control Plane 服务 | 把 Task 编译为 AgentSpec（provider/model/reasoning/permissions/budget/workspace） | 生成不受策略约束的权限 |
 | **ContextBuilder** | Control Plane 服务 | 生成内容寻址的 ContextPackage；强制包含集 + 排序候选集 + token 预算 | 注入完整历史或他人 transcript |

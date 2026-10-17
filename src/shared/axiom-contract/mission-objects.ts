@@ -57,19 +57,6 @@ export const PlanRiskSchema = z.object({
   mitigation: Text.optional()
 })
 
-export const PlanRevisionSchema = z.object({
-  id: AxiomIdSchema,
-  missionId: AxiomIdSchema,
-  revision: z.number().int().positive(),
-  status: PlanRevisionStatusSchema,
-  goalRevisionId: AxiomIdSchema,
-  milestones: z.array(MilestoneSchema),
-  risks: z.array(PlanRiskSchema),
-  provenance: ProvenanceSchema,
-  supersedesId: AxiomIdSchema.optional(),
-  rejectedReason: Text.optional()
-})
-
 // Limits are data only; admission and approved-budget comparisons belong to the Control Plane.
 export const BudgetSchema = z.strictObject({
   maxRuntimeMinutes: z.number().positive().optional(),
@@ -96,6 +83,21 @@ export const TaskEdgeSchema = z.object({
   fromTaskId: AxiomIdSchema,
   toTaskId: AxiomIdSchema,
   readinessThreshold: ReadinessThresholdSchema.default('INTEGRATED')
+})
+
+export const PlanRevisionSchema = z.object({
+  id: AxiomIdSchema,
+  missionId: AxiomIdSchema,
+  revision: z.number().int().positive(),
+  status: PlanRevisionStatusSchema,
+  goalRevisionId: AxiomIdSchema,
+  milestones: z.array(MilestoneSchema),
+  risks: z.array(PlanRiskSchema),
+  tasks: z.array(TaskSpecSchema),
+  edges: z.array(TaskEdgeSchema),
+  provenance: ProvenanceSchema,
+  supersedesId: AxiomIdSchema.optional(),
+  rejectedReason: Text.optional()
 })
 
 export const TaskStageRecordSchema = z.object({
@@ -134,6 +136,7 @@ export const PolicySchema = z.object({
   unverifiableToleranceMinutes: z.number().nonnegative().default(30)
 })
 
+export type GoalBody = z.infer<typeof GoalBodySchema>
 export type Provenance = z.infer<typeof ProvenanceSchema>
 export type Mission = z.infer<typeof MissionSchema>
 export type GoalRevision = z.infer<typeof GoalRevisionSchema>

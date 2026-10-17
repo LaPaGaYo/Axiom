@@ -20,6 +20,8 @@ const PlanBodySchema = PlanRevisionSchema.pick({
   goalRevisionId: true,
   milestones: true,
   risks: true,
+  tasks: true,
+  edges: true,
   provenance: true
 })
 const PlanOptionsSchema = PlanRevisionSchema.pick({
@@ -106,8 +108,8 @@ export function revisionsStore(db: OrchestrationDb) {
         PlanRowCodec.parse(
           db.db
             .prepare(`INSERT INTO plan_revisions
-          (id, mission_id, revision, status, goal_revision_id, milestones, risks, provenance, supersedes_id)
-          VALUES (?, ?, (SELECT COALESCE(MAX(revision), 0) + 1 FROM plan_revisions WHERE mission_id = ?), ?, ?, ?, ?, ?, ?)
+          (id, mission_id, revision, status, goal_revision_id, milestones, risks, proposal, provenance, supersedes_id)
+          VALUES (?, ?, (SELECT COALESCE(MAX(revision), 0) + 1 FROM plan_revisions WHERE mission_id = ?), ?, ?, ?, ?, ?, ?, ?)
           RETURNING ${AXIOM_COLUMNS.plan_revisions}`)
             .get(
               generateId('planrev'),
@@ -117,6 +119,7 @@ export function revisionsStore(db: OrchestrationDb) {
               b.goalRevisionId,
               JSON.stringify(b.milestones),
               JSON.stringify(b.risks),
+              JSON.stringify({ tasks: b.tasks, edges: b.edges }),
               JSON.stringify(b.provenance),
               p.supersedesId ?? null
             )

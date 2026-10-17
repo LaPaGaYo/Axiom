@@ -86,7 +86,7 @@ describe('transition tables', () => {
   const missionRows: Record<string, string[]> = {
     DRAFT: ['ANALYZING'],
     ANALYZING: ['PLAN_REVIEW'],
-    PLAN_REVIEW: ['PLANNED'],
+    PLAN_REVIEW: ['PLANNED', 'ANALYZING'],
     PLANNED: ['EXECUTING'],
     EXECUTING: ['REPLANNING', 'FINALIZING'],
     REPLANNING: ['EXECUTING'],
