@@ -35,6 +35,7 @@ describe('Mission creation and plans', () => {
     })
     expect(goalRevision).toMatchObject({ revision: 1, status: 'ACTIVE', ...createInput.goal })
     expect(policy).toEqual({
+      routing: { preferredProviders: [], disallowedProviders: [], highRiskTier: 'A', models: {} },
       concurrencyLimit: 3,
       budget: {},
       readinessThreshold: 'INTEGRATED',

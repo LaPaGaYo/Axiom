@@ -3,6 +3,26 @@ import { GLOBAL_FLAGS } from '../args'
 
 export const AXIOM_MISSION_COMMAND_SPECS: CommandSpec[] = [
   {
+    path: ['mission', 'policy', 'show'],
+    summary: 'Show Mission policy',
+    usage: 'axiom mission policy show --mission <id> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'mission'],
+    examples: ['axiom mission policy show --mission mission_123 --json']
+  },
+  {
+    path: ['mission', 'policy', 'update'],
+    summary: 'Update Mission provider routing or concurrency',
+    usage:
+      'axiom mission policy update --mission <id> [--routing-file <json>] [--concurrency <n>] [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'mission', 'routing-file', 'concurrency', 'retry-request'],
+    examples: [
+      'axiom mission policy update --mission mission_123 --routing-file routing.json --concurrency 3 --json'
+    ],
+    notes: [
+      'Routing replaces the routing object; omitted fields use defaults. Budget changes require Approval and are unavailable until M4.'
+    ]
+  },
+  {
     path: ['mission', 'create'],
     summary: 'Create a Mission for a repository',
     usage:

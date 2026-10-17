@@ -1,3 +1,5 @@
+import { DEFAULT_ROUTING_POLICY } from './mission-objects'
+
 // Hand-written shape of LaPaGaYo/flowtask-fixture, fixture-v1,
 // scenarios/goal/decomposition.json. IDs and dependsOn edges match the frozen file.
 export const decomposition = [
@@ -53,6 +55,7 @@ export const goal = {
   provenance
 }
 export const policy = {
+  routing: DEFAULT_ROUTING_POLICY,
   concurrencyLimit: 3,
   budget: { maxRuntimeMinutes: 120 },
   readinessThreshold: 'INTEGRATED' as const,

@@ -26,6 +26,7 @@ import {
   PlanRejectParams,
   PlanShowParams
 } from '../axiom-contract/plan-params'
+import { PolicyShowParams, PolicyUpdateParams } from '../axiom-contract/policy-params'
 import { TaskCancelParams, TaskListParams, TaskShowParams } from '../axiom-contract/task-params'
 import {
   BrowserClientFileChannelAbortParams,
@@ -655,6 +656,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'axiom.plan.propose': PlanProposeParams,
   'axiom.plan.reject': PlanRejectParams,
   'axiom.plan.show': PlanShowParams,
+  'axiom.policy.show': PolicyShowParams,
+  'axiom.policy.update': PolicyUpdateParams,
   'axiom.task.cancel': TaskCancelParams,
   'axiom.task.list': TaskListParams,
   'axiom.task.show': TaskShowParams,

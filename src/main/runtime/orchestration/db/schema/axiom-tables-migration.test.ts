@@ -21,7 +21,7 @@ const TABLE_COLUMNS: Record<string, string> = {
   mission_task_edges:
     'mission_id from_task_id to_task_id readiness_threshold plan_revision_id created_at updated_at',
   agent_specs:
-    'id mission_id role provider model reasoning permissions budget workspace_strategy created_at',
+    'id mission_id role provider model reasoning permissions budget workspace_strategy created_at spec',
   attempt_bindings:
     'task_id mission_id seq branch dispatch_id agent_spec_id context_package_id created_at updated_at',
   context_packages:
@@ -40,7 +40,7 @@ const TABLE_COLUMNS: Record<string, string> = {
   approvals:
     'id mission_id action_kind inputs_hash risk status expires_at resolver requested_by resolution outcome executed_at created_at updated_at',
   mission_policies:
-    'mission_id concurrency_limit budget readiness_threshold approval_rules verification_rules nested_worker_max_depth unverifiable_tolerance_minutes created_at updated_at',
+    'mission_id concurrency_limit budget readiness_threshold approval_rules verification_rules nested_worker_max_depth unverifiable_tolerance_minutes created_at updated_at routing',
   audit_events: 'sequence mission_id actor object_kind object_id event before after created_at'
 }
 
@@ -197,8 +197,8 @@ describe('Axiom v43 side tables', () => {
 
   it('creates all 17 tables, specified columns, indexes and three triggers on a fresh database', () => {
     const { db } = open()
-    expect(SCHEMA_VERSION).toBe(43)
-    expect(db.pragma('user_version', { simple: true })).toBe(43)
+    expect(SCHEMA_VERSION).toBe(44)
+    expect(db.pragma('user_version', { simple: true })).toBe(44)
     expect(Object.keys(TABLE_COLUMNS)).toHaveLength(17)
     for (const [table, columns] of Object.entries(TABLE_COLUMNS)) {
       expect(
@@ -249,10 +249,38 @@ describe('Axiom v43 side tables', () => {
       previous.close()
     }
     const migrated = open(path)
-    expect(migrated.db.pragma('user_version', { simple: true })).toBe(43)
+    expect(migrated.db.pragma('user_version', { simple: true })).toBe(44)
     expect(axiomSchema(migrated.db)).toBe(axiomSchema(open().db))
     expect(migrated.db.prepare('SELECT * FROM runs WHERE id = ?').get('run-kept')).toEqual(run)
     expect(migrated.db.prepare('SELECT * FROM tasks WHERE id = ?').get('kept')).toEqual(task)
+  })
+
+  it('upgrades v43 columns without changing rows and reopens idempotently', () => {
+    const path = filePath()
+    const first = open(path)
+    seedMission(first.db, 'kept')
+    first.db.exec('ALTER TABLE agent_specs DROP COLUMN spec')
+    first.db.exec('ALTER TABLE mission_policies DROP COLUMN routing')
+    first.db.pragma('user_version = 43')
+    const spec = first.db.prepare('SELECT * FROM agent_specs').get()
+    const policy = first.db.prepare('SELECT * FROM mission_policies').get()
+    close(first)
+    const upgraded = open(path)
+    expect(upgraded.db.pragma('user_version', { simple: true })).toBe(44)
+    expect(upgraded.db.prepare('SELECT * FROM agent_specs').get()).toEqual({ ...spec, spec: '{}' })
+    expect(upgraded.db.prepare('SELECT * FROM mission_policies').get()).toEqual({
+      ...policy,
+      routing: '{}'
+    })
+    const schema = axiomSchema(upgraded.db)
+    close(upgraded)
+    const reopened = open(path)
+    expect(axiomSchema(reopened.db)).toBe(schema)
+    expect(reopened.db.prepare('SELECT * FROM agent_specs').get()).toEqual({ ...spec, spec: '{}' })
+    expect(reopened.db.prepare('SELECT * FROM mission_policies').get()).toEqual({
+      ...policy,
+      routing: '{}'
+    })
   })
 
   it('keeps the Axiom sqlite_master definitions byte-identical across reopen', () => {
@@ -292,11 +320,12 @@ describe('Axiom v43 side tables', () => {
     const first = open(path)
     seedMission(first.db, 'future')
     const before = axiomSchema(first.db)
-    first.db.pragma('user_version = 44')
+    first.db.pragma('user_version = 45')
     close(first)
     const { db } = open(path)
-    expect(db.pragma('user_version', { simple: true })).toBe(44)
-    expect(resolveOrchestrationMigrationStartVersion(db, 44, SCHEMA_VERSION)).toBe(44)
+    expect(db.pragma('user_version', { simple: true })).toBe(45)
+    expect(resolveOrchestrationMigrationStartVersion(db, 45, SCHEMA_VERSION)).toBe(45)
+    expect(resolveOrchestrationMigrationStartVersion(db, 44, 43)).toBe(44)
     expect(axiomSchema(db)).toBe(before)
     expect(db.prepare('SELECT id FROM missions').all()).toEqual([{ id: 'future' }])
     // The completeness probe must also ignore absent Axiom tables at a current-version stamp.

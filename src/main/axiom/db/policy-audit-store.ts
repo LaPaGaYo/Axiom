@@ -26,9 +26,9 @@ export function policyAuditStore(db: OrchestrationDb) {
       db.db
         .prepare(`INSERT INTO mission_policies
         (mission_id, concurrency_limit, budget, readiness_threshold, approval_rules, verification_rules,
-         nested_worker_max_depth, unverifiable_tolerance_minutes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         nested_worker_max_depth, unverifiable_tolerance_minutes, routing) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(mission_id) DO UPDATE SET concurrency_limit = excluded.concurrency_limit,
-          budget = excluded.budget, readiness_threshold = excluded.readiness_threshold,
+          routing = excluded.routing, budget = excluded.budget, readiness_threshold = excluded.readiness_threshold,
           approval_rules = excluded.approval_rules, verification_rules = excluded.verification_rules,
           nested_worker_max_depth = excluded.nested_worker_max_depth,
           unverifiable_tolerance_minutes = excluded.unverifiable_tolerance_minutes,
@@ -41,7 +41,8 @@ export function policyAuditStore(db: OrchestrationDb) {
           JSON.stringify(p.approvalRules),
           JSON.stringify(p.verificationRules),
           p.nestedWorkerMaxDepth,
-          p.unverifiableToleranceMinutes
+          p.unverifiableToleranceMinutes,
+          JSON.stringify(p.routing)
         )
     },
     getPolicy(missionId: string) {

@@ -5,11 +5,13 @@ import { missionsStore } from './missions-store'
 import { revisionsStore } from './revisions-store'
 import { taskGraphStore } from './task-graph-store'
 import { artifactsStore } from './artifacts-store'
+import { agentSpecsStore } from './agent-specs-store'
 import { policyAuditStore } from './policy-audit-store'
 
 type Missions = ReturnType<typeof missionsStore>
 type Revisions = ReturnType<typeof revisionsStore>
 type TaskGraph = ReturnType<typeof taskGraphStore>
+type AgentSpecs = ReturnType<typeof agentSpecsStore>
 type Artifacts = ReturnType<typeof artifactsStore>
 type PolicyAudit = ReturnType<typeof policyAuditStore>
 
@@ -45,6 +47,10 @@ export class AxiomStore {
   readonly appendAuditEvent: PolicyAudit['appendAuditEvent']
   readonly listAuditEvents: PolicyAudit['listAuditEvents']
 
+  readonly insertAgentSpec: AgentSpecs['insertAgentSpec']
+  readonly getAgentSpec: AgentSpecs['getAgentSpec']
+  readonly listAgentSpecs: AgentSpecs['listAgentSpecs']
+
   readonly insertArtifact: Artifacts['insertArtifact']
   readonly getArtifact: Artifacts['getArtifact']
   readonly listArtifacts: Artifacts['listArtifacts']
@@ -54,6 +60,10 @@ export class AxiomStore {
   readonly getContextTokenBudget: Artifacts['getContextTokenBudget']
 
   constructor(private readonly db: OrchestrationDb) {
+    const specs = agentSpecsStore(db)
+    this.insertAgentSpec = specs.insertAgentSpec
+    this.getAgentSpec = specs.getAgentSpec
+    this.listAgentSpecs = specs.listAgentSpecs
     const artifacts = artifactsStore(db)
     this.insertArtifact = artifacts.insertArtifact
     this.getArtifact = artifacts.getArtifact
