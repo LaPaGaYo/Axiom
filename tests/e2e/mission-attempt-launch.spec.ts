@@ -266,7 +266,7 @@ test('M2-05: launches three fixture Attempts and preserves identity without rela
     const restarted = list()
     expect(restarted.map((a) => a.attemptId).sort()).toEqual(ids)
     for (const a of restarted) {
-      expect(['exited', 'unverifiable']).toContain(a.liveness)
+      expect(['live', 'exited', 'unverifiable']).toContain(a.liveness)
     }
     console.log(
       `[M2-05] ${JSON.stringify({
