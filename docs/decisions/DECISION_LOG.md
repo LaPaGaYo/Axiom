@@ -390,3 +390,52 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **理由**：每个 Task 一次 Codex attempt 可完成、可独立验证并有明确 sidecar 门；把最大的不确定性（Control Plane 以什么身份接入内核）放在第一个 Task 用测试钉住；schema 一次到位避免 M2–M4 反复 bump `SCHEMA_VERSION`。
 **后果**：`docs/plans/M1.md` 是 M1 的 PlanRevision 等价物（Axiom 自身的 Control Plane 尚不存在）；brief 在 `.axiom-work/briefs/M1-nn.md`，验证记录在 `.axiom-work/verifications/`；分解的拆分 / 合并 / 新增以本条下的修订行记录，不重写本条。
 **取代规则**：M1 出口 Decision 记录实际完成情况并关闭本条；范围变更经修订行。
+
+## D45 · DEF-1 复审：托管 CI 的后半部分 — PROPOSED（待 Henry；建议 A + C-lite）
+
+**背景**：D41 选了 A（本地门禁为权威，上游工作流原样保留、只在 PR 上触发），并把 B / C 延到 M1 控制平面代码合入后复审（DEF-1）。触发点已到：M1-01～M1-10 全部合入 main。复审数据（2026-10-17）：
+
+| 数据 | 事实 |
+|---|---|
+| fork 的 Actions 运行记录 | `GET repos/LaPaGaYo/Axiom/actions/runs` → `total_count: 0`：fork 上从未跑过任何托管工作流（上游 40 个工作流都是 `pull_request` / `workflow_dispatch` / 带 paths 过滤的 `push`；Axiom 直接推 `main`、不走 PR），托管 CI 目前贡献 0 信号，分钟数 0 |
+| 上游 `pr.yml` 的体量 | 1,197 行、约 14 个 job：code_paths 守卫、static analysis（≈ 20 项 check / ratchet / verify）、typecheck（`ubuntu-24.04-arm`）、git compatibility、codex index-heal、xterm patch sync、shell contracts、`unit-tests.yml` 8 分片、orcad browser provider、mobile web bundle、cross-version wire、managed hooks Node 18；changed-code 门依赖 `github.event.pull_request.base.sha` |
+| 本地 attempt 门禁（57 次 launcher 验证：M0 44、M1 13，`docs/review-evidence/axiom-m1/M1-exit-e2e.md#local-gate-timings`） | M1 中位数：unit（定向 targets）5 s、typecheck 0–1 s（增量缓存）、changed-code quality 2 s、完整 lint 80 s、墙钟 94 s；renderer 任务 141–188 s。固定成本 = 完整 lint |
+| 合并树检查 `verify-main`（M1 十个 sidecar 的并集 + 完整 lint，main `4db3ad86c`，`verify-merged-4db3ad86c-20261017-045350.log`） | 1,739 个测试文件 / 16,235 个测试：16,214 通过、20 skipped、1 失败 = 已登记的环境性 flake `src/main/ipc/pty-runtime-hidden-at-spawn-mark.test.ts`（定向重跑 8/8 绿）；unit 142 s，extras 全过，lint 82 s，墙钟约 4 min |
+| 全量 suite（`pnpm test` on main `4db3ad86c`，`fullsuite-main-20261017-045905.log`） | 9,943 个测试文件：9,852 通过、79 skipped、11 失败——全部在已登记的 known-environmental 列表上（与 M0-09 的全量基线集合相同）；1 个未跑 = 会挂起宿主的 `src/shared/startup-shell-portability.live-shell.test.ts`（verify.sh 一直排除它，fullsuite 启动器已同步排除）；94,245 个测试：93,635 通过、25 失败（全在那 11 个文件里）、1 expected fail、513 skipped；约 14 min 墙钟（04:59–05:13）。M1 没有引入新失败 |
+| 只能在宿主跑的部分 | Electron e2e（headless，`ORCA_BACKGROUND_LAUNCH=1`）与 fixture 出口 e2e（`AXIOM_FIXTURE_REPO`）：Worker 沙箱不能启动 Electron（SIGABRT）/ 不能绑 socket；Linux CI 需要 xvfb 才能跑 Electron |
+
+**选项**：
+- **A（维持）**：只靠本地 launcher 门禁。成本 0；风险：单机、单平台（macOS arm64），没有第二台机器的独立信号。
+- **B**：上游 `pr.yml` 加 `push: branches: [main]`：每次推送跑完整上游矩阵（估 60–120 runner-min / push，含 ARM runner；含依赖宿主环境的 suite，flake 风险），changed-code 门要改成 `github.event.before`，并且改动上游工作流文件会增加 rebase 冲突面。
+- **C**：删上游工作流、只留 Axiom 自己的 `ci.yml`：丢掉全部上游覆盖，对上游的 diff 大，rebase 代价高。
+- **A + C-lite（建议）**：A 继续作为权威门禁；只**新增一个** Axiom 自己的小工作流 `.github/workflows/axiom-ci.yml`（`push: branches: [main]` + `workflow_dispatch`；`ubuntu-latest`、Node 24、`pnpm install --frozen-lockfile`）：`pnpm tc:node && pnpm tc:cli && pnpm tc:web`、`pnpm lint`、`pnpm test src/main/axiom src/shared/axiom-contract src/main/runtime/rpc/methods/axiom src/cli/specs src/cli/handlers/axiom src/renderer/src/components/missions src/renderer/src/lib/axiom-client.test.ts tests/e2e/helpers/fixture-plan-proposal.unit.test.ts`。估 6–10 min / push，Linux 上的第二信号，不碰任何上游工作流文件（它们保持 PR-only 休眠，rebase 零冲突）。前提：Henry 在 fork 的 Settings → Actions 里启用 Actions（fork 默认关闭）。fixture 出口 e2e 在 M1 仍只在宿主跑；若第二信号证明有用，M2 再加 xvfb 的 Electron e2e job。
+
+**决定**：待 Henry 选择。选定后：本条改为 ACCEPTED，`DEFERRED.md` 的 DEF-1 改为 `RESOLVED (D45)`；若选 A + C-lite，则以一个 M2-00 hygiene Task 提交 `axiom-ci.yml`（brief 由 verifier 写，Worker 实现，launcher 验证）。
+**取代规则**：CI 策略再变更以新 Decision 取代本条；D41 的 A 部分不受影响。
+
+## D46 · M1 出口检查清单 — PROPOSED（待 Henry 确认：M1 关闭）
+
+**背景**：架构 §20 给 M1 三条出口标准；D44 要求出口 = 三条 + `DEFERRED.md` 逐条核对；`docs/plans/M1.md` 另要求 M1-05 之后每次合入跑 `verify-main`、M1-08 之后跑一次全量 suite。下表逐项对照，每项都指向独立验证记录（`.axiom-work/verifications/`）或证据文档，没有一项靠 Worker 自述。M1 的十个 Task 共 15 个 attempt，全部在 2026-10-17 00:40–04:50 内完成并合入（main `4db3ad86c`）。
+
+| 出口项 | 证据 | 状态 |
+|---|---|---|
+| 出口 1：应用重启后 Mission / GoalRevision / PlanRevision / Task / stage 不丢 | M1-08 文件 DB 重启测试（`control-plane-boot.test.ts`，`M1-08-2.md`）；M1-10 在 `fixture-v1` 上的宿主 e2e：关闭并在同一 profile 重启，`mission show` / `goal show` / `plan show` / `task list` 载荷逐字节相同、Mission `EXECUTING`、`recovery.run_binding_lost` 0、Mission Home 与 Task 表文本相同（`M1-10-2.md`；`docs/review-evidence/axiom-m1/M1-exit-e2e.md` 实测表） | 完成 |
+| 出口 2：直接 `orchestration.taskUpdate` / `workerStart` / `reset` 打 Mission Run 被拒 | M1-07 RPC 级：绑定 coordinator 的 `taskUpdate` / `workerStart` / `dispatch` / `reset` → `mission_managed`，状态快照不变（`admission-rpc.test.ts`，`M1-07-1.md`）；M1-10 真实 CLI：`reset --tasks` → `mission_managed`，`task-update` / `worker-start` → `no_active_sender_terminal`（CLI 身份层，命令未到 runtime；三层拒绝：CLI 身份 → runtime Run 绑定 `run_required` / `consumer_fenced` → Mission 守卫），前后 CLI 快照与 Mission 状态不变 | 完成（CLI 只能到达第一层；bound-coordinator 路径由 RPC 测试证明） |
+| 出口 3：映射 §4b 每个拦截点有测试 | M1-07 四个测试文件 `src/main/axiom/admission/{mission-managed-run-guard,admission-rpc,admission-run,admission-message}.test.ts`（含非 Mission Run 对照） | 完成（M2 需把 `workerStop` / `workerAbandon` / `workerRelease` / `workerRetain` / `workerTerminalUserInput`、`ask` / `reply`、群发路由、federation 纳入守卫评审） |
+| D14 映射核实 spike | M1-01（`M1-01-1.md`，`docs/review-evidence/axiom-m1/D14-session-party-spike.md`）：合成 `axiom-mission-<uuid>` session party 成立，D14 保留 | 完成 |
+| 共享契约（枚举与术语表一一对应、PlanProposal / DAG 校验、params / 响应 schema） | M1-02（`M1-02-2.md`；glossary parity test） | 完成 |
+| Schema v43：映射 §6 的 17 张 side table 一次建全，之后只 additive | M1-03（`M1-03-2.md`；`axiom-tables-migration.test.ts`） | 完成（M1 业务写入 7 张；其余 10 张只建表） |
+| AxiomStore（zod 行校验、savepoint 事务） | M1-04（`M1-04-1.md`） | 完成 |
+| MissionController：Mission / Goal / Plan 生命周期、Task 物化、readiness 重算、`previous_status` / `previous_stage` | M1-05（`M1-05-1.md`） | 完成（不启动 Attempt；`blockingQuestionOrApproval()` 为 M1 存根） |
+| `axiom.mission/goal/plan/task` RPC + 契约栅栏 / 幂等收据 + CLI | M1-06（`M1-06-1.md`） | 完成 |
+| run mailbox 消费者骨架 + RecoveryService（M1 子集）+ 桌面 / daemon 启动接入 | M1-08（`M1-08-2.md`） | 完成（`reconcileAttempts()` 空钩子；250 ms 固定退避与 audit 扫描去重是 M2 的上限） |
+| Mission Home + Task 列表（missions 视图、envelope 客户端、stage 文案、headless e2e） | M1-09（`M1-09-2.md`；宿主 e2e `mission-home-task-list.spec.ts` PASS） | 完成（Settings → Shortcuts 文案副作用与一处注释重复词 → M2 UI Task） |
+| `docs/reference/control-plane.md`（AGENTS.md Required Reading）+ 映射 §2 / §4a / §4b / §4c / §6 / §8 回填 | M1-10（`M1-10-2.md`） | 完成 |
+| 合并树检查 `verify-main`（M1 十个 sidecar 并集 + 完整 lint） | main `4db3ad86c`：1,739 文件 / 16,214 通过 / 1 失败 = 已登记环境 flake（`verify-merged-4db3ad86c-20261017-045350.log`） | 完成 |
+| 全量 suite（`pnpm test`） | main `4db3ad86c`：9,943 文件：9,852 通过 / 79 skipped / 11 失败（全部 = known-environmental 基线，与 M0-09 全量基线相同）/ 1 未跑（已知挂起的 live-shell suite，verify.sh 一直排除）；93,635 测试通过；无新失败（`fullsuite-main-20261017-045905.log`） | 完成 |
+| 延期事项核对（`DEFERRED.md`） | DEF-1 触发点已到 → D45（待 Henry）；DEF-2 的触发点（Settings / Integrations UI 排期）M1 未触及，OPEN；DEF-3（首个发布前）OPEN | 核对完成（DEF-1 与本条同时决定） |
+
+**明确留到 M2 的**（均已写入各验证记录的 Observations 或 `docs/plans/M1.md`）：`MissionSummary` 不含 Run id 与暂停 / 阻塞 reason（renderer 已预留可选字段）；readiness 的 Question / Approval 存根与预算 / 并发 enforcement；consumer 退避与去重策略；Attempt 身份（= dispatch id）与 attempt-launcher seams（`startLocalWorker` additive 入参）；Planner；Settings 文案恢复 Apple 名称 + 注释笔误；UI 选择不跨重启、无轮询；出口 e2e 增加 Attempts / submissions / bound-coordinator 路径；环境 flake `pty-runtime-hidden-at-spawn-mark.test.ts` 在满负载时再现（3/4 次广泛运行失败、定向 8/8 通过）→ M2 hygiene 调查；上游 `typecheck:e2e` 基线 214 条（hygiene）。
+
+**决定**（待 Henry）：确认上表 → **M1 关闭**（Axiom main `4db3ad86c`（M1-10 合入；本条与 D45 的文档提交在其后），fixture `fixture-v1`）。M2 的任务分解随后以 brief 形式提出（Scheduler / AgentSpec / ContextPackage / Attempt / Worker / Submission）。
+**取代规则**：无。M1 之后发现的 M1 范围内缺口以新的 M1-nn Task 记录并在本条下追加一行，不重开里程碑。
