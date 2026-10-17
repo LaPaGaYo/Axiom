@@ -297,6 +297,8 @@ M0-09 / D37：`orca-data.json` 的 GlobalSettings 增加可选 `providerActivati
 
 ## 8. 代码落位与类型安全
 
+`src/main/axiom/db/axiom-store.ts` 的 `AxiomStore` 集中 M1 七张 side table 的数据访问，所有读取遵循「parse rows, never cast」：逐表 zod row schema 校验后转换为共享契约对象。
+
 - `src/main/axiom/`：Control Plane 服务（`mission-controller/`、`scheduler/`、`agent-factory/`、`context-builder/`、`message-router/`、`verification/`、`integration/`、`approval/`、`recovery/`、`audit/`、`admission/`、`db/`）；只通过 `OrchestrationDb` 实例与 runtime service 边界接入，RPC handler 在 `src/main/runtime/rpc/methods/axiom/`。
 - `src/shared/axiom-contract/`：zod schema 与类型（状态枚举、消息 payload、Submission 合同、RPC params）；renderer/CLI/main 共用；枚举值与 `docs/GLOSSARY.md` 一一对应，改枚举先改术语表并记 Decision。
 - `@ts-nocheck` 基线：`config/ts-nocheck-baseline.txt` 共 176 项，其中 `src/main/runtime/orca-runtime-*.ts` **137** 项（非测试 `orca-runtime-*.ts` 共 150 个）；`config/scripts/check-ts-nocheck-ratchet.mjs` 是只减不增的 ratchet（`pnpm lint` 内 `check:ts-nocheck-ratchet`），新文件带 `@ts-nocheck` 直接 CI 失败。规则：Axiom 不在这些文件内新增逻辑（D12）；如必须触碰（例如 `getNestedWorkerMaxDepth`，`orca-runtime-resolve-worktree-selector.ts:118`），只加一行委托到强类型模块。

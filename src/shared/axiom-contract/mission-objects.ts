@@ -5,7 +5,8 @@ import {
   MissionStatusSchema,
   PlanRevisionStatusSchema,
   ReadinessThresholdSchema,
-  RiskLevelSchema
+  RiskLevelSchema,
+  TaskStageSchema
 } from './lifecycle'
 
 export const AxiomIdSchema = z.string().min(1).max(128)
@@ -97,6 +98,30 @@ export const TaskEdgeSchema = z.object({
   readinessThreshold: ReadinessThresholdSchema.default('INTEGRATED')
 })
 
+export const TaskStageRecordSchema = z.object({
+  taskId: AxiomIdSchema,
+  missionId: AxiomIdSchema,
+  planRevisionId: AxiomIdSchema,
+  stage: TaskStageSchema,
+  previousStage: TaskStageSchema.nullable(),
+  spec: TaskSpecSchema,
+  retryPolicy: TaskSpecSchema.shape.retryPolicy,
+  attemptCount: z.number().int().nonnegative(),
+  updatedAt: Text
+})
+
+export const AuditEventSchema = z.object({
+  sequence: z.number().int().positive(),
+  missionId: AxiomIdSchema,
+  actor: Text,
+  objectKind: Text,
+  objectId: AxiomIdSchema,
+  event: Text,
+  before: z.json(),
+  after: z.json(),
+  createdAt: Text
+})
+
 export const PolicySchema = z.object({
   concurrencyLimit: z.number().int().positive(),
   budget: BudgetSchema,
@@ -115,4 +140,6 @@ export type GoalRevision = z.infer<typeof GoalRevisionSchema>
 export type PlanRevision = z.infer<typeof PlanRevisionSchema>
 export type TaskSpec = z.infer<typeof TaskSpecSchema>
 export type TaskEdge = z.infer<typeof TaskEdgeSchema>
+export type TaskStageRecord = z.infer<typeof TaskStageRecordSchema>
+export type AuditEvent = z.infer<typeof AuditEventSchema>
 export type Policy = z.infer<typeof PolicySchema>
