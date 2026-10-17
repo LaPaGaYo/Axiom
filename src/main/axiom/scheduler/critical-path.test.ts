@@ -25,7 +25,9 @@ it('prioritizes path length before lexical id and memoizes the frozen DAG fan-in
   const ready = tasks
     .filter((t) => t.stage === 'READY')
     .map((t) => ({ ...t, taskId: ids.get(t.taskId)! }))
-    .toReversed()
+    // Why: Orca task ids are random, so the store order is random too; pin an order that is
+    // certainly not the critical-path order (ascending ids) instead of reversing it.
+    .sort((a, b) => a.taskId.localeCompare(b.taskId))
   const reads: string[] = []
   const ordered = orderByCriticalPath(
     {
