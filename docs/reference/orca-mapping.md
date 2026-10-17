@@ -233,14 +233,18 @@ Envelope 字段（`RpcRequest`，`rpc/core.ts:44`）：`orchestrationContractVer
 
 **为什么不改现有 CHECK 枚举**：`createTables`（`db/schema/create-tables.ts`）在每次打开时执行 `CREATE TABLE IF NOT EXISTS`，`IF NOT EXISTS` 不会放宽已有表的 CHECK（`migrate-v39.ts` 注释）；放宽 CHECK 只能重建表并复制（v39 对 `worker_terminal_archives` 的做法）。而 `resolveOrchestrationMigrationStartVersion`（`orchestration/orchestration-schema-version-skew.ts:184`）在 `storedVersion > schemaVersion` 时原样打开数据库——旧二进制会读到新枚举值，`LEGAL_TRANSITIONS[entity][state]` 查不到即崩溃，`TaskStatus` 等联合类型也失真。上游先例是 side table：`attempt_observation_facts` 的 DDL 注释 "Attempt evidence stays additive so old Task/Dispatch/worker CHECK enums remain wire-compatible"；`hasCompletePostV6Schema` 只探测列/索引/`messages` 的 `'question'`，不探测新表，因此新表对降级探针透明。
 
-**落位**：新建 `db/schema/migrate-v43.ts`（`migrateV43(this, current)`，`current >= 43` 早退），在 `migrate.ts` 的 `migrateV42.call(this, current)` 之后调用；`SCHEMA_VERSION` 在 `db/contract-constants.ts` 改为 `43` 并追加版本注释。新表 DDL 同时放入新文件 `db/schema/create-axiom-tables-sql.ts` 并由 `createTables` 执行（与 `structured_pointer_operations` 相同：fresh DB 由 createTables 建表，v43 只建索引/补列）。Axiom 表的删除清理沿用 `ADDITIVE_LIFECYCLE_DELETE_TRIGGERS_SQL` 模式（`create-graph-tables-sql.ts`）挂到 `tasks`/`dispatch_contexts` 的 AFTER DELETE；但 `orchestration.reset` 对 Mission 已拦截（§4b）。所有列名用 snake_case，时间戳用 `TEXT`（`datetime('now')`），JSON 用 `TEXT`，与上游一致。
+**实现文件**：`src/main/runtime/orchestration/db/schema/create-axiom-tables-sql.ts` 的 `createAxiomTablesSql()` 定义以下 17 张表、9 个查询索引和 3 个删除触发器；`db/schema/create-tables.ts` 在 core / graph DDL 之后、迁移之前执行它。`db/schema/migrate-v43.ts` 的 `migrateV43(this, current)` 在 `current >= 43` 时早退，否则复用同一索引 / 触发器 SQL；`db/schema/migrate.ts` 在 v42 之后调用它，`db/contract-constants.ts` 的 `SCHEMA_VERSION = 43`。fresh DB 与旧 v42 文件都由每次打开时的 `CREATE TABLE IF NOT EXISTS` 建表；后续扩展只通过 v44+ additive 加列。
 
-| 表 | 关键列（≤8） | 备注 |
+Axiom 的 status / stage / kind 等可扩展枚举均为 `TEXT NOT NULL`，不加 CHECK，由 `axiom-contract` 在写入边界校验；唯一例外是 D11 永久固定的 `nested_worker_max_depth = 1`；可空的 `missions.previous_status` / `task_stages.previous_stage` 分别保存 PAUSED / BLOCKED 的返回状态。所有列名用 snake_case，时间戳用 `TEXT NOT NULL DEFAULT (datetime('now'))`，JSON 用 `TEXT`（集合 / 对象默认 `[]` / `{}`）；有生命周期变化的行带 `updated_at`，不可变证据只带 `created_at`。
+
+不声明外键，删除清理沿用 `ADDITIVE_LIFECYCLE_DELETE_TRIGGERS_SQL` 模式：`trg_tasks_delete_axiom` 清除该 Task 的 stage、任一端点的边、Attempt binding；`trg_dispatches_delete_axiom` 只把 binding 的 `dispatch_id` 置空并保留历史；`trg_runs_delete_axiom` 先按 Mission id 清除全部 side rows，再删除 Mission。除 `missions` 自身以外，每张表都持久化 `mission_id`（`mission_policies` 用它作主键，其余均为 `TEXT NOT NULL`），避免先删 Task / Dispatch 后丢失历史行的 Mission 归属；清理只写 Axiom 表，不更改 Orca 表 / 索引 / 触发器 / view，降级探针也不纳入新表。`orchestration.reset` 的 Mission admission 拦截由 M1-07 实现（§4b）。
+
+| 表 | 关键列 | 备注 |
 |---|---|---|
-| `missions` | `id PK`, `run_id UNIQUE`, `repo_id`, `repo_path`, `target_branch`, `status`, `active_goal_revision_id`, `active_plan_revision_id` | status 取术语表 §4.1；`integration_branch = axiom/integration/<id>` 可派生 |
+| `missions` | `id PK`, `run_id UNIQUE NOT NULL`, `coordinator_orca_session_id UNIQUE NOT NULL`, `repo_id`, `repo_path`, `target_branch`, `status`, `active_goal_revision_id`, `active_plan_revision_id`, `previous_status` | status 取术语表 §4.1；`integration_branch = axiom/integration/<id>` 可派生 |
 | `goal_revisions` | `id PK`, `mission_id`, `revision INTEGER`, `status`, `objective`, `constraints`(JSON), `acceptance_criteria`(JSON), `provenance`(JSON) | `UNIQUE(mission_id, revision)` |
-| `plan_revisions` | `id PK`, `mission_id`, `revision`, `status`, `goal_revision_id`, `milestones`(JSON), `risks`(JSON), `supersedes_id` | 同上；`rejected_reason` 可加 |
-| `task_stages` | `task_id PK`(→`tasks.id`), `mission_id`, `plan_revision_id`, `stage`, `spec`(JSON), `retry_policy`(JSON), `attempt_count`, `updated_at` | **唯一项目级权威**；`spec` 含 scope/acceptance/evidence/risk |
+| `plan_revisions` | `id PK`, `mission_id`, `revision`, `status`, `goal_revision_id`, `milestones`(JSON), `risks`(JSON), `supersedes_id`, `rejected_reason`, `provenance`(JSON) | `UNIQUE(mission_id, revision)` |
+| `task_stages` | `task_id PK`(→`tasks.id`), `mission_id`, `plan_revision_id`, `stage`, `previous_stage`, `spec`(JSON), `retry_policy`(JSON), `attempt_count`, `updated_at` | **唯一项目级权威**；`spec` 含 scope/acceptance/evidence/risk |
 | `mission_task_edges` | `mission_id`, `from_task_id`, `to_task_id`, `readiness_threshold`(`INTEGRATED` 或 `VERIFIED`), `plan_revision_id` | `PK(from_task_id, to_task_id)`；DAG 无环由 Control Plane 校验 |
 | `agent_specs` | `id PK`(sha256), `role`, `provider`, `model`, `reasoning`(JSON), `permissions`(JSON), `budget`(JSON), `workspace_strategy` | 内容寻址；Attempt 经 `attempt_bindings` 关联（下一行） |
 | `attempt_bindings` | `task_id`, `seq INTEGER`（`PK(task_id, seq)`）, `branch`, `dispatch_id`（可空，`UNIQUE`，`createDispatchContext` 后回填）, `agent_spec_id`, `context_package_id`, `created_at` | admission 时先写行（此时 dispatch 尚不存在，D6a），启动成功后回填 `dispatch_id` |
@@ -248,12 +252,12 @@ Envelope 字段（`RpcRequest`，`rpc/core.ts:44`）：`orchestrationContractVer
 | `submissions` | `id PK`, `dispatch_id UNIQUE`, `task_id`, `candidate_id`, `report`(JSON), `checks_run`(JSON), `limitations`(JSON), `follow_ups`(JSON) | 不可变 |
 | `candidates` | `id PK`, `dispatch_id`, `task_id`, `commit_sha`, `tree_sha`, `status`(`ACTIVE` 或 `SUPERSEDED`), `superseded_by`, `created_at` | `UNIQUE(task_id, commit_sha)` |
 | `artifacts` | `id PK`, `mission_id`, `kind`, `sha256`, `size_bytes`, `media_type`, `related`(JSON ids), `created_by` | 内容在 `<userData>/axiom/artifacts/<sha256>` |
-| `decisions` | `id PK`, `mission_id`, `status`, `title`, `options`(JSON), `resolution`, `authority`, `provenance`(JSON) | `supersedes_id` 可加 |
+| `decisions` | `id PK`, `mission_id`, `status`, `title`, `options`(JSON), `resolution`, `authority`, `provenance`(JSON) | `supersedes_id` 已有 |
 | `verification_runs` | `id PK`, `candidate_id`, `task_id`, `status`, `verdict_detail`(JSON), `commands`(JSON), `tool_versions`(JSON), `verifier` | 证据引用走 `artifacts` |
 | `integration_batches` | `id PK`, `mission_id`, `base_commit`, `candidate_ids`(JSON，V1 长度 1), `status`, `merge_commit`, `conflicts`(JSON), `approval_id` | 单一集成权威串行写 |
 | `approvals` | `id PK`, `mission_id`, `action_kind`, `inputs_hash`, `risk`, `status`, `expires_at`, `resolver` | 另加 `requested_by`, `resolution`, `outcome`(JSON，执行结果), `executed_at` |
-| `mission_policies` | `mission_id PK`, `concurrency_limit`, `budget`(JSON), `readiness_threshold`, `approval_rules`(JSON), `verification_rules`(JSON), `nested_worker_max_depth`(=1), `updated_at` | Mission 级覆盖全局设置 |
-| `audit_events` | `id PK`, `mission_id`, `actor`, `object_kind`, `object_id`, `event`, `before`(JSON), `after`(JSON) | 只追加；`sequence INTEGER PRIMARY KEY AUTOINCREMENT` 可替代 `id` |
+| `mission_policies` | `mission_id PK`, `concurrency_limit`, `budget`(JSON), `readiness_threshold`, `approval_rules`(JSON), `verification_rules`(JSON), `nested_worker_max_depth`(=1), `unverifiable_tolerance_minutes INTEGER NOT NULL DEFAULT 30`, `updated_at` | Mission 级覆盖全局设置 |
+| `audit_events` | `sequence INTEGER PRIMARY KEY AUTOINCREMENT`, `mission_id`, `actor`, `object_kind`, `object_id`, `event`, `before`(JSON), `after`(JSON) | 只追加；另有 `created_at`，sequence 删除后不复用 |
 
 ## 7. M0 网络出口与身份清单
 
