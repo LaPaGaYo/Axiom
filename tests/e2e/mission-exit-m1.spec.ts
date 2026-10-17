@@ -232,7 +232,7 @@ test('M1 exit: frozen fixture survives restart and refuses direct Orca mutations
     expect(tasks.every((task) => task.orcaStatus === 'ready')).toBe(true)
     expect(MissionResponseSchema.parse(before.mission).mission.status).toBe('EXECUTING')
     expect(PlanResponseSchema.parse(before.plan).planRevision.status).toBe('APPROVED')
-    const goalText = readFileSync(path.join(clone, 'GOAL.md'), 'utf8').trim()
+    const goalText = readFileSync(path.join(clone, 'GOAL.md'), 'utf8')
     expect(GoalResponseSchema.parse(before.goal).goalRevision).toMatchObject({
       id: goalRevisionId,
       status: 'ACTIVE',
@@ -244,17 +244,20 @@ test('M1 exit: frozen fixture survives restart and refuses direct Orca mutations
     const inspection = inspectMission(userData, mission.id)
     expect(inspection.binding.status).toBe('EXECUTING')
     const deniedStarted = performance.now()
+    // task-update/worker-start can refuse at three layers: CLI terminal identity
+    // (no_active_sender_terminal, before RPC), runtime Run binding (run_required /
+    // consumer_fenced), then the Mission guard (mission_managed; M1-07 RPC tests).
     const commands = [
       { verb: 'reset', args: ['--tasks'], codes: ['mission_managed'] },
       {
         verb: 'task-update',
         args: ['--id', tasks[0].id, '--status', 'completed', '--run', inspection.binding.run_id],
-        codes: ['mission_managed', 'run_required', 'consumer_fenced']
+        codes: ['mission_managed', 'run_required', 'consumer_fenced', 'no_active_sender_terminal']
       },
       {
         verb: 'worker-start',
         args: ['--task', tasks[0].id, '--agent', 'codex', '--run', inspection.binding.run_id],
-        codes: ['mission_managed', 'run_required', 'consumer_fenced']
+        codes: ['mission_managed', 'run_required', 'consumer_fenced', 'no_active_sender_terminal']
       }
     ]
     for (const command of commands) {
@@ -283,25 +286,23 @@ test('M1 exit: frozen fixture survives restart and refuses direct Orca mutations
     })
     expect(await missionUi(second.page, mission.id, goalText)).toEqual(beforeUi)
     durationsMs.restartAndAssertions = performance.now() - restartStarted
+    const measurements = {
+      fixtureCommit: head,
+      missionId: mission.id,
+      tasks: tasks.length,
+      edges: proposal.edges.length,
+      ready: tasks.filter((task) => task.stage === 'READY').length,
+      defined: tasks.filter((task) => task.stage === 'DEFINED').length,
+      orcaReady: tasks.filter((task) => task.orcaStatus === 'ready').length,
+      refusals,
+      recoveryRunBindingLost: 0,
+      cliSnapshotIdentical: true,
+      uiSnapshotIdentical: true,
+      durationsMs: { ...durationsMs, total: performance.now() - started }
+    }
+    console.log(`[M1-exit] ${JSON.stringify(measurements)}`)
     await testInfo.attach('M1-exit-measurements', {
-      body: JSON.stringify(
-        {
-          fixtureCommit: head,
-          missionId: mission.id,
-          tasks: tasks.length,
-          edges: proposal.edges.length,
-          ready: tasks.filter((task) => task.stage === 'READY').length,
-          defined: tasks.filter((task) => task.stage === 'DEFINED').length,
-          orcaReady: tasks.filter((task) => task.orcaStatus === 'ready').length,
-          refusals,
-          recoveryRunBindingLost: 0,
-          cliSnapshotIdentical: true,
-          uiSnapshotIdentical: true,
-          durationsMs: { ...durationsMs, total: performance.now() - started }
-        },
-        null,
-        2
-      ),
+      body: JSON.stringify(measurements, null, 2),
       contentType: 'application/json'
     })
   } finally {

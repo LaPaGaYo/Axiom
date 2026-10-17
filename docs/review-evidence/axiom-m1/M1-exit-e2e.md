@@ -19,7 +19,7 @@ fixture 不在 Axiom 仓库内。`AXIOM_FIXTURE_REPO` 必须指向已有本地 c
 | 合同 | 自动断言与证据边界 |
 |---|---|
 | 1. 重启不丢 Mission / GoalRevision / PlanRevision / Task / stage | 编译 CLI 注册 clone、读 `GOAL.md` 创建 Mission、读取 active Goal id、转换并共享校验 decomposition、propose/approve/start。保存完整 Mission/Goal/Plan/Task result JSON，关闭并在同一 userData 重启后逐字节比较；Goal 正文/ACTIVE、Plan APPROVED、Mission EXECUTING、Task ids/stages/orcaStatus 均保留。只读 DB 检查 Run id/status 不变且没有 `recovery.run_binding_lost`。成功恢复本身不写 audit event |
-| 2. 直接 taskUpdate / workerStart / reset 被拒 | 对同一 Mission Run/Task 运行三条 Orca CLI，每条必须非零退出且 `ok:false`。reset 仅接受 `mission_managed`；task-update/worker-start 仅接受 `mission_managed`、`run_required`、`consumer_fenced`。前后完整 result 快照和 DB Mission 状态不变；任何成功、其他错误码、信号退出或超时均不能通过 |
+| 2. 直接 taskUpdate / workerStart / reset 被拒 | 对同一 Mission Run/Task 运行三条 Orca CLI，每条必须非零退出且 `ok:false`。reset 仅接受 `mission_managed`；task-update/worker-start 仅接受三层拒绝码：CLI 无终端身份 `no_active_sender_terminal`（尚未发送 mutation RPC），runtime Run 绑定 `run_required` / `consumer_fenced`，Mission 守卫 `mission_managed`（M1-07 绑定 coordinator 的 RPC 测试覆盖）。前后完整 result 快照和 DB Mission 状态不变；任何成功、其他错误码、信号退出或超时均不能通过 |
 | 3. §4b 所有拦截点有测试 | 复用 M1-07 的 `src/main/axiom/admission/{mission-managed-run-guard,admission-rpc,admission-run,admission-message}.test.ts`，不重复实现；独立验收记录 `.axiom-work/verifications/M1-07-1.md`。包括已绑定 coordinator 的 `mission_managed` 路径、非 Mission 正向对照和无状态变化断言 |
 
 CLI 成功输出从 `{ok:true,result:...}` 读取；比较的是整个 result payload（不删领域字段），RPC envelope 的随机 request id / runtime metadata 不参与持久对象比较。SQLite 只读连接只执行 missions / audit_events SELECT；不写 `orchestration.db`，不注入计划到 renderer/store。
@@ -30,7 +30,7 @@ UI 两次都从 `openMissionsPage()` 进入，通过 Mission list 中包含 Miss
 
 ## 宿主实跑结果（由 verifier 填写）
 
-从 Playwright `testInfo.attach('M1-exit-measurements', ...)` 的 JSON 复制 counts、refusals、durationsMs，并补宿主日志/版本/候选身份。下列任何 pending 均不表示 PASS。
+从宿主日志的 `[M1-exit] ` JSON 行复制 counts、refusals、durationsMs（与 `testInfo.attach('M1-exit-measurements', ...)` 使用同一个 measurements 对象；成功测试的附件可能不保留），并补宿主日志/版本/候选身份。下列任何 pending 均不表示 PASS。
 
 | 项目 | 预期 | 实测 |
 |---|---|---|
@@ -38,8 +38,8 @@ UI 两次都从 `openMissionsPage()` 进入，通过 Mission list 中包含 Miss
 | fixture HEAD / tag / D42 | 三者相同 | pending host run |
 | Task / edge / READY / DEFINED / Orca ready | 12 / 20 / 3 / 9 / 12 | pending host run |
 | reset 实际拒绝码 | mission_managed | pending host run |
-| task-update 实际拒绝码 | mission_managed 或 run_required 或 consumer_fenced | pending host run |
-| worker-start 实际拒绝码 | mission_managed 或 run_required 或 consumer_fenced | pending host run |
+| task-update 实际拒绝码 | CLI 身份 no_active_sender_terminal；runtime 绑定 run_required / consumer_fenced；Mission 守卫 mission_managed（三层之一） | pending host run |
+| worker-start 实际拒绝码 | CLI 身份 no_active_sender_terminal；runtime 绑定 run_required / consumer_fenced；Mission 守卫 mission_managed（三层之一） | pending host run |
 | 拒绝前后 CLI / Mission status | 字节不变 / EXECUTING | pending host run |
 | 重启后 Mission/Goal/Plan/Task CLI 快照 | 字节相同 / EXECUTING | pending host run |
 | 两次 UI / recovery.run_binding_lost 数 | 相同 / 0 | pending host run |

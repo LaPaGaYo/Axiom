@@ -147,7 +147,7 @@ M1 已使用 Run 创建、Task 物化、收据和 Run mailbox；下表的 Attemp
 | `orchestration.run` / `runStop`、CLI `orchestration coordinator-start` | 已退役：`RETIRED_ORCHESTRATION_METHODS`（`src/shared/orchestration-rpc-contract.ts`）→ `orchestration_migration_required(command_retired)`；CLI 在 `src/cli/handlers/orchestration/dispatch-handlers.ts:69` | 无需处理；文档中不再提「coordinator」 | 沿用 `rpc/orchestration-contract-fence.ts`；`admission/admission-rpc.test.ts` 验证两种 Run 均保持退役拒绝 |
 | `taskCreate` 带 `deps` | 会让 `promoteReadyTasks` 生效 | Mission Run 内 RPC taskCreate 一律拒绝（含空 deps） | `assertTaskCreateAllowed` → `messaging/message-methods.ts`（`taskCreate`，Run 解析后；RPC 即使无 deps 也拒绝，只有 `axiom.plan.approve` 物化 Task + stage） |
 
-M1 出口第 3 条证据：`src/main/axiom/admission/mission-managed-run-guard.test.ts`、`admission-rpc.test.ts`、`admission-run.test.ts`、`admission-message.test.ts` 覆盖全表及非 Mission 对照。CLI 没有 coordinator terminal 时，task-update / worker-start 的 Run 解析会先返回 `run_required` / `consumer_fenced`；绑定 coordinator 的 RPC 测试验证 `mission_managed`。出口 e2e `tests/e2e/mission-exit-m1.spec.ts` 要求三动词拒绝且全部 Mission/Task 快照不变，不扩大允许码集合。
+M1 出口第 3 条证据：`src/main/axiom/admission/mission-managed-run-guard.test.ts`、`admission-rpc.test.ts`、`admission-run.test.ts`、`admission-message.test.ts` 覆盖全表及非 Mission 对照。task-update / worker-start 的三层拒绝依次是：CLI 无终端身份时，`src/cli/handlers/orchestration/terminal-identity.ts` 的 `resolveCoordinatorTerminalHandle` 抛 `no_active_sender_terminal`（尚未发送 mutation RPC）；runtime Run 绑定解析返回 `run_required` / `consumer_fenced`；Mission 守卫返回 `mission_managed`（绑定 coordinator 的 RPC 测试覆盖）。出口 e2e `tests/e2e/mission-exit-m1.spec.ts` 要求三动词拒绝且全部 Mission/Task 快照不变，只接受上述固定集合；reset 仍仅接受 `mission_managed`。
 
 ### 4c. 新增 `axiom.*` 方法清单
 

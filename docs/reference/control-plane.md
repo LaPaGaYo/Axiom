@@ -119,7 +119,7 @@ CLI JSON 输出是 `{ ok, result, ... }` / `{ ok:false, error:{code,...}, ... }`
 | runUse，包括 takeover-legacy | `assertNotMissionManaged`；`orchestration/runs/runs.ts`；bindRun 前拒绝 |
 | run / runStop / coordinator-start | 保持退役；契约 fence / CLI dispatch-handlers 拒绝 |
 
-完整测试为 `src/main/axiom/admission/{mission-managed-run-guard,admission-rpc,admission-run,admission-message}.test.ts`。无 coordinator terminal 的 CLI 调用 task-update / worker-start 会先在 Run caller 解析处被 `run_required` / `consumer_fenced` 拒绝；绑定 coordinator 的 RPC 测试覆盖 `mission_managed`。不能为取得某个错误码而给终端接管合成 Run。
+完整测试为 `src/main/axiom/admission/{mission-managed-run-guard,admission-rpc,admission-run,admission-message}.test.ts`。task-update / worker-start 有三层拒绝：CLI 无终端身份时，`src/cli/handlers/orchestration/terminal-identity.ts` 的 `resolveCoordinatorTerminalHandle` 先抛 `no_active_sender_terminal`，尚未发送 mutation RPC；进入 runtime 后，Run 绑定解析可返回 `run_required` / `consumer_fenced`；到达 Mission 守卫后返回 `mission_managed`，由 M1-07 绑定 coordinator 的 RPC 测试覆盖。不能为取得某个错误码而给终端接管合成 Run。
 
 ## 8. Mailbox 与恢复
 
@@ -151,6 +151,7 @@ axiom task show --task <taskId> --json
 
 | 错误/诊断 | 含义与操作 |
 |---|---|
+| `no_active_sender_terminal` | CLI 没有终端身份，命令未到达 runtime；不是 Mission 损坏 |
 | `mission_managed` | Orca 入口试图越过权威；改用相应 `axiom mission/plan/task` 动作。reset 不是取消；破坏性恢复需后续 Approval 路径 |
 | `consumer_fenced` | caller/consumer 的绑定或 generation 已失效；CLI 拒绝不等于 Mission 损坏。若 Mission BLOCKED，检查 `mailbox.consumer_fenced` 及绑定证据，不抢占/重建 Run |
 | `run_required` | Orca caller 没有可用 coordinator Run；仅传 `--run` 不能获得权限 |
