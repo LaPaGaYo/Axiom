@@ -228,6 +228,7 @@ ci-shards/
 !docs/archive/
 !docs/archive/**
 !docs/reference/orca-mapping.md
+!docs/reference/control-plane.md
 !docs/reference/upstream-orca-agents.md
 
 # Axiom: visible Finder launchers (double-click targets); the real scripts live in .axiom-work/
