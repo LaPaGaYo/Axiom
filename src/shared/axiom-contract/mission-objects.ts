@@ -64,6 +64,7 @@ export const PlanRevisionSchema = z.object({
   goalRevisionId: AxiomIdSchema,
   milestones: z.array(MilestoneSchema),
   risks: z.array(PlanRiskSchema),
+  provenance: ProvenanceSchema,
   supersedesId: AxiomIdSchema.optional(),
   rejectedReason: Text.optional()
 })

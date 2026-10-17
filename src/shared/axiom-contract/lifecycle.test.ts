@@ -110,12 +110,17 @@ describe('transition tables', () => {
           from !== to &&
           !['COMPLETED', 'FAILED', 'CANCELED'].includes(from) &&
           (['PAUSED', 'BLOCKED', 'FAILED', 'CANCELED'].includes(to) ||
-            (from === 'PAUSED' && !['COMPLETED', 'FAILED', 'CANCELED'].includes(to)) ||
+            (['PAUSED', 'BLOCKED'].includes(from) &&
+              !['COMPLETED', 'FAILED', 'CANCELED'].includes(to)) ||
             (missionRows[from] ?? []).includes(to))
         expect(isLegalMissionTransition(from, to), `${from} → ${to}`).toBe(expected)
       }
       expect(isLegalMissionTransition(from, from)).toBe(false)
     }
+  })
+  it('allows a BLOCKED Mission to return to EXECUTING but never directly to COMPLETED', () => {
+    expect(isLegalMissionTransition('BLOCKED', 'EXECUTING')).toBe(true)
+    expect(isLegalMissionTransition('BLOCKED', 'COMPLETED')).toBe(false)
   })
   it('admits exactly the Task rows and BLOCKED returns to non-terminal stages', () => {
     for (const from of TASK_STAGES) {

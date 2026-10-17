@@ -179,6 +179,7 @@ EXECUTING ↔ REPLANNING
 | `FINALIZING → READY_FOR_APPROVAL` | 目标分支漂移已合入集成基线并通过最终全量回归；completion gate 全部通过；CompletionReport 生成 |
 | `READY_FOR_APPROVAL → COMPLETED` | 交付 Approval GRANTED（或 policy 不要求）；集成基线合入目标分支（Delivery）成功 |
 | `* → BLOCKED` | Mission 级阻塞：未解决的 blocking Question / Decision / Approval，或预算耗尽 |
+| `BLOCKED → <进入前的状态>` | 阻塞原因解除；目标状态 = `missions.previous_status`，由 MissionController 校验 |
 | `* → FAILED` | 无安全有界恢复路径且用户放弃；须记录原因 |
 
 集成在 `EXECUTING` 期间持续发生（每个 VERIFIED 候选即时入队），`FINALIZING` 只是最终回归与完成门评估。

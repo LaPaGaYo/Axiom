@@ -87,6 +87,7 @@ EXECUTING ↔ REPLANNING
 - Delivery 是动作不是状态：`READY_FOR_APPROVAL →（Delivery）→ COMPLETED`。
 - `READY_FOR_APPROVAL`：等待最终交付 Approval（若 policy 要求）。
 - **Delivery / 交付**：把集成基线合入目标分支的最终动作；成功后进入 `COMPLETED`。
+- `BLOCKED`：阻塞解除（Approval GRANTED / DENIED、Question ANSWERED、预算经 Approval 上调或 replan）后回到进入前的状态；进入前的状态持久化在 `missions.previous_status`（与 `PAUSED` 相同）。
 
 ### 4.2 GoalRevision
 `PROPOSED → ACTIVE → SUPERSEDED`（用户直接编写的 Goal 创建即 ACTIVE；模型提出的修正为 PROPOSED）。Goal 变更 = `MAJOR_REPLAN` 触发。

@@ -24,17 +24,38 @@ describe('Mission objects', () => {
     ).toBe(true)
     const proposal = makeProposal()
     expect(
-      PlanRevisionSchema.safeParse({
+      PlanRevisionSchema.parse({
         id: 'p',
         missionId: 'm',
         revision: 1,
         status: 'PROPOSED',
         goalRevisionId: 'g',
         milestones: proposal.milestones,
-        risks: proposal.risks
-      }).success
-    ).toBe(true)
+        risks: proposal.risks,
+        provenance
+      }).provenance
+    ).toEqual(provenance)
     expect(TaskSpecSchema.safeParse(proposal.tasks[0]).success).toBe(true)
+  })
+  it('rejects PlanRevision with missing or invalid provenance', () => {
+    const revision = {
+      id: 'p',
+      missionId: 'm',
+      revision: 1,
+      status: 'PROPOSED',
+      goalRevisionId: 'g',
+      milestones: [],
+      risks: []
+    }
+    expect(PlanRevisionSchema.safeParse(revision).success).toBe(false)
+    for (const invalid of [
+      null,
+      { ...provenance, kind: 'reviewer' },
+      { ...provenance, actor: '' },
+      { ...provenance, at: 'yesterday' }
+    ]) {
+      expect(PlanRevisionSchema.safeParse({ ...revision, provenance: invalid }).success).toBe(false)
+    }
   })
   it.each([0, 2, -1, 1.5, '1', null])('rejects nestedWorkerMaxDepth=%s', (nestedWorkerMaxDepth) => {
     expect(PolicySchema.safeParse({ ...policy, nestedWorkerMaxDepth }).success).toBe(false)

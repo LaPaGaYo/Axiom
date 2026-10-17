@@ -96,7 +96,19 @@ export const MISSION_TRANSITIONS: Readonly<Record<MissionStatus, readonly Missio
     'FAILED',
     'CANCELED'
   ],
-  BLOCKED: ['PAUSED', 'FAILED', 'CANCELED'],
+  BLOCKED: [
+    'DRAFT',
+    'ANALYZING',
+    'PLAN_REVIEW',
+    'PLANNED',
+    'EXECUTING',
+    'REPLANNING',
+    'FINALIZING',
+    'READY_FOR_APPROVAL',
+    'PAUSED',
+    'FAILED',
+    'CANCELED'
+  ],
   COMPLETED: [],
   FAILED: [],
   CANCELED: []
