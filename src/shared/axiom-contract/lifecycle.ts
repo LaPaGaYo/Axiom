@@ -31,6 +31,7 @@ export const TASK_STAGES = [
   'CANCELED'
 ] as const
 export const REPLAN_LEVELS = ['NO_REPLAN', 'MINOR_ADJUSTMENT', 'MAJOR_REPLAN'] as const
+export const BLOCKING_APPROVAL_ACTION_KINDS = ['budget_increase'] as const
 export const RISK_LEVELS = ['low', 'medium', 'high'] as const
 export const READINESS_THRESHOLDS = ['INTEGRATED', 'VERIFIED'] as const
 export const TASK_DISPOSITIONS = ['inherit', 'cancel', 'rebind'] as const

@@ -145,7 +145,7 @@ describe('generic Task transitions', () => {
           actor,
           reason: 'generic contract'
         })
-      if (TASK_STAGE_TRANSITIONS[from].includes(to)) {
+      if (TASK_STAGE_TRANSITIONS[from].includes(to) && to !== 'RUNNING') {
         action()
         expect(task('T01')).toMatchObject({
           stage: to,

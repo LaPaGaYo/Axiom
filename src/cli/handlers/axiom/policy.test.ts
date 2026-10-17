@@ -60,6 +60,7 @@ describe('mission policy CLI', () => {
             preferredProviders: ['codex'],
             disallowedProviders: [],
             highRiskTier: 'A',
+            providerConcurrency: {},
             models: {}
           }
         }

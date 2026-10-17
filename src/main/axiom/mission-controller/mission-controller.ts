@@ -1,3 +1,4 @@
+import type { ScheduleTrigger } from '../scheduler/scheduler'
 import { randomUUID } from 'node:crypto'
 import type { z } from 'zod'
 import type { PlanProposeParams } from '../../../shared/axiom-contract/plan-params'
@@ -38,11 +39,17 @@ export { MissionControllerError, MISSION_CONTROLLER_ERROR_CODES } from './contro
 // the supplied database, including proposals awaiting approval after restart.
 export class MissionController {
   private readonly ctx: ControllerContext
+  private readonly onScheduleTrigger?: (missionId: string, trigger: ScheduleTrigger) => void
   constructor(
     db: OrchestrationDb,
     store: AxiomStore,
-    deps: { now?: () => string; mintSessionId?: () => string } = {}
+    deps: {
+      now?: () => string
+      mintSessionId?: () => string
+      onScheduleTrigger?: (missionId: string, trigger: ScheduleTrigger) => void
+    } = {}
   ) {
+    this.onScheduleTrigger = deps.onScheduleTrigger
     this.ctx = {
       db,
       store,
@@ -53,6 +60,32 @@ export class MissionController {
 
   private write<T>(operation: string, action: () => T): T {
     return runLifecycleWriteTransaction(this.ctx.db.db, `axiom_${operation}`, action)
+  }
+
+  private scheduleAfterWrite(missionId: string, trigger: ScheduleTrigger): void {
+    if (!this.onScheduleTrigger) {
+      return
+    }
+    if (!this.ctx.db.db.isTransaction) {
+      this.onScheduleTrigger(missionId, trigger)
+      return
+    }
+    // Mailbox/RPC/admission callers may own an outer synchronous transaction.
+    // Wait for that stack to commit and suppress the trigger if it rolled back.
+    const event = this.ctx.store.listAuditEvents({ missionId }).at(-1)
+    if (!event) {
+      return
+    }
+    queueMicrotask(() => {
+      const persisted = this.ctx.store.listAuditEvents({
+        missionId,
+        afterSequence: event.sequence - 1,
+        limit: 1
+      })[0]
+      if (JSON.stringify(persisted) === JSON.stringify(event)) {
+        this.onScheduleTrigger?.(missionId, trigger)
+      }
+    })
   }
 
   createMission(input: CreateMissionInput) {
@@ -95,7 +128,7 @@ export class MissionController {
     return projectTask(this.ctx, requireTask(this.ctx, taskId))
   }
   startExecution(missionId: string) {
-    return this.write('start_execution', () => {
+    const result = this.write('start_execution', () => {
       const mission = requireMission(this.ctx, missionId)
       if (mission.status !== 'PLANNED' && mission.status !== 'EXECUTING') {
         throw new MissionControllerError('illegal_transition', {
@@ -109,6 +142,8 @@ export class MissionController {
       recomputeReadiness(this.ctx, missionId)
       return projectMission(this.ctx, missionId)
     })
+    this.scheduleAfterWrite(missionId, 'mission_start')
+    return result
   }
   pauseMission(missionId: string, reason = 'paused by user') {
     return this.write('pause_mission', () =>
@@ -116,7 +151,11 @@ export class MissionController {
     )
   }
   resumeMission(missionId: string, reason?: string) {
-    return this.write('resume_mission', () => restoreMission(this.ctx, missionId, 'PAUSED', reason))
+    const result = this.write('resume_mission', () =>
+      restoreMission(this.ctx, missionId, 'PAUSED', reason)
+    )
+    this.scheduleAfterWrite(missionId, 'resume')
+    return result
   }
   blockMission(missionId: string, reason: string) {
     return this.write('block_mission', () =>
@@ -124,7 +163,11 @@ export class MissionController {
     )
   }
   unblockMission(missionId: string) {
-    return this.write('unblock_mission', () => restoreMission(this.ctx, missionId, 'BLOCKED'))
+    const result = this.write('unblock_mission', () =>
+      restoreMission(this.ctx, missionId, 'BLOCKED')
+    )
+    this.scheduleAfterWrite(missionId, 'resume')
+    return result
   }
   cancelMission(missionId: string, reason: string) {
     return this.write('cancel_mission', () => {
@@ -141,10 +184,12 @@ export class MissionController {
     })
   }
   transitionTaskStage(input: TransitionTaskInput) {
-    return this.write('transition_task_stage', () => transitionTaskStage(this.ctx, input))
+    const result = this.write('transition_task_stage', () => transitionTaskStage(this.ctx, input))
+    this.scheduleAfterWrite(result.missionId, 'stage_change')
+    return result
   }
   cancelTask(input: { taskId: string; rationale: string; actor: string }) {
-    return this.write('cancel_task', () =>
+    const result = this.write('cancel_task', () =>
       projectTask(
         this.ctx,
         transitionTaskStage(this.ctx, {
@@ -155,9 +200,15 @@ export class MissionController {
         })
       )
     )
+    this.scheduleAfterWrite(result.missionId, 'stage_change')
+    return result
   }
   recomputeReadiness(missionId: string) {
-    return this.write('recompute_readiness', () => recomputeReadiness(this.ctx, missionId))
+    const moved = this.write('recompute_readiness', () => recomputeReadiness(this.ctx, missionId))
+    if (moved.length) {
+      this.scheduleAfterWrite(missionId, 'stage_change')
+    }
+    return moved
   }
   listTasks(input: { missionId: string; stage?: TaskStage }) {
     return listTasks(this.ctx, input)

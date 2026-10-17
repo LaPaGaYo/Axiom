@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   AuditEventSchema,
+  BudgetSchema,
+  RoutingPolicySchema,
   GoalRevisionSchema,
   MissionSchema,
   PlanRevisionSchema,
@@ -164,4 +166,21 @@ describe('Mission objects', () => {
       }).success
     ).toBe(false)
   })
+})
+
+it('validates wall-clock and provider concurrency limits with backward-compatible defaults', () => {
+  expect(BudgetSchema.parse({ maxWallClockMinutes: 0.5 })).toEqual({ maxWallClockMinutes: 0.5 })
+  expect(RoutingPolicySchema.parse({}).providerConcurrency).toEqual({})
+  expect(
+    RoutingPolicySchema.parse({ providerConcurrency: { claude: 2 } }).providerConcurrency
+  ).toEqual({ claude: 2 })
+  for (const value of [0, -1, Infinity]) {
+    expect(BudgetSchema.safeParse({ maxWallClockMinutes: value }).success).toBe(false)
+    expect(RoutingPolicySchema.safeParse({ providerConcurrency: { claude: value } }).success).toBe(
+      false
+    )
+  }
+  expect(RoutingPolicySchema.safeParse({ providerConcurrency: { claude: 1.5 } }).success).toBe(
+    false
+  )
 })
