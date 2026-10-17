@@ -1,5 +1,6 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { PreambleParams } from '../../../../orchestration/preamble'
 import type { RunRow, TaskRow } from '../../../../orchestration/types'
 import type { WorkerStartModeReceipt } from '../../orchestration-worker-start-mode'
 import { deliverWorkerDispatchPreamble } from './deliver-worker-dispatch-preamble'
@@ -28,6 +29,8 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   task: TaskRow
   dispatchId: string
   dispatchDepth: number
+  dispatchMaxDepth?: number
+  preambleBuilder?: (params: PreambleParams) => string
   structuredSession: Awaited<ReturnType<typeof createStructuredWorkerSessionForWorktree>> | null
   terminalHandle: string
   coordinatorHandle: string
@@ -53,6 +56,8 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
     terminalHandle,
     dispatchId: args.dispatchId,
     dispatchDepth: args.dispatchDepth,
+    dispatchMaxDepth: args.dispatchMaxDepth,
+    preambleBuilder: args.preambleBuilder,
     taskId: task.id,
     taskSpec: task.spec,
     coordinatorHandle: args.coordinatorHandle,
