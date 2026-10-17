@@ -1,5 +1,5 @@
 import React from 'react'
-import { BookOpen, CalendarClock, EyeOff, Files, Search, Smartphone } from 'lucide-react'
+import { BookOpen, CalendarClock, EyeOff, Files, Search, Smartphone, Target } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
@@ -55,6 +55,7 @@ const SidebarNav = React.memo(function SidebarNav() {
   // translate() preserves Orca's pseudo-localization behavior.
   useTranslation()
   const worktreePaletteShortcutCombos = useShortcutKeyComboDetails('worktree.palette')
+  const openMissionsPage = useAppStore((s) => s.openMissionsPage)
   const openAutomationsPage = useAppStore((s) => s.openAutomationsPage)
   const openMobilePage = useAppStore((s) => s.openMobilePage)
   const openArtifactsPage = useAppStore((s) => s.openArtifactsPage)
@@ -179,6 +180,20 @@ const SidebarNav = React.memo(function SidebarNav() {
           <HideSidebarMenu onHide={hideSkillsButton} />
         </ContextMenu>
       ) : null}
+      <button
+        type="button"
+        onClick={openMissionsPage}
+        aria-current={activeView === 'missions' ? 'page' : undefined}
+        className={cn(
+          'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
+          activeView === 'missions'
+            ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
+            : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-accent'
+        )}
+      >
+        <Target className="size-4 shrink-0" />
+        {translate('missions.title', 'Missions')}
+      </button>
       {showAutomationsButton ? (
         <ContextMenu>
           <ContextMenuTrigger asChild>

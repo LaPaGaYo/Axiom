@@ -9,13 +9,13 @@ import type {
 } from '../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { RuntimeEnvironmentSubscriptionHandle } from '../runtime-environment-subscriptions'
-import type { PreloadApi } from '../api-types'
+import type { DesktopRuntimeCall, PreloadApi } from '../api-types'
 
 export const runtimeApi = {
   syncWindowGraph: (graph: RuntimeRendererSyncWindowGraph): Promise<RuntimeSyncWindowGraphResult> =>
     ipcRenderer.invoke('runtime:syncWindowGraph', graph),
   getStatus: (): Promise<RuntimeStatus> => ipcRenderer.invoke('runtime:getStatus'),
-  call: (args: { method: string; params?: unknown }): Promise<RuntimeRpcResponse<unknown>> =>
+  call: (args: DesktopRuntimeCall): Promise<RuntimeRpcResponse<unknown>> =>
     ipcRenderer.invoke('runtime:call', args),
   subscribe: async (
     args: { method: string; params?: unknown },

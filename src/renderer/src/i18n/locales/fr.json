@@ -12037,7 +12037,7 @@
           "confirm": "Arrêter le nettoyage"
         },
         "shortcutDefinitionCatalog": {
-          "missionControlConflict": "Bloqué par Mission Control. Remappez ici ou changez-le dans Réglages Système."
+          "missionControlConflict": "Bloqué par macOS system shortcuts. Remappez ici ou changez-le dans Réglages Système."
         },
         "HiddenExperimentalGroup": {
           "7c4e18d2f6": "Arme les gestes de capture audacieux sur cette machine : {{samplingShortcut}} démarre une rafale d'échantillonnage ; {{captureShortcut}} capture les preuves du volet sur le disque.",

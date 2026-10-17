@@ -10,7 +10,7 @@ afterEach(cleanup)
 
 describe('ShortcutCommandBlock', () => {
   it('wraps persistent conflict remediation instead of truncating it', () => {
-    const warning = 'Blocked by Mission Control. Remap here or change it in System Settings.'
+    const warning = 'Blocked by macOS system shortcuts. Remap here or change it in System Settings.'
     const item = getKeybindingDefinition('tab.selectByIndex')
     expect(item).not.toBeNull()
 

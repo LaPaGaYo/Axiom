@@ -1,3 +1,4 @@
+import { createMissionsSlice } from './slices/missions'
 import { create, type StateCreator } from 'zustand'
 import type { AppState } from './types'
 import { createRepoSlice } from './slices/repos'
@@ -76,6 +77,7 @@ export const useAppStore = create<AppState>()(
       // Why: the inner api is only reachable here, before create() copies subscribe onto the hook.
       installStoreListenerCensus(a[2])
       return {
+        ...createMissionsSlice(...a),
         ...createRepoSlice(...a),
         ...createSparsePresetsSlice(...a),
         ...createWorktreeSlice(...a),

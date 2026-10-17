@@ -1,3 +1,4 @@
+import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
 import type {
   ClaudeAccountsApi,
   CodexAccountsApi,
@@ -136,7 +137,9 @@ export type PreloadApi = {
   fs: FilesystemApi['fs']
   git: Merged<GitInspectionApi & GitOperationApi>
   ui: Merged<UiCommandEventApi & UiWindowApi>
-  runtime: RuntimeApi['runtime']
+  runtime: Omit<RuntimeApi['runtime'], 'call'> & {
+    call: (args: DesktopRuntimeCall) => Promise<RuntimeRpcResponse<unknown>>
+  }
   runtimeEnvironments: RuntimeApi['runtimeEnvironments']
   rateLimits: RateLimitsApi
   minimaxCredentials: MinimaxCredentialsApi
@@ -214,5 +217,14 @@ declare global {
   // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
   interface Window {
     api: PreloadApi
+  }
+}
+
+export type DesktopRuntimeCall = {
+  method: string
+  params?: unknown
+  envelope?: {
+    orchestrationContractVersion?: number
+    orchestrationRequestId?: string
   }
 }
