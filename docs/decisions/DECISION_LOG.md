@@ -439,3 +439,11 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 
 **决定**（Henry 2026-10-17，回复"D43确认"——D43 已于 M0 关闭时接受，按上下文记为对本条的确认）：确认上表，**M1 关闭**（Axiom main `4db3ad86c` = M1-10 合入；本条与 D45 的文档提交在其后，fixture `fixture-v1`）。M2 的任务分解随后以 `docs/plans/M2.md` + Decision 提出（Scheduler / AgentSpec / ContextPackage / Attempt / Worker / Submission / Candidate；Planner 接入；admission 扩展）。
 **取代规则**：无。M1 之后发现的 M1 范围内缺口以新的 M1-nn Task 记录并在本条下追加一行，不重开里程碑。
+- **修订 2026-10-17（M1-11）**：首次托管 Axiom CI 运行（run 39055324479，main `0b4a67ced`）的 typecheck job 失败：`src/main/runtime/rpc/methods/ui-state-schema-parity-checks.ts(33,7)` 的值域 parity 断言——M1-09 把 `missions` 加进了 `TopLevelView` 与 `TOP_LEVEL_VIEW_LOOKUP`，没加进 RPC 的 `TopLevelViewSchema`（`src/shared/rpc-contract/client-ui-params.ts`）。本地 launcher 的 `tc:node` 九个 attempt 都是 1 s 的增量运行（stale `config/tsconfig.node.tsbuildinfo`），清缓存后 8 s 即复现同一错误。以 M1-11 修复（一行 + 运行时守卫测试），不重开 M1；流水线侧见 D47。
+
+## D47 · 本地 typecheck 门禁改为清缓存运行（事实记录，2026-10-17）
+
+**背景**：D45 的第一次托管运行就抓到一个本地门禁漏掉的真实类型错误（见 D46 修订行）。原因是三个 tsconfig 都是 `composite`，`config/tsconfig.*.tsbuildinfo` 让 `pnpm tc:*` 在 1 s 内返回，且对跨文件的类型级断言（`AssertNoMissingValues`）没有重新检查。
+**决定**：`.axiom-work/verify.sh` 在三个 typecheck 门之前 `rm -f` 这三个 `tsbuildinfo` 缓存（干净的 `tc:node` 在验证者的 Mac 上 8 s；`verify-merged.sh` 复用同一脚本，自动获得）。托管 `axiom-ci.yml` 的 typecheck job 本来就是干净 checkout，保持不变。
+**后果**：每个 attempt 的验证多出十几秒；M1-01～M1-10 的 typecheck PASS 记录只证明增量检查通过，M1-11 之后才是干净检查。首次托管运行的 lint（3 m 17 s）与 Axiom tests（1 m 18 s）job 绿；typecheck job 在 M1-11 合入后的第二次运行中核验。
+**取代规则**：无。
