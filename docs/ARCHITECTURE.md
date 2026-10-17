@@ -453,6 +453,8 @@ RecoveryService 在启动与周期性运行：
 3. 以 `runs.consumer_generation` 续接 `run:<runId>` mailbox 消费；
 4. Scheduler 完全从 `task_stages` 重算 readiness；不存在需要恢复的内存态。
 
+M1（`src/main/axiom/recovery/recovery-service.ts` 与 `control-plane-boot.ts`）实现步骤 2–4 的 Mission 恢复子集：加载 Mission、校验 Run 绑定、按持久化 generation 续接 mailbox 并重算 readiness（步骤 2 的验证/集成队列与 Approval 尚无 M1 写入者，后续里程碑接入）；步骤 1 的 Attempt reconciliation 留给 M2，当前显式返回 `no_attempts_in_m1`。
+
 ### 16.2 预算（G3）
 | 层级 | 维度 | 执行 |
 |---|---|---|

@@ -11,6 +11,7 @@
  * Chromium proves available at startup.
  */
 import process from 'node:process'
+import { startAxiomControlPlane, stopAxiomControlPlane } from '../axiom/control-plane-boot'
 import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
 import { setSecretStore, type SecretStore } from '../../shared/secret-store'
 import type { ServeReadiness } from '../server/serve-readiness'
@@ -248,6 +249,9 @@ async function startOrcadRuntime(
       }
     }
   })
+
+  startAxiomControlPlane(runtime)
+  getAppEnvironment().onWillQuit(() => stopAxiomControlPlane(runtime))
 
   const { installOrcadSessionSearchService } = await import('./orcad-session-search')
   sessionSearch = await installOrcadSessionSearchService({
