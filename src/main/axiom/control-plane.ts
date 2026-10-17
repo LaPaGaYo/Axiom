@@ -1,4 +1,6 @@
 import path from 'node:path'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { createAttemptLauncher } from './execution/attempt-launcher'
 import { Scheduler } from './scheduler/scheduler'
 import { detectInstalledAgentsWithShellPathHydration } from '../preflight/agent-detection'
 import { AgentFactory } from './agent-factory/agent-factory'
@@ -12,12 +14,12 @@ import type { MissionSummary } from '../../shared/axiom-contract/mission-params'
 import type { TaskListItem } from '../../shared/axiom-contract/task-params'
 import { AxiomStore } from './db/axiom-store'
 import { MissionController } from './mission-controller/mission-controller'
-import { RunMailboxConsumer, type AxiomRuntime } from './mission-controller/run-mailbox-consumer'
+import { RunMailboxConsumer } from './mission-controller/run-mailbox-consumer'
 import { RecoveryService } from './recovery/recovery-service'
 
 const instances = new WeakMap<OrchestrationDb, ReturnType<typeof createControlPlane>>()
 
-export function getAxiomControlPlane(runtime: AxiomRuntime) {
+export function getAxiomControlPlane(runtime: OrcaRuntimeService) {
   const db = runtime.getOrchestrationDb()
   let instance = instances.get(db)
   if (!instance) {
@@ -27,7 +29,7 @@ export function getAxiomControlPlane(runtime: AxiomRuntime) {
   return instance
 }
 
-function createControlPlane(runtime: AxiomRuntime, db: OrchestrationDb) {
+function createControlPlane(runtime: OrcaRuntimeService, db: OrchestrationDb) {
   const store = new AxiomStore(db)
   const artifacts = new ArtifactStore(
     store,
@@ -48,7 +50,7 @@ function createControlPlane(runtime: AxiomRuntime, db: OrchestrationDb) {
     }
   })
   const scheduler = new Scheduler(db, store, missions, contextBuilder, agentFactory, {
-    launch: null
+    launch: createAttemptLauncher({ runtime, db, store, missions, artifacts })
   })
   const recovery = new RecoveryService(db, store, missions)
   // Only process-local cancellation handles are retained; statuses, stages,

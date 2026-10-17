@@ -118,6 +118,7 @@ BLOCKED           → 阻塞解除后回到进入前的 stage（READY / VERIFYIN
 ### 4.6 Attempt（投影，不新建表）
 | Axiom 视图 | 来源 |
 |---|---|
+| `LAUNCH_PENDING` | `attempt_bindings.dispatch_id IS NULL`：admission 已提交，尚未绑定内核 dispatch；`liveness / workspace = null`，恢复由 M2-08 负责 |
 | `STARTING / RUNNING / SUBMITTED / FAILED / STOPPED / ABANDONED / START_UNKNOWN / STOP_UNKNOWN` | Orca `worker_dispatches.state`（`starting→STARTING`、`ready→RUNNING`、`stopping→RUNNING`、`succeeded→SUBMITTED`、`failed`、`stopped`、`abandoned`、`start_unknown`、`stop_unknown`）与 `dispatch_contexts.status`（`circuit_broken` → 视为 FAILED 且触发 B4） |
 | `liveness: live / unverifiable / exited` | `PtyLivenessVerdict`（执行宿主为准） |
 | `workspace: retained / released / pending` | `worker_terminal_resources.release_state`（`retained`、`released`；其余 `not_requested / requested / releasing / unknown` 折叠为 `pending`） |

@@ -4,6 +4,7 @@ export const CLI_COMMAND_NAMES = [
   'agent',
   'agent-context',
   'artifacts',
+  'attempt',
   'automations',
   'back',
   'browser',

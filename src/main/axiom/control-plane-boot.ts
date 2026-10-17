@@ -1,8 +1,8 @@
 import { getAxiomControlPlane } from './control-plane'
-import type { AxiomRuntime } from './mission-controller/run-mailbox-consumer'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RecoveryReport } from './recovery/recovery-service'
 
-export function startAxiomControlPlane(runtime: AxiomRuntime): RecoveryReport | undefined {
+export function startAxiomControlPlane(runtime: OrcaRuntimeService): RecoveryReport | undefined {
   const plane = getAxiomControlPlane(runtime)
   if (plane.started) {
     return
@@ -15,7 +15,7 @@ export function startAxiomControlPlane(runtime: AxiomRuntime): RecoveryReport | 
   return report
 }
 
-export function stopAxiomControlPlane(runtime: AxiomRuntime): void {
+export function stopAxiomControlPlane(runtime: OrcaRuntimeService): void {
   const plane = getAxiomControlPlane(runtime)
   plane.started = false
   for (const consumer of plane.consumers.values()) {

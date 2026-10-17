@@ -18,6 +18,10 @@ it('persists ordered bindings, validates rows, and rolls back sequence allocatio
   expect(f.store.getAttemptBinding('task', 1)).toBeUndefined()
   f.store.insertAttemptBinding(binding)
   expect(f.store.getAttemptBinding('task', 1)).toMatchObject(binding)
+  expect(f.store.bindAttemptDispatch('task', 1, 'd1')).toBe(true)
+  expect(f.store.bindAttemptDispatch('task', 1, 'd2')).toBe(false)
+  expect(f.store.getAttemptBindingByDispatch('d1')).toMatchObject({ ...binding, dispatchId: 'd1' })
+  expect(f.store.getAttemptBindingByDispatch('d2')).toBeUndefined()
   expect(f.store.nextAttemptSeq('task')).toBe(2)
   expect(() => f.store.insertAttemptBinding(binding)).toThrow()
   expect(() =>

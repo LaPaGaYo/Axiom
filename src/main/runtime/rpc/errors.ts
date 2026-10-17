@@ -89,6 +89,9 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
 const COMPUTER_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(Object.values(COMPUTER_ERROR_CODES))
 const LINEAR_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(LINEAR_ERROR_CODES)
 const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
+  'attempt_not_found',
+  'integration_base_unavailable',
+  'target_branch_not_found',
   ...MISSION_CONTROLLER_ERROR_CODES,
   'mission_managed',
   'approval_required',

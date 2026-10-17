@@ -39,6 +39,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/axiom/plan.js')).AXIOM_PLAN_HANDLERS
   },
   {
+    name: 'axiom-attempt',
+    keys: ['attempt show', 'attempt list'],
+    load: async () => (await import('./handlers/axiom/attempt.js')).AXIOM_ATTEMPT_HANDLERS
+  },
+  {
     name: 'axiom-task',
     keys: ['task list', 'task show', 'task cancel'],
     load: async () => (await import('./handlers/axiom/task.js')).AXIOM_TASK_HANDLERS

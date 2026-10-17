@@ -1,3 +1,4 @@
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { vi } from 'vitest'
 import { isOrcaSessionId } from '../../shared/orca-session-address'
 import { RuntimeMessageWaiters } from '../runtime/runtime-message-waiters'
@@ -16,11 +17,13 @@ export function mailboxRuntime(db: OrchestrationDb) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: tests use run: addresses only, which bypass terminal routing; unexpected terminal paths fail loudly.
   const notificationDeps = deps as unknown as Dependencies
   const notifications = new OrchestrationMailboxNotificationCoordinator(notificationDeps)
-  return {
+  const runtime = {
     getOrchestrationDb: () => db,
     waitForMessage: vi.fn(waiters.wait.bind(waiters)),
     notifyMessageArrived: notifications.notifyMessageArrived.bind(notifications)
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: mailbox-only tests do not admit Workers; only the supplied methods are reached.
+  return runtime as typeof runtime & OrcaRuntimeService
 }
 
 export function insertMail(db: OrchestrationDb, runId: string) {

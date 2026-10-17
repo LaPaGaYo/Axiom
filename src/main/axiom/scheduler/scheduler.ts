@@ -28,7 +28,6 @@ export type ScheduleRoundResult = {
   skipped: {
     taskId: string
     reason:
-      | 'launcher_unavailable'
       | 'concurrency'
       | 'provider_concurrency'
       | 'task_attempts'
@@ -57,7 +56,7 @@ export class Scheduler {
     private readonly missions: MissionController,
     private readonly contextBuilder: ContextBuilder,
     private readonly agentFactory: AgentFactory,
-    private readonly deps: { launch: AttemptLaunch | null; now?: () => string }
+    private readonly deps: { launch: AttemptLaunch; now?: () => string }
   ) {
     this.now = deps.now ?? (() => new Date().toISOString())
   }
@@ -162,12 +161,6 @@ export class Scheduler {
       this.store.listTaskStages({ missionId, stage: 'READY' })
     )
     const launch = this.deps.launch
-    if (!launch) {
-      return {
-        admitted: [],
-        skipped: candidates.map((t) => ({ taskId: t.taskId, reason: 'launcher_unavailable' }))
-      }
-    }
     try {
       for (const candidate of candidates) {
         const before = this.store.transaction('scheduler_precheck', () => {

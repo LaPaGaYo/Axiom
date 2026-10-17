@@ -1,3 +1,4 @@
+import { TUI_AGENT_CONFIG } from '../../src/shared/tui-agent-config'
 /**
  * M1 exit on D42's frozen Controlled Acceptance Fixture. The sole permitted
  * skip is AXIOM_FIXTURE_REPO unset; a missing path/tag or wrong commit fails.
@@ -82,6 +83,9 @@ function inspectMission(userData: string, missionId: string) {
       binding: z
         .object({ run_id: z.string(), status: z.string() })
         .parse(db.prepare('SELECT run_id, status FROM missions WHERE id = ?').get(missionId)),
+      attempts: db
+        .prepare('SELECT task_id FROM attempt_bindings WHERE mission_id = ?')
+        .all(missionId),
       lostBindings: db
         .prepare('SELECT actor, event FROM audit_events WHERE mission_id = ? AND event = ?')
         .all(missionId, 'recovery.run_binding_lost')
@@ -191,6 +195,20 @@ test('M1 exit: frozen fixture survives restart and refuses direct Orca mutations
         path.join(clone, 'GOAL.md')
       ])
     )
+    const routingPath = path.join(temp, 'routing.json')
+    writeFileSync(
+      routingPath,
+      JSON.stringify({ disallowedProviders: Object.keys(TUI_AGENT_CONFIG) })
+    )
+    cli(userData, [
+      'mission',
+      'policy',
+      'update',
+      '--mission',
+      mission.id,
+      '--routing-file',
+      routingPath
+    ])
     const shown = MissionResponseSchema.parse(
       cli(userData, ['mission', 'show', '--mission', mission.id])
     )
@@ -216,6 +234,7 @@ test('M1 exit: frozen fixture survives restart and refuses direct Orca mutations
     )
     cli(userData, ['plan', 'approve', '--plan', planRevision.id, '--resolver', 'e2e'])
     cli(userData, ['mission', 'start', '--mission', mission.id])
+    expect(inspectMission(userData, mission.id).attempts).toEqual([])
     const before = snapshot(userData, mission.id)
     const { tasks } = TaskListResponseSchema.parse(before.tasks)
     expect(tasks).toHaveLength(12)
@@ -282,6 +301,7 @@ test('M1 exit: frozen fixture survives restart and refuses direct Orca mutations
     expect(JSON.stringify(snapshot(userData, mission.id))).toBe(JSON.stringify(before))
     expect(inspectMission(userData, mission.id)).toEqual({
       binding: inspection.binding,
+      attempts: [],
       lostBindings: []
     })
     expect(await missionUi(second.page, mission.id, goalText)).toEqual(beforeUi)
