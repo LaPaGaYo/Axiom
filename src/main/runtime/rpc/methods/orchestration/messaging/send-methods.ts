@@ -1,4 +1,4 @@
-import { assertWorkerMessageAllowed } from '../../../../../axiom/admission/mission-managed-run-guard'
+import { assertNotMissionManaged, assertWorkerMessageAllowed } from '../../../../../axiom/admission/mission-managed-run-guard'
 import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { isGroupAddress } from '../../../../orchestration/groups'
@@ -201,6 +201,7 @@ export const ORCHESTRATION_SEND_METHODS = [
           withSendWarnings
         })
       }
+      assertNotMissionManaged(runtime, { runId: routing.run?.id, from, verb: 'orchestration.send(group)' })
       return sendGroupMessage({
         params,
         runtime,

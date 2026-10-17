@@ -78,7 +78,7 @@ Axiom 八种 → Orca `messages.type`（仅路由/授权语义；产品类型持
 | Axiom | Orca `type` | 为什么选它 |
 |---|---|---|
 | `INFORM` | `status` | 无生命周期副作用；`reconcileLifecycleMessage` 对其 `ignored` |
-| `REQUEST` / `BLOCKED` / `REQUEST_SUBTASK` | `escalation` | `isDispatchMutationMessageType`（`src/shared/rpc-contract/orchestration-params.ts`）为真 → `send` 走 `resolveLifecycleAuthority`，免费获得 capability/assignee 校验；不能发给群组 |
+| `REQUEST` / `BLOCKED` / `REQUEST_SUBTASK` | `escalation` | M2-06a 在 `axiom.attempt.*` 先走共享 `resolveAttemptSender`，再由 MessageRouter 插入；不经内核 send 的生命周期结算，不发给群组 |
 | `QUESTION` | `question`（Attempt 级，经 `orchestration.ask` 建 `question_threads`）；Task 级另建 `decision_gates` | 见 §3e |
 | `DECISION` | `status`（正文在 `decisions` 表） | Control Plane → Attempt mailbox 的通知 |
 | `HANDOFF` | `handoff` | 无副作用；Axiom 在 RPC 层自行校验 capability |
@@ -97,6 +97,14 @@ Orca 九种类型在 Axiom 中的用途：
 | `decision_gate` | 仅 Control Plane 在开 Task 级 gate 时使用；Worker 禁用 |
 | `question` | QUESTION 载体（经 `ask`） |
 | `heartbeat` | 执行内核 liveness 信号，不是产品消息类型；保留 5 分钟节奏（`preamble.ts` `HEARTBEAT_INTERVAL_MIN = 5`），写 `dispatch_contexts.last_heartbeat_at` |
+
+M2-06a 的严格载荷契约在 `src/shared/axiom-contract/message-params.ts`（`AxiomMessagePayloadSchema`）；八种 D9 映射由 `axiomMessageRoutingType` 返回，Orca CHECK 枚举不变：
+
+```json
+{"axiom":{"version":1,"type":"HANDOFF","missionId":"mission-id","taskId":"task-id","attemptId":"dispatch-id","summary":"Evidence ready","artifactIds":["artifact-id"],"related":{"taskIds":["downstream-task-id"]}}}
+```
+
+`related` 可含 taskIds / decisionId / artifactId。仅 REQUEST_SUBTASK 必须附 `subtask:{title,objective,allowedPaths,acceptanceCriteria,requiredEvidence,risk}`，其它类型禁止该字段。summary ≤ 2,000 字符；Artifact 与显式 Task 引用必须属于同 Mission。Mission/Task 身份来自 capability 所属 binding，Worker params 没有 to/type/missionId。Control Plane 副本发给 `run:<runId>`，INFORM/HANDOFF 另发直接下游（或非空显式 taskIds）最新 dispatched Attempt 的 `dispatch:<id>`；其 threadId 为 Control Plane 副本 id。详见 `control-plane.md` §6 Worker channel / §8。
 
 ### 3d. liveness 三词汇与来源类型
 
@@ -150,6 +158,12 @@ M1 已使用 Run 创建、Task 物化、收据和 Run mailbox；下表的 Attemp
 | `orchestration.runUse --takeover-legacy` / 重绑 coordinator | 会 `unbindOtherRunsForPane`、bump `consumer_generation` | `runs/runs.ts` handler：Mission Run 禁止被终端接管 | `assertNotMissionManaged` → `runs/runs.ts`（`runUse`，`getRun` 后、`bindRun` 前；任何 flags 都拒绝） |
 | `orchestration.run` / `runStop`、CLI `orchestration coordinator-start` | 已退役：`RETIRED_ORCHESTRATION_METHODS`（`src/shared/orchestration-rpc-contract.ts`）→ `orchestration_migration_required(command_retired)`；CLI 在 `src/cli/handlers/orchestration/dispatch-handlers.ts:69` | 无需处理；文档中不再提「coordinator」 | 沿用 `rpc/orchestration-contract-fence.ts`；`admission/admission-rpc.test.ts` 验证两种 Run 均保持退役拒绝 |
 | `taskCreate` 带 `deps` | 会让 `promoteReadyTasks` 生效 | Mission Run 内 RPC taskCreate 一律拒绝（含空 deps） | `assertTaskCreateAllowed` → `messaging/message-methods.ts`（`taskCreate`，Run 解析后；RPC 即使无 deps 也拒绝，只有 `axiom.plan.approve` 物化 Task + stage） |
+| `workerStop` / `workerAbandon`（M2-06a） | 终止/放弃 Attempt，绕过 Control Plane | `worker/worker-stop.ts` / `worker-control.ts`，首次写入前 | dispatchId → `assertNotMissionManaged`；`admission-worker-control.test.ts` |
+| `workerRelease` / `workerRetain` / `workerTerminalUserInput`（M2-06a） | 改变资源所有权、释放或保留终端 | `worker/worker-release.ts`；input 先解析 pane/session/handle | dispatch 或 pane 关联的资源 → 同一守卫；覆盖已结算资源与 remint，`admission-worker-control.test.ts` |
+| `orchestration.ask`（M2-06a） | 创建 question_threads，绕过 typed Worker channel | `messaging/ask-methods.ts`，activeDispatch 后、createQuestion 前 | dispatchId → 同一守卫；`admission-rpc.test.ts` |
+| `orchestration.reply`（M2-06a） | 直接读标记/回答，绕过 Control Plane answer | `messaging/message-methods.ts`，原消息解析后、markAsRead/answerQuestion 前 | original.run_id + 发送者 Run → 同一守卫；`admission-rpc.test.ts` |
+| `orchestration.send` 群组（M2-06a） | @all / @worktree 等广播绕过对象关系路由 | `messaging/send-methods.ts`，sendGroupMessage 前 | routing.run / sender Run → 同一守卫，verb 为 `orchestration.send(group)`；`admission-rpc.test.ts` |
+| `workerStart --on <environment>`（M2-06a 测试） | federation 远端派发越过 Scheduler | 沿用 `worker/workers.ts` 的既有 workerStart guard | 无代码更改；`admission-rpc.test.ts` 验证 Mission 在 federation 前拒绝，非 Mission 到达 federation seam |
 
 M1 出口第 3 条证据：`src/main/axiom/admission/mission-managed-run-guard.test.ts`、`admission-rpc.test.ts`、`admission-run.test.ts`、`admission-message.test.ts` 覆盖全表及非 Mission 对照。task-update / worker-start 的三层拒绝依次是：CLI 无终端身份时，`src/cli/handlers/orchestration/terminal-identity.ts` 的 `resolveCoordinatorTerminalHandle` 抛 `no_active_sender_terminal`（尚未发送 mutation RPC）；runtime Run 绑定解析返回 `run_required` / `consumer_fenced`；Mission 守卫返回 `mission_managed`（绑定 coordinator 的 RPC 测试覆盖）。出口 e2e `tests/e2e/mission-exit-m1.spec.ts` 要求三动词拒绝且全部 Mission/Task 快照不变，只接受上述固定集合；reset 仍仅接受 `mission_managed`。
 
@@ -179,9 +193,9 @@ M1-06 已注册下表标记「M1 已注册」的方法；其余方法留待后�
 | `axiom.task.create` | missionId、spec、edges、rationale（`MINOR_ADJUSTMENT`/FIX_TASK） | 同 approve 的物化路径 | M |
 | `axiom.task.cancel`（M1 已注册） | taskId、authorized rationale | `CANCELED`；活跃 Attempt stop/abandon 留给 M2 | M |
 | `axiom.attempt.submit` | attemptId、taskId、report（summary/filesChanged/checksRun/artifacts/limitations/questions/followUps） | §5 编号步骤 | M |
-| `axiom.attempt.inform` / `request` / `blocked` / `handoff` / `requestSubtask` | attemptId、正文、相关 id | `verifyDispatchCapability` → `insertMessage`（§3c 类型）→ MessageRouter | M |
+| `axiom.attempt.inform` / `request` / `blocked` / `handoff` / `request-subtask`（M2-06a 已注册） | attemptId、from、summary、body?、artifactIds、related；子任务另有 subtask | `resolveAttemptSender` → MessageRouter（§3c），原子 mail / message.sent / mutation receipt | M |
 | `axiom.attempt.ask` | attemptId、question、options、timeoutMs / resume | 复用 `createQuestion` + 长轮询；`answerQuestion` 由 `axiom.message.answer` 触发 | M |
-| `axiom.attempt.check` | attemptId、ack? | 读 `dispatch:<attemptId>` mailbox；带 `ack` 时为 M | —/M |
+| `axiom.attempt.check`（M2-06a 已注册） | attemptId、from、wait?、timeoutMs?、type? | 同一 authority check → 内核 checkWorkerMailbox；保留 generation fence / 长轮询，不开放 ack | — |
 | `axiom.attempt.show` / `list` | attemptId / missionId、taskId? | M2-05 已注册：§3b fleet 状态/资源 + 执行宿主 liveness 投影；CLI `axiom attempt show/list` | — |
 | `axiom.attempt.stop` / `abandon` | attemptId、reason | 委托 `workerStop`/`workerAbandon` service | M |
 | `axiom.verification.list` / `show` | candidateId / verificationRunId | 无 | — |
@@ -192,7 +206,8 @@ M1-06 已注册下表标记「M1 已注册」的方法；其余方法留待后�
 | `axiom.approval.list` / `grant` / `deny` / `revoke` | missionId / approvalId、resolver、note | `approvals.status`；grant 后单次 CONSUMED | —/M/M/M |
 | `axiom.decision.propose` / `accept` / `reject` / `list` / `show` | missionId、decision 正文、provenance | `decisions`；accept 发 DECISION 通知 | M/M/M/—/— |
 | `axiom.artifact.put` / `read` / `list`（M2-02 已注册） | put：missionId、kind、contentBase64（≤8 MiB）、mediaType、related、createdBy；read：id；list：missionId、kind?、relatedTo? | 原子内容寻址写入 + `artifacts` 元数据；read 校验 hash；CLI 挂 `mission artifact`，无新顶层命令 | M/—/— |
-| `axiom.message.list` / `send` / `answer` | missionId、taskId?、attemptId?、type? / 目标 attemptId / questionMessageId、body | `send`→`insertMessage` 到 `dispatch:<id>`；`answer`→`answerQuestion` | —/M/M |
+| `axiom.message.list`（M2-06a 已注册） | missionId、type?、taskId?、attemptId?、pendingOnly? | 同 Run 的严格 typed messages，sequence 升序；subtask.resolved 前 REQUEST_SUBTASK 为 pending | — |
+| `axiom.message.send` / `answer`（后续） | 目标 attemptId / questionMessageId、body | `send`→`insertMessage` 到 `dispatch:<id>`；`answer`→`answerQuestion` | M/M |
 | `axiom.policy.show` / `update` | missionId、patch | 预算上调走 Approval | —/M |
 
 注册 5 步：(1) zod params 放 `src/shared/axiom-contract/<ns>-params.ts`（catalog 生成器只索引 `src/shared/**` 且被 `src/main/runtime/rpc/**` 相对导入的模块）；(2) `AXIOM_<NS>_METHODS = [defineMethod({ name: 'axiom.ns.verb', params, handler: (p, { runtime, orchestrationCapability }) => … })]` 放 `src/main/runtime/rpc/methods/axiom/<ns>.ts`，聚合为 `AXIOM_METHODS`（`methods/axiom.ts`）；(3) `...AXIOM_METHODS` 加入 `ALL_RPC_METHODS`（启动即验重名）；(4) `pnpm generate:rpc-params-catalog` 重新生成 `src/shared/rpc-contract/rpc-params-catalog.generated.ts`，`pnpm verify:rpc-params-catalog`（`pnpm lint` 内）必须通过；(5) CLI：spec 放 `src/cli/specs/axiom*.ts`，handler 放 `src/cli/handlers/axiom/`，顶层命令名加入 `CLI_COMMAND_NAMES`（`src/main/startup/cli-command-names.ts`，需保持排序；`src/cli/cli-command-name-parity.test.ts` 校验与 `COMMAND_SPECS` 一致）。

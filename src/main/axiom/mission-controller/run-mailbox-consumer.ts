@@ -2,6 +2,7 @@ import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { MessageRow } from '../../runtime/orchestration/types'
 import { OrchestrationError } from '../../runtime/orchestration/orchestration-error'
 import { TERMINAL_MISSION_STATUSES } from '../../../shared/axiom-contract/lifecycle'
+import { parseAxiomMessagePayload } from '../../../shared/axiom-contract/message-params'
 import type { AxiomStore } from '../db/axiom-store'
 import type { MissionController } from './mission-controller'
 
@@ -120,22 +121,51 @@ export class RunMailboxConsumer {
       const seen = new Set(
         this.store
           .listAuditEvents({ missionId: this.identity.missionId })
-          .filter((event) => event.event === 'mailbox.message')
+          .filter(
+            (event) => event.event === 'mailbox.message' || event.event === 'message.received'
+          )
           .map((event) => event.objectId)
       )
       for (const message of messages) {
         if (seen.has(message.id)) {
           continue
         }
-        this.store.appendAuditEvent({
+        const parsed = parseAxiomMessagePayload(message.payload)
+        const axiom = parsed?.axiom.missionId === this.identity.missionId ? parsed.axiom : undefined
+        const audit = {
           missionId: this.identity.missionId,
           actor: 'MissionController',
           objectKind: 'message',
           objectId: message.id,
-          event: 'mailbox.message',
-          before: null,
-          after: { runId: this.identity.runId, type: message.type }
+          before: null
+        }
+        const after = axiom
+          ? {
+              type: axiom.type,
+              taskId: axiom.taskId,
+              attemptId: axiom.attemptId,
+              messageId: message.id
+            }
+          : undefined
+        this.store.appendAuditEvent({
+          ...audit,
+          event: axiom ? 'message.received' : 'mailbox.message',
+          after: after ?? { runId: this.identity.runId, type: message.type }
         })
+        if (axiom?.type === 'REQUEST_SUBTASK' && axiom.subtask && after) {
+          this.store.appendAuditEvent({
+            ...audit,
+            event: 'subtask.requested',
+            after: { ...after, subtask: axiom.subtask }
+          })
+        }
+        if (axiom?.type === 'BLOCKED') {
+          this.store.appendAuditEvent({
+            ...audit,
+            event: 'attempt.blocked_reported',
+            after: after!
+          })
+        }
         seen.add(message.id)
       }
       this.missions.recomputeReadiness(this.identity.missionId)

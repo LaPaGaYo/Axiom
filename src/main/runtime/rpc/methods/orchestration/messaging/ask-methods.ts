@@ -1,4 +1,5 @@
 import { defineMethod } from '../../../core'
+import { assertNotMissionManaged } from '../../../../../axiom/admission/mission-managed-run-guard'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { clampOrchestrationAskTimeoutMs } from '../../../../../../shared/orchestration-ask-timeout'
 import { isGroupAddress } from '../../../../orchestration/groups'
@@ -54,6 +55,7 @@ export const ORCHESTRATION_ASK_METHODS = [
           'ask requires an active supervised Dispatch.'
         )
       }
+      assertNotMissionManaged(runtime, { dispatchId: activeDispatch.id, verb: 'orchestration.ask' })
       if (activeDispatch.capability_hash) {
         const authority = db.verifyDispatchCapability({
           dispatchId: activeDispatch.id,

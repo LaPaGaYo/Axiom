@@ -40,7 +40,9 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'axiom-attempt',
-    keys: ['attempt show', 'attempt list'],
+    keys: 'show list inform request blocked handoff request-subtask check'
+      .split(' ')
+      .map((verb) => `attempt ${verb}`),
     load: async () => (await import('./handlers/axiom/attempt.js')).AXIOM_ATTEMPT_HANDLERS
   },
   {

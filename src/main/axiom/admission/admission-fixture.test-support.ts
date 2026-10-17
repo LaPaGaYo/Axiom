@@ -12,7 +12,8 @@ export function admissionFixture(managed = true, bindTerminal = true) {
   const kernel = createOrchestrationWorkerReleaseHarness()
   kernel.setup()
   const { db, runtime } = kernel
-  const { missions, store } = getAxiomControlPlane(runtime)
+  const { missions, store, scheduler } = getAxiomControlPlane(runtime)
+  vi.spyOn(scheduler, 'scheduleRound').mockResolvedValue({ admitted: [], skipped: [] })
   let runId = kernel.activeRunId
   let missionId: string | undefined
   if (managed) {
@@ -61,6 +62,8 @@ export function admissionFixture(managed = true, bindTerminal = true) {
       'runs',
       'messages',
       'decision_gates',
+      'question_threads',
+      'worker_terminal_resources',
       'mission_task_edges',
       'audit_events'
     ].map((table) => db.db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all())
