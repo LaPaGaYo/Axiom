@@ -49,6 +49,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
       if (!original) {
         throw new Error(`Message not found: ${params.id}`)
       }
+      assertNotMissionManaged(runtime, { runId: original.run_id, from: params.from, verb: 'orchestration.reply' })
       if (
         legacyCoordinatorRunId &&
         (original.run_id !== legacyCoordinatorRunId ||

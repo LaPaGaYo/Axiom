@@ -1,4 +1,5 @@
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import { assertNotMissionManaged } from '../../../../../axiom/admission/mission-managed-run-guard'
 import { defineMethod } from '../../../core'
 import { describeUnconfirmedAgentStop } from '../../../../../../shared/pty-liveness-verdict'
 import { ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
@@ -19,6 +20,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
     handler: (params, { runtime, orchestrationMutation }) =>
       dedupeWorkerStop(runtime, params.dispatch, async () => {
         const db = runtime.getOrchestrationDb()
+        assertNotMissionManaged(runtime, { dispatchId: params.dispatch, verb: 'orchestration.workerStop' })
         const federated = db.getFederatedDispatch(params.dispatch)
         if (federated) {
           if (!orchestrationMutation) {

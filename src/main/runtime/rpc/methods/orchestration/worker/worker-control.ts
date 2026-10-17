@@ -1,4 +1,5 @@
 import { contextOnlyAbandonWarning } from '../../../../orchestration/context-only-dispatch-release'
+import { assertNotMissionManaged } from '../../../../../axiom/admission/mission-managed-run-guard'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineMethod } from '../../../core'
 import {
@@ -197,6 +198,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
     name: 'orchestration.workerAbandon',
     params: WorkerDispatchParams,
     handler: (params, { runtime }) => {
+      assertNotMissionManaged(runtime, { dispatchId: params.dispatch, verb: 'orchestration.workerAbandon' })
       const abandoned = runtime.getOrchestrationDb().abandonWorkerDispatch(params.dispatch)
       if (abandoned.disposition === 'context_only') {
         if (!abandoned.alreadySettled) {

@@ -16,6 +16,8 @@ describe('Axiom RPC namespace', () => {
       'axiom.namespace.get',
       'axiom.attempt.show',
       'axiom.attempt.list',
+      'axiom.attempt.check',
+      'axiom.message.list',
       'axiom.mission.show',
       'axiom.mission.list',
       'axiom.goal.show',

@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import * as federation from '../../runtime/rpc/methods/orchestration/federation/federated-worker-start'
 import { admissionFixture } from './admission-fixture.test-support'
 
 describe('§4b Mission admission through real RPC envelopes', () => {
@@ -7,6 +8,118 @@ describe('§4b Mission admission through real RPC envelopes', () => {
 
   for (const managed of [true, false]) {
     const outcome = managed ? 'refuses Mission' : 'allows plain Run'
+    it(`${outcome} workerStart --on before federation`, async () => {
+      f = admissionFixture(managed)
+      const start = vi
+        .spyOn(federation, 'startFederatedWorker')
+        .mockRejectedValue(new Error('federation boundary'))
+      const before = f.snapshot()
+      const result = await f.call('workerStart', {
+        from: 'term_coord',
+        task: f.task.id,
+        run: f.runId,
+        on: 'remote',
+        agent: 'codex'
+      })
+      if (managed) {
+        f.refusal(result, 'workerStart')
+        expect(start).not.toHaveBeenCalled()
+      } else {
+        expect(result).toMatchObject({ ok: false, error: { message: 'federation boundary' } })
+        expect(start).toHaveBeenCalledTimes(1)
+      }
+      expect(f.snapshot()).toEqual(before)
+    })
+    it(`${outcome} ask with a live dispatch`, async () => {
+      f = admissionFixture(managed)
+      f.db.createDispatchContext({
+        taskId: f.task.id,
+        assigneeHandle: 'term_worker',
+        assigneePaneKey: f.workerPaneKey,
+        creator: { kind: 'system' },
+        maxDepth: 1
+      })
+      const before = f.snapshot()
+      const result = await f.call('ask', {
+        from: 'term_worker',
+        question: 'Continue?',
+        timeoutMs: 1
+      })
+      if (managed) {
+        f.refusal(result, 'ask')
+        expect(f.snapshot()).toEqual(before)
+      } else {
+        expect(result).toMatchObject({ ok: true, result: { timedOut: true } })
+      }
+    })
+    it.each(['plain', 'question'])(`${outcome} reply to %s message`, async (kind) => {
+      f = admissionFixture(managed)
+      const dispatch = f.db.createDispatchContext({
+        taskId: f.task.id,
+        assigneeHandle: 'term_worker',
+        assigneePaneKey: f.workerPaneKey,
+        creator: { kind: 'system' },
+        maxDepth: 1
+      })
+      const message =
+        kind === 'question'
+          ? f.db.createQuestion({
+              runId: f.runId,
+              dispatchId: dispatch.id,
+              askerHandle: 'term_worker',
+              question: 'Continue?',
+              options: []
+            }).message
+          : f.db.insertMessage({
+              from: 'term_worker',
+              to: `run:${f.runId}`,
+              runId: f.runId,
+              subject: 'Update'
+            })
+      const before = f.snapshot()
+      const result = await f.call('reply', {
+        from: 'term_coord',
+        id: message.id,
+        body: 'Yes',
+        run: f.runId
+      })
+      if (managed) {
+        f.refusal(result, 'reply')
+        expect(f.snapshot()).toEqual(before)
+      } else {
+        expect(result.ok).toBe(true)
+      }
+    })
+    it.each(['@all', '@worktree:repo::worktree'])(`${outcome} group send %s`, async (to) => {
+      f = admissionFixture(managed)
+      f.db.createDispatchContext({
+        taskId: f.task.id,
+        assigneeHandle: 'term_worker',
+        assigneePaneKey: f.workerPaneKey,
+        creator: { kind: 'system' },
+        maxDepth: 1
+      })
+      vi.spyOn(f.runtime, 'listTerminals').mockResolvedValue({
+        terminals: [],
+        totalCount: 0,
+        truncated: false
+      })
+      const before = f.snapshot()
+      const result = await f.call('send', {
+        from: 'term_coord',
+        to,
+        subject: 'Broadcast',
+        type: 'status'
+      })
+      if (managed) {
+        f.refusal(result, 'send(group)')
+        expect(f.snapshot()).toEqual(before)
+      } else if (to.startsWith('@worktree:')) {
+        expect(result).toMatchObject({ ok: false, error: { code: 'terminal_not_found' } })
+      } else {
+        expect(result.ok).toBe(true)
+      }
+    })
     it(`${outcome} taskUpdate completed (M1 exit criterion 2)`, async () => {
       f = admissionFixture(managed)
       const before = f.snapshot()
@@ -167,6 +280,29 @@ describe('§4b Mission admission through real RPC envelopes', () => {
       }),
       'taskUpdate',
       { taskId: f.task.id }
+    )
+    expect(f.snapshot()).toEqual(before)
+  })
+
+  it('refuses reply from a Mission worker into a plain Run', async () => {
+    f = admissionFixture()
+    f.db.createDispatchContext({
+      taskId: f.task.id,
+      assigneeHandle: 'term_worker',
+      assigneePaneKey: f.workerPaneKey,
+      creator: { kind: 'system' },
+      maxDepth: 1
+    })
+    const message = f.db.insertMessage({
+      from: 'external',
+      to: 'term_worker',
+      runId: f.activeRunId,
+      subject: 'Cross-Run reply'
+    })
+    const before = f.snapshot()
+    f.refusal(
+      await f.call('reply', { from: 'term_worker', id: message.id, body: 'No bypass' }),
+      'reply'
     )
     expect(f.snapshot()).toEqual(before)
   })

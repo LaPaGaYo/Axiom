@@ -1,4 +1,5 @@
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import { assertNotMissionManaged } from '../../../../../axiom/admission/mission-managed-run-guard'
 import { defineMethod } from '../../../core'
 import { releaseFederatedWorker } from '../federation/federated-worker-release'
 import { ORCHESTRATION_WORKER_LIST_METHOD } from './worker-list-method'
@@ -17,6 +18,7 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
     params: WorkerDispatchParams,
     handler: async (params, { runtime, orchestrationMutation }): Promise<WorkerReleaseReceipt> => {
       const db = runtime.getOrchestrationDb()
+      assertNotMissionManaged(runtime, { dispatchId: params.dispatch, verb: 'orchestration.workerRelease' })
       const federated = db.getFederatedDispatch(params.dispatch)
       if (federated) {
         if (!orchestrationMutation) {
@@ -88,6 +90,7 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
     params: WorkerRetainParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
+      assertNotMissionManaged(runtime, { dispatchId: params.dispatch, verb: 'orchestration.workerRetain' })
       const retained = db.retainWorkerTerminalResource(params.dispatch)
       if (retained.disposition === 'already_released') {
         return {
@@ -145,6 +148,7 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
         (params.sessionId
           ? runtime.getStructuredWorkerPaneKeyForSession(params.sessionId)
           : runtime.getTerminalPaneKey(params.terminal!))
+      assertNotMissionManaged(runtime, { paneKey, verb: 'orchestration.workerTerminalUserInput' })
       const changed = paneKey
         ? runtime.getOrchestrationDb().markWorkerTerminalUserOwned(paneKey)
         : 0

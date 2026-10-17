@@ -12,8 +12,15 @@ import {
   ArtifactPutParams,
   ArtifactReadParams
 } from '../axiom-contract/artifact-params'
-import { AttemptListParams, AttemptShowParams } from '../axiom-contract/attempt-params'
+import {
+  AttemptBlockedParams,
+  AttemptCheckParams,
+  AttemptListParams,
+  AttemptRequestSubtaskParams,
+  AttemptShowParams
+} from '../axiom-contract/attempt-params'
 import { GoalActivateParams, GoalProposeParams } from '../axiom-contract/goal-params'
+import { MessageListParams } from '../axiom-contract/message-params'
 import {
   MissionCancelParams,
   MissionCreateParams,
@@ -641,11 +648,18 @@ export const RPC_PARAMS_BY_METHOD = {
   'axiom.artifact.list': ArtifactListParams,
   'axiom.artifact.put': ArtifactPutParams,
   'axiom.artifact.read': ArtifactReadParams,
+  'axiom.attempt.blocked': AttemptBlockedParams,
+  'axiom.attempt.check': AttemptCheckParams,
+  'axiom.attempt.handoff': AttemptBlockedParams,
+  'axiom.attempt.inform': AttemptBlockedParams,
   'axiom.attempt.list': AttemptListParams,
+  'axiom.attempt.request': AttemptBlockedParams,
+  'axiom.attempt.request-subtask': AttemptRequestSubtaskParams,
   'axiom.attempt.show': AttemptShowParams,
   'axiom.goal.activate': GoalActivateParams,
   'axiom.goal.propose': GoalProposeParams,
   'axiom.goal.show': GoalActivateParams,
+  'axiom.message.list': MessageListParams,
   'axiom.mission.cancel': MissionCancelParams,
   'axiom.mission.create': MissionCreateParams,
   'axiom.mission.list': MissionListParams,

@@ -1,4 +1,5 @@
 import { AXIOM_ATTEMPT_METHODS } from './axiom/attempt'
+import { AXIOM_MESSAGE_METHODS } from './axiom/message'
 import { AXIOM_POLICY_METHODS } from './axiom/policy'
 import { AXIOM_ARTIFACT_METHODS } from './axiom/artifact'
 import { namespaceMethod } from '../../../axiom/namespace-rpc'
@@ -10,6 +11,7 @@ import { AXIOM_TASK_METHODS } from './axiom/task'
 export const AXIOM_METHODS = [
   namespaceMethod,
   ...AXIOM_ATTEMPT_METHODS,
+  ...AXIOM_MESSAGE_METHODS,
   ...AXIOM_MISSION_METHODS,
   ...AXIOM_GOAL_METHODS,
   ...AXIOM_PLAN_METHODS,

@@ -8,6 +8,7 @@ import { taskGraphStore } from './task-graph-store'
 import { artifactsStore } from './artifacts-store'
 import { agentSpecsStore } from './agent-specs-store'
 import { policyAuditStore } from './policy-audit-store'
+import { messagesStore } from './messages-store'
 
 type AttemptBindings = ReturnType<typeof attemptBindingsStore>
 
@@ -20,6 +21,7 @@ type PolicyAudit = ReturnType<typeof policyAuditStore>
 
 // One injected store; table modules keep SQL and validation within the file-size gate.
 export class AxiomStore {
+  readonly listMessages: ReturnType<typeof messagesStore>['listMessages']
   readonly insertAttemptBinding: AttemptBindings['insertAttemptBinding']
   readonly bindAttemptDispatch: AttemptBindings['bindAttemptDispatch']
   readonly getAttemptBindingByDispatch: AttemptBindings['getAttemptBindingByDispatch']
@@ -73,6 +75,7 @@ export class AxiomStore {
   readonly getContextTokenBudget: Artifacts['getContextTokenBudget']
 
   constructor(private readonly db: OrchestrationDb) {
+    this.listMessages = messagesStore(db).listMessages
     const bindings = attemptBindingsStore(db)
     this.insertAttemptBinding = bindings.insertAttemptBinding
     this.bindAttemptDispatch = bindings.bindAttemptDispatch

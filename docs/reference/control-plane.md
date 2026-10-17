@@ -1,4 +1,4 @@
-# Control Plane 子系统参考（M1 + M2-05）
+# Control Plane 子系统参考（M1 + M2-06a）
 
 更新：2026-10-17 · 适用：M1-01～M1-09 已合入的 Mission Facade；M1-10 出口证据另见 [M1-exit-e2e.md](../review-evidence/axiom-m1/M1-exit-e2e.md)。
 规范权威仍是 [Constitution](../PROJECT_CONSTITUTION.md) §1、ACCEPTED Decisions、[Glossary](../GLOSSARY.md) §4 与 [Architecture](../ARCHITECTURE.md)；本文定位实现，不新增权威或状态。
@@ -177,9 +177,28 @@ CLI `src/cli/runtime/client.ts` 为 `axiom.*` 打版本戳，为 durable mutatio
 
 CLI JSON 输出是 `{ ok, result, ... }` / `{ ok:false, error:{code,...}, ... }`；单对象 result 用 `mission` / `goalRevision` / `planRevision` / `task`，列表用 `missions` / `planRevisions` / `tasks`。MissionSummary 不包含 Run id；TaskListItem 的 `id` 是 Orca Task id，不是提案 id。
 
+### Worker channel（M2-06a，D9 / D11 / D16）
+
+已注册五个 mutation：`axiom.attempt.inform` / `request` / `blocked` / `handoff` / `request-subtask`。参数为 `{attemptId, from, senderPaneKey?, summary, body?, artifactIds?, related?, subtask?}`；只有 `request-subtask` 接受且必须带 `subtask`。严格 schema 不接受 `to`、自报 `type` 或 Mission/Task 身份。summary 与可选 body 各 ≤ 2,000 字符；较长内容先 `axiom mission artifact put`，再引用 Artifact id。`artifactIds` / `related.artifactId` 必须属于同 Mission，显式 `related.taskIds` 必须属于同 Mission，否则 `invalid_argument`，不写消息或审计。
+
+`execution/attempt-authority.ts` 在写入前按以下顺序校验（六动词共用）：
+
+1. dispatch 不存在 → `unknown_dispatch`；没有 `attempt_bindings` → `unknown_dispatch`。
+2. dispatch 非 `dispatched` → `inactive_dispatch`。
+3. 同 Task 存在更高 seq（包括尚未绑定 dispatch 的 admission）→ `stale_dispatch`。
+4. 由 runtime 与 `orchestrationCallerIdentity` 解析 sender，调用内核 `verifyDispatchCapability`；缺失、错误、撤销的 capability 或 pane/process 不匹配 → `dispatch_capability_invalid`，保留内核 reason。
+5. 内核 `hasLifecycleAuthority` 失败 → `sender_not_assignee`；外来 pane 会先返回 `dispatch_capability_invalid`，因为 `verifyDispatchCapability` 已在 `hasLifecycleAuthority` 之前强制校验 pane 等价性，`sender_not_assignee` 仅保留给缺少 `assignee_pane_key` 的 legacy row 的 handle 鉴权回退（仍须先通过 capability 校验）。
+6. binding、Task、Mission、Run 关联不一致 → `task_dispatch_mismatch`。
+
+CLI `axiom attempt <verb> --attempt <id> --dispatch-capability <token> --summary <text>` 支持 `--body` / `--body-file`（互斥）、可重复 `--artifact` / `--related-task`；子任务另需 `--title --objective --allowed-path --acceptance --evidence`，risk 默认 low。from 复用 `resolveOrchestrationTerminalHandle`（`--from` / `ORCA_TERMINAL_HANDLE`），pane metadata 来自 `ORCA_PANE_KEY`；runtime 自行解析 pane，不信任该参数授予权限。capability 放 envelope，mutation 复用 `callOrchestrationMutation` 与 `--retry-request <原 UUID>`。失败的新请求不留收据；已完成请求沿用内核回放语义，同 id + 同 params 不重复写入，改变 params → `request_mismatch`。
+
+`axiom.attempt.check {attemptId, from, senderPaneKey?, wait?, timeoutMs?, type?}` 是 read，不进 mutation 集合；鉴权后调用 `checkWorkerMailbox` 读取 `dispatch:<attemptId>`。type 是内核路由类型（可逗号分隔），保留 delivery replay、generation fence 与长轮询。CLI 为等待显式加 10 秒 transport grace；不新增 ack 参数，返回内核 deliveryId 等证据。
+
+`axiom.message.list {missionId, type?, taskId?, attemptId?, pendingOnly?}` 是 read，按 messages.sequence 从旧到新返回 `{messages:[{id,type,taskId,attemptId,summary,artifactIds,related,subtask?,createdAt,pending}]}`。读取 Mission Run 的全部严格 Axiom 载荷（包括投递副本），跳过普通/非法载荷；`REQUEST_SUBTASK` 在没有同 Mission、`objectKind: message`、`objectId: messageId` 的 `subtask.resolved` 审计时为 pending。M2-06b 写 resolution，本 Task 不创建 Task。
+
 ## 7. Admission 守卫（映射 §4b）
 
-`mission-managed-run-guard.ts` 按 Run、Task、dispatch 查 Mission 归属，在对象解析后、首次写入前拒绝。非 Mission Run 保持原行为；未知对象保持原错误。以下路径均在 M1-07 落地：
+`mission-managed-run-guard.ts` 按 Run、Task、dispatch 查 Mission 归属，在对象解析后、首次写入前拒绝。非 Mission Run 保持原行为；未知对象保持原错误。以下路径在 M1-07 / M2-06a 落地：
 
 | Orca 入口 | 守卫 / RPC 文件（`src/main/runtime/rpc/methods/` 下） |
 |---|---|
@@ -191,6 +210,14 @@ CLI JSON 输出是 `{ ok, result, ... }` / `{ ok:false, error:{code,...}, ... }`
 | gateCreate / gateResolve | `assertNotMissionManaged`；`orchestration/gates/gates.ts` |
 | runUse，包括 takeover-legacy | `assertNotMissionManaged`；`orchestration/runs/runs.ts`；bindRun 前拒绝 |
 | run / runStop / coordinator-start | 保持退役；契约 fence / CLI dispatch-handlers 拒绝 |
+| workerStop / workerAbandon（M2-06a） | `assertNotMissionManaged`；`orchestration/worker/worker-stop.ts` / `worker-control.ts`，首次 stop/abandon 前 |
+| workerRelease / workerRetain / workerTerminalUserInput（M2-06a） | `orchestration/worker/worker-release.ts`；输入先解析 pane（含 session/handle），守卫查资源的 dispatch，覆盖已结算保留资源与 pane remint |
+| ask（M2-06a） | `orchestration/messaging/ask-methods.ts`；activeDispatch 解析后，createQuestion 前；Worker ask 由 M2-06b 提供 |
+| reply（M2-06a） | `orchestration/messaging/message-methods.ts`；原消息 run_id 与发送者 Run 两侧检查，markAsRead / answerQuestion 前 |
+| send(group)，含 @all / @worktree（M2-06a） | `orchestration/messaging/send-methods.ts`；路由与发送者 Run 检查，sendGroupMessage 前 |
+| workerStart --on（M2-06a 测试） | 沿用 `worker/workers.ts` 的 M1-07 守卫；测试证明 federation 前拒绝，无新增内核代码 |
+
+M2-06a 的 `admission-worker-control.test.ts` 与 `admission-rpc.test.ts` 覆盖上述入口的 Mission/非 Mission 对照。Control Plane 后续 stop/abandon 调用走 service 边界；进程内 `caller: 'control_plane'` 不对 RPC params 开放。
 
 完整测试为 `src/main/axiom/admission/{mission-managed-run-guard,admission-rpc,admission-run,admission-message}.test.ts`。task-update / worker-start 有三层拒绝：CLI 无终端身份时，`src/cli/handlers/orchestration/terminal-identity.ts` 的 `resolveCoordinatorTerminalHandle` 先抛 `no_active_sender_terminal`，尚未发送 mutation RPC；进入 runtime 后，Run 绑定解析可返回 `run_required` / `consumer_fenced`；到达 Mission 守卫后返回 `mission_managed`，由 M1-07 绑定 coordinator 的 RPC 测试覆盖。不能为取得某个错误码而给终端接管合成 Run。
 
@@ -202,7 +229,11 @@ M2-04：MissionController 在 startExecution 提交后触发 mission_start；res
 
 `RunMailboxConsumer` 先注册 exclusive waiter 再 drain backlog，避免读空到订阅之间丢唤醒；waiter 的独占仅限进程。`getOrCreateRunDelivery` 与 `acknowledgeRunDelivery` 用启动时捕获的 generation 栅栏，不能重读并采用别人的新 generation。
 
-一批消息在 store 事务内按 message id 查 `audit_events` 去重，写 `mailbox.message`，重算 readiness，成功后才 ack。语义是 at-least-once delivery + 幂等效果，不能先 ack 再处理。处理失败留下批次以供重放；M1 固定退避 250ms、扫描 Mission audit 去重，M2 需评估消息量和有界 retry/escalation。`consumer_fenced` 写 `mailbox.consumer_fenced`，将 Mission BLOCKED 并停止消费者。
+一批消息在 store 事务内按 message id 查 `audit_events` 去重：普通载荷写 `mailbox.message`，合法同 Mission 的 `payload.axiom` 改写 `message.received`；两种事件共同作为去重依据。重算 readiness，成功后才 ack。语义是 at-least-once delivery + 幂等效果，不能先 ack 再处理。处理失败留下批次以供重放；仍采用固定退避 250ms、扫描 Mission audit 去重，消息量增长后需评估索引与有界 retry/escalation。`consumer_fenced` 写 `mailbox.consumer_fenced`，将 Mission BLOCKED 并停止消费者。
+
+M2-06a `MessageRouter` 在 `store.transaction('message_route', …)` 内写 Control Plane 副本、下游副本与 `message.sent`（含 type/taskId/attemptId/recipients），并保存 mutation receipt；提交后向每个收件地址 `notifyMessageArrived`。Control Plane 地址必须为 `run:<runId>`：M1-08 的 `getOrCreateRunDelivery` 不消费 coordinator 的 `session:<id>` 直邮。INFORM/HANDOFF 默认只投 sender Task 的直接下游最新且 dispatched 的 Attempt；非空 `related.taskIds` 替换默认受众。REQUEST/BLOCKED/REQUEST_SUBTASK 只投 Control Plane；所有副本以 Control Plane 消息 id 为 threadId，从不使用群组地址。
+
+`message.received.after = {type, taskId, attemptId, messageId}`；REQUEST_SUBTASK 在同事务另写 `subtask.requested.after = {...ids, subtask}`，作为 D50 step 1 的可查询待决项；BLOCKED 另写 `attempt.blocked_reported`。这三个事件的 objectKind 都是 message，objectId 是收到的消息 id，重放不重复记录。BLOCKED 只是 Worker 报告，在 M2 不改 Task stage 或 Attempt：Worker 仍可能运行，后续 RecoveryService / submit 才结算。
 
 `startAxiomControlPlane` 在桌面 `src/main/startup/main-process-runtime-service.ts` 与 daemon `src/main/orcad/orcad-entry.ts` 接入。每次启动先 `RecoveryService.recover()`，再为 ANALYZING / PLAN_REVIEW / PLANNED / EXECUTING 启消费者；boot 幂等，quit 停止全部消费者。create/start/resume/unblock 同步启动，pause/block/cancel 停止；持久状态不依赖这些内存句柄。
 
@@ -243,4 +274,4 @@ axiom attempt show --attempt <dispatchId> --json
 
 后续边界按 Architecture §20 排序：M2-02/03/04 已提供 AgentSpec/ContextPackage、RulesEngine、Scheduler 与预算 admission；M2-05 已接 Attempt launcher/读接口；M2 后续增加 Planner、Worker 通道、Submission/Candidate；M3 加独立验证与 NEEDS_FIX；M4 加串行集成、Approval、Delivery/完成门及全对象恢复；M5 加完整 replanning 与可替换决策模型；M6 才覆盖远端扩展。
 
-M2 还需将 workerStop/Abandon/Release/Retain/TerminalUserInput、ask/reply、跨 Run 群发与 federation 纳入 admission 评审，并在出口 e2e 加 Attempt、submission 和可到达时的 bound-coordinator `mission_managed` 路径。M1 出口验证不能替代这些后续证据。
+M2-06a 已补 §7 的 admission 入口；M2-06b 实现 ask/answer、D50 确定性检查、task.create 与 message.resolve；M2-07 实现 submit；M2-10 将待决项接入 Mission Home。出口 e2e 仍需覆盖 Attempt、submission 与 bound-coordinator `mission_managed` 路径；单元/RPC 证据不替代宿主验证。

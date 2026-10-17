@@ -1,5 +1,48 @@
 import { GLOBAL_FLAGS, type CommandSpec } from '../args'
 export const AXIOM_ATTEMPT_COMMAND_SPECS: CommandSpec[] = [
+  ...['inform', 'request', 'blocked', 'handoff', 'request-subtask'].map((verb): CommandSpec => ({
+    path: ['attempt', verb],
+    summary: `Send a typed Worker ${verb} message`,
+    usage: `axiom attempt ${verb} --attempt <id> --dispatch-capability <token> --summary <text> [--body <text> | --body-file <path>] [--artifact <id>] [--related-task <id>]${verb === 'request-subtask' ? ' --title <text> --objective <text> --allowed-path <path> --acceptance <text> --evidence <text> [--risk low|medium|high]' : ''} [--json]`,
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'attempt',
+      'from',
+      'dispatch-capability',
+      'retry-request',
+      'summary',
+      'body',
+      'body-file',
+      'artifact',
+      'related-task',
+      ...(verb === 'request-subtask'
+        ? ['title', 'objective', 'allowed-path', 'acceptance', 'evidence', 'risk']
+        : [])
+    ],
+    repeatableFlags: [
+      'artifact',
+      'related-task',
+      ...(verb === 'request-subtask' ? ['allowed-path', 'acceptance', 'evidence'] : [])
+    ],
+    notes: [
+      'Detailed content belongs in an Artifact. Summary and optional body are limited to 2,000 characters.'
+    ]
+  })),
+  {
+    path: ['attempt', 'check'],
+    summary: 'Read the current Attempt mailbox',
+    usage:
+      'axiom attempt check --attempt <id> --dispatch-capability <token> [--wait] [--timeout-ms <n>] [--type <routing-type>] --json',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'attempt',
+      'from',
+      'dispatch-capability',
+      'wait',
+      'timeout-ms',
+      'type'
+    ]
+  },
   {
     path: ['attempt', 'show'],
     summary: 'Show an Attempt and execution evidence',
