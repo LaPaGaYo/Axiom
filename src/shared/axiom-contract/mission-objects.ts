@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { isTuiAgent } from '../tui-agent-config'
 import { requiredString } from '../rpc-contract/rpc-param-primitives'
 import {
   GoalRevisionStatusSchema,
@@ -62,7 +63,8 @@ export const BudgetSchema = z.strictObject({
   maxRuntimeMinutes: z.number().positive().optional(),
   maxAttempts: z.number().int().positive().optional(),
   maxTokens: z.number().int().nonnegative().optional(),
-  maxCostUsd: z.number().nonnegative().optional()
+  maxCostUsd: z.number().nonnegative().optional(),
+  contextTokens: z.number().int().positive().optional()
 })
 
 export const TaskSpecSchema = z.object({
@@ -124,7 +126,17 @@ export const AuditEventSchema = z.object({
   createdAt: Text
 })
 
+export const TuiAgentIdSchema = z.string().refine(isTuiAgent, 'unknown provider')
+export const RoutingPolicySchema = z.strictObject({
+  preferredProviders: z.array(TuiAgentIdSchema).default([]),
+  disallowedProviders: z.array(TuiAgentIdSchema).default([]),
+  highRiskTier: z.enum(['A']).default('A'),
+  models: z.record(z.string(), z.string()).default({})
+})
+export const DEFAULT_ROUTING_POLICY = RoutingPolicySchema.parse({})
+
 export const PolicySchema = z.object({
+  routing: RoutingPolicySchema.default(DEFAULT_ROUTING_POLICY),
   concurrencyLimit: z.number().int().positive(),
   budget: BudgetSchema,
   readinessThreshold: ReadinessThresholdSchema.default('INTEGRATED'),
@@ -149,6 +161,7 @@ export type Policy = z.infer<typeof PolicySchema>
 
 // Shared M1 defaults; budgets other than maxAttempts are enforced by M2 admission.
 export const DEFAULT_MISSION_POLICY: Policy = {
+  routing: DEFAULT_ROUTING_POLICY,
   concurrencyLimit: 3,
   budget: {},
   readinessThreshold: 'INTEGRATED',

@@ -79,7 +79,8 @@ CREATE TABLE IF NOT EXISTS agent_specs (
   permissions TEXT NOT NULL DEFAULT '{}',
   budget TEXT NOT NULL DEFAULT '{}',
   workspace_strategy TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  spec TEXT NOT NULL DEFAULT '{}'
 );
 CREATE TABLE IF NOT EXISTS attempt_bindings (
   task_id TEXT NOT NULL,
@@ -205,7 +206,8 @@ CREATE TABLE IF NOT EXISTS mission_policies (
   -- // Why: v43 is unreleased; v42 opens create this whole table, so no ALTER TABLE is needed.
   unverifiable_tolerance_minutes INTEGER NOT NULL DEFAULT 30,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  routing TEXT NOT NULL DEFAULT '{}'
 );
 CREATE TABLE IF NOT EXISTS audit_events (
   sequence INTEGER PRIMARY KEY AUTOINCREMENT,

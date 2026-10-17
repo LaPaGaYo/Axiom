@@ -11,6 +11,7 @@ import {
 import { MissionStatusSchema, TaskStageSchema } from '../../../shared/axiom-contract/lifecycle'
 import { readJson } from './row-codec'
 import { AuditRowSchema } from './audit-rows'
+import { AgentSpecRowSchema } from './agent-spec-rows'
 import { ArtifactRowSchema, ContextPackageRowSchema, DecisionRowSchema } from './artifact-rows'
 export { AuditRowCodec } from './audit-rows'
 export { ArtifactRowCodec, ContextPackageRowCodec, DecisionRowCodec } from './artifact-rows'
@@ -187,6 +188,7 @@ export const PolicyRowSchema = z.object({
   mission_id: AxiomIdSchema,
   concurrency_limit: PolicySchema.shape.concurrencyLimit,
   budget: z.string(),
+  routing: z.string(),
   readiness_threshold: PolicySchema.shape.readinessThreshold,
   approval_rules: z.string(),
   verification_rules: z.string(),
@@ -196,14 +198,19 @@ export const PolicyRowSchema = z.object({
 })
 export const PolicyRowCodec = PolicyRowSchema.transform((row) =>
   PolicySchema.parse({
+    routing: readJson(
+      PolicySchema.shape.routing,
+      row.routing,
+      'mission_policies',
+      row.mission_id,
+      'routing'
+    ),
     concurrencyLimit: row.concurrency_limit,
     readinessThreshold: row.readiness_threshold,
     nestedWorkerMaxDepth: row.nested_worker_max_depth,
     unverifiableToleranceMinutes: row.unverifiable_tolerance_minutes,
     budget: readJson(
-      PolicySchema.shape.budget
-        .extend({ contextTokens: z.number().int().nonnegative().optional() })
-        .transform(({ contextTokens: _contextTokens, ...budget }) => budget),
+      PolicySchema.shape.budget,
       row.budget,
       'mission_policies',
       row.mission_id,
@@ -228,6 +235,7 @@ export const PolicyRowCodec = PolicyRowSchema.transform((row) =>
 
 // Enumerate the validated row keys, never a wildcard; schema tests pin these to migrated DDL.
 export const AXIOM_COLUMNS = {
+  agent_specs: Object.keys(AgentSpecRowSchema.shape).join(', '),
   missions: Object.keys(MissionRowSchema.shape).join(', '),
   goal_revisions: Object.keys(GoalRowSchema.shape).join(', '),
   plan_revisions: Object.keys(PlanRowSchema.shape).join(', '),

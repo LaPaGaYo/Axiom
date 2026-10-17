@@ -91,6 +91,8 @@ const LINEAR_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(LINEAR_ERROR_CODES
 const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   ...MISSION_CONTROLLER_ERROR_CODES,
   'mission_managed',
+  'approval_required',
+  'no_eligible_provider',
   WORKTREE_CREATE_COLLISION_CODE,
   'worktree_id_requires_full_path',
   'run_not_found',

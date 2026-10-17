@@ -1,4 +1,8 @@
 import path from 'node:path'
+import { detectInstalledAgentsWithShellPathHydration } from '../preflight/agent-detection'
+import { AgentFactory } from './agent-factory/agent-factory'
+import { PROVIDER_SELECTION_RULES } from './agent-factory/provider-selection'
+import { RulesEngine } from './decision-engine/rules-engine'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { ArtifactStore } from './artifacts/artifact-store'
 import { ContextBuilder } from './context-builder/context-builder'
@@ -29,6 +33,12 @@ function createControlPlane(runtime: AxiomRuntime, db: OrchestrationDb) {
     path.join(getAppEnvironment().getPath('userData'), 'axiom', 'artifacts')
   )
   const contextBuilder = new ContextBuilder(store, artifacts)
+  const decisionEngine = new RulesEngine(PROVIDER_SELECTION_RULES)
+  const agentFactory = new AgentFactory(
+    store,
+    decisionEngine,
+    detectInstalledAgentsWithShellPathHydration
+  )
   const missions = new MissionController(db, store)
   const recovery = new RecoveryService(db, store, missions)
   // Only process-local cancellation handles are retained; statuses, stages,
@@ -38,6 +48,8 @@ function createControlPlane(runtime: AxiomRuntime, db: OrchestrationDb) {
     store,
     artifacts,
     contextBuilder,
+    agentFactory,
+    decisionEngine,
     missions,
     recovery,
     consumers,

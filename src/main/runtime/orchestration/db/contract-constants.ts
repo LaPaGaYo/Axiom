@@ -20,4 +20,5 @@ export const CURRENT_CONTRACT_VERSION = ORCHESTRATION_CONTRACT_VERSION
 // v41: derive outstanding deliveries from unread messages.
 // v42: structured-session Orca session id columns.
 // v43: Axiom Control Plane side tables (missions … audit_events).
-export const SCHEMA_VERSION = 43
+// v44: canonical AgentSpec and Mission routing policy JSON.
+export const SCHEMA_VERSION = 44

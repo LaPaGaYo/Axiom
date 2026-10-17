@@ -12,7 +12,8 @@ import {
   DecisionRowCodec
 } from './axiom-rows'
 import { ContextPackageRecordSchema, DecisionStatusSchema } from './artifact-rows'
-import { readJson, readRow, readRows } from './row-codec'
+import { readRow, readRows } from './row-codec'
+import { policyAuditStore } from './policy-audit-store'
 
 const InsertArtifact = ArtifactMetaSchema.omit({ createdAt: true })
 const InsertContext = ContextPackageRecordSchema.omit({ createdAt: true })
@@ -110,22 +111,7 @@ export function artifactsStore(db: OrchestrationDb) {
       )
     },
     getContextTokenBudget(missionId: string) {
-      // M2 reads this optional JSON extension; the shared policy mutation contract stays unchanged.
-      const row = readRow(
-        z.object({ budget: z.string() }),
-        db.db
-          .prepare('SELECT budget FROM mission_policies WHERE mission_id = ?')
-          .get(AxiomIdSchema.parse(missionId))
-      )
-      return row
-        ? readJson(
-            z.object({ contextTokens: z.number().int().nonnegative().optional() }),
-            row.budget,
-            'mission_policies',
-            missionId,
-            'budget'
-          ).contextTokens
-        : undefined
+      return policyAuditStore(db).getPolicy(missionId)?.budget.contextTokens
     }
   }
 }

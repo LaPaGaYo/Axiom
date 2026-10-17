@@ -1,3 +1,4 @@
+import { AXIOM_POLICY_HANDLERS } from './policy'
 import { AXIOM_ARTIFACT_HANDLERS } from './artifact'
 import type { CommandHandler } from '../../dispatch'
 import { getRequiredStringFlag as required, getOptionalStringFlag as optional } from '../../flags'
@@ -8,6 +9,7 @@ import { callAxiom } from './rpc-command'
 
 export const AXIOM_MISSION_HANDLERS: Record<string, CommandHandler> = {
   ...AXIOM_ARTIFACT_HANDLERS,
+  ...AXIOM_POLICY_HANDLERS,
   'mission create': async (ctx) => {
     const params = {
       repo: required(ctx.flags, 'repo'),
