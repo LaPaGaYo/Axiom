@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { BLOCKING_APPROVAL_ACTION_KINDS } from '../../../shared/axiom-contract/lifecycle'
 import {
   AuditEventSchema,
   AxiomIdSchema,
@@ -44,6 +45,16 @@ export function policyAuditStore(db: OrchestrationDb) {
           p.unverifiableToleranceMinutes,
           JSON.stringify(p.routing)
         )
+    },
+    hasBlockingApproval(missionId: string): boolean {
+      return (
+        db.db
+          .prepare(`SELECT 1 FROM approvals
+        WHERE mission_id = ? AND status = 'PENDING'
+          AND action_kind IN (SELECT value FROM json_each(?)) LIMIT 1`)
+          .get(AxiomIdSchema.parse(missionId), JSON.stringify(BLOCKING_APPROVAL_ACTION_KINDS)) !==
+        undefined
+      )
     },
     getPolicy(missionId: string) {
       const key = AxiomIdSchema.parse(missionId)

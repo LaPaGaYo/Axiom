@@ -61,6 +61,7 @@ export const PlanRiskSchema = z.object({
 // Limits are data only; admission and approved-budget comparisons belong to the Control Plane.
 export const BudgetSchema = z.strictObject({
   maxRuntimeMinutes: z.number().positive().optional(),
+  maxWallClockMinutes: z.number().positive().optional(),
   maxAttempts: z.number().int().positive().optional(),
   maxTokens: z.number().int().nonnegative().optional(),
   maxCostUsd: z.number().nonnegative().optional(),
@@ -131,6 +132,7 @@ export const RoutingPolicySchema = z.strictObject({
   preferredProviders: z.array(TuiAgentIdSchema).default([]),
   disallowedProviders: z.array(TuiAgentIdSchema).default([]),
   highRiskTier: z.enum(['A']).default('A'),
+  providerConcurrency: z.record(z.string(), z.number().int().positive()).default({}),
   models: z.record(z.string(), z.string()).default({})
 })
 export const DEFAULT_ROUTING_POLICY = RoutingPolicySchema.parse({})

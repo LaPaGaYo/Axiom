@@ -104,6 +104,8 @@ describe('Axiom Mission RPC through the dispatcher', () => {
     const result = z.object({ tasks: z.array(TaskListItemSchema) }).parse(tasks.result)
     expect(result.tasks).toHaveLength(12)
     expect(result.tasks.filter((t) => t.stage === 'READY')).toHaveLength(3)
+    expect(result.tasks.filter((t) => t.stage === 'RUNNING')).toEqual([])
+    expect(f.store.listAttemptBindings({ missionId: mission.id })).toEqual([])
     expect(result.tasks.every((t) => t.orcaStatus === 'ready')).toBe(true)
   })
 

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { attemptBindingsStore } from './attempt-bindings-store'
 import type { OrchestrationDb } from '../../runtime/orchestration/db/orchestration-db'
 import { runLifecycleWriteTransaction } from '../../runtime/orchestration/db/lifecycle-write-transaction-runner'
 import { missionsStore } from './missions-store'
@@ -7,6 +8,8 @@ import { taskGraphStore } from './task-graph-store'
 import { artifactsStore } from './artifacts-store'
 import { agentSpecsStore } from './agent-specs-store'
 import { policyAuditStore } from './policy-audit-store'
+
+type AttemptBindings = ReturnType<typeof attemptBindingsStore>
 
 type Missions = ReturnType<typeof missionsStore>
 type Revisions = ReturnType<typeof revisionsStore>
@@ -17,6 +20,13 @@ type PolicyAudit = ReturnType<typeof policyAuditStore>
 
 // One injected store; table modules keep SQL and validation within the file-size gate.
 export class AxiomStore {
+  readonly insertAttemptBinding: AttemptBindings['insertAttemptBinding']
+  readonly getAttemptBinding: AttemptBindings['getAttemptBinding']
+  readonly listAttemptBindings: AttemptBindings['listAttemptBindings']
+  readonly nextAttemptSeq: AttemptBindings['nextAttemptSeq']
+  readonly hasPendingQuestionForTask: AttemptBindings['hasPendingQuestionForTask']
+  readonly countRunningTasksForProvider: AttemptBindings['countRunningTasksForProvider']
+
   readonly updateRunObjective: Missions['updateRunObjective']
   readonly insertMission: Missions['insertMission']
   readonly getMission: Missions['getMission']
@@ -43,6 +53,7 @@ export class AxiomStore {
   readonly listUpstreamEdges: TaskGraph['listUpstreamEdges']
   readonly listDownstreamEdges: TaskGraph['listDownstreamEdges']
   readonly upsertPolicy: PolicyAudit['upsertPolicy']
+  readonly hasBlockingApproval: PolicyAudit['hasBlockingApproval']
   readonly getPolicy: PolicyAudit['getPolicy']
   readonly appendAuditEvent: PolicyAudit['appendAuditEvent']
   readonly listAuditEvents: PolicyAudit['listAuditEvents']
@@ -60,6 +71,13 @@ export class AxiomStore {
   readonly getContextTokenBudget: Artifacts['getContextTokenBudget']
 
   constructor(private readonly db: OrchestrationDb) {
+    const bindings = attemptBindingsStore(db)
+    this.insertAttemptBinding = bindings.insertAttemptBinding
+    this.getAttemptBinding = bindings.getAttemptBinding
+    this.listAttemptBindings = bindings.listAttemptBindings
+    this.nextAttemptSeq = bindings.nextAttemptSeq
+    this.hasPendingQuestionForTask = bindings.hasPendingQuestionForTask
+    this.countRunningTasksForProvider = bindings.countRunningTasksForProvider
     const specs = agentSpecsStore(db)
     this.insertAgentSpec = specs.insertAgentSpec
     this.getAgentSpec = specs.getAgentSpec
@@ -102,6 +120,7 @@ export class AxiomStore {
     this.listDownstreamEdges = graph.listDownstreamEdges
     const policyAudit = policyAuditStore(db)
     this.upsertPolicy = policyAudit.upsertPolicy
+    this.hasBlockingApproval = policyAudit.hasBlockingApproval
     this.getPolicy = policyAudit.getPolicy
     this.appendAuditEvent = policyAudit.appendAuditEvent
     this.listAuditEvents = policyAudit.listAuditEvents

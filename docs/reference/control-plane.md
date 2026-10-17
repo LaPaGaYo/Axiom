@@ -1,4 +1,4 @@
-# Control Plane 子系统参考（M1 + M2-03）
+# Control Plane 子系统参考（M1 + M2-04）
 
 更新：2026-10-17 · 适用：M1-01～M1-09 已合入的 Mission Facade；M1-10 出口证据另见 [M1-exit-e2e.md](../review-evidence/axiom-m1/M1-exit-e2e.md)。
 规范权威仍是 [Constitution](../PROJECT_CONSTITUTION.md) §1、ACCEPTED Decisions、[Glossary](../GLOSSARY.md) §4 与 [Architecture](../ARCHITECTURE.md)；本文定位实现，不新增权威或状态。
@@ -21,6 +21,7 @@ Execution Kernel 继续拥有 Run、Orca Task、dispatch、PTY、进程、worktr
 | `src/main/axiom/context-builder/` | M2-02：七节强制集、确定性依赖 Artifact 排序、预算裁剪、脱敏、canonical manifest 和 Worker prompt template |
 | `src/main/axiom/agent-factory/` | M2-03：先过滤，再由 RulesEngine 排序；生成 worker/planner AgentSpec，在同一事务持久化合同与选择审计，不启动进程 |
 | `src/main/axiom/decision-engine/` | M2-03：闭集 choose/score/classify/rank 接口与确定性 RulesEngine；只能建议，不能修改 eligibility 或权威状态 |
+| `src/main/axiom/scheduler/` | `scheduler.ts` 逐轮从数据库排序/校验并事务性 admission；`critical-path.ts` 计算最长下游链；`admission-blockers.ts` 真查 Question/Approval；`admission-budget.ts` 校验 Mission 总 Attempts/wall-clock；typed launch seam 在 M2-05 注入 |
 | `src/main/axiom/admission/` | `mission-managed-run-guard.ts` 阻止 Orca RPC 修改 Mission 对象；四组测试固定 §4b 拦截 |
 | `src/main/axiom/recovery/` | `recovery-service.ts` 恢复非终态 Mission、检查绑定、重算 readiness；Attempt 恢复尚为空钩子 |
 | `src/main/axiom/control-plane.ts` | 按 `OrchestrationDb` WeakMap 缓存 store/controller/recovery/artifacts/contextBuilder/agentFactory/decisionEngine，维护进程内消费者取消句柄并接入生命周期 |
@@ -48,7 +49,7 @@ Execution Kernel 继续拥有 Run、Orca Task、dispatch、PTY、进程、worktr
 | `audit_events` | 使用：只追加的 sequence、actor、object、event、before/after、时间；mailbox 幂等依据 |
 | `agent_specs` | M2-03 已写/读：v44 `spec` 存 canonical 完整合同，id = `spec_` + sha256；标量索引与合同必须一致 |
 | `context_packages` | M2-02 已写/读：canonical manifest、预算；`mandatory_refs` = `[manifestArtifactId, renderArtifactId]`，`ranked_refs` = 已纳入候选 Artifact id |
-| `attempt_bindings` | 表已建；M2 关联 Task 序号、branch、dispatch、AgentSpec、ContextPackage（D6a） |
+| `attempt_bindings` | M2-04 admission 写/读：Task 序号、branch、AgentSpec、ContextPackage；`dispatch_id = NULL`，由 M2-05 launch 创建 dispatch 后回填（D6a） |
 | `submissions` | 表已建；M2 submit 形成不可变 Worker 报告 |
 | `candidates` | 表已建；M2 由 Control Plane 固定 commit/tree，Worker 不能自封候选 |
 | `artifacts` | M2-02 已写/读：Mission、kind、sha256、size、media type、related ids、createdBy；内容只存 `<userData>/axiom/artifacts/<sha256>` |
@@ -57,7 +58,7 @@ Execution Kernel 继续拥有 Run、Orca Task、dispatch、PTY、进程、worktr
 | `integration_batches` | 表已建；M4 串行集成使用 |
 | `approvals` | 表已建；M4 ApprovalGateway 使用，不复用 decision gate |
 
-Milestone 存在 Plan JSON 内，没有独立表/状态机。Attempt 身份仍等于 Orca dispatch id，不存在 Axiom Attempt 表。M2-02 启用 Artifact/ContextPackage 写入和 Decision 读取；M2-03 启用 AgentSpec 写入和 policy routing 更新；其余后续表目前只有建表和清理支持，不能把表存在当成产品能力已完成。
+Milestone 存在 Plan JSON 内，没有独立表/状态机。Attempt 身份仍等于 Orca dispatch id，不存在 Axiom Attempt 表。M2-02 启用 Artifact/ContextPackage 写入和 Decision 读取；M2-03 启用 AgentSpec 写入和 policy routing 更新；M2-04 启用 attempt_bindings 写入与阻塞 Approval/Question 读取；其余后续表目前只有建表和清理支持，不能把表存在当成产品能力已完成。
 
 `create-tables.ts` 每次打开执行幂等 DDL，`SCHEMA_VERSION=44`；9 个查询索引、3 个删除触发器沿用 additive 模式。Task 删除清理 stage/边/binding，dispatch 删除仅清空 binding 的 dispatch 引用，Run 删除清理所属 Mission side rows。没有声明外键；v44 仅为 agent_specs.spec 与 mission_policies.routing 加列（TEXT NOT NULL DEFAULT '{}'），hasColumn 防止重复 ALTER，版本化探针从 v44 起检查这两列，v43 与更高版本降级路径保持透明。详细列见映射 §6。
 
@@ -115,9 +116,32 @@ M1 仅允许首个 Plan 批准。`plan-materialization.ts` 校验共享 schema�
 1. Mission 为 EXECUTING，Task 所属 Plan 为同 Mission 的 APPROVED revision。
 2. 每条上游边来自同 Mission/Plan；默认阈值需要 INTEGRATED；VERIFIED 阈值接受 VERIFIED、INTEGRATION_READY、INTEGRATED。
 3. Task `attemptCount < retryPolicy.maxAttempts`，Mission policy 存在；配置了 `budget.maxAttempts` 时，Mission 总 attempt count 尚未耗尽。
-4. 无阻塞 Question/Approval。M1 的 `blockingQuestionOrApproval()` 明确返回 `none`，因为没有这些写入者；M2 admission 前必须替换。时间/token/成本预算与并发 enforcement 也归 M2。
+4. 无阻塞 Question/Approval。M2-04 的 `blockingQuestionOrApproval(ctx, task)` 依次查询 Task 的 pending `decision_gates`、经 `attempt_bindings.dispatch_id` 关联的 pending `question_threads`，以及同 Mission 的 PENDING `approvals`。前两者返回 question；Approval 只匹配 `BLOCKING_APPROVAL_ACTION_KINDS = [budget_increase]`，返回 approval（M4 扩展）。resolved/timeout gate、answered/closed thread 与非阻塞 action kind 不拦截。DEFINED readiness 和 READY admission 共用此检查。
 
 冻结 fixture 初次启动因此是 12 Tasks / 20 edges / 3 READY（T01–T03）/ 9 DEFINED，12 个 Orca 投影均 ready。`parallelReady` 提示不是 readiness 权威。
+
+### Scheduler admission 与预算（M2-04）
+
+`Scheduler.scheduleRound(missionId, trigger)` 只处理 EXECUTING Mission，先重算 readiness，再按最长下游链长度降序、Task id 升序遍历 READY Tasks。每轮从数据库读取状态；同实例/同 Mission 的重叠调用只保留一个待执行 trigger，当前轮结束后再跑一轮，无 polling/timer。进程重启只需重新实例化 Scheduler；序号、计数、provider 占用均从数据库恢复。
+
+ContextBuilder/AgentFactory 的异步构建在 admission 事务之前完成。事务内重新校验 Mission/Task、APPROVED Plan 与依赖、Question/Approval、预算/并发、构建前后的 Task/policy 一致性，以及 package/spec 存在且归属匹配；分配 `seq = max(seq) + 1`，写 `attempt_bindings(dispatch_id = NULL, branch = axiom/attempt/<taskId>/<seq>)`，CAS `READY → RUNNING` 并 `attempt_count += 1`，追加 `task.stage` / `attempt.admitted`。RUNNING 转换必须带 `actor: Scheduler` 与 `attemptCountDelta: 1`，否则 `illegal_transition(reason: admission_required)`。
+
+只有提交成功后才 `await launch(attempt)`；拒绝写 `attempt.launch_failed`（只记录身份与分类，不存可能含密钥的异常文本），保留 binding/RUNNING/count 并继续后续候选。M2-04 的 `plane.scheduler` 注入 `launch: null`，此时所有 READY 候选返回 launcher_unavailable，不构建合同、不 admission、不启动 Attempt；M1 start 行为仍是 3 READY、0 RUNNING、0 binding。
+
+| 配置 | 含义 | M2 enforcement |
+|---|---|---|
+| `policy.budget.maxAttempts` | Mission 总 Attempt 数 = 全部 Task `attempt_count` 之和 | readiness 与 admission 重查；有 READY 候选且耗尽时 Mission BLOCKED |
+| `policy.budget.maxRuntimeMinutes` | 默认每次 Attempt 运行时长上限，**不是** Mission 总时长 | AgentFactory 采用 Task → Mission → 45 分钟；M2-05 映射到 `workerStart.timeoutMs` |
+| `policy.budget.maxWallClockMinutes` | 可选正数；Mission 自第一次 `mission.status.after.status = EXECUTING` 审计起的总 wall-clock，含暂停/阻塞时间 | admission 按注入时钟重查；有 READY 候选且耗尽时 Mission BLOCKED |
+| `policy.concurrencyLimit` | Mission 的 RUNNING Task 总数 | admission 事务内重查；满额只跳过，不 BLOCKED |
+| `policy.routing.providerConcurrency` | provider → 正整数上限，默认 `{}` 表示未设 provider cap | RUNNING Tasks 的最新 seq binding JOIN AgentSpec.provider；事务内重查，满额只跳过 |
+| `task.retryPolicy.maxAttempts` | 单 Task Attempt 次数上限，权威计数为 `task_stages.attempt_count` | readiness 与 admission 重查，admission 返回 task_attempts |
+| 单 Task 总时长、token/成本总预算 | 需要 Attempt 结算数据 | M2 不 enforce；后续结算/预算服务接入 |
+
+Mission 总 Attempts/wall-clock 耗尽通过既有 `blockMission(missionId, budget_exhausted)` 保留 `previous_status = EXECUTING`，同事务追加 `budget.exhausted {dimension, limit, used}`；Approval 请求对象留给 M4。并发满额、无可选 provider 与 Question/Approval 不视为预算耗尽。
+
+每轮返回 admitted（有序身份）与 skipped（taskId/reason）；skip reason 为 launcher_unavailable、concurrency、provider_concurrency、task_attempts、question、approval、no_eligible_provider 或 stale。只有本轮 admitted 非空或 Mission 被预算阻塞才写一条 `scheduler.round {trigger, admitted, skipped}`；空轮和全部跳过的轮不写此事件。构建合同可留下可复用的内容寻址行，这不等于 admission。每个新实例必须重新请求一轮（启动时的调度/未发出的 binding 恢复由 M2-05/M2-08 接入）。
+
 
 ## 5. 合成 session party 与 Run 绑定（D14）
 
@@ -155,6 +179,8 @@ CLI JSON 输出是 `{ ok, result, ... }` / `{ ok:false, error:{code,...}, ... }`
 完整测试为 `src/main/axiom/admission/{mission-managed-run-guard,admission-rpc,admission-run,admission-message}.test.ts`。task-update / worker-start 有三层拒绝：CLI 无终端身份时，`src/cli/handlers/orchestration/terminal-identity.ts` 的 `resolveCoordinatorTerminalHandle` 先抛 `no_active_sender_terminal`，尚未发送 mutation RPC；进入 runtime 后，Run 绑定解析可返回 `run_required` / `consumer_fenced`；到达 Mission 守卫后返回 `mission_managed`，由 M1-07 绑定 coordinator 的 RPC 测试覆盖。不能为取得某个错误码而给终端接管合成 Run。
 
 ## 8. Mailbox 与恢复
+
+M2-04：MissionController 在 startExecution 提交后触发 mission_start；resumeMission/unblockMission 提交后触发 resume；transitionTaskStage/cancelTask/recomputeReadiness 实际移动 stage 后触发 stage_change。recomputeReadiness 无变化不触发。嵌套事务（mailbox、RPC、admission）延至当前同步调用栈提交后才触发，并核对持久审计以抑制回滚事务的通知。control-plane.ts 以 fire-and-forget 调用 scheduleRound，拒绝仅 console.warn，不抛回生命周期调用者；manual 可由服务调用者显式请求。现有 RunMailboxConsumer 的 readiness 调用沿用此入口，无新增轮询。
 
 `RunMailboxConsumer` 先注册 exclusive waiter 再 drain backlog，避免读空到订阅之间丢唤醒；waiter 的独占仅限进程。`getOrCreateRunDelivery` 与 `acknowledgeRunDelivery` 用启动时捕获的 generation 栅栏，不能重读并采用别人的新 generation。
 
@@ -195,6 +221,6 @@ axiom task show --task <taskId> --json
 | `replan_not_supported` | M1 不能批准替代计划；Goal 在 EXECUTING 激活虽可进入 REPLANNING，完整替代闭环留给 M5 |
 | `orchestration_migration_required` / `request_mismatch` | 契约 envelope 缺失/不兼容，或同幂等 id 换了载荷；升级兼容客户端或为新意图使用新 id |
 
-后续边界按 Architecture §20 排序：M2-02/03 已提供 AgentSpec/ContextPackage 与 RulesEngine；M2 后续增加 Planner、Scheduler、Attempt/Worker、预算 admission、Submission/Candidate；M3 加独立验证与 NEEDS_FIX；M4 加串行集成、Approval、Delivery/完成门及全对象恢复；M5 加完整 replanning 与可替换决策模型；M6 才覆盖远端扩展。
+后续边界按 Architecture §20 排序：M2-02/03/04 已提供 AgentSpec/ContextPackage、RulesEngine、Scheduler 与预算 admission；M2 后续增加 Planner、Attempt launcher/Worker、Submission/Candidate；M3 加独立验证与 NEEDS_FIX；M4 加串行集成、Approval、Delivery/完成门及全对象恢复；M5 加完整 replanning 与可替换决策模型；M6 才覆盖远端扩展。
 
 M2 还需将 workerStop/Abandon/Release/Retain/TerminalUserInput、ask/reply、跨 Run 群发与 federation 纳入 admission 评审，并在出口 e2e 加 Attempt、submission 和可到达时的 bound-coordinator `mission_managed` 路径。M1 出口验证不能替代这些后续证据。

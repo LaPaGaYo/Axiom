@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { Scheduler } from './scheduler/scheduler'
 import { detectInstalledAgentsWithShellPathHydration } from '../preflight/agent-detection'
 import { AgentFactory } from './agent-factory/agent-factory'
 import { PROVIDER_SELECTION_RULES } from './agent-factory/provider-selection'
@@ -39,7 +40,16 @@ function createControlPlane(runtime: AxiomRuntime, db: OrchestrationDb) {
     decisionEngine,
     detectInstalledAgentsWithShellPathHydration
   )
-  const missions = new MissionController(db, store)
+  const missions = new MissionController(db, store, {
+    onScheduleTrigger: (missionId, trigger) => {
+      void scheduler.scheduleRound(missionId, trigger).catch(() => {
+        console.warn('[axiom] Scheduler round failed', { missionId, trigger })
+      })
+    }
+  })
+  const scheduler = new Scheduler(db, store, missions, contextBuilder, agentFactory, {
+    launch: null
+  })
   const recovery = new RecoveryService(db, store, missions)
   // Only process-local cancellation handles are retained; statuses, stages,
   // binding and generation are loaded from the database at each new start.
@@ -51,6 +61,7 @@ function createControlPlane(runtime: AxiomRuntime, db: OrchestrationDb) {
     agentFactory,
     decisionEngine,
     missions,
+    scheduler,
     recovery,
     consumers,
     started: false,

@@ -1,3 +1,4 @@
+import { blockingQuestionOrApproval } from '../scheduler/admission-blockers'
 import type { TaskStageRecord } from '../../../shared/axiom-contract/mission-objects'
 import {
   isLegalTaskStageTransition,
@@ -12,16 +13,14 @@ import {
   type ControllerContext
 } from './controller-context'
 
-// M1 has no Question/Approval writers. M2 must replace this hook before admission.
-function blockingQuestionOrApproval(): 'none' {
-  return 'none'
-}
-
-// ponytail: M1 recomputes small graphs per Task (O(tasks²) with an attempt cap);
-// M2 can batch Mission budget/Plan reads within each transaction for larger graphs.
-function canBecomeReady(ctx: ControllerContext, task: TaskStageRecord): boolean {
-  const mission = requireMission(ctx, task.missionId)
-  if (mission.status !== 'EXECUTING') {
+// ponytail: small graphs recompute per Task (O(tasks²) with an attempt cap);
+// batch Mission budget/Plan reads under the write lock if larger graphs require it.
+export function canBecomeReady(
+  ctx: Pick<ControllerContext, 'db' | 'store'>,
+  task: TaskStageRecord
+): boolean {
+  const mission = ctx.store.getMission(task.missionId)
+  if (mission?.status !== 'EXECUTING') {
     return false
   }
   const plan = ctx.store.getPlanRevision(task.planRevisionId)
@@ -30,7 +29,7 @@ function canBecomeReady(ctx: ControllerContext, task: TaskStageRecord): boolean 
   }
   if (
     task.attemptCount >= task.retryPolicy.maxAttempts ||
-    blockingQuestionOrApproval() !== 'none'
+    blockingQuestionOrApproval(ctx, task) !== 'none'
   ) {
     return false
   }
@@ -64,11 +63,25 @@ function canBecomeReady(ctx: ControllerContext, task: TaskStageRecord): boolean 
   })
 }
 
-export type TransitionTaskInput = { taskId: string; to: TaskStage; reason: string; actor: string }
+export type TransitionTaskInput = {
+  taskId: string
+  to: TaskStage
+  reason: string
+  actor: string
+  attemptCountDelta?: number
+}
 export function transitionTaskStage(ctx: ControllerContext, input: TransitionTaskInput) {
   const task = requireTask(ctx, input.taskId)
   const from = task.stage
   const to = input.to
+  if (to === 'RUNNING' && (input.actor !== 'Scheduler' || input.attemptCountDelta !== 1)) {
+    throw new MissionControllerError('illegal_transition', {
+      taskId: task.taskId,
+      from,
+      to,
+      reason: 'admission_required'
+    })
+  }
   if (
     !isLegalTaskStageTransition(from, to) ||
     (from === 'BLOCKED' && to !== 'CANCELED' && to !== task.previousStage)
@@ -97,7 +110,15 @@ export function transitionTaskStage(ctx: ControllerContext, input: TransitionTas
     stopAttemptsForCancellation()
   }
   const previousStage = to === 'BLOCKED' ? from : null
-  if (!ctx.store.updateTaskStage({ taskId: task.taskId, from, to, previousStage })) {
+  if (
+    !ctx.store.updateTaskStage({
+      taskId: task.taskId,
+      from,
+      to,
+      previousStage,
+      attemptCountDelta: input.attemptCountDelta
+    })
+  ) {
     throw new MissionControllerError('stale_state', { taskId: task.taskId, from, to })
   }
   audit(ctx, {
