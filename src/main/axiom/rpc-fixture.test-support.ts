@@ -1,3 +1,5 @@
+import * as integrationBase from './execution/integration-base'
+import * as detection from '../preflight/agent-detection'
 import { randomUUID } from 'node:crypto'
 import { vi } from 'vitest'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -11,6 +13,11 @@ import { goal, policy } from '../../shared/axiom-contract/contract-fixtures.test
 export const createParams = { repo: 'fixture', targetBranch: 'main', goal, policy }
 
 export function rpcFixture() {
+  vi.spyOn(integrationBase, 'ensureIntegrationBase').mockResolvedValue({
+    sha: 'fixture-head',
+    created: true
+  })
+  vi.spyOn(detection, 'detectInstalledAgentsWithShellPathHydration').mockResolvedValue([])
   const db = new OrchestrationDb(':memory:')
   const runtime = new OrcaRuntimeService()
   runtime.setOrchestrationDb(db)

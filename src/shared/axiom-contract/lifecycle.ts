@@ -30,6 +30,19 @@ export const TASK_STAGES = [
   'BLOCKED',
   'CANCELED'
 ] as const
+export const ATTEMPT_STATES = [
+  'LAUNCH_PENDING',
+  'STARTING',
+  'RUNNING',
+  'SUBMITTED',
+  'FAILED',
+  'STOPPED',
+  'ABANDONED',
+  'START_UNKNOWN',
+  'STOP_UNKNOWN'
+] as const
+export const AttemptStateSchema = z.enum(ATTEMPT_STATES)
+export type AttemptState = z.infer<typeof AttemptStateSchema>
 export const REPLAN_LEVELS = ['NO_REPLAN', 'MINOR_ADJUSTMENT', 'MAJOR_REPLAN'] as const
 export const BLOCKING_APPROVAL_ACTION_KINDS = ['budget_increase'] as const
 export const RISK_LEVELS = ['low', 'medium', 'high'] as const

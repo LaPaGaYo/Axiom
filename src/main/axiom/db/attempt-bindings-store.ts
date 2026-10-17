@@ -27,6 +27,26 @@ export function attemptBindingsStore(db: OrchestrationDb) {
           p.contextPackageId
         )
     },
+    bindAttemptDispatch(taskId: string, seq: number, dispatchId: string): boolean {
+      return (
+        db.db
+          .prepare(`UPDATE attempt_bindings SET dispatch_id = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+        WHERE task_id = ? AND seq = ? AND dispatch_id IS NULL`)
+          .run(
+            AxiomIdSchema.parse(dispatchId),
+            AxiomIdSchema.parse(taskId),
+            AttemptBindingSchema.shape.seq.parse(seq)
+          ).changes === 1
+      )
+    },
+    getAttemptBindingByDispatch(dispatchId: string) {
+      return readRow(
+        AttemptBindingRowCodec,
+        db.db
+          .prepare(`SELECT ${columns} FROM attempt_bindings WHERE dispatch_id = ?`)
+          .get(AxiomIdSchema.parse(dispatchId))
+      )
+    },
     getAttemptBinding(taskId: string, seq: number) {
       return readRow(
         AttemptBindingRowCodec,

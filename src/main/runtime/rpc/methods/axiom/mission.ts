@@ -1,3 +1,4 @@
+import { ensureIntegrationBase } from '../../../../axiom/execution/integration-base'
 import { defineMethod } from '../../core'
 import {
   MissionCreateParams,
@@ -53,9 +54,25 @@ export const AXIOM_MISSION_METHODS = [
   defineMethod({
     name: 'axiom.mission.start',
     params: MissionStartParams,
-    handler: (p, { runtime }) => ({
-      mission: missionSummary(getAxiomControlPlane(runtime).missions.startExecution(p.missionId))
-    })
+    handler: async (p, { runtime }) => {
+      const { missions, store } = getAxiomControlPlane(runtime)
+      const mission = missions.getMission(p.missionId)
+      const base = await ensureIntegrationBase({
+        repoPath: mission.repoPath,
+        targetBranch: mission.targetBranch,
+        missionId: mission.id
+      })
+      store.appendAuditEvent({
+        missionId: mission.id,
+        actor: 'MissionController',
+        objectKind: 'mission',
+        objectId: mission.id,
+        event: base.created ? 'integration.base_created' : 'integration.base_reused',
+        before: null,
+        after: { sha: base.sha }
+      })
+      return { mission: missionSummary(missions.startExecution(p.missionId)) }
+    }
   }),
   defineMethod({
     name: 'axiom.mission.pause',

@@ -21,6 +21,8 @@ type PolicyAudit = ReturnType<typeof policyAuditStore>
 // One injected store; table modules keep SQL and validation within the file-size gate.
 export class AxiomStore {
   readonly insertAttemptBinding: AttemptBindings['insertAttemptBinding']
+  readonly bindAttemptDispatch: AttemptBindings['bindAttemptDispatch']
+  readonly getAttemptBindingByDispatch: AttemptBindings['getAttemptBindingByDispatch']
   readonly getAttemptBinding: AttemptBindings['getAttemptBinding']
   readonly listAttemptBindings: AttemptBindings['listAttemptBindings']
   readonly nextAttemptSeq: AttemptBindings['nextAttemptSeq']
@@ -73,6 +75,8 @@ export class AxiomStore {
   constructor(private readonly db: OrchestrationDb) {
     const bindings = attemptBindingsStore(db)
     this.insertAttemptBinding = bindings.insertAttemptBinding
+    this.bindAttemptDispatch = bindings.bindAttemptDispatch
+    this.getAttemptBindingByDispatch = bindings.getAttemptBindingByDispatch
     this.getAttemptBinding = bindings.getAttemptBinding
     this.listAttemptBindings = bindings.listAttemptBindings
     this.nextAttemptSeq = bindings.nextAttemptSeq

@@ -14,6 +14,8 @@ describe('Axiom RPC namespace', () => {
   it('classifies every registered method exactly once and registers every mutation', () => {
     const reads = [
       'axiom.namespace.get',
+      'axiom.attempt.show',
+      'axiom.attempt.list',
       'axiom.mission.show',
       'axiom.mission.list',
       'axiom.goal.show',

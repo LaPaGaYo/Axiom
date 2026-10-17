@@ -56,7 +56,7 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-function makeScheduler(launcher: AttemptLaunch | null = launch, now?: () => string) {
+function makeScheduler(launcher: AttemptLaunch = launch, now?: () => string) {
   return new Scheduler(f.db, f.store, f.controller, context, factory, { launch: launcher, now })
 }
 function task(id: string) {
@@ -223,16 +223,6 @@ describe('Scheduler admission', () => {
     expect(result.admitted).toEqual([])
     expect(f.store.listAttemptBindings({ missionId: f.missionId })).toEqual([])
     expect(f.store.getMission(f.missionId)?.status).toBe('EXECUTING')
-    expect(events('scheduler.round')).toEqual([])
-  })
-  it('preserves M1 start behavior without a launcher and does not build contracts', async () => {
-    const build = vi.spyOn(context, 'build')
-    expect((await round(makeScheduler(null))).skipped.map((s) => s.reason)).toEqual(
-      Array(3).fill('launcher_unavailable')
-    )
-    expect(build).not.toHaveBeenCalled()
-    expect(f.store.countTaskStages(f.missionId)).toMatchObject({ READY: 3, RUNNING: 0 })
-    expect(f.store.listAttemptBindings({ missionId: f.missionId })).toEqual([])
     expect(events('scheduler.round')).toEqual([])
   })
   it('resumes sequence allocation and RUNNING counts with a new Scheduler instance', async () => {
