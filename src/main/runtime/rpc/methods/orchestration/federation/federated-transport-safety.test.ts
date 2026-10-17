@@ -269,6 +269,7 @@ describe('federated transport safety', () => {
   it('fences stop preflight and effect calls to the resolved pairing revision', async () => {
     const db = {
       getFederatedDispatch: () => federatedDispatch(),
+      getDispatchContextById: () => undefined,
       beginWorkerStop: () => ({ disposition: 'stopping', worker: { state: 'stopping' } }),
       reconcileFederatedWorkerStop: () => ({ state: 'stopped' })
     }
