@@ -13,6 +13,33 @@ export type HandlerGroup = {
 // real exports by handler-group-manifest.test.ts, so drift fails CI, not dispatch.
 export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   {
+    name: 'axiom-mission',
+    keys: [
+      'mission create',
+      'mission show',
+      'mission list',
+      'mission start',
+      'mission pause',
+      'mission resume',
+      'mission cancel',
+      'mission goal propose',
+      'mission goal activate',
+      'mission goal show'
+    ],
+    load: async () => (await import('./handlers/axiom/mission.js')).AXIOM_MISSION_HANDLERS
+  },
+  {
+    name: 'axiom-plan',
+    keys: ['plan propose', 'plan approve', 'plan reject', 'plan list', 'plan show'],
+    load: async () => (await import('./handlers/axiom/plan.js')).AXIOM_PLAN_HANDLERS
+  },
+  {
+    name: 'axiom-task',
+    keys: ['task list', 'task show', 'task cancel'],
+    load: async () => (await import('./handlers/axiom/task.js')).AXIOM_TASK_HANDLERS
+  },
+
+  {
     name: 'core',
     keys: ['claude-teams', 'open', 'serve', 'status'],
     load: async () => (await import('./handlers/core.js')).CORE_HANDLERS

@@ -1,3 +1,4 @@
+import { isAxiomMutation } from './axiom-contract/mutations'
 import { ORCHESTRATION_CONTRACT_VERSION } from './protocol-version'
 
 export type OrchestrationMigrationReason =
@@ -61,7 +62,7 @@ export function isOrchestrationMutation(method: string, params: unknown): boolea
   if (method === 'orchestration.dispatch') {
     return !hasTrueProperty(params, 'dryRun')
   }
-  return ORCHESTRATION_MUTATION_METHODS.has(method)
+  return ORCHESTRATION_MUTATION_METHODS.has(method) || isAxiomMutation(method)
 }
 
 export function isTerminalPromptMutation(method: string, params: unknown): boolean {

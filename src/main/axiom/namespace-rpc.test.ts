@@ -5,11 +5,33 @@ import {
   AXIOM_RPC_NAMESPACE
 } from '../../shared/axiom-contract/namespace'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods'
-import { AXIOM_METHODS } from './namespace-rpc'
+import { namespaceMethod } from './namespace-rpc'
+import { AXIOM_METHODS } from '../runtime/rpc/methods/axiom'
+import { AXIOM_MUTATION_METHODS, isAxiomMutation } from '../../shared/axiom-contract/mutations'
+import { isOrchestrationMutation } from '../../shared/orchestration-rpc-contract'
 
 describe('Axiom RPC namespace', () => {
+  it('classifies every registered method exactly once and registers every mutation', () => {
+    const reads = [
+      'axiom.namespace.get',
+      'axiom.mission.show',
+      'axiom.mission.list',
+      'axiom.goal.show',
+      'axiom.plan.list',
+      'axiom.plan.show',
+      'axiom.task.list',
+      'axiom.task.show'
+    ]
+    const classified = [...AXIOM_MUTATION_METHODS, ...reads]
+    expect(new Set(classified).size).toBe(classified.length)
+    expect(AXIOM_METHODS.map((m) => m.name).sort()).toEqual(classified.sort())
+    for (const method of AXIOM_METHODS) {
+      expect(isAxiomMutation(method.name)).toBe(!reads.includes(method.name))
+      expect(isOrchestrationMutation(method.name, {})).toBe(!reads.includes(method.name))
+    }
+  })
   it('registers namespace introspection in the runtime manifest', () => {
-    expect(AXIOM_METHODS.map((method) => method.name)).toEqual(['axiom.namespace.get'])
+    expect(AXIOM_METHODS.map((method) => method.name)).toContain('axiom.namespace.get')
     expect(ALL_RPC_METHODS.map((method) => method.name)).toContain('axiom.namespace.get')
   })
 
@@ -35,7 +57,7 @@ describe('Axiom RPC namespace', () => {
   })
 
   it('returns the shared reserved names without accessing the runtime', () => {
-    const method = AXIOM_METHODS[0]
+    const method = namespaceMethod
     expect(method.params).toBeNull()
     expect(
       method.handler(undefined, {

@@ -5,6 +5,8 @@ import { AuditEventSchema } from '../../../shared/axiom-contract/mission-objects
 
 export const MISSION_CONTROLLER_ERROR_CODES = [
   'mission_not_found',
+  'goal_revision_not_found',
+  'goal_not_proposed',
   'plan_revision_not_found',
   'task_not_found',
   'illegal_transition',

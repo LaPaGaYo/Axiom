@@ -27,8 +27,10 @@ describe('CLI command-name parity between COMMAND_SPECS and the launch redirect'
   it.each([
     ['COMMAND_SPECS', specCommandNames],
     ['CLI_COMMAND_NAMES', CLI_COMMAND_NAMES]
-  ])('keeps reserved Axiom CLI command names out of %s', (_source, names) => {
-    const reserved = new Set<string>(AXIOM_CLI_COMMAND_NAMES)
+  ])('keeps unimplemented Axiom CLI command names out of %s', (_source, names) => {
+    const reserved = new Set<string>(
+      AXIOM_CLI_COMMAND_NAMES.filter((name) => !['mission', 'plan', 'task'].includes(name))
+    )
     expect(names.filter((name) => reserved.has(name))).toEqual([])
   })
 })

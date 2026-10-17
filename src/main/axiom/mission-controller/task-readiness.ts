@@ -151,16 +151,19 @@ export function recomputeReadiness(ctx: ControllerContext, missionId: string): s
   return moved
 }
 
+export function projectTask(ctx: ControllerContext, row: TaskStageRecord) {
+  const mission = requireMission(ctx, row.missionId)
+  const orca = ctx.db.getTask(row.taskId)
+  if (!orca || orca.run_id !== mission.runId) {
+    throw new MissionControllerError('task_not_found', {
+      taskId: row.taskId,
+      missionId: mission.id
+    })
+  }
+  return { ...row, orcaStatus: orca.status, title: orca.task_title ?? row.spec.title }
+}
+
 export function listTasks(ctx: ControllerContext, input: { missionId: string; stage?: TaskStage }) {
-  const mission = requireMission(ctx, input.missionId)
-  return ctx.store.listTaskStages(input).map((row) => {
-    const orca = ctx.db.getTask(row.taskId)
-    if (!orca || orca.run_id !== mission.runId) {
-      throw new MissionControllerError('task_not_found', {
-        taskId: row.taskId,
-        missionId: mission.id
-      })
-    }
-    return { ...row, orcaStatus: orca.status, title: orca.task_title ?? row.spec.title }
-  })
+  requireMission(ctx, input.missionId)
+  return ctx.store.listTaskStages(input).map((row) => projectTask(ctx, row))
 }

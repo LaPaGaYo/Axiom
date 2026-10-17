@@ -7,6 +7,17 @@ import {
 
 describe('orchestration RPC contract', () => {
   it.each([
+    ['axiom.mission.create', {}],
+    ['axiom.mission.start', {}],
+    ['axiom.mission.pause', {}],
+    ['axiom.mission.resume', {}],
+    ['axiom.mission.cancel', {}],
+    ['axiom.goal.propose', {}],
+    ['axiom.goal.activate', {}],
+    ['axiom.plan.propose', {}],
+    ['axiom.plan.approve', {}],
+    ['axiom.plan.reject', {}],
+    ['axiom.task.cancel', {}],
     ['orchestration.runCreate', {}],
     ['orchestration.runUse', {}],
     ['orchestration.send', {}],
@@ -36,6 +47,14 @@ describe('orchestration RPC contract', () => {
   })
 
   it.each([
+    ['axiom.mission.show', {}],
+    ['axiom.mission.list', {}],
+    ['axiom.goal.show', {}],
+    ['axiom.plan.list', {}],
+    ['axiom.plan.show', {}],
+    ['axiom.task.list', {}],
+    ['axiom.task.show', {}],
+    ['axiom.namespace.get', {}],
     ['orchestration.runList', {}],
     ['orchestration.runShow', {}],
     ['orchestration.runCurrent', {}],

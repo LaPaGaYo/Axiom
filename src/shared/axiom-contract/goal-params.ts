@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { AxiomIdSchema, GoalBodySchema } from './mission-objects'
+import { AxiomIdSchema, GoalBodySchema, GoalRevisionSchema } from './mission-objects'
 
 export const GoalProposeParams = z.object({ missionId: AxiomIdSchema, goal: GoalBodySchema })
 export const GoalActivateParams = z.object({
@@ -7,3 +7,6 @@ export const GoalActivateParams = z.object({
   goalRevisionId: AxiomIdSchema
 })
 export const GoalShowParams = GoalActivateParams
+
+export const GoalResponseSchema = z.object({ goalRevision: GoalRevisionSchema })
+export type GoalResponse = z.infer<typeof GoalResponseSchema>

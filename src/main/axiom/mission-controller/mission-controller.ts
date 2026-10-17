@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { z } from 'zod'
 import type { PlanProposeParams } from '../../../shared/axiom-contract/plan-params'
-import type { Provenance } from '../../../shared/axiom-contract/mission-objects'
+import type { GoalBody, Provenance } from '../../../shared/axiom-contract/mission-objects'
 import type { TaskStage } from '../../../shared/axiom-contract/lifecycle'
 import type { OrchestrationDb } from '../../runtime/orchestration/db/orchestration-db'
 import { runLifecycleWriteTransaction } from '../../runtime/orchestration/db/lifecycle-write-transaction-runner'
@@ -9,6 +9,8 @@ import type { AxiomStore } from '../db/axiom-store'
 import {
   MissionControllerError,
   requireMission,
+  requirePlan,
+  requireTask,
   type ControllerContext
 } from './controller-context'
 import {
@@ -19,10 +21,12 @@ import {
   restoreMission,
   type CreateMissionInput
 } from './mission-lifecycle'
+import { activateGoal, getGoal, proposeGoal } from './goal-lifecycle'
 import { approvePlan, proposePlan, rejectPlan } from './plan-materialization'
 import {
   cancelMissionTasks,
   listTasks,
+  projectTask,
   recomputeReadiness,
   transitionTaskStage,
   type TransitionTaskInput
@@ -71,6 +75,25 @@ export class MissionController {
   rejectPlan(input: { planRevisionId: string; reason: string; resolver: string }) {
     return this.write('reject_plan', () => rejectPlan(this.ctx, input))
   }
+  getPlan(planRevisionId: string) {
+    return requirePlan(this.ctx, planRevisionId)
+  }
+  listPlans(missionId: string) {
+    requireMission(this.ctx, missionId)
+    return this.ctx.store.listPlanRevisions(missionId)
+  }
+  getGoal(input: { missionId: string; goalRevisionId: string }) {
+    return getGoal(this.ctx, input)
+  }
+  proposeGoal(input: { missionId: string; goal: GoalBody }) {
+    return this.write('propose_goal', () => proposeGoal(this.ctx, input))
+  }
+  activateGoal(input: { missionId: string; goalRevisionId: string }) {
+    return this.write('activate_goal', () => activateGoal(this.ctx, input))
+  }
+  getTask(taskId: string) {
+    return projectTask(this.ctx, requireTask(this.ctx, taskId))
+  }
   startExecution(missionId: string) {
     return this.write('start_execution', () => {
       const mission = requireMission(this.ctx, missionId)
@@ -92,8 +115,8 @@ export class MissionController {
       interruptMission(this.ctx, missionId, 'PAUSED', reason)
     )
   }
-  resumeMission(missionId: string) {
-    return this.write('resume_mission', () => restoreMission(this.ctx, missionId, 'PAUSED'))
+  resumeMission(missionId: string, reason?: string) {
+    return this.write('resume_mission', () => restoreMission(this.ctx, missionId, 'PAUSED', reason))
   }
   blockMission(missionId: string, reason: string) {
     return this.write('block_mission', () =>
@@ -121,12 +144,17 @@ export class MissionController {
     return this.write('transition_task_stage', () => transitionTaskStage(this.ctx, input))
   }
   cancelTask(input: { taskId: string; rationale: string; actor: string }) {
-    return this.transitionTaskStage({
-      taskId: input.taskId,
-      to: 'CANCELED',
-      reason: input.rationale,
-      actor: input.actor
-    })
+    return this.write('cancel_task', () =>
+      projectTask(
+        this.ctx,
+        transitionTaskStage(this.ctx, {
+          taskId: input.taskId,
+          to: 'CANCELED',
+          reason: input.rationale,
+          actor: input.actor
+        })
+      )
+    )
   }
   recomputeReadiness(missionId: string) {
     return this.write('recompute_readiness', () => recomputeReadiness(this.ctx, missionId))

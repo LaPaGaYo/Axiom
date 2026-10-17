@@ -1,3 +1,4 @@
+import { MISSION_CONTROLLER_ERROR_CODES } from '../../axiom/mission-controller/controller-context'
 // Why: every RPC response needs the same runtimeId envelope, and the
 // runtime/browser error allowlists define the contract the CLI relies on to
 // format human-facing messages. Centralizing this mapping keeps the allowlist
@@ -88,6 +89,7 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
 const COMPUTER_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(Object.values(COMPUTER_ERROR_CODES))
 const LINEAR_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(LINEAR_ERROR_CODES)
 const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
+  ...MISSION_CONTROLLER_ERROR_CODES,
   WORKTREE_CREATE_COLLISION_CODE,
   'worktree_id_requires_full_path',
   'run_not_found',

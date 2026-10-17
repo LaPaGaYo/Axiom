@@ -3,6 +3,7 @@ import { generateId } from '../../runtime/orchestration/db/generated-id'
 import { isOrcaSessionId } from '../../../shared/orca-session-address'
 import {
   GoalBodySchema,
+  DEFAULT_MISSION_POLICY,
   MissionSchema,
   PolicySchema,
   ProvenanceSchema,
@@ -22,16 +23,7 @@ import {
   type ControllerContext
 } from './controller-context'
 
-// M1 defaults live here; budgets other than maxAttempts are enforced by M2 admission.
-export const DEFAULT_MISSION_POLICY: Policy = {
-  concurrencyLimit: 3,
-  budget: {},
-  readinessThreshold: 'INTEGRATED',
-  approvalRules: {},
-  verificationRules: {},
-  nestedWorkerMaxDepth: 1,
-  unverifiableToleranceMinutes: 30
-}
+export { DEFAULT_MISSION_POLICY } from '../../../shared/axiom-contract/mission-objects'
 export type CreateMissionInput = {
   repoId: string
   repoPath: string
@@ -199,7 +191,12 @@ export function interruptMission(
   return moveMission(ctx, id, requireMission(ctx, id).status, to, 'MissionController', reason)
 }
 
-export function restoreMission(ctx: ControllerContext, id: string, from: 'PAUSED' | 'BLOCKED') {
+export function restoreMission(
+  ctx: ControllerContext,
+  id: string,
+  from: 'PAUSED' | 'BLOCKED',
+  reason: string | null = null
+) {
   const mission = requireMission(ctx, id)
   if (mission.status !== from || !mission.previousStatus) {
     throw new MissionControllerError('illegal_transition', {
@@ -208,5 +205,5 @@ export function restoreMission(ctx: ControllerContext, id: string, from: 'PAUSED
       command: from === 'PAUSED' ? 'resume' : 'unblock'
     })
   }
-  return moveMission(ctx, id, from, mission.previousStatus, 'MissionController', null, true)
+  return moveMission(ctx, id, from, mission.previousStatus, 'MissionController', reason, true)
 }

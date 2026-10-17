@@ -35,7 +35,12 @@ function errorCode(error: unknown): string | undefined {
 }
 
 export function formatCliError(error: unknown, context: CliErrorContext = {}): string {
-  const message = error instanceof Error ? error.message : String(error)
+  const rawMessage = error instanceof Error ? error.message : String(error)
+  const message =
+    error instanceof RuntimeClientError &&
+    ['mission', 'plan', 'task'].includes(context.commandPath?.[0] ?? '')
+      ? `${error.code}: ${rawMessage}`
+      : rawMessage
   const selector = selectorRecovery(errorCode(error), context)
   if (selector) {
     return formatMessageWithNextSteps(

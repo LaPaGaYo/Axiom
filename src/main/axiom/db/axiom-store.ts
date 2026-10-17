@@ -13,6 +13,7 @@ type PolicyAudit = ReturnType<typeof policyAuditStore>
 
 // One injected store; table modules keep SQL and validation within the file-size gate.
 export class AxiomStore {
+  readonly updateRunObjective: Missions['updateRunObjective']
   readonly insertMission: Missions['insertMission']
   readonly getMission: Missions['getMission']
   readonly getMissionByRunId: Missions['getMissionByRunId']
@@ -44,6 +45,7 @@ export class AxiomStore {
 
   constructor(private readonly db: OrchestrationDb) {
     const missions = missionsStore(db)
+    this.updateRunObjective = missions.updateRunObjective
     this.insertMission = missions.insertMission
     this.getMission = missions.getMission
     this.getMissionByRunId = missions.getMissionByRunId

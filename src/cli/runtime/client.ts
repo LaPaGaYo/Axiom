@@ -130,9 +130,10 @@ export class RuntimeClient {
       : {}
     const envelope = {
       orchestrationCapability: options?.orchestrationCapability,
-      orchestrationContractVersion: method.startsWith('orchestration.')
-        ? ORCHESTRATION_CONTRACT_VERSION
-        : undefined,
+      orchestrationContractVersion:
+        method.startsWith('orchestration.') || method.startsWith('axiom.')
+          ? ORCHESTRATION_CONTRACT_VERSION
+          : undefined,
       orchestrationRequestId,
       ...compatibilityEnvelope
     }
