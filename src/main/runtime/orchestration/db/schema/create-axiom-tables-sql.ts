@@ -200,6 +200,8 @@ CREATE TABLE IF NOT EXISTS mission_policies (
   approval_rules TEXT NOT NULL DEFAULT '{}',
   verification_rules TEXT NOT NULL DEFAULT '{}',
   nested_worker_max_depth INTEGER NOT NULL DEFAULT 1 CHECK(nested_worker_max_depth = 1),
+  -- // Why: v43 is unreleased; v42 opens create this whole table, so no ALTER TABLE is needed.
+  unverifiable_tolerance_minutes INTEGER NOT NULL DEFAULT 30,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

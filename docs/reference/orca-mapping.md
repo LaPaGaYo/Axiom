@@ -256,7 +256,7 @@ Axiom 的 status / stage / kind 等可扩展枚举均为 `TEXT NOT NULL`，不�
 | `verification_runs` | `id PK`, `candidate_id`, `task_id`, `status`, `verdict_detail`(JSON), `commands`(JSON), `tool_versions`(JSON), `verifier` | 证据引用走 `artifacts` |
 | `integration_batches` | `id PK`, `mission_id`, `base_commit`, `candidate_ids`(JSON，V1 长度 1), `status`, `merge_commit`, `conflicts`(JSON), `approval_id` | 单一集成权威串行写 |
 | `approvals` | `id PK`, `mission_id`, `action_kind`, `inputs_hash`, `risk`, `status`, `expires_at`, `resolver` | 另加 `requested_by`, `resolution`, `outcome`(JSON，执行结果), `executed_at` |
-| `mission_policies` | `mission_id PK`, `concurrency_limit`, `budget`(JSON), `readiness_threshold`, `approval_rules`(JSON), `verification_rules`(JSON), `nested_worker_max_depth`(=1), `updated_at` | Mission 级覆盖全局设置 |
+| `mission_policies` | `mission_id PK`, `concurrency_limit`, `budget`(JSON), `readiness_threshold`, `approval_rules`(JSON), `verification_rules`(JSON), `nested_worker_max_depth`(=1), `unverifiable_tolerance_minutes INTEGER NOT NULL DEFAULT 30`, `updated_at` | Mission 级覆盖全局设置 |
 | `audit_events` | `sequence INTEGER PRIMARY KEY AUTOINCREMENT`, `mission_id`, `actor`, `object_kind`, `object_id`, `event`, `before`(JSON), `after`(JSON) | 只追加；另有 `created_at`，sequence 删除后不复用 |
 
 ## 7. M0 网络出口与身份清单
