@@ -27,6 +27,7 @@ describe('Mission routing policy', () => {
       preferredProviders: [],
       disallowedProviders: [],
       highRiskTier: 'A',
+      providerConcurrency: {},
       models: {}
     })
     expect(BudgetSchema.parse({ contextTokens: 42 })).toEqual({ contextTokens: 42 })
