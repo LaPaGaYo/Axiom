@@ -6,6 +6,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { sessionSearchScopeCatalogFromStore } from '../ai-vault-search/session-search-store-scope-catalog'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { app } from 'electron'
+import { startAxiomControlPlane, stopAxiomControlPlane } from '../axiom/control-plane-boot'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { getLocalPtyProvider, getSshPtyProvider, clearProviderPtyState } from '../ipc/pty'
 import { agentHookServer } from '../agent-hooks/server'
@@ -189,6 +190,8 @@ export function configureRuntimeServices(runtime: OrcaRuntimeService): void {
       isArtifactSharingEnabled(state.store?.getSettings())
     )
   )
+  startAxiomControlPlane(runtime)
+  app.once('will-quit', () => stopAxiomControlPlane(runtime))
   runtime.setSkillCloudService(new SkillCloudService(app.getPath('userData')))
   runtime.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
   runtime.setCommitMessageAgentEnvironmentResolvers({

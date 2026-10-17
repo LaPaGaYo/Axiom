@@ -42,7 +42,7 @@
 | **VerificationService** | Control Plane 服务 | 对不可变候选运行 deterministic checks、acceptance checks、diff/Artifact inspection，编排 Reviewer 与升级 | 采信 Worker 自述；让 LLM 推翻 FAIL |
 | **IntegrationController** | Control Plane 服务 | 单一集成权威：串行应用候选到集成基线、集成树回归、冲突/修复 Task、批次 promotion | 并行合并；静默解决语义冲突 |
 | **ApprovalGateway** | Control Plane 服务 | 按 policy 生成、投递、校验、消费 Approval | 复用过期或范围不符的 Approval |
-| **RecoveryService** | Control Plane 服务 | 启动与周期性 reconciliation：对非终态 Attempt 询问执行宿主 liveness 并推进状态 | 把 `unverifiable` 判为失败或完成；重复启动 |
+| **RecoveryService** | Control Plane 服务（`src/main/axiom/recovery/recovery-service.ts`） | 启动与周期性 reconciliation：对非终态 Attempt 询问执行宿主 liveness 并推进状态 | 把 `unverifiable` 判为失败或完成；重复启动 |
 | **AuditLog** | Control Plane 服务 | 不可变 AuditEvent 记录 | — |
 | **Worker** | 临时执行者 | Claude Code / Codex / Gemini / OpenCode 等在授权 worktree 内执行一次 Attempt；通过 `axiom` CLI 发类型化消息与 Submission | 自证完成；自行集成；派生 Worker；越权写入 |
 

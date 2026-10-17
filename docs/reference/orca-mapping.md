@@ -128,7 +128,7 @@ Orca 九种类型在 Axiom 中的用途：
 | `orchestration.send` / `check` / `inbox` / `reply` / `ask`（`messaging/*.ts`） | Worker 侧消息经 `axiom.attempt.*` 落到同一 `db.insertMessage` / `createQuestion`；Control Plane 回复 Worker 用 `send` 到 `dispatch:<attemptId>`（`from` 可为合成身份，`SendParams.from` 可选） | `worker_done/heartbeat` 在 `send-point-to-point.ts` 内同步结算；`check --wait` 长轮询 `RuntimeMessageWaiters`（`runtime-message-waiters.ts`） |
 | `orchestration.gateCreate` / `gateResolve` / `gateList`（`gates/gates.ts`） | Task 级 QUESTION | 只允许 Control Plane 对 Mission Run 调用（人类经 UI → `axiom.message.*` → Control Plane） |
 | `orchestration.requestShow`（`runs/mutation-request-show.ts`） | 查询幂等收据 | 与 `mutation_receipts` 配套 |
-| Run mailbox 消费：`getUnreadRunMailbox` / `getOrCreateRunDelivery` / `acknowledgeRunDelivery` / `requireCurrentConsumer`（`db/runs/run-delivery.ts`） | MissionController 作为 `run:<runId>` 的确定性消费者 | 以 `runs.consumer_generation` 栅栏，重启后可续 |
+| Run mailbox 消费：`getUnreadRunMailbox` / `getOrCreateRunDelivery` / `acknowledgeRunDelivery` / `requireCurrentConsumer`（`db/runs/run-delivery.ts`） | MissionController 的确定性消费者：`src/main/axiom/mission-controller/run-mailbox-consumer.ts`；启动/恢复接入 `src/main/axiom/control-plane-boot.ts` | 以 `runs.consumer_generation` 栅栏；先注册 exclusive waiter 再 drain，整批处理后 ack，审计按 message id 幂等，重启后可续 |
 
 ### 4b. 对 Mission 管理对象必须拦截/禁用的 Orca 入口
 
