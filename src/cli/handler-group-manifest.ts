@@ -24,7 +24,10 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'mission cancel',
       'mission goal propose',
       'mission goal activate',
-      'mission goal show'
+      'mission goal show',
+      'mission artifact put',
+      'mission artifact read',
+      'mission artifact list'
     ],
     load: async () => (await import('./handlers/axiom/mission.js')).AXIOM_MISSION_HANDLERS
   },
