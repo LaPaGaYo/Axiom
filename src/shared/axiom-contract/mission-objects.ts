@@ -1,0 +1,117 @@
+import { z } from 'zod'
+import { requiredString } from '../rpc-contract/rpc-param-primitives'
+import {
+  GoalRevisionStatusSchema,
+  MissionStatusSchema,
+  PlanRevisionStatusSchema,
+  ReadinessThresholdSchema,
+  RiskLevelSchema
+} from './lifecycle'
+
+export const AxiomIdSchema = z.string().min(1).max(128)
+const Text = requiredString('Expected non-empty text')
+
+export const ProvenanceSchema = z.object({
+  kind: z.enum(['user', 'planner', 'control_plane']),
+  actor: Text,
+  model: Text.optional(),
+  at: z.iso.datetime({ offset: true })
+})
+
+export const MissionSchema = z.object({
+  id: AxiomIdSchema,
+  runId: AxiomIdSchema,
+  repoId: AxiomIdSchema,
+  repoPath: Text,
+  targetBranch: Text,
+  status: MissionStatusSchema,
+  activeGoalRevisionId: AxiomIdSchema.nullable(),
+  activePlanRevisionId: AxiomIdSchema.nullable(),
+  coordinatorOrcaSessionId: AxiomIdSchema
+})
+
+export const GoalBodySchema = z.object({
+  objective: Text,
+  constraints: z.array(Text),
+  acceptanceCriteria: z.array(Text),
+  provenance: ProvenanceSchema
+})
+
+export const GoalRevisionSchema = GoalBodySchema.extend({
+  id: AxiomIdSchema,
+  missionId: AxiomIdSchema,
+  revision: z.number().int().positive(),
+  status: GoalRevisionStatusSchema
+})
+
+export const MilestoneSchema = z.object({
+  id: AxiomIdSchema,
+  title: Text,
+  exitCriteria: z.array(Text)
+})
+
+export const PlanRiskSchema = z.object({
+  id: AxiomIdSchema,
+  description: Text,
+  mitigation: Text.optional()
+})
+
+export const PlanRevisionSchema = z.object({
+  id: AxiomIdSchema,
+  missionId: AxiomIdSchema,
+  revision: z.number().int().positive(),
+  status: PlanRevisionStatusSchema,
+  goalRevisionId: AxiomIdSchema,
+  milestones: z.array(MilestoneSchema),
+  risks: z.array(PlanRiskSchema),
+  supersedesId: AxiomIdSchema.optional(),
+  rejectedReason: Text.optional()
+})
+
+// Limits are data only; admission and approved-budget comparisons belong to the Control Plane.
+export const BudgetSchema = z.strictObject({
+  maxRuntimeMinutes: z.number().positive().optional(),
+  maxAttempts: z.number().int().positive().optional(),
+  maxTokens: z.number().int().nonnegative().optional(),
+  maxCostUsd: z.number().nonnegative().optional()
+})
+
+export const TaskSpecSchema = z.object({
+  id: AxiomIdSchema,
+  title: Text,
+  objective: Text,
+  scope: z.object({ allowedPaths: z.array(Text) }),
+  acceptanceCriteria: z.array(Text),
+  requiredEvidence: z.array(Text),
+  risk: RiskLevelSchema,
+  retryPolicy: z.object({ maxAttempts: z.number().int().positive() }),
+  budget: BudgetSchema.omit({ maxAttempts: true }).optional(),
+  milestoneId: AxiomIdSchema.optional(),
+  kind: z.enum(['task', 'fix'])
+})
+
+export const TaskEdgeSchema = z.object({
+  fromTaskId: AxiomIdSchema,
+  toTaskId: AxiomIdSchema,
+  readinessThreshold: ReadinessThresholdSchema.default('INTEGRATED')
+})
+
+export const PolicySchema = z.object({
+  concurrencyLimit: z.number().int().positive(),
+  budget: BudgetSchema,
+  readinessThreshold: ReadinessThresholdSchema.default('INTEGRATED'),
+  // §6 defines these payloads as JSON without a rule language. Preserve them;
+  // the policy-owning service must validate supported rule semantics before use.
+  approvalRules: z.record(z.string(), z.json()),
+  verificationRules: z.record(z.string(), z.json()),
+  nestedWorkerMaxDepth: z.literal(1),
+  unverifiableToleranceMinutes: z.number().nonnegative().default(30)
+})
+
+export type Provenance = z.infer<typeof ProvenanceSchema>
+export type Mission = z.infer<typeof MissionSchema>
+export type GoalRevision = z.infer<typeof GoalRevisionSchema>
+export type PlanRevision = z.infer<typeof PlanRevisionSchema>
+export type TaskSpec = z.infer<typeof TaskSpecSchema>
+export type TaskEdge = z.infer<typeof TaskEdgeSchema>
+export type Policy = z.infer<typeof PolicySchema>

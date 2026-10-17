@@ -151,6 +151,8 @@ M0 通过 `src/main/axiom/namespace-rpc.ts` 的 `axiom.namespace.get` 注册命�
 
 约定：参数 zod schema 在 `src/shared/axiom-contract/<ns>-params.ts`；所有 mutation 需 `orchestrationContractVersion === 1` 与 `orchestrationRequestId`（幂等）；Worker 侧方法另需 envelope `orchestrationCapability`。「M」= mutation。
 
+M1 参数契约位于 `src/shared/axiom-contract/mission-params.ts`、`goal-params.ts`、`plan-params.ts`、`task-params.ts`，RPC 注册与 envelope 栅栏由 M1-06 接入。
+
 | 方法 | 参数要点 | 副作用 | M |
 |---|---|---|---|
 | `axiom.mission.create` | repo selector、targetBranch、goal、policy | `missions` + `db.createRun`（合成 coordinator）+ `goal_revisions`(ACTIVE) + `mission_policies` + `audit_events` | M |

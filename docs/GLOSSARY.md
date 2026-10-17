@@ -23,7 +23,7 @@
 | **Blind External Validation Fixture** | M4 基本完成后独立选定的第二个仓库（D18）；盲测前不得用于调优 prompt、路由规则、Task 模板或验证策略；提供泛化证据。 |
 | **Fixture manifest** | 版本化的 fixture 描述：仓库 + commit、工具链版本、检查命令与时限、预置场景（deterministic failure / merge-only failure / Agent crash / retry / stale-completion）与预期结果；存为 Artifact。 |
 | **契约级名称** | 提交合同 `axiom-submission-v1`；AgentSpec workspace 策略 `attempt-worktree`；对 Mission 管理对象越权调用的拒绝码 `mission_managed`；客户端协商的 runtime capability `axiom.control-plane.v1`。 |
-| **代码落位（D12）** | `src/main/axiom/`（Control Plane 服务）、`src/shared/axiom-contract/`（zod schema 与类型）、RPC 方法经 `src/main/runtime/rpc/methods/index.ts` 注册。禁止在 `@ts-nocheck` 文件内新增逻辑。 |
+| **代码落位（D12）** | `src/main/axiom/`（Control Plane 服务）、`src/shared/axiom-contract/`（zod schema 与类型：`lifecycle.ts`、`mission-objects.ts`、`plan-proposal.ts`、`plan-task-graph.ts`、`mission-params.ts`、`goal-params.ts`、`plan-params.ts`、`task-params.ts`）、RPC 方法经 `src/main/runtime/rpc/methods/index.ts` 注册。禁止在 `@ts-nocheck` 文件内新增逻辑。 |
 
 ## 2. 分层与角色
 
