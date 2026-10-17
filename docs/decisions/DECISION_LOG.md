@@ -448,3 +448,40 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **决定**：`.axiom-work/verify.sh` 在三个 typecheck 门之前 `rm -f` 这三个 `tsbuildinfo` 缓存（干净的 `tc:node` 在验证者的 Mac 上 8 s；`verify-merged.sh` 复用同一脚本，自动获得）。托管 `axiom-ci.yml` 的 typecheck job 本来就是干净 checkout，保持不变。
 **后果**：每个 attempt 的验证多出十几秒；M1-01～M1-10 的 typecheck PASS 记录只证明增量检查通过，M1-11 之后才是干净检查。首次托管运行的 lint（3 m 17 s）与 Axiom tests（1 m 18 s）job 绿；typecheck job 在 M1-11 合入后的第二次运行中核验。
 **取代规则**：无。
+
+## D48 · Planner v1 的形态：经 attempt-launcher 启动的只读规划 Agent，提案只能走 `axiom plan propose` — PROPOSED（M2 前置）
+
+**背景**：架构 §7 第一步是"Planner 分析代码库与约束（只读 worktree）→ `axiom.plan.propose`"；M1 没有 Planner，计划由人用 JSON 喂入（D44）。M2 要接 Planner，但 V1 不新增 API key 存储、不新增 provider 适配层（§16.4），Mission Intelligence 的模型调用必须经现有 provider 适配层。
+**决定**：Planner v1 = 一个 `role: planner` 的 AgentSpec，由与 Worker 相同的 attempt-launcher 在只读 planner worktree（`axiom/planner/<missionId>/<n>`，从集成基线创建；`permissions.write = []`）里以用户已有的 A 级 provider（结构化会话：Codex / Claude Code）启动；它的首条 prompt = Goal 正文 + 仓库规则 + PlanProposal JSON 契约 + `axiom plan propose --mission <id> --file <path>` 配方；提案只能经现有 `axiom.plan.propose` 进入（`provenance.kind = 'model'`），Mission `ANALYZING → PLAN_REVIEW`，批准仍由人在 Plan review 里完成（自动批准是 policy 项，M5 再议）。Planner 的 Attempt 结束后 worktree 释放；Planner 对权威状态没有任何直接写路径；其 diff 必须为空。启动入口 RPC `axiom.mission.plan`（CLI `axiom mission plan --mission <id>`）。
+**备选**：(a) 进程内直接调 provider API 生成计划——V1 无 API key 存储，且绕过 Worker 通道的 capability / 收据；(b) 把 Planner 做成单独子系统——重复 launcher / worktree / 观测机制。
+**后果**：Planner 复用 Scheduler 之外的直接启动路径（不占 Task 并发额度，但受 Mission 总 Attempt 预算约束）；`attempt_bindings` 需要能表示非 Task 的 planner 绑定（M2-09 的 brief 决定表示方式，不改 CHECK 枚举）；Planner 质量不在 M2 出口标准内（只要求 schema-valid、无环、≥ 1 根），M5 的 replanning 复用同一入口。
+**取代规则**：Planner 改为进程内模型调用或多轮规划需新 Decision 取代本条。
+
+## D49 · 确定性测试 provider（fake agent）用于 e2e 与宿主回归 — PROPOSED（M2 前置）
+
+**背景**：M2 出口要证明 3 个 Attempt 并行 `RUNNING → SUBMITTED`、非法 Submission 被拒、重启不重复启动。真实 provider 不确定、有成本、沙箱里跑不了；Orca 自己的 e2e 已有 fake agent 机制（`tests/e2e/helpers/fake-agent-command-override.ts`、`golden-stub-agent.ts`：用 `ORCA_*` 启动覆盖把 `codex` 命令换成脚本）。fixture v1 自带确定性 stub Worker（`scenarios/stub-worker/worker.mjs`：按场景打补丁、写 `REPORT.md`，可 crash / hang）。
+**决定**：e2e 与宿主回归使用"测试 provider"= Orca 的 fake-agent 启动覆盖 + 一个脚本化 agent：读 preamble 里的 Attempt 身份与 capability，在 Attempt worktree 里执行 fixture 的 stub Worker（`--scenario <按 Task 映射> --attempt <seq>`），然后调用 `axiom attempt submit --dispatch-capability …`（可按场景改为 `ask` / `blocked` / 直接退出 / 挂起）。它只存在于 `tests/e2e/` 与 fixture，**产品里没有这个 provider**，AgentFactory 的 provider 清单不包含它；M2 出口的"三种 provider"中它算一种，其余两种必须是真实 provider。
+**后果**：出口 e2e 可在宿主确定性运行（验证者的 chain）；真实 provider 的 smoke（Codex 必有）作为补充证据而非唯一证据；D18 的 fixture 场景（retry / stale-completion / agent-crash / deterministic-failure / merge-only-failure）从 M2 起逐个被 e2e 消费。
+**取代规则**：无；测试 provider 的协议随 Worker 通道变化而更新。
+
+## D50 · `REQUEST_SUBTASK` 的 V1 策略：落为待决项，确定性检查通过且 policy 允许时才自动建 Task — PROPOSED（M2 前置）
+
+**背景**：Constitution / AGENTS.md：Worker 不得直接派生 Worker；`REQUEST_SUBTASK` 由 Control Plane 在检查范围、深度、重复、依赖、成本、权限后决定是否建 Task。M2 要实现动词与检查，但 Planner / replanning（M5）与 Approval（M4）还不在。
+**决定**：V1 的 `REQUEST_SUBTASK` 处理 = (1) 消息持久化（`payload.axiom.type = REQUEST_SUBTASK`，关联 Task / Attempt）并在 Mission Home 显示为待决项；(2) Control Plane 跑确定性检查：请求的 `scope.allowedPaths` ⊆ 发起 Task 的 scope、嵌套深度 = 1（`nested_worker_max_depth`）、与现有 Task 标题 / scope 无重复、依赖边不成环、Mission 预算仍有余量、发起 Attempt 有效；(3) 全部通过且 `mission_policies.approval_rules.subtaskAutoCreate === true` 时经 `axiom.task.create`（`MINOR_ADJUSTMENT`）物化为 DEFINED Task 并加边 `原 Task → 新 Task`；否则保持待决，由人在 UI 里接受（走同一 `task.create`）或拒绝，审计记录理由；默认 `subtaskAutoCreate = false`。发起 Attempt 不因请求而阻塞，可继续或 `blocked`。
+**后果**：M2 不引入递归派生；`axiom.task.create` 在 M2-06 注册；M5 的 replan 分级可以把大量 `REQUEST_SUBTASK` 升级为 `MAJOR_REPLAN` 触发。
+**取代规则**：Approval 接入（M4）后，自动建 Task 的条件可改为 policy + Approval；以新 Decision 取代。
+
+## D51 · 集成基线 ref `axiom/integration/<missionId>` 在 `mission start` 时由 MissionController 创建（D6 的细化）— PROPOSED（M2 前置）
+
+**背景**：D6 规定 Attempt 分支从集成基线 `axiom/integration/<missionId>` 创建，基线只由 IntegrationController 写；但 IntegrationController 是 M4 的，而 M2 的 attempt-launcher 已经需要一个基线来建 worktree。
+**决定**：`axiom.mission.start`（`PLANNED → EXECUTING`）时，MissionController 以目标分支当前 HEAD 创建 `axiom/integration/<missionId>`（已存在则校验其祖先关系并沿用，不重置）；在 M4 之前该 ref 只读——任何 Attempt、验证或人工流程都不得移动它；M4 的 IntegrationController 接管后是唯一写者（PROMOTED = 前进该 ref）。创建失败（目标分支不存在等）→ `mission start` 失败且 Mission 保持 PLANNED（事务回滚）。
+**后果**：D6 的"只由 IntegrationController 写"改读为"创建由 MissionController 在 start 时完成一次，之后只由 IntegrationController 前进"；目标分支漂移（§12.3）仍在 M4 处理。
+**取代规则**：无。
+
+## D52 · M2（Planning 与 Agent Factory）任务分解与顺序 — PROPOSED（待 Henry）
+
+**背景**：M1 已关闭（D46）；架构 §20 的 M2 行给出范围与两条出口标准；D46 列出了 M1 遗留给 M2 的项；D48–D51 补齐了 M2 开工前的四个形态决定。
+**决定**：M2 按 `docs/plans/M2.md` 的 11 个 Task 执行：M2-00 `axiom-ci.yml`（已完成）→ M2-01 内核 seam（`startLocalWorker` 的 service-only additive 入参，D14 适配器）→ M2-02 ArtifactStore + ContextBuilder → M2-03 AgentSpec + AgentFactory + RulesEngine 基线 → M2-04 Scheduler + 事务性 admission + 预算 → M2-05 attempt-launcher + `axiom.attempt.show/list` → M2-06 Worker 通道 `axiom attempt inform/request/blocked/handoff/request-subtask/ask/check` + admission 扩展 → M2-07 `axiom attempt submit` 结算 + Candidate 快照 → M2-08 RecoveryService（Attempt 子集）+ pause / cancel 处置 → M2-09 Planner v1 → M2-10 UI（Attempt 与待决项 + M1 文案遗留）→ M2-11 出口 e2e + 文档 + hygiene。出口标准 = §20 两条 + 重启不重复启动 + §4b 新增拦截点有测试 + 三种 provider（测试 provider 必有，真实 provider 以安装为准）+ `DEFERRED.md` 核对，详见计划文件。
+**理由**：先把内核 seam 钉死（最大不确定性），再按 ContextPackage → AgentSpec → admission → launcher → Worker 通道 → 结算 → 恢复的依赖顺序推进；Planner 放在 launcher 与通道之后以复用它们；UI 与出口 e2e 最后。每个 Task 一次 Codex attempt 可完成、可独立验证、有 sidecar 门。
+**后果**：`docs/plans/M2.md` 是 M2 的 PlanRevision 等价物；brief 在 `.axiom-work/briefs/M2-nn.md`；验证记录在 `.axiom-work/verifications/`；分解的拆分 / 合并 / 新增以本条下的修订行记录。粗估 3–5 个工作日的流水线时间。
+**取代规则**：M2 出口 Decision 记录实际完成情况并关闭本条；范围变更经修订行。
