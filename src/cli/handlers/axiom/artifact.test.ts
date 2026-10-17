@@ -32,7 +32,7 @@ describe('mission artifact CLI', () => {
         '--related',
         't1,t2',
         '--retry-request',
-        'retry'
+        '11111111-1111-4111-8111-111111111111'
       ],
       method: 'axiom.artifact.put',
       params: {
@@ -74,7 +74,7 @@ describe('mission artifact CLI', () => {
     const output = vi.spyOn(console, 'log').mockImplementation(() => undefined)
     await dispatch(parsed.commandPath, { flags: parsed.flags, client, cwd: root, json: true })
     expect(call).toHaveBeenCalledExactlyOnceWith(method, params, {
-      orchestrationRequestId: verb === 'put' ? 'retry' : undefined
+      orchestrationRequestId: verb === 'put' ? '11111111-1111-4111-8111-111111111111' : undefined
     })
     expect(output).toHaveBeenCalled()
   })
