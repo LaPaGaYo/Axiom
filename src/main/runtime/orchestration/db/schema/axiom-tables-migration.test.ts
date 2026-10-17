@@ -15,7 +15,7 @@ const TABLE_COLUMNS: Record<string, string> = {
   goal_revisions:
     'id mission_id revision status objective constraints acceptance_criteria provenance created_at updated_at',
   plan_revisions:
-    'id mission_id revision status goal_revision_id milestones risks supersedes_id rejected_reason provenance created_at updated_at',
+    'id mission_id revision status goal_revision_id milestones risks proposal supersedes_id rejected_reason provenance created_at updated_at',
   task_stages:
     'task_id mission_id plan_revision_id stage previous_stage spec retry_policy attempt_count created_at updated_at',
   mission_task_edges:
@@ -379,9 +379,9 @@ describe('Axiom v43 side tables', () => {
     expect(
       db.prepare('SELECT nested_worker_max_depth, readiness_threshold FROM mission_policies').get()
     ).toEqual({ nested_worker_max_depth: 1, readiness_threshold: 'INTEGRATED' })
-    expect(
-      db.prepare('SELECT unverifiable_tolerance_minutes FROM mission_policies').get()
-    ).toEqual({ unverifiable_tolerance_minutes: 30 })
+    expect(db.prepare('SELECT unverifiable_tolerance_minutes FROM mission_policies').get()).toEqual(
+      { unverifiable_tolerance_minutes: 30 }
+    )
     expect(() =>
       db.exec(
         "INSERT INTO mission_policies (mission_id, concurrency_limit, nested_worker_max_depth) VALUES ('invalid', 1, 2)"

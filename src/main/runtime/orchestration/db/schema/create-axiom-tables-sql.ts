@@ -38,6 +38,8 @@ CREATE TABLE IF NOT EXISTS plan_revisions (
   goal_revision_id TEXT NOT NULL,
   milestones TEXT NOT NULL DEFAULT '[]',
   risks TEXT NOT NULL DEFAULT '[]',
+  -- v43 is unreleased: retain the validated proposal before Task materialization.
+  proposal TEXT NOT NULL DEFAULT '{}',
   supersedes_id TEXT,
   rejected_reason TEXT,
   provenance TEXT NOT NULL DEFAULT '{}',

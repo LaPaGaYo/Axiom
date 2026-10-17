@@ -73,9 +73,11 @@ describe('Mission objects', () => {
         goalRevisionId: 'g',
         milestones: proposal.milestones,
         risks: proposal.risks,
+        tasks: proposal.tasks,
+        edges: proposal.edges,
         provenance
-      }).provenance
-    ).toEqual(provenance)
+      })
+    ).toMatchObject({ provenance, tasks: proposal.tasks, edges: proposal.edges })
     expect(TaskSpecSchema.safeParse(proposal.tasks[0]).success).toBe(true)
   })
   it('rejects PlanRevision with missing or invalid provenance', () => {
@@ -86,8 +88,11 @@ describe('Mission objects', () => {
       status: 'PROPOSED',
       goalRevisionId: 'g',
       milestones: [],
-      risks: []
+      risks: [],
+      tasks: [],
+      edges: []
     }
+    expect(PlanRevisionSchema.safeParse({ ...revision, provenance }).success).toBe(true)
     expect(PlanRevisionSchema.safeParse(revision).success).toBe(false)
     for (const invalid of [
       null,

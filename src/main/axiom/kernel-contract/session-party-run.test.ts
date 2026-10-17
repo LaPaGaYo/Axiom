@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { isOrcaSessionId } from '../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 import { OrchestrationDb } from '../../runtime/orchestration/db'
+import { runLifecycleWriteTransaction } from '../../runtime/orchestration/db/lifecycle-write-transaction-runner'
 import {
   hasRunBindingKey,
   mailboxAddressOf,
@@ -51,6 +52,24 @@ describe('D14 synthetic Mission session party', () => {
       coordinatorOrcaSessionId: id
     })
   }
+
+  it('rolls a nested createRun and its coordinator binding back with the outer transaction', () => {
+    const original = createMissionRun()
+    let replacementId = ''
+    expect(() =>
+      runLifecycleWriteTransaction(db.db, 'axiom_create_mission', () => {
+        const replacement = createMissionRun()
+        replacementId = replacement.id
+        expect(db.getRun(replacementId)).toEqual(replacement)
+        throw new Error('mission insert failed')
+      })
+    ).toThrow('mission insert failed')
+    expect(replacementId).not.toBe('')
+    expect(db.getRun(replacementId)).toBeUndefined()
+    expect(db.getRun(original.id)).toEqual(original)
+    expect(db.getCurrentRunForCoordinator(caller)?.id).toBe(original.id)
+    expect(db.getRunMailboxOwnerIdsForHandle(caller.address)).toEqual([original.id])
+  })
 
   it('constructs a bound in-process caller without an agent-session record', () => {
     expect(isOrcaSessionId(sessionId)).toBe(true)

@@ -179,6 +179,8 @@ describe('AxiomStore revisions', () => {
       goalRevisionId: planBody.goalRevisionId,
       milestones: planBody.milestones,
       risks: planBody.risks,
+      tasks: planBody.tasks,
+      edges: planBody.edges,
       provenance: planBody.provenance
     })
     expect(first.id).toMatch(/^planrev_[a-f0-9]{12}$/)
@@ -331,12 +333,12 @@ describe('AxiomStore policy, audit and transactions', () => {
     expect(store.getPolicy(mission.id)).toEqual(changed)
   })
   it('appends immutable audit events and pages by sequence within a Mission', () => {
-    const sequence = store.appendAuditEvent(audit)
+    const sequence = store.appendAuditEvent({ ...audit, createdAt: '2026-10-17T12:00:00Z' })
     store.appendAuditEvent({ ...audit, missionId: 'other' })
     const second = store.appendAuditEvent({ ...audit, before: false, after: ['x', 1] })
     expect(second).toBeGreaterThan(sequence)
     expect(store.listAuditEvents({ missionId: mission.id, limit: 1 })).toEqual([
-      { ...audit, sequence, createdAt: expect.any(String) }
+      { ...audit, sequence, createdAt: '2026-10-17T12:00:00Z' }
     ])
     expect(store.listAuditEvents({ missionId: mission.id, afterSequence: sequence })).toEqual([
       { ...audit, before: false, after: ['x', 1], sequence: second, createdAt: expect.any(String) }

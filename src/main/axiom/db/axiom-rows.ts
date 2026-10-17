@@ -93,6 +93,7 @@ export const PlanRowSchema = z.object({
   goal_revision_id: AxiomIdSchema,
   milestones: z.string(),
   risks: z.string(),
+  proposal: z.string(),
   supersedes_id: AxiomIdSchema.nullable(),
   rejected_reason: z.string().nullable(),
   provenance: z.string(),
@@ -105,6 +106,13 @@ export const PlanRowCodec = PlanRowSchema.transform((row) =>
     revision: row.revision,
     status: row.status,
     goalRevisionId: row.goal_revision_id,
+    ...readJson(
+      PlanRevisionSchema.pick({ tasks: true, edges: true }),
+      row.proposal,
+      'plan_revisions',
+      row.id,
+      'proposal'
+    ),
     supersedesId: row.supersedes_id ?? undefined,
     rejectedReason: row.rejected_reason ?? undefined,
     milestones: readJson(

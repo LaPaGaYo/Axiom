@@ -9,7 +9,9 @@ import type { OrchestrationDb } from '../../runtime/orchestration/db/orchestrati
 import { AXIOM_COLUMNS, AuditRowCodec, PolicyRowCodec } from './axiom-rows'
 import { readRow, readRows } from './row-codec'
 
-const AppendSchema = AuditEventSchema.omit({ sequence: true, createdAt: true })
+const AppendSchema = AuditEventSchema.omit({ sequence: true }).extend({
+  createdAt: AuditEventSchema.shape.createdAt.optional()
+})
 const ListSchema = z.object({
   missionId: AxiomIdSchema,
   afterSequence: z.number().int().nonnegative().optional(),
@@ -58,7 +60,8 @@ export function policyAuditStore(db: OrchestrationDb) {
       return AuditRowCodec.parse(
         db.db
           .prepare(`INSERT INTO audit_events
-        (mission_id, actor, object_kind, object_id, event, before, after) VALUES (?, ?, ?, ?, ?, ?, ?)
+        (mission_id, actor, object_kind, object_id, event, before, after, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))
         RETURNING ${AXIOM_COLUMNS.audit_events}`)
           .get(
             p.missionId,
@@ -67,7 +70,8 @@ export function policyAuditStore(db: OrchestrationDb) {
             p.objectId,
             p.event,
             p.before === null ? null : JSON.stringify(p.before),
-            p.after === null ? null : JSON.stringify(p.after)
+            p.after === null ? null : JSON.stringify(p.after),
+            p.createdAt ?? null
           )
       ).sequence
     },
