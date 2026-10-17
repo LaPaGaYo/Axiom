@@ -1,6 +1,7 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
 import type { OrchestrationDb } from '../../../../orchestration/db'
+import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { RunRow, TaskRow } from '../../../../orchestration/types'
 import type {
   OrchestrationCallerIdentity,
@@ -29,6 +30,7 @@ import { tearDownFailedWorkerStart } from './failed-worker-start-teardown'
 import { requireWorkerAuthority, type WorkerEffect } from './worker-topology'
 import { prepareLocalWorkerStart } from './worker-start-validation'
 import { deliverAndSettleWorkerStartReadiness } from './worker-start-readiness-settlement'
+import type { ControlPlaneWorkerStart } from './control-plane-worker-start'
 
 type WorkerStartMutation = {
   callerFingerprint: string
@@ -46,6 +48,7 @@ export async function startLocalWorker(args: {
   callerSession?: OrchestrationSessionCaller
   existingTask?: TaskRow
   orchestrationMutation?: WorkerStartMutation
+  controlPlane?: ControlPlaneWorkerStart
   /** Settings-driven; the executing host still gets to refuse below. */
   mode: WorkerStartModeReceipt
 }): Promise<unknown> {
@@ -53,6 +56,12 @@ export async function startLocalWorker(args: {
   const { orchestrationMutation } = args
   const coordinatorPane = coordinator?.paneKey ?? null
   const requestedWorktree = params.worktree ?? 'current'
+  if (args.controlPlane?.worktreeId !== undefined && requestedWorktree !== 'current') {
+    throw new OrchestrationError(
+      'invalid_argument',
+      'controlPlane.worktreeId requires current worktree placement.'
+    )
+  }
   const createsWorktree = requestedWorktree === 'new-child' || requestedWorktree === 'new-top-level'
   const { agent, launch } = prepareLocalWorkerStart({ params, createsWorktree, runtime })
 
@@ -74,7 +83,9 @@ export async function startLocalWorker(args: {
   let resolvedWorktree = creationWorktree
     ? undefined
     : requestedWorktree === 'current'
-      ? await runtime.showManagedTerminalWorkspace(`id:${coordinatorWorktreeId}`)
+      ? await runtime.showManagedTerminalWorkspace(
+          `id:${args.controlPlane?.worktreeId ?? coordinatorWorktreeId}`
+        )
       : await runtime.showManagedTerminalWorkspace(requestedWorktree)
   if (params.terminal) {
     await assertExplicitWorkerTerminalUsable({
@@ -106,8 +117,13 @@ export async function startLocalWorker(args: {
       : 'existing_worktree'
   }
   const started = db.createStartingWorkerDispatch({
-    creator: resolveDispatchCreator(runtime, params.from, callerSession),
-    maxDepth: runtime.getNestedWorkerMaxDepth(),
+    creator:
+      args.controlPlane?.dispatchCreator ??
+      resolveDispatchCreator(runtime, params.from, callerSession),
+    maxDepth: Math.min(
+      runtime.getNestedWorkerMaxDepth(),
+      args.controlPlane?.dispatchMaxDepth ?? Infinity
+    ),
     taskId: existingTask?.id,
     taskSpec: params.spec,
     taskTitle: params.taskTitle,
@@ -144,6 +160,8 @@ export async function startLocalWorker(args: {
       dispatchId: started.dispatch.id,
       taskId: task.id,
       params,
+      branchNameOverride: args.controlPlane?.branchNameOverride,
+      callerIdentity: args.controlPlane?.callerIdentity,
       requestedWorktree,
       creationWorktree,
       resolvedWorktree,
@@ -225,6 +243,8 @@ export async function startLocalWorker(args: {
       task,
       dispatchId: started.dispatch.id,
       dispatchDepth: started.dispatch.depth,
+      dispatchMaxDepth: args.controlPlane?.dispatchMaxDepth,
+      preambleBuilder: args.controlPlane?.preambleBuilder,
       structuredSession,
       terminalHandle,
       coordinatorHandle: params.from,

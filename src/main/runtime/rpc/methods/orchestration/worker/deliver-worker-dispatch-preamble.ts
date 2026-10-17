@@ -2,7 +2,8 @@ import type { RuntimeTerminalSend } from '../../../../../../shared/runtime-termi
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import {
   buildDispatchPreamble,
-  dispatchPreambleSendOptions
+  dispatchPreambleSendOptions,
+  type PreambleParams
 } from '../../../../orchestration/preamble'
 import { sendStructuredWorkerPreamble } from '../../orchestration-structured-worker-session'
 import type { createStructuredWorkerSessionForWorktree } from './worker-topology'
@@ -22,6 +23,8 @@ export async function deliverWorkerDispatchPreamble(args: {
   terminalHandle: string
   dispatchId: string
   dispatchDepth: number
+  dispatchMaxDepth?: number
+  preambleBuilder?: (params: PreambleParams) => string
   taskId: string
   taskSpec: string
   coordinatorHandle: string
@@ -30,11 +33,13 @@ export async function deliverWorkerDispatchPreamble(args: {
   requestId: string
 }): Promise<RuntimeTerminalSend['prompt']> {
   const { runtime, structuredSession, terminalHandle } = args
-  const preamble = buildDispatchPreamble({
+  const preamble = (args.preambleBuilder ?? buildDispatchPreamble)({
     // Depth only. A worker is taught the same verbs whichever mode it runs in, so this must not
     // become a second gate: resolving the caller's worktree is what lets a structured worker
     // dispatch sub-workers exactly like a PTY one.
-    canDispatchSubWorkers: args.dispatchDepth < runtime.getNestedWorkerMaxDepth(),
+    canDispatchSubWorkers:
+      args.dispatchDepth <
+      Math.min(runtime.getNestedWorkerMaxDepth(), args.dispatchMaxDepth ?? Infinity),
     taskId: args.taskId,
     dispatchId: args.dispatchId,
     taskSpec: args.taskSpec,

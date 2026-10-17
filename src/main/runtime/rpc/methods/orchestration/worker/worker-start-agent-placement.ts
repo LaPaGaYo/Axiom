@@ -17,6 +17,7 @@ import type { AgentLaunchPreferences } from '../../../../../../shared/agent-sess
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationCallerIdentity } from '../../../../orchestration/orchestration-caller-identity'
 import {
   resolveWorkerStartModeOnHost,
   type WorkerStartModeReceipt
@@ -51,6 +52,8 @@ type WorkerAgentPlacementArgs = {
   dispatchId: string
   taskId: string
   params: WorkerStartInput
+  branchNameOverride?: string
+  callerIdentity?: OrchestrationCallerIdentity
   requestedWorktree: string
   /** The coordinator's worktree, present only when this start creates one. */
   creationWorktree: PlacedWorktree | undefined
@@ -117,6 +120,8 @@ async function placeInCreatedWorktree(
     requestedWorktree: args.requestedWorktree,
     coordinatorWorktree,
     params: args.params,
+    branchNameOverride: args.branchNameOverride,
+    callerIdentity: args.callerIdentity,
     agent: args.agent as TuiAgent,
     withAgentTerminal: args.mode.mode !== 'structured',
     ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
