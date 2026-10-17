@@ -412,6 +412,7 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 
 **决定**（Henry 2026-10-17）：**A + C-lite**。本地 launcher 门禁仍是权威；新增 `.github/workflows/axiom-ci.yml` 作为 Linux 上的第二信号，由 M2-00 hygiene Task 提交（brief 由 verifier 写，Worker 实现，launcher 验证）；上游工作流文件一律不动。`DEFERRED.md` 的 DEF-1 改为 `RESOLVED (D45)`。前提动作（Henry）：在 fork 的 Settings → Actions 启用 Actions。
 **取代规则**：CI 策略再变更以新 Decision 取代本条；D41 的 A 部分不受影响。
+- **首次托管运行记录（2026-10-17）**：run #1 `39055324479`（main `0b4a67ced`，M2-00 合入）：Lint 3 m 17 s 绿、Axiom tests 1 m 18 s 绿、Typecheck 54 s **红**（真实类型错误，见 D46 修订行 / M1-11 / D47）；run #2 `39057000785`（main `c305070cd`，M1-11 合入）：**全绿**，Typecheck 110 s、Lint 198 s、Axiom tests 68 s，总时长 3 m 21 s。第二信号已就位：每次推送 main 约 3.5 min，三个 job 并行。
 
 ## D46 · M1 出口检查清单 — ACCEPTED（Henry 2026-10-17：M1 关闭）
 
