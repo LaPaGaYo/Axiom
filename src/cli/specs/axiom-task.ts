@@ -3,6 +3,14 @@ import { GLOBAL_FLAGS } from '../args'
 
 export const AXIOM_TASK_COMMAND_SPECS: CommandSpec[] = [
   {
+    path: ['task', 'create'],
+    summary: 'Add a Task to the approved Mission plan',
+    usage:
+      'axiom task create --mission <id> --file <task.json> [--depends-on <taskId>] [--retry-request <id>] --json',
+    allowedFlags: [...GLOBAL_FLAGS, 'mission', 'file', 'depends-on', 'retry-request'],
+    repeatableFlags: ['depends-on']
+  },
+  {
     path: ['task', 'list'],
     summary: 'List Tasks by authoritative stage',
     usage: 'axiom task list --mission <id> [--stage <stage>] [--json]',

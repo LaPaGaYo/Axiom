@@ -5,6 +5,8 @@ import { TERMINAL_MISSION_STATUSES } from '../../../shared/axiom-contract/lifecy
 import { parseAxiomMessagePayload } from '../../../shared/axiom-contract/message-params'
 import type { AxiomStore } from '../db/axiom-store'
 import type { MissionController } from './mission-controller'
+import { projectQuestion } from '../messaging/question-projection'
+import { processSubtaskRequest } from '../messaging/subtask-resolution'
 
 export type AxiomRuntime = Pick<OrcaRuntimeService, 'getOrchestrationDb' | 'waitForMessage'>
 type ConsumerIdentity = { missionId: string; runId: string; consumerGeneration: number }
@@ -139,17 +141,22 @@ export class RunMailboxConsumer {
           objectId: message.id,
           before: null
         }
-        const after = axiom
+        const question =
+          message.type === 'question' && message.run_id === this.identity.runId
+            ? projectQuestion(this.runtime.getOrchestrationDb(), message.id)
+            : undefined
+        const typed = axiom ?? question
+        const after = typed
           ? {
-              type: axiom.type,
-              taskId: axiom.taskId,
-              attemptId: axiom.attemptId,
+              type: typed.type,
+              taskId: typed.taskId,
+              attemptId: typed.attemptId,
               messageId: message.id
             }
           : undefined
         this.store.appendAuditEvent({
           ...audit,
-          event: axiom ? 'message.received' : 'mailbox.message',
+          event: typed ? 'message.received' : 'mailbox.message',
           after: after ?? { runId: this.identity.runId, type: message.type }
         })
         if (axiom?.type === 'REQUEST_SUBTASK' && axiom.subtask && after) {
@@ -158,6 +165,11 @@ export class RunMailboxConsumer {
             event: 'subtask.requested',
             after: { ...after, subtask: axiom.subtask }
           })
+          processSubtaskRequest(
+            { db: this.runtime.getOrchestrationDb(), store: this.store, missions: this.missions },
+            this.identity.missionId,
+            message.id
+          )
         }
         if (axiom?.type === 'BLOCKED') {
           this.store.appendAuditEvent({

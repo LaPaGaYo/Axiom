@@ -4,6 +4,11 @@ import type { HandlerGroup } from './handler-group-manifest'
 // keeps handler-group-manifest.ts within its line limit.
 export const AXIOM_HANDLER_GROUPS: readonly HandlerGroup[] = [
   {
+    name: 'axiom-message',
+    keys: ['message list', 'message answer', 'message resolve'],
+    load: async () => (await import('./handlers/axiom/message.js')).AXIOM_MESSAGE_HANDLERS
+  },
+  {
     name: 'axiom-mission',
     keys: [
       'mission create',
@@ -32,6 +37,7 @@ export const AXIOM_HANDLER_GROUPS: readonly HandlerGroup[] = [
   {
     name: 'axiom-attempt',
     keys: [
+      'attempt ask',
       'attempt show',
       'attempt list',
       'attempt inform',
@@ -45,7 +51,7 @@ export const AXIOM_HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'axiom-task',
-    keys: ['task list', 'task show', 'task cancel'],
+    keys: ['task create', 'task list', 'task show', 'task cancel'],
     load: async () => (await import('./handlers/axiom/task.js')).AXIOM_TASK_HANDLERS
   }
 ]

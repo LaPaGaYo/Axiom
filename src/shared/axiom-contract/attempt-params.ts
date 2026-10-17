@@ -24,6 +24,28 @@ export const AttemptHandoffParams = AttemptMessageParams
 export const AttemptRequestSubtaskParams = AttemptMessageParams.extend({
   subtask: SubtaskRequestSchema
 })
+export const AttemptAskParams = z
+  .strictObject({
+    ...AttemptSenderFields,
+    question: MessageSummarySchema.optional(),
+    options: z.array(z.string().trim().min(1)).optional(),
+    timeoutMs: z.number().int().nonnegative().max(2147483647).optional(),
+    resume: AxiomIdSchema.optional()
+  })
+  .refine(
+    (p) => p.resume !== undefined || p.question !== undefined,
+    'Question or resume is required'
+  )
+export const AttemptAskResponseSchema = z.object({
+  answer: z.string().nullable(),
+  messageId: AxiomIdSchema,
+  answerMessageId: AxiomIdSchema.nullable().optional(),
+  threadId: AxiomIdSchema,
+  timedOut: z.boolean(),
+  cancelled: z.boolean(),
+  connectionLost: z.boolean(),
+  timeoutMs: z.number()
+})
 export const AttemptCheckParams = z
   .object({
     ...AttemptSenderFields,

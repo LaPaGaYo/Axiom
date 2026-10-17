@@ -1,3 +1,4 @@
+import { TaskCreateParams } from '../../../shared/axiom-contract/task-params'
 import { readFile, stat } from 'node:fs/promises'
 import { extname, resolve } from 'node:path'
 import { z } from 'zod'
@@ -50,4 +51,11 @@ export function readPlanFile(cwd: string, file: string) {
 
 export function readRoutingFile(cwd: string, file: string) {
   return readInput(cwd, file, (text) => RoutingPolicySchema.parse(JSON.parse(text)))
+}
+
+export function readTaskFile(cwd: string, file: string) {
+  return readInput(cwd, file, async (text, path) => ({
+    task: TaskCreateParams.shape.task.parse(JSON.parse(text)),
+    provenance: { kind: 'user' as const, actor: 'user', at: (await stat(path)).mtime.toISOString() }
+  }))
 }
