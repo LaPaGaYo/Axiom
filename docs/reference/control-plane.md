@@ -156,6 +156,8 @@ Mission 总 Attempts/wall-clock 耗尽通过既有 `blockMission(missionId, budg
 
 `timeoutMs = resolveWorkerStartReadinessTimeoutMs(undefined)`（当前 60,000ms）只限制 readiness wait；Attempt runtime cap 由 M2-08 按 admission 的 `created_at` 和 bound spec 预算执行。`ready` 保持 RUNNING；`failed` 在尚有重试预算时转 NEEDS_FIX，否则 BLOCKED (`retry_budget_exhausted`)；`outcome_unknown` 保持 RUNNING，交 M2-08。dispatch 铸造前抛错时保留 NULL binding，记录经脱敏的失败 message，按同一重试规则转 stage。未绑定的读投影为 LAUNCH_PENDING；M2-08 负责该状态与 START_UNKNOWN 的恢复及 NEEDS_FIX → READY。
 
+`axiom.attempt.show/list` 异步经 `inspectWorkerTerminal` 读取执行宿主的 liveness（`live/exited` 原样保留，其余状态 → `unverifiable`，可选 `livenessReason` 优先保留 reason、否则保留非 live/exited 的 status，无则 null），不用 fleet 的 agent-status 判定；state、workspace 与 worktreeId 继续取自 `projectFleetWorker`，NULL dispatch 的 liveness/livenessReason 仍为 null。
+
 
 ## 5. 合成 session party 与 Run 绑定（D14）
 

@@ -120,7 +120,7 @@ BLOCKED           → 阻塞解除后回到进入前的 stage（READY / VERIFYIN
 |---|---|
 | `LAUNCH_PENDING` | `attempt_bindings.dispatch_id IS NULL`：admission 已提交，尚未绑定内核 dispatch；`liveness / workspace = null`，恢复由 M2-08 负责 |
 | `STARTING / RUNNING / SUBMITTED / FAILED / STOPPED / ABANDONED / START_UNKNOWN / STOP_UNKNOWN` | Orca `worker_dispatches.state`（`starting→STARTING`、`ready→RUNNING`、`stopping→RUNNING`、`succeeded→SUBMITTED`、`failed`、`stopped`、`abandoned`、`start_unknown`、`stop_unknown`）与 `dispatch_contexts.status`（`circuit_broken` → 视为 FAILED 且触发 B4） |
-| `liveness: live / unverifiable / exited` | `PtyLivenessVerdict`（执行宿主为准） |
+| `liveness: live / unverifiable / exited` | 经 `inspectWorkerTerminal` 读取执行宿主判定（`PtyLivenessVerdict`），不用 fleet 的 agent-status 判定；`live/exited` 原样保留，其余状态折叠为 `unverifiable`，可选 `livenessReason: string \| null` 保留 reason 或非 live/exited 的原始 status |
 | `workspace: retained / released / pending` | `worker_terminal_resources.release_state`（`retained`、`released`；其余 `not_requested / requested / releasing / unknown` 折叠为 `pending`） |
 规则：`liveness = unverifiable` 期间 Attempt 视为仍在 RUNNING，禁止对同一 worktree 冷启动新 Attempt；超过 policy 时限后由 RecoveryService 转 `ABANDONED` 并留证据。
 

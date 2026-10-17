@@ -69,7 +69,7 @@
 | `workspace` | `worker_terminal_resources.release_state` | `retained`→retained，`released`→released；`not_requested/requested/releasing/unknown` 折叠为 `pending`（术语表 §4.6） |
 | 失败计数 | `dispatch_contexts.failure_count`（跨重试累加） | Control Plane 的 `retryPolicy.maxAttempts` 为权威计数，circuit breaker 是下限保护（B4） |
 
-`src/main/axiom/execution/attempt-projection.ts` 复用 `projectFleetWorker(runtime, db, dispatchId)`，不另算 liveness；resource absent → workspace null；workspace.id → worktreeId。M2-05 的 `axiom.attempt.show/list` 已注册。
+`src/main/axiom/execution/attempt-projection.ts` 复用 `projectFleetWorker(runtime, db, dispatchId)` 的 state / resource / workspace；resource absent → workspace null；workspace.id → worktreeId。M2-05 的 `axiom.attempt.show/list` 已注册，异步经 `inspectWorkerTerminal` 读取执行宿主 liveness（按 §3d 折叠，不用 fleet 的 agent-status 判定），可选 `livenessReason` 优先保留 reason、否则保留非 live/exited 的 status，无则 null。
 
 ### 3c. 消息类型（D9）
 
@@ -182,7 +182,7 @@ M1-06 已注册下表标记「M1 已注册」的方法；其余方法留待后�
 | `axiom.attempt.inform` / `request` / `blocked` / `handoff` / `requestSubtask` | attemptId、正文、相关 id | `verifyDispatchCapability` → `insertMessage`（§3c 类型）→ MessageRouter | M |
 | `axiom.attempt.ask` | attemptId、question、options、timeoutMs / resume | 复用 `createQuestion` + 长轮询；`answerQuestion` 由 `axiom.message.answer` 触发 | M |
 | `axiom.attempt.check` | attemptId、ack? | 读 `dispatch:<attemptId>` mailbox；带 `ack` 时为 M | —/M |
-| `axiom.attempt.show` / `list` | attemptId / missionId、taskId? | M2-05 已注册：§3b fleet 投影；CLI `axiom attempt show/list` | — |
+| `axiom.attempt.show` / `list` | attemptId / missionId、taskId? | M2-05 已注册：§3b fleet 状态/资源 + 执行宿主 liveness 投影；CLI `axiom attempt show/list` | — |
 | `axiom.attempt.stop` / `abandon` | attemptId、reason | 委托 `workerStop`/`workerAbandon` service | M |
 | `axiom.verification.list` / `show` | candidateId / verificationRunId | 无 | — |
 | `axiom.verification.resolveReview` | verificationRunId、verdict(PASS/FAIL)、reviewer、evidence | 仅 `INCONCLUSIVE` 可收敛 | M |

@@ -18,6 +18,7 @@ export const AttemptSummarySchema = z.object({
   provider: z.string().nullable(),
   state: AttemptStateSchema,
   liveness: z.enum(['live', 'unverifiable', 'exited']).nullable(),
+  livenessReason: z.string().nullable().optional(),
   workspace: z.enum(['retained', 'released', 'pending']).nullable(),
   worktreeId: z.string().nullable(),
   createdAt: z.string(),
