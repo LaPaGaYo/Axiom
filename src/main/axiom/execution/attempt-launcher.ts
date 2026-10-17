@@ -140,7 +140,7 @@ export function createAttemptLauncher(deps: Dependencies): AttemptLaunch {
         worktree: 'current',
         agent: spec.provider,
         model: spec.model === 'policy-default' ? undefined : spec.model,
-        effort: spec.reasoning.effort,
+        effort: spec.model === 'policy-default' ? undefined : spec.reasoning.effort,
         timeoutMs
       })
       const args: Omit<AttemptWorkerStartArgs, 'runtime'> = {

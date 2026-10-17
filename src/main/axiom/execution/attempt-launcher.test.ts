@@ -113,7 +113,7 @@ it('kernel inputs: precreates from integration base and sends one synthetic call
     worktree: 'current',
     agent: 'codex',
     model: undefined,
-    effort: 'medium',
+    effort: undefined,
     timeoutMs: 60_000
   })
   expect(args.existingTask?.id).toBe(attempt.taskId)
@@ -159,6 +159,28 @@ it('kernel inputs: precreates from integration base and sends one synthetic call
       sameCaller: args.coordinator === args.callerSession
     })
   )
+})
+it('policy-default model leaves model and effort undefined', async () => {
+  await admit()
+  expect(f.store.getAgentSpec(attempt.agentSpecId)?.spec.model).toBe('policy-default')
+  await launcher()(attempt)
+  const { params } = startWorker.mock.calls[0][0]
+  expect(params.model).toBeUndefined()
+  expect(params.effort).toBeUndefined()
+  expect(stage()).toBe('RUNNING')
+})
+it('explicit routing model passes both model and reasoning effort', async () => {
+  const policy = f.store.getPolicy(f.missionId)!
+  f.store.upsertPolicy(f.missionId, {
+    ...policy,
+    routing: { ...policy.routing, models: { codex: 'gpt-5.6-sol' } }
+  })
+  await admit()
+  await launcher()(attempt)
+  const { params } = startWorker.mock.calls[0][0]
+  expect(params.model).toBe('gpt-5.6-sol')
+  expect(params.effort).toBe('medium')
+  expect(stage()).toBe('RUNNING')
 })
 it.each([
   ['ready', 1, 'RUNNING', 'attempt.started'],
