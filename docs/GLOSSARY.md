@@ -19,7 +19,7 @@
 | **CLI** | 二进制 `axiom`。运维/用户命令：`axiom mission create|show|pause|resume|cancel`、`axiom plan propose|approve|list`、`axiom task list|show`、`axiom approval list|grant|deny` …；Worker 命令见 §5。 |
 | **分支命名（D6，含修正）** | 集成基线 `axiom/integration/<missionId>`；Attempt 分支 `axiom/attempt/<taskId>/<seq>`（seq = 该 Task 的 Attempt 序号，由 Control Plane 递增；D6 原文的 `<attemptId>` 因 dispatch id 在 worktree 创建后才存在而改为序号，`attempt_bindings` 记录 `dispatch_id ↔ seq ↔ branch`）；集成临时分支 `axiom/integrating/<batchId>`；目标分支 = 用户指定（默认仓库默认分支）。 |
 | **数据落位** | 权威状态：Orca `orchestration.db`（新增 Axiom side tables，迁移 v43 起）；证据/Artifact 内容：`<userData>/axiom/artifacts/<sha256>`（内容寻址，DB 只存引用与 hash，G4）。 |
-| **Controlled Acceptance Fixture** | V1 演示与验收用的冻结仓库（D18）：固定 commit / Node / 包管理器版本，确定性离线检查，硬门槛见章程 §9；基线只经 fixture-version Decision 变更。候选 FlowTask @ `b551cfae…`（待资格测试）。 |
+| **Controlled Acceptance Fixture** | V1 演示与验收用的冻结仓库（D18）：固定 commit / Node / 包管理器版本，确定性离线检查，硬门槛见章程 §9；基线只经 fixture-version Decision 变更。v1 = 自建 FlowTask，`LaPaGaYo/flowtask-fixture` tag `fixture-v1`（commit `a6a8413`），manifest `fixture-manifest.v1.json`（D39、D42）。 |
 | **Blind External Validation Fixture** | M4 基本完成后独立选定的第二个仓库（D18）；盲测前不得用于调优 prompt、路由规则、Task 模板或验证策略；提供泛化证据。 |
 | **Fixture manifest** | 版本化的 fixture 描述：仓库 + commit、工具链版本、检查命令与时限、预置场景（deterministic failure / merge-only failure / Agent crash / retry / stale-completion）与预期结果；存为 Artifact。 |
 | **契约级名称** | 提交合同 `axiom-submission-v1`；AgentSpec workspace 策略 `attempt-worktree`；对 Mission 管理对象越权调用的拒绝码 `mission_managed`；客户端协商的 runtime capability `axiom.control-plane.v1`。 |

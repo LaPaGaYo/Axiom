@@ -332,3 +332,52 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **决定**（Henry 2026-10-16）：**选项 A**。实施为 hygiene 任务 M0-14：10 个工作流去掉 `schedule:` 与 `push:` 触发（`ci-cache-warmup`、`mobile`、`skill-update-roundtrip`、`computer-e2e`、`e2e`、`node-next-compat`、`packaged-browser-e2e`、`performance-contracts`、`terminal-ime-e2e`、`terminal-perf`），保留 `workflow_dispatch` / `workflow_call` / `pull_request`，不删文件、不动 `pr.yml`；同步更新断言这些触发器的工作流自测（`ci-cache-warmup-workflow`、`skill-update-roundtrip-workflow`、`terminal-ime-e2e-workflow`、`computer-e2e-workflow` 等）。推送 main 之前的门禁仍是本地的 `verify-merged` + 全量 suite + 打包检查。
 **延期复审（登记在 `docs/decisions/DEFERRED.md`，不可遗忘）**：B（`pr.yml` 加 push 触发）与 C（Axiom 自己的 `ci.yml`）在 **M1 控制平面代码首次合入 main 之后、M1 出口之前**重新决定；届时需带上 fork 里托管 CI 的实际运行记录（Actions 页）与本地门禁的时长数据。
 **取代规则**：B/C 的复审结果以新 Decision（D41a 或独立编号）记录并取代本条的 CI 策略；在那之前任何新增工作流默认只允许 `workflow_dispatch` / `workflow_call` / `pull_request` 触发。
+
+## D42 · fixture-version Decision：Controlled Acceptance Fixture v1 冻结为 `LaPaGaYo/flowtask-fixture` @ `a6a8413`（tag `fixture-v1`） — ACCEPTED（事实记录；执行 D39 的冻结条款，Henry 可在 M0 出口确认时否决）
+
+**背景**：D39 把 fixture 改为自建，并规定「候选通过全部硬门槛并冻结 manifest v1」为 M0 出口项、「更换 fixture 仓库或改变其基线 commit 需新的 fixture-version Decision」。两个 fixture Task 都已走完 brief → Codex Worker → 独立验证 → `--no-ff` 合入 fixture `main` 的流水线：FT-01（应用，`.axiom-work/verifications/FT-01-2.md`，fixture `main` `60f3824`）与 FT-02（五个场景、stub worker、`fixture-manifest.v1.json`、参考 Goal 分解、`qualify` / `scenarios:check`，`FT-02-2.md`，fixture `main` `a6a8413`）。FT-02 的 attempt 1 只败在 `qualify` 的 `fast-identical` 门（oxlint 的 `Finished in <n>ms` 计时行让两次 `verify:fast` 输出不等）；attempt 2 只归一化 `Finished in …` 行里的时长片段（文件数与线程数保留），差异时报告首个不同行，并由 `scripts/qualify.test.mjs` 固定下来。
+
+**决定**：fixture v1 基线 = commit **`a6a8413ecdcbbdb1d34f36950ba7e1aaa5a1a642`**（fixture `main`；注释标签 **`fixture-v1`**，标签对象 `ae59963`，由 `launchers/fixture-tag.command` 创建并只推送 `refs/tags/fixture-v1` 这一个引用）；manifest = `fixture-manifest.v1.json`（sha256 `00377615f5273c20c85c528bfe4e45933494853f14fdc90f39fb25e2441afa9d`，`manifestVersion: 1`，`baselineRef: "fixture-v1"`）。硬门槛对照（D18 / 章程 §9）：
+
+| 硬门槛 | v1 实测（验证者独立核对，非 Worker 自述） |
+|---|---|
+| 许可 | MIT（仓库 LICENSE 与 manifest 一致） |
+| 固定版本 | commit `a6a8413` / tag `fixture-v1`；Node 22（`.nvmrc`）、pnpm 10.34.7（`packageManager`）、TypeScript 7.0.2、vitest 4.1.12、oxlint 1.88.0；锁文件已提交且自 FT-01 起字节不变 |
+| 确定性检查 | `typecheck` / `lint` / `test:unit` / `build` / `test:integration` 离线可复现；`qualify` 在已提交树上连续 PASS 两次（`fast-identical`：两次 `verify:fast` 输出在归一化计时片段后一致） |
+| 时限 | `verify:fast` ≈ 2.5 s（预算 180 s）、`verify:full` ≈ 4.2 s（预算 480 s）、`scenarios:check` ≈ 43 s、`verify:fixture` ≈ 48 s（macOS arm64，12 核） |
+| 规模 | 254 个受跟踪文件、62 个 `*.test.ts`（另有 4 个 `scripts/*.test.mjs`）；214 单测 + 20 集成 + 23 脚本测试 |
+| 可分解性 | `GOAL.md`「Sprints and planning」→ `scenarios/goal/decomposition.json`：12 个 Task（T01–T12），3 个根 Task 可并行就绪（T01 Sprint 实体与校验、T02 表格 CSV 互换、T03 就绪工作报表），最长依赖链 7，每个 Task 列出允许改动的文件 |
+| 预置场景 | S1 `deterministic-failure`（6 步）、S2 `merge-only-failure`（semantic + textual，11 步）、S3 `agent-crash`（crash → 137/SIGKILL + 半写文件无报告、hang → 每秒心跳不退出、succeed，3 步）、S4 `retry`（4 步）、S5 `stale-completion`（5 步）：全部 29 步由 `pnpm run scenarios:check` 机械证明，期望值（含精确的失败测试名与 `git apply --check` 拒绝）写在 manifest；验证者在 Linux VM 上独立复核了补丁序列与 stub worker 的退出码/文件副作用 |
+
+**冻结规则**：V1 期间 Axiom 的验收与演示一律以 `fixture-v1`（manifest 的 `baselineRef`）为基线。任何对基线 commit、manifest、场景补丁或 stub worker 的修改都必须经新的 fixture-version Decision（D42a、D42b…）并产生新 tag（`fixture-v2`…）与新的 manifest 版本号；已推送的 `fixture-v1` 标签不得移动或删除。fixture 仓库的 `main` 之后可以继续演进（例如为 M3/M4 增加场景），但 Axiom 引用的永远是 tag，不是 `main`。
+
+**后果**：M0 出口项「fixture 候选通过全部硬门槛并冻结 manifest v1」完成；章程 §9 的「暂定候选 FlowTask @ b551cfae…」段落改写为冻结后的事实（修订记录第 13 条）；Evidence Deliverable「Controlled Acceptance Fixture 的资格测试记录与版本化 fixture manifest」= `FT-01-2.md` + `FT-02-2.md`（Axiom 仓库）+ `fixture-manifest.v1.json` + `docs/FIXTURE.md` + `REPORT-FT-01.md` / `REPORT-FT-02.md`（fixture 仓库）。
+
+**保留的观察/风险**：S2（semantic a、textual a/b）、S4、S5 的补丁都改 `src/services/date-range.ts` 第 7–10 行——各场景按 manifest 各自在新的基线树上执行，互不影响；但组合演示只能是 S1 + {S2 | S4 | S5} 之一 + S3，不能把 S2/S4/S5 叠到同一棵树上。`qualify` 的 `clean` 门在脏树上必失败（设计如此：Worker 在沙箱里永远过不了它，由 launcher 提交后验证者重跑）。资格测试只在 macOS arm64 上跑过，Linux/Windows 宿主的时限未测（manifest 预算留了 ≥ 60× 余量）。Worker 的负面对照（改掉 S1 补丁的故意缺陷后 `scenarios:check` 在 `one-failure` 步失败）记录在 `REPORT-FT-02.md`，验证者未重复执行。
+
+**取代规则**：更换仓库、基线 commit、manifest 版本或场景集合需新的 fixture-version Decision；本条不取代 D39 的分工（Orca 式合成仓库继续用于 M1–M4 的单测 / e2e）。
+
+## D43 · M0 出口检查清单 — PROPOSED（请 Henry 确认后 M0 关闭）
+
+**背景**：章程 §9 定义 M0 = 新产品身份与网络隔离（品牌、更新源、telemetry、第三方 notice、网络出口清单与断言测试）；D18 追加 fixture 资格测试；D40 追加打包证据；`DEFERRED.md` 要求里程碑出口逐条核对延期事项。下表逐项对照，每项都指向独立验证记录（`.axiom-work/verifications/`）或证据文档，没有一项靠 Worker 自述。
+
+| 出口项 | 证据 | 状态 |
+|---|---|---|
+| 产品机器身份（bundle id、URL scheme、CLI / 可执行名、发布仓库） | M0-02（`M0-02-5.md`，D21）；打包产物 Info.plist 身份全部为 Axiom（`docs/review-evidence/axiom-m0/M0-13-packaged-app.md`） | 完成 |
+| 更新源、changelog / nudge、插件 kill-list、反馈与崩溃上传、官方诊断 | M0-03（`M0-03-2.md`） | 完成 |
+| 产品 telemetry 移除 | M0-04（`M0-04-4.md`，D25） | 完成 |
+| 品牌与文案：应用 / CLI / 文档站 / README / attribution notice、`orca://` 残留；打包 helper 显示名与权限提示文案 | M0-05a、M0-05b-1、M0-05b-2（D32）；M0-12（`M0-12-2.md`） | 完成；asar 内仍有 2 处 `stablyai`（`NOTICE.md` 归属必须保留；mobile `ProtocolBlockScreen` 的上游链接 = hygiene） |
+| 云服务 / 插件市场 / 技能来源纳入产品出口策略 | M0-06a、M0-06b | 完成 |
+| 上游云基础设施树与原生移动发布 CI 移除 | M0-07（D33 / D33a） | 完成 |
+| 网络出口清单 + 断言测试 | vendor-egress ratchet 基线 430 对（M0-10）；冷启动 / 空闲零出口（M0-08 FAIL for cause → M0-09 PASS，D37 / D38）；打包产物前台 75 s 抓包 tally `{}`（D40） | 完成 |
+| `axiom.*` RPC 命名空间与 CLI 命令名无碰撞 | M0-11（`M0-11-1.md`） | 完成 |
+| 打包产物内容契约（`app.asar` 根目录白名单、禁止路径守卫） | M0-13 两个 attempt（`M0-13-1.md`、`M0-13-2.md`）：572 MB、asar 5 个根条目、守卫 OK | 完成（仅 macOS arm64；签名 / 公证与 Windows / Linux 打包不在 M0 范围） |
+| 托管 CI 策略 | D41 选项 A → M0-14（`M0-14-2.md`）；B / C = DEF-1 | 完成（DEF-1 在 M1 复审） |
+| Controlled Acceptance Fixture 资格测试 + manifest v1 冻结 | FT-01、FT-02、D42（`fixture-v1`） | 完成 |
+| 三份文档（`docs/GLOSSARY.md`、`docs/PROJECT_CONSTITUTION.md`、`docs/reference/orca-mapping.md`）与 `AGENTS.md` | 已在仓库 | 完成（落位规则 D13 仍 PROPOSED，随 M1 前置 Decision 一并拍板） |
+| 延期事项核对（`DEFERRED.md`） | DEF-1（M1 控制平面首次合入后）、DEF-2（M1 Settings UI 排期时）、DEF-3（首个发布版本前）全部 OPEN，触发点都在 M0 之后 | 核对完成，不阻塞 |
+
+**明确留到 M0 之后的**：Windows / Linux 打包与签名 / 公证；`package.json.name`、`CFBundleShortVersionString`、`orca-*` helper 可执行文件名与 NSIS 文案（DEF-3）；mobile 代码的 9 个 `import/no-cycle` 与 `ProtocolBlockScreen` 上游链接（hygiene 清单）；上游 `typecheck:e2e` 在 main 上本就红（hygiene）。
+
+**提议**：Henry 确认后本条改为 ACCEPTED，M0 关闭。M1 的前置 Decision 为 D6a、D7a、D9–D16（均 PROPOSED，待拍板），M1 的任务分解随后以 brief 形式提出。
+**取代规则**：无。若 Henry 要求补做某项，补做的工作以新的 M0-nn Task 记录，本条在补齐前保持 PROPOSED。

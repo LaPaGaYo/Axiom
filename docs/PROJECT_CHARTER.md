@@ -1,6 +1,6 @@
 # 自主软件工程控制平台：Project Charter V1.1
 
-更新日期：2026-09-26  
+更新日期：2026-10-17（§9 fixture 段落；其余 2026-09-26）  
 项目代号：Axiom（D17 已确认）  
 文档状态：V1.1  
 基于：V1（2026-09-26）
@@ -210,7 +210,7 @@ V1 使用两类相互独立的 fixture。
 
 fixture 基线在 V1 期间保持不变，除非通过明确的 fixture-version Decision；所有场景与预期结果存为版本化 fixture manifest。
 
-暂定候选：**FlowTask @ `b551cfaeb7ce2d42433b29d63c43659a6b9e4d56`**，以两项条件为前提：许可明确确认；在固定的 Node 22 + pnpm 10 工具链下通过可复现性资格测试。若候选在 M0 出口前未满足每一项硬门槛，改用组织自有的参考任务管理应用。
+已冻结（D39、D42）：Controlled Acceptance Fixture = 自建的 **FlowTask** 参考任务管理应用，仓库 `https://github.com/LaPaGaYo/flowtask-fixture`（MIT），基线 **tag `fixture-v1` = commit `a6a8413ecdcbbdb1d34f36950ba7e1aaa5a1a642`**，manifest `fixture-manifest.v1.json`（`manifestVersion: 1`，`baselineRef: "fixture-v1"`，五个预置场景与参考 Goal 分解的期望值都在其中）；工具链固定 Node 22 / pnpm 10.34.7；资格测试记录 `.axiom-work/verifications/FT-01-2.md`、`FT-02-2.md`。改动基线需新的 fixture-version Decision。原暂定候选 FlowTask @ `b551cfaeb7ce2d42433b29d63c43659a6b9e4d56` 已被 D39 取代。
 
 **Blind External Validation Fixture（盲测 fixture）**：在 M4 实现基本完成后独立选定第二个仓库；盲测运行前不得用它调优规划 prompt、路由规则、Task 模板或验证策略。
 
@@ -395,3 +395,4 @@ CompletionReport 至少回答：
 | 10 | §11 成功标准：拆分并行/provider；新增 0 个原厂请求；`worker_done` → 伪造或错误的 `SUBMISSION` 无法直接进入 `INTEGRATION_READY` | A2、C9、C1 |
 | 11 | §12 Non-Goals 新增多候选批次、远端/federation 与 mixed-version、Jev 超出接口与基线的实验 | D5、D8 |
 | 12 | §15 Completion Definition 对齐 Mission 状态与精确 stage 名 | B7、术语表 §4.1 |
+| 13 | §9「Demo 与验证 fixture」：暂定候选段落改为冻结后的事实（自建 FlowTask，`fixture-v1` = `a6a8413`，manifest v1）；2026-10-17 | D39、D42 |
