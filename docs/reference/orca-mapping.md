@@ -132,18 +132,18 @@ Orca 九种类型在 Axiom 中的用途：
 
 ### 4b. 对 Mission 管理对象必须拦截/禁用的 Orca 入口
 
-判定依据：`tasks.run_id`（或 `dispatch_contexts.run_id`）命中 `missions.run_id`。建议统一守卫模块 `src/main/axiom/admission/mission-managed-run-guard.ts`，在下列 handler 入口各加一行调用；拒绝码用新增 `mission_managed`（加入 `rpc/errors.ts` 的错误码表）。
+判定依据：`tasks.run_id`（或 `dispatch_contexts.run_id`）命中 `missions.run_id`。统一守卫模块 `src/main/axiom/admission/mission-managed-run-guard.ts`，在下列 handler 入口各加一行调用；拒绝码用新增 `mission_managed`（加入 `rpc/errors.ts` 的错误码表）。
 
-| Orca 入口 | 现状 | 拦截点 |
-|---|---|---|
-| `orchestration.taskUpdate` 改 `status` | `updateTaskStatus` 只校验活跃 dispatch，可直接写 `completed` 并 `promoteReadyTasks` | `messaging/message-methods.ts` 的 `orchestration.taskUpdate` handler（不拦 `updateTaskStatus` 本身，`resolveGate` 内部要用它） |
-| `orchestration.reset`（`--all/--tasks/--messages`） | `resetAll/resetTasks` 删除 `runs/tasks/dispatch_contexts/messages…`（`db/reset/orchestration-reset.ts`），破坏性且不删 Axiom 表 | `runs/reset-methods.ts` handler：存在任一 Mission 时拒绝，改走 `axiom.mission.cancel` + Approval（C14） |
-| `orchestration.workerStart` / `orchestration.dispatch` | 任一 coordinator 终端可对 `ready` Task 启动 Attempt | `worker/workers.ts`、`runs/dispatch-methods.ts` handler：Mission Run 只接受 Control Plane caller（D10） |
-| `orchestration.send --type` ∈ {`worker_done`, `merge_ready`, `dispatch`, `decision_gate`} 来自 Worker | `merge_ready/dispatch` 不经任何授权校验 | `messaging/send-methods.ts` handler：目标为 Mission Run 时按 §3c 表拒绝 |
-| `orchestration.gateCreate` / `gateResolve` 来自非 Control Plane | 任一 coordinator 可开/关 gate 并改 Task 状态 | `gates/gates.ts` handler |
-| `orchestration.runUse --takeover-legacy` / 重绑 coordinator | 会 `unbindOtherRunsForPane`、bump `consumer_generation` | `runs/runs.ts` handler：Mission Run 禁止被终端接管 |
-| `orchestration.run` / `runStop`、CLI `orchestration coordinator-start` | 已退役：`RETIRED_ORCHESTRATION_METHODS`（`src/shared/orchestration-rpc-contract.ts`）→ `orchestration_migration_required(command_retired)`；CLI 在 `src/cli/handlers/orchestration/dispatch-handlers.ts:69` | 无需处理；文档中不再提「coordinator」 |
-| `taskCreate` 带 `deps` | 会让 `promoteReadyTasks` 生效 | Mission Run 内 `deps` 非空即拒绝 |
+| Orca 入口 | 现状 | 拦截点 | 实现 |
+|---|---|---|---|
+| `orchestration.taskUpdate` 改 `status` | `updateTaskStatus` 只校验活跃 dispatch，可直接写 `completed` 并 `promoteReadyTasks` | `messaging/message-methods.ts` 的 `orchestration.taskUpdate` handler（不拦 `updateTaskStatus` 本身，`resolveGate` 内部要用它） | `assertNotMissionManaged` → `messaging/message-methods.ts`（`taskUpdate`，Task 解析后） |
+| `orchestration.reset`（`--all/--tasks/--messages`） | `resetAll/resetTasks` 删除 `runs/tasks/dispatch_contexts/messages…`（`db/reset/orchestration-reset.ts`），破坏性且不删 Axiom 表 | `runs/reset-methods.ts` handler：存在任一 Mission 时拒绝，改走 `axiom.mission.cancel` + Approval（C14） | `assertResetAllowed` → `runs/reset-methods.ts`（三种 scope 的首次副作用前） |
+| `orchestration.workerStart` / `orchestration.dispatch` | 任一 coordinator 终端可对 `ready` Task 启动 Attempt | `worker/workers.ts`、`runs/dispatch-methods.ts` handler：Mission Run 只接受 Control Plane caller（D10） | `assertNotMissionManaged` → `worker/workers.ts`（`workerStart`）、`runs/dispatch-methods.ts`（`dispatch`），Run / Task 解析后 |
+| `orchestration.send --type` ∈ {`worker_done`, `merge_ready`, `dispatch`, `decision_gate`} 来自 Worker | `merge_ready/dispatch` 不经任何授权校验 | `messaging/send-methods.ts` handler：目标为 Mission Run 时按 §3c 表拒绝 | `assertWorkerMessageAllowed` → `messaging/send-methods.ts`（目标 mailbox / Run 解析后，结算前） |
+| `orchestration.gateCreate` / `gateResolve` 来自非 Control Plane | 任一 coordinator 可开/关 gate 并改 Task 状态 | `gates/gates.ts` handler | `assertNotMissionManaged` → `gates/gates.ts`（`gateCreate` / `gateResolve`，Task / gate 解析后） |
+| `orchestration.runUse --takeover-legacy` / 重绑 coordinator | 会 `unbindOtherRunsForPane`、bump `consumer_generation` | `runs/runs.ts` handler：Mission Run 禁止被终端接管 | `assertNotMissionManaged` → `runs/runs.ts`（`runUse`，`getRun` 后、`bindRun` 前；任何 flags 都拒绝） |
+| `orchestration.run` / `runStop`、CLI `orchestration coordinator-start` | 已退役：`RETIRED_ORCHESTRATION_METHODS`（`src/shared/orchestration-rpc-contract.ts`）→ `orchestration_migration_required(command_retired)`；CLI 在 `src/cli/handlers/orchestration/dispatch-handlers.ts:69` | 无需处理；文档中不再提「coordinator」 | 沿用 `rpc/orchestration-contract-fence.ts`；`admission/admission-rpc.test.ts` 验证两种 Run 均保持退役拒绝 |
+| `taskCreate` 带 `deps` | 会让 `promoteReadyTasks` 生效 | Mission Run 内 `deps` 非空即拒绝 | `assertTaskCreateAllowed` → `messaging/message-methods.ts`（`taskCreate`，Run 解析后；RPC 即使无 deps 也拒绝，只有 `axiom.plan.approve` 物化 Task + stage） |
 
 ### 4c. 新增 `axiom.*` 方法清单
 

@@ -1,3 +1,4 @@
+import { assertNotMissionManaged } from '../../../../../axiom/admission/mission-managed-run-guard'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineMethod } from '../../../core'
 import { startFederatedWorker } from '../federation/federated-worker-start'
@@ -49,6 +50,11 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
           `Task ${params.task} was not found in Run ${run.id}.`
         )
       }
+      assertNotMissionManaged(runtime, {
+        runId: run.id,
+        taskId: existingTask?.id,
+        verb: 'orchestration.workerStart'
+      })
       await assertWorkerStartTaskSpecWithinPromptBudget(params.spec ?? existingTask!.spec)
       const mode = decideWorkerStartMode({
         params,

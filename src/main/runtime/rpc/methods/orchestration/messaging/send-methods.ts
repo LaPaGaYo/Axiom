@@ -1,3 +1,4 @@
+import { assertWorkerMessageAllowed } from '../../../../../axiom/admission/mission-managed-run-guard'
 import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { isGroupAddress } from '../../../../orchestration/groups'
@@ -147,6 +148,7 @@ export const ORCHESTRATION_SEND_METHODS = [
           sendWarnings.push(recipient.warning)
         }
       }
+      assertWorkerMessageAllowed(runtime, { runId: messageRunId, type: params.type })
       const withSendWarnings = <T extends object>(
         receipt: T
       ): T & { warnings?: SendRecipientWarning[] } =>

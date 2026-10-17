@@ -1,3 +1,7 @@
+import {
+  assertNotMissionManaged,
+  assertTaskCreateAllowed
+} from '../../../../../axiom/admission/mission-managed-run-guard'
 import { defineMethod } from '../../../core'
 import type { TaskStatus } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
@@ -164,6 +168,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
         callerEvidence: orchestrationCompatibilityEvidence,
         callerSession: orchestrationCaller
       })
+      assertTaskCreateAllowed(runtime, { runId: run.id, deps })
       // A handle-less session creates root Tasks: Task lineage is recorded by terminal only.
       const creatorHandle = params.callerTerminalHandle
         ? orchestrationCallerIdentity(runtime, {
@@ -260,6 +265,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
           `Task ${params.id} was not found in Run ${run.id}.`
         )
       }
+      assertNotMissionManaged(runtime, { taskId: existing.id, verb: 'orchestration.taskUpdate' })
       const task = db.updateTaskStatus(params.id, params.status, params.result)
       if (!task) {
         throw new Error(`Task not found: ${params.id}`)

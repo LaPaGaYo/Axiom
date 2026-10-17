@@ -1,3 +1,4 @@
+import { assertNotMissionManaged } from '../../../../../axiom/admission/mission-managed-run-guard'
 import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import {
@@ -48,6 +49,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           runId: run.id
         })
       }
+      assertNotMissionManaged(runtime, { taskId: task.id, verb: 'orchestration.dispatch' })
       const assignee = params.to ? resolveDispatchAssigneeParty(params.to, db).address : undefined
 
       // Why: dry-run previews the preamble without mutating state, so it skips the ready-status check and uses a placeholder dispatchId.

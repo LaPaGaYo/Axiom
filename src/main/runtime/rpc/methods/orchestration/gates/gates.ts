@@ -1,3 +1,4 @@
+import { assertNotMissionManaged } from '../../../../../axiom/admission/mission-managed-run-guard'
 import { defineMethod } from '../../../core'
 import type { GateStatus } from '../../../../orchestration/db'
 import { Coordinator } from '../../../../orchestration/coordinator'
@@ -119,6 +120,7 @@ export const ORCHESTRATION_GATE_METHODS = [
           runId: run.id
         })
       }
+      assertNotMissionManaged(runtime, { taskId: task.id, verb: 'orchestration.gateCreate' })
       const gate = db.createGate({
         taskId: params.task,
         question: params.question,
@@ -152,6 +154,10 @@ export const ORCHESTRATION_GATE_METHODS = [
       if (existing.run_id !== run.id) {
         throw new Error(`Gate not found: ${params.id}`)
       }
+      assertNotMissionManaged(runtime, {
+        taskId: existing.task_id,
+        verb: 'orchestration.gateResolve'
+      })
       const gate = db.resolveGate(params.id, params.resolution)
       if (!gate) {
         throw new Error(`Gate not found: ${params.id}`)

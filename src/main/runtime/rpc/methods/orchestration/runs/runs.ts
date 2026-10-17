@@ -1,3 +1,4 @@
+import { assertNotMissionManaged } from '../../../../../axiom/admission/mission-managed-run-guard'
 import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { assertCallerHandleMatchesEvidence, resolveOrchestrationCaller } from './run-scope'
@@ -71,6 +72,10 @@ export const ORCHESTRATION_RUN_METHODS = [
       assertCallerHandleMatchesEvidence(runtime, params.from, orchestrationCompatibilityEvidence)
       const db = runtime.getOrchestrationDb()
       const priorRun = db.getCurrentRunForCoordinator(caller)
+      assertNotMissionManaged(runtime, {
+        runId: db.getRun(params.id)?.id,
+        verb: 'orchestration.runUse'
+      })
       const run = db.bindRun({
         runId: params.id,
         coordinatorHandle: caller.terminalHandle,

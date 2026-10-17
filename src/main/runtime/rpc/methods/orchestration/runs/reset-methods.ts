@@ -1,3 +1,4 @@
+import { assertResetAllowed } from '../../../../../axiom/admission/mission-managed-run-guard'
 import { defineMethod } from '../../../core'
 import { ResetParams } from '../schemas'
 
@@ -7,6 +8,7 @@ export const ORCHESTRATION_RESET_METHODS = [
     params: ResetParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
+      assertResetAllowed(runtime, params)
       if (params.all) {
         runtime.stopOrchestrationFederationRelay()
         db.resetAll()
