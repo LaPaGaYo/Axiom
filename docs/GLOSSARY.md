@@ -23,7 +23,7 @@
 | **Blind External Validation Fixture** | M4 基本完成后独立选定的第二个仓库（D18）；盲测前不得用于调优 prompt、路由规则、Task 模板或验证策略；提供泛化证据。 |
 | **Fixture manifest** | 版本化的 fixture 描述：仓库 + commit、工具链版本、检查命令与时限、预置场景（deterministic failure / merge-only failure / Agent crash / retry / stale-completion）与预期结果；存为 Artifact。 |
 | **契约级名称** | 提交合同 `axiom-submission-v1`；AgentSpec workspace 策略 `attempt-worktree`；对 Mission 管理对象越权调用的拒绝码 `mission_managed`；客户端协商的 runtime capability `axiom.control-plane.v1`。 |
-| **代码落位（D12）** | `src/main/axiom/`（Control Plane 服务）、`src/shared/axiom-contract/`（zod schema 与类型）、RPC 方法经 `src/main/runtime/rpc/methods/index.ts` 注册。禁止在 `@ts-nocheck` 文件内新增逻辑。 |
+| **代码落位（D12）** | `src/main/axiom/`（Control Plane 服务）、`src/shared/axiom-contract/`（zod schema 与类型：`lifecycle.ts`、`mission-objects.ts`、`plan-proposal.ts`、`plan-task-graph.ts`、`mission-params.ts`、`goal-params.ts`、`plan-params.ts`、`task-params.ts`）、RPC 方法经 `src/main/runtime/rpc/methods/index.ts` 注册。禁止在 `@ts-nocheck` 文件内新增逻辑。 |
 
 ## 2. 分层与角色
 
@@ -87,6 +87,7 @@ EXECUTING ↔ REPLANNING
 - Delivery 是动作不是状态：`READY_FOR_APPROVAL →（Delivery）→ COMPLETED`。
 - `READY_FOR_APPROVAL`：等待最终交付 Approval（若 policy 要求）。
 - **Delivery / 交付**：把集成基线合入目标分支的最终动作；成功后进入 `COMPLETED`。
+- `BLOCKED`：阻塞解除（Approval GRANTED / DENIED、Question ANSWERED、预算经 Approval 上调或 replan）后回到进入前的状态；进入前的状态持久化在 `missions.previous_status`（与 `PAUSED` 相同）。
 
 ### 4.2 GoalRevision
 `PROPOSED → ACTIVE → SUPERSEDED`（用户直接编写的 Goal 创建即 ACTIVE；模型提出的修正为 PROPOSED）。Goal 变更 = `MAJOR_REPLAN` 触发。

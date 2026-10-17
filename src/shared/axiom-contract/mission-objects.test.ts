@@ -1,0 +1,121 @@
+import { describe, expect, it } from 'vitest'
+import {
+  GoalRevisionSchema,
+  MissionSchema,
+  PlanRevisionSchema,
+  PolicySchema,
+  ProvenanceSchema,
+  TaskEdgeSchema,
+  TaskSpecSchema
+} from './mission-objects'
+import { goal, makeProposal, mission, policy, provenance } from './contract-fixtures.test-support'
+
+describe('Mission objects', () => {
+  it('parses persisted shapes and nullable inactive revisions', () => {
+    expect(MissionSchema.safeParse(mission).success).toBe(true)
+    expect(
+      GoalRevisionSchema.safeParse({
+        ...goal,
+        id: 'g',
+        missionId: 'm',
+        revision: 1,
+        status: 'ACTIVE'
+      }).success
+    ).toBe(true)
+    const proposal = makeProposal()
+    expect(
+      PlanRevisionSchema.parse({
+        id: 'p',
+        missionId: 'm',
+        revision: 1,
+        status: 'PROPOSED',
+        goalRevisionId: 'g',
+        milestones: proposal.milestones,
+        risks: proposal.risks,
+        provenance
+      }).provenance
+    ).toEqual(provenance)
+    expect(TaskSpecSchema.safeParse(proposal.tasks[0]).success).toBe(true)
+  })
+  it('rejects PlanRevision with missing or invalid provenance', () => {
+    const revision = {
+      id: 'p',
+      missionId: 'm',
+      revision: 1,
+      status: 'PROPOSED',
+      goalRevisionId: 'g',
+      milestones: [],
+      risks: []
+    }
+    expect(PlanRevisionSchema.safeParse(revision).success).toBe(false)
+    for (const invalid of [
+      null,
+      { ...provenance, kind: 'reviewer' },
+      { ...provenance, actor: '' },
+      { ...provenance, at: 'yesterday' }
+    ]) {
+      expect(PlanRevisionSchema.safeParse({ ...revision, provenance: invalid }).success).toBe(false)
+    }
+  })
+  it.each([0, 2, -1, 1.5, '1', null])('rejects nestedWorkerMaxDepth=%s', (nestedWorkerMaxDepth) => {
+    expect(PolicySchema.safeParse({ ...policy, nestedWorkerMaxDepth }).success).toBe(false)
+  })
+  it('defaults readiness thresholds and liveness tolerance', () => {
+    expect(PolicySchema.parse(policy).unverifiableToleranceMinutes).toBe(30)
+    expect(TaskEdgeSchema.parse({ fromTaskId: 'a', toTaskId: 'b' }).readinessThreshold).toBe(
+      'INTEGRATED'
+    )
+    const { readinessThreshold: _, ...withoutThreshold } = policy
+    expect(PolicySchema.parse(withoutThreshold).readinessThreshold).toBe('INTEGRATED')
+  })
+  it('rejects invalid ids, revisions, retry budgets and ISO dates', () => {
+    for (const id of ['', 'x'.repeat(129), 42]) {
+      expect(MissionSchema.safeParse({ ...mission, id }).success).toBe(false)
+    }
+    for (const revision of [0, -1, 1.5]) {
+      expect(
+        GoalRevisionSchema.safeParse({
+          ...goal,
+          id: 'g',
+          missionId: 'm',
+          revision,
+          status: 'ACTIVE'
+        }).success
+      ).toBe(false)
+    }
+    for (const maxAttempts of [0, -1, 1.5]) {
+      expect(
+        TaskSpecSchema.safeParse({ ...makeProposal().tasks[0], retryPolicy: { maxAttempts } })
+          .success
+      ).toBe(false)
+    }
+    expect(ProvenanceSchema.safeParse({ ...provenance, at: 'yesterday' }).success).toBe(false)
+    expect(ProvenanceSchema.safeParse({ ...provenance, at: '2026-02-30T00:00:00Z' }).success).toBe(
+      false
+    )
+    expect(
+      ProvenanceSchema.safeParse({ ...provenance, at: '2026-10-17T06:00:00-06:00' }).success
+    ).toBe(true)
+  })
+  it('validates policy numeric limits and preserves JSON policy rule payloads', () => {
+    expect(PolicySchema.safeParse({ ...policy, concurrencyLimit: 0 }).success).toBe(false)
+    expect(PolicySchema.safeParse({ ...policy, unverifiableToleranceMinutes: -1 }).success).toBe(
+      false
+    )
+    expect(PolicySchema.safeParse({ ...policy, budget: { maxTokens: -1 } }).success).toBe(false)
+    const rules = { approvalRules: { high: true }, verificationRules: { commands: ['pnpm test'] } }
+    expect(PolicySchema.parse({ ...policy, ...rules })).toMatchObject(rules)
+    expect(
+      PolicySchema.safeParse({ ...policy, verificationRules: { callback: () => true } }).success
+    ).toBe(false)
+  })
+  it('keeps Task attempt limits solely in retryPolicy and permits a Mission-wide cap', () => {
+    expect(PolicySchema.safeParse({ ...policy, budget: { maxAttempts: 12 } }).success).toBe(true)
+    expect(
+      TaskSpecSchema.safeParse({
+        ...makeProposal().tasks[0],
+        budget: { maxAttempts: 1 }
+      }).success
+    ).toBe(false)
+  })
+})
