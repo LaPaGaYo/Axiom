@@ -9032,7 +9032,7 @@
           }
         },
         "shortcutDefinitionCatalog": {
-          "missionControlConflict": "Bloqueado por Mission Control. Reasigna aquí o cámbialo en Ajustes del Sistema."
+          "missionControlConflict": "Bloqueado por macOS system shortcuts. Reasigna aquí o cámbialo en Ajustes del Sistema."
         },
         "shortcuts": {
           "search": {

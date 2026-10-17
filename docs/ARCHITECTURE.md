@@ -433,6 +433,8 @@ Approval（D7）：
 
 ## 15. 产品界面
 
+M1 已提供 Mission Home 与内嵌 Task 列表，并提供最小 Plan review（提案 Tasks / edges、批准与拒绝）；其余完整视图留待后续里程碑。
+
 Mission-first。主视图：
 1. **Mission Home**：Goal、总体状态、进度、风险、待处理项、下一步；
 2. **Plan & DAG**：PlanRevision 版本、Milestone 分组、依赖图与 critical path；

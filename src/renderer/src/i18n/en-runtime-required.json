@@ -2767,6 +2767,36 @@
       "title": "Agent dashboard"
     }
   },
+  "missions": {
+    "stages": {
+      "BLOCKED": "Blocked",
+      "CANCELED": "Canceled",
+      "DEFINED": "Defined",
+      "INTEGRATED": "Integrated",
+      "INTEGRATION_READY": "Awaiting integration",
+      "NEEDS_FIX": "Needs fix",
+      "READY": "Ready",
+      "RUNNING": "Running",
+      "SUBMITTED": "Submitted, awaiting verification",
+      "VERIFIED": "Verified",
+      "VERIFYING": "Verifying"
+    },
+    "statuses": {
+      "ANALYZING": "Analyzing",
+      "BLOCKED": "Blocked",
+      "CANCELED": "Canceled",
+      "COMPLETED": "Completed",
+      "DRAFT": "Draft",
+      "EXECUTING": "Executing",
+      "FAILED": "Failed",
+      "FINALIZING": "Finalizing",
+      "PAUSED": "Paused",
+      "PLANNED": "Planned",
+      "PLAN_REVIEW": "Plan review",
+      "READY_FOR_APPROVAL": "Awaiting delivery approval",
+      "REPLANNING": "Replanning"
+    }
+  },
   "runtimeRpc": {
     "startupFailure": {
       "guidance": {

@@ -90,7 +90,7 @@ export function ShortcutsPane(): React.JSX.Element {
   const macCapturedDigitChords = useMacCapturedDigitChords({ enabled: isMac })
   const missionControlConflictMessage = translate(
     'auto.components.settings.shortcutDefinitionCatalog.missionControlConflict',
-    'Blocked by Mission Control. Remap here or change it in System Settings.'
+    'Blocked by macOS system shortcuts. Remap here or change it in System Settings.'
   )
 
   // Why: suspend global dispatch so a captured chord reaches the editor.

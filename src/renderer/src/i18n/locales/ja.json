@@ -10261,7 +10261,7 @@
           }
         },
         "shortcutDefinitionCatalog": {
-          "missionControlConflict": "Mission Control によってブロックされています。ここで再割り当てするか、システム設定で変更してください。"
+          "missionControlConflict": "macOS system shortcuts によってブロックされています。ここで再割り当てするか、システム設定で変更してください。"
         },
         "shortcuts": {
           "search": {

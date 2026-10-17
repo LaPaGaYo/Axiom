@@ -95,7 +95,7 @@ describe('non-mac Ctrl+Left/Right word-nav', () => {
 
   it('does not translate Ctrl+Arrow on macOS (reserved by OS)', () => {
     // Mac uses Cmd+Arrow for line-nav and Option+Arrow for word-nav.
-    // Ctrl+Arrow is the macOS Mission Control / Spaces chord.
+    // Ctrl+Arrow is the macOS macOS system shortcuts / Spaces chord.
     expect(
       resolveTerminalShortcutAction(
         event({ key: 'ArrowLeft', code: 'ArrowLeft', ctrlKey: true }),

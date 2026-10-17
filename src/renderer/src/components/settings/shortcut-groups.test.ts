@@ -55,7 +55,7 @@ describe('shortcut groups', () => {
       pluginCommands: [command],
       keybindings: {},
       platform: 'darwin',
-      missionControlConflictMessage: 'Blocked by Mission Control.'
+      missionControlConflictMessage: 'Blocked by macOS system shortcuts.'
     })
 
     expect(catalog.conflictByAction.get('plugin:orca-samples.tasks/open')).toEqual([

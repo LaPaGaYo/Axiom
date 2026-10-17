@@ -36,7 +36,7 @@ export const MissionSummarySchema = MissionSchema.pick({
   status: true,
   activeGoalRevisionId: true,
   activePlanRevisionId: true
-})
+}).extend({ reason: z.string().optional() })
 export type MissionSummary = z.infer<typeof MissionSummarySchema>
 
 export const MissionResponseSchema = z.object({ mission: MissionSummarySchema })

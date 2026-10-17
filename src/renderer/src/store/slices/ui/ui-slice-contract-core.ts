@@ -112,6 +112,7 @@ export type UiViewHistory =
   | 'tasks'
   | 'activity'
   | 'automations'
+  | 'missions'
   | 'space'
   | 'skills'
   | 'artifacts'

@@ -1,3 +1,4 @@
+import { createMissionsSlice } from './missions'
 import { create } from 'zustand'
 import type { AppState } from '../types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
@@ -63,6 +64,7 @@ export const TEST_REPO = {
 
 export function createTestStore() {
   return create<AppState>()((...a) => ({
+    ...createMissionsSlice(...a),
     ...createRepoSlice(...a),
     ...createSparsePresetsSlice(...a),
     ...createWorktreeSlice(...a),

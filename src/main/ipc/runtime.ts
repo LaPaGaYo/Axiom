@@ -1,3 +1,4 @@
+import type { DesktopRuntimeCall } from '../../preload/api-types'
 import { BrowserWindow, ipcMain } from 'electron'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
@@ -61,10 +62,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
 
   ipcMain.handle(
     'runtime:call',
-    async (
-      event,
-      args: { method: string; params?: unknown }
-    ): Promise<RuntimeRpcResponse<unknown>> => {
+    async (event, args: DesktopRuntimeCall): Promise<RuntimeRpcResponse<unknown>> => {
       if (event.senderFrame !== event.sender.mainFrame) {
         throw new Error('Runtime RPC call must originate from the current main frame')
       }
@@ -74,7 +72,13 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
           id: 'desktop-ipc',
           authToken: 'desktop-ipc',
           method: args.method,
-          params: args.params
+          params: args.params,
+          ...(args.envelope
+            ? {
+                orchestrationContractVersion: args.envelope.orchestrationContractVersion,
+                orchestrationRequestId: args.envelope.orchestrationRequestId
+              }
+            : {})
         },
         {
           clientId: 'desktop-renderer',

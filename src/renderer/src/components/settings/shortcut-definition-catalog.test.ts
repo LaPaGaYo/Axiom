@@ -17,7 +17,7 @@ function warningFor(chords: readonly MacCapturedDigitChord[]): string | undefine
     macCapturedDigitChords: chords,
     missionControlConflictMessage: translate(
       'auto.components.settings.shortcutDefinitionCatalog.missionControlConflict',
-      'Blocked by Mission Control. Remap here or change it in System Settings.'
+      'Blocked by macOS system shortcuts. Remap here or change it in System Settings.'
     )
   }).conflictByAction.get('tab.selectByIndex')?.[0]
 }
@@ -26,10 +26,10 @@ afterEach(async () => {
   await i18n.changeLanguage('en')
 })
 
-describe('Mission Control shortcut warnings', () => {
+describe('macOS system shortcuts shortcut warnings', () => {
   it('uses concise count-independent remediation copy', () => {
     expect(warningFor([chord(1), chord(2), chord(3), chord(4), chord(5), chord(6)])).toBe(
-      'Blocked by Mission Control. Remap here or change it in System Settings.'
+      'Blocked by macOS system shortcuts. Remap here or change it in System Settings.'
     )
   })
 
@@ -37,19 +37,22 @@ describe('Mission Control shortcut warnings', () => {
     await i18n.changeLanguage(PSEUDO_LOCALIZATION_LOCALE)
 
     expect(warningFor([chord(1)])).toBe(
-      '[Blocked by Mission Control. Remap here or change it in System Settings.]'
+      '[Blocked by macOS system shortcuts. Remap here or change it in System Settings.]'
     )
   })
 
   it.each([
-    ['es', 'Bloqueado por Mission Control. Reasigna aquí o cámbialo en Ajustes del Sistema.'],
+    [
+      'es',
+      'Bloqueado por macOS system shortcuts. Reasigna aquí o cámbialo en Ajustes del Sistema.'
+    ],
     [
       'ja',
-      'Mission Control によってブロックされています。ここで再割り当てするか、システム設定で変更してください。'
+      'macOS system shortcuts によってブロックされています。ここで再割り当てするか、システム設定で変更してください。'
     ],
     [
       'ko',
-      'Mission Control에 의해 차단되었습니다. 여기에서 다시 매핑하거나 시스템 설정에서 변경하세요.'
+      'macOS system shortcuts에 의해 차단되었습니다. 여기에서 다시 매핑하거나 시스템 설정에서 변경하세요.'
     ],
     ['zh', '已被调度中心拦截。在此重新映射，或在系统设置中更改。']
   ])('uses the shipped %s translation', async (locale, expected) => {
