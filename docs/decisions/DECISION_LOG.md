@@ -381,3 +381,11 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 
 **决定**（Henry 2026-10-17）：确认上表，**M0 关闭**（Axiom main `3a5c63832`，fixture `fixture-v1`）。M1 的前置 Decision D6a、D7a、D9–D16 已于 2026-10-17 全部 ACCEPTED，M1 的任务分解随后以 brief 形式提出。
 **取代规则**：无。M0 之后发现的 M0 范围内缺口以新的 M0-nn Task 记录并在本条下追加一行，不重开里程碑。
+
+## D44 · M1（Mission Facade）任务分解与顺序 — ACCEPTED（Henry 2026-10-17）
+
+**背景**：M0 已关闭（D43）；M1 的前置 Decision D6a、D7a、D9–D16 已全部拍板。架构 §20 给出 M1 的范围与三条出口标准，但没有可执行的 Task 粒度。
+**决定**：M1 按 `docs/plans/M1.md` 的 10 个 Task 执行：M1-01 D14 映射核实 spike（只写测试与报告，不改生产代码；结论若推翻 D14 则记 D14a）→ M1-02 共享契约 → M1-03 迁移 v43（一次建全 `orca-mapping.md` §6 的 side table，之后只 additive 加列）→ M1-04 AxiomStore → M1-05 MissionController 与状态机（不启动 Attempt）→ M1-06 `axiom.mission/goal/plan/task` RPC + 契约栅栏 / 幂等收据 + CLI → M1-07 admission 守卫（映射 §4b 全部拦截点）→ M1-08 run mailbox 消费者骨架 + RecoveryService（M1 子集）→ M1-09 Mission Home + Task 列表 → M1-10 在 `fixture-v1` 上的出口 e2e、`docs/reference/control-plane.md`、DEF-1 复审。M1 不含 Planner：Plan 经 CLI / RPC 以 JSON 喂入（fixture 的 `scenarios/goal/decomposition.json` 即 M1 的参考 Plan），M2 再接 Planner。M1 出口标准 = 架构 §20 的三条 + `DEFERRED.md` 逐条核对。
+**理由**：每个 Task 一次 Codex attempt 可完成、可独立验证并有明确 sidecar 门；把最大的不确定性（Control Plane 以什么身份接入内核）放在第一个 Task 用测试钉住；schema 一次到位避免 M2–M4 反复 bump `SCHEMA_VERSION`。
+**后果**：`docs/plans/M1.md` 是 M1 的 PlanRevision 等价物（Axiom 自身的 Control Plane 尚不存在）；brief 在 `.axiom-work/briefs/M1-nn.md`，验证记录在 `.axiom-work/verifications/`；分解的拆分 / 合并 / 新增以本条下的修订行记录，不重写本条。
+**取代规则**：M1 出口 Decision 记录实际完成情况并关闭本条；范围变更经修订行。

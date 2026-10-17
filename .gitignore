@@ -221,6 +221,10 @@ ci-shards/
 !docs/review-evidence/
 !docs/review-evidence/axiom-m0/
 !docs/review-evidence/axiom-m0/**
+!docs/review-evidence/axiom-m1/
+!docs/review-evidence/axiom-m1/**
+!docs/plans/
+!docs/plans/**
 !docs/archive/
 !docs/archive/**
 !docs/reference/orca-mapping.md

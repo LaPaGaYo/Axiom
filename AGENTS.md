@@ -65,8 +65,8 @@ Before creating new infrastructure, search for an existing implementation that c
 
 ## Axiom Control Plane Code Placement and RPC Conventions
 
-- Control Plane services live in `src/main/axiom/`; zod schemas and types shared by main, CLI, and renderer live in `src/shared/axiom-contract/`. Axiom code reaches the runtime only through RPC method registration and existing service boundaries (per D12, proposed).
-- Never add logic to a `@ts-nocheck` file. 137 of the ~150 non-test `orca-runtime-*.ts` modules are listed in `config/ts-nocheck-baseline.txt`, including `orca-runtime-core.ts` and `orca-runtime-automation-operations.ts`; add a typed adapter beside them instead, and do not grow the baseline (per D12, proposed).
+- Control Plane services live in `src/main/axiom/`; zod schemas and types shared by main, CLI, and renderer live in `src/shared/axiom-contract/`. Axiom code reaches the runtime only through RPC method registration and existing service boundaries (D12).
+- Never add logic to a `@ts-nocheck` file. 137 of the ~150 non-test `orca-runtime-*.ts` modules are listed in `config/ts-nocheck-baseline.txt`, including `orca-runtime-core.ts` and `orca-runtime-automation-operations.ts`; add a typed adapter beside them instead, and do not grow the baseline (D12).
 - The RPC namespace is `axiom.*` only: `axiom.mission.*`, `axiom.goal.*`, `axiom.plan.*`, `axiom.task.*`, `axiom.attempt.*`, `axiom.verification.*`, `axiom.integration.*`, `axiom.approval.*`, `axiom.decision.*`, `axiom.artifact.*`, `axiom.message.*`, `axiom.policy.*`. Never `project.*`: it collides with the existing `project.list` / `project.update`, `projectHostSetup.*`, `projectGroup.*`, `automation.*`, and CLI `orca project`, and `buildRegistry()` throws `duplicate_rpc_method` at startup (D1).
 - Register a method in five steps: (1) zod params in `src/shared/axiom-contract/<ns>-params.ts`; (2) `defineMethod({ name: 'axiom.<ns>.<verb>', params, handler })` in `src/main/runtime/rpc/methods/axiom/<ns>.ts`, aggregated into `AXIOM_METHODS` (`src/main/runtime/rpc/methods/axiom.ts`); (3) spread `AXIOM_METHODS` into `ALL_RPC_METHODS` in `src/main/runtime/rpc/methods/index.ts`; (4) regenerate `src/shared/rpc-contract/rpc-params-catalog.generated.ts` with `config/scripts/generate-rpc-params-catalog.mjs` (`verify:rpc-params-catalog` runs inside `pnpm lint`); (5) for CLI exposure, add the spec in `src/cli/specs/`, the handler in `src/cli/handlers/`, and the command name in `src/main/startup/cli-command-names.ts`. The product CLI binary is `axiom`.
 - Every orchestration mutation carries `orchestrationContractVersion: 1` in the request envelope (`ORCHESTRATION_MUTATION_METHODS` in `src/shared/orchestration-rpc-contract.ts`; the fence in `src/main/runtime/rpc/orchestration-contract-fence.ts` otherwise returns `orchestration_migration_required`). `axiom.*` mutations that touch orchestration tables follow the same fence and reuse `mutation_receipts` for idempotency.
@@ -147,7 +147,7 @@ Before beginning implementation, confirm that the Task defines:
 - risk and Approval requirements;
 - `retryPolicy` (Task-level `maxAttempts`) and budget limits.
 
-The authoritative Task stage is `task_stages.stage` (D2): `DEFINED → READY → RUNNING → SUBMITTED → VERIFYING → VERIFIED → INTEGRATION_READY → INTEGRATED`, with `NEEDS_FIX`, `BLOCKED`, and `CANCELED` as defined in the Glossary. `READY` means the upstream TaskEdges meet their readiness threshold (default `INTEGRATED`, relaxable per edge to `VERIFIED`), the PlanRevision is APPROVED, no blocking Question or Approval is open, and budget remains. MissionController computes readiness; Orca `promoteReadyTasks` does not (per D10, proposed).
+The authoritative Task stage is `task_stages.stage` (D2): `DEFINED → READY → RUNNING → SUBMITTED → VERIFYING → VERIFIED → INTEGRATION_READY → INTEGRATED`, with `NEEDS_FIX`, `BLOCKED`, and `CANCELED` as defined in the Glossary. `READY` means the upstream TaskEdges meet their readiness threshold (default `INTEGRATED`, relaxable per edge to `VERIFIED`), the PlanRevision is APPROVED, no blocking Question or Approval is open, and budget remains. MissionController computes readiness; Orca `promoteReadyTasks` does not (D10).
 
 An `Attempt` is one execution of a Task and is an Orca dispatch: `attemptId ≡ dispatchId`. Attempt state is a projection of `dispatch_contexts.status`, `worker_dispatches.state`, and the liveness verdict; do not add a parallel Attempt table or enum. Retrying creates a new Attempt (`retryOf` the prior dispatch); it must not erase the previous Attempt or silently reuse stale completion authority. When `maxAttempts` is exhausted the Task becomes `BLOCKED`, the change is classified for replanning, and Approval is requested per policy; the Control Plane count is authoritative and Orca's dispatch circuit breaker (`circuit_broken`) is only a floor.
 
@@ -176,11 +176,11 @@ An AgentSpec is an execution contract, not a persona, and is content-addressed i
 
 Workers may modify only their authorized scope. They must report discoveries that affect other Tasks through typed messages or Artifacts.
 
-Workers talk to the Control Plane only through the `axiom` CLI — `axiom attempt submit | ask | blocked | handoff | inform | request | request-subtask | check` (all Worker verbs live under `axiom attempt`, because Orca's CLI already has a top-level `check` command — per D16, proposed) — which calls `axiom.attempt.*` RPC methods and carries the Orca dispatch capability (`--dispatch-capability dcap_…`). The RPC layer reuses Orca's `hasLifecycleAuthority` check, capability hash, `consumer_generation` fence, and `mutation_receipts`; Control Plane replies reach the Worker through its `dispatch:<dispatchId>` mailbox (`axiom attempt check`). No MCP server is introduced for this channel (per D11, proposed).
+Workers talk to the Control Plane only through the `axiom` CLI — `axiom attempt submit | ask | blocked | handoff | inform | request | request-subtask | check` (all Worker verbs live under `axiom attempt`, because Orca's CLI already has a top-level `check` command — D16) — which calls `axiom.attempt.*` RPC methods and carries the Orca dispatch capability (`--dispatch-capability dcap_…`). The RPC layer reuses Orca's `hasLifecycleAuthority` check, capability hash, `consumer_generation` fence, and `mutation_receipts`; Control Plane replies reach the Worker through its `dispatch:<dispatchId>` mailbox (`axiom attempt check`). No MCP server is introduced for this channel (D11).
 
 Workers must not directly spawn other Workers. `nestedWorkerMaxDepth` is pinned to 1 for Mission Workers by policy. A Worker may send `REQUEST_SUBTASK`; the Control Plane decides whether to create a Task after checking scope, depth, duplication, dependency, cost, and permissions.
 
-Orca `tasks.deps` stays empty for Mission-managed Tasks (the Orca-side `ready` status means only "dispatchable"). The DAG lives in `mission_task_edges`, the Scheduler is the only dispatcher, and admission rejects direct `orchestration.workerStart` / `orchestration.dispatch` against Mission-managed Tasks (per D10, proposed).
+Orca `tasks.deps` stays empty for Mission-managed Tasks (the Orca-side `ready` status means only "dispatchable"). The DAG lives in `mission_task_edges`, the Scheduler is the only dispatcher, and admission rejects direct `orchestration.workerStart` / `orchestration.dispatch` against Mission-managed Tasks (D10).
 
 Workers must not communicate Mission-changing decisions only through terminal text. Persist decisions and handoffs as typed objects.
 
@@ -202,7 +202,7 @@ Every ContextPackage is content-addressed in `context_packages` so an Attempt ca
 
 ## Typed Communication
 
-Use typed messages rather than unbounded Agent-to-Agent chat. The eight product types, who may send them, and their Orca routing type (per D9, proposed):
+Use typed messages rather than unbounded Agent-to-Agent chat. The eight product types, who may send them, and their Orca routing type (D9):
 
 | Axiom type | Meaning | Sender | Orca `messages.type` (routing only) |
 |---|---|---|---|
@@ -215,7 +215,7 @@ Use typed messages rather than unbounded Agent-to-Agent chat. The eight product 
 | `REQUEST_SUBTASK` | request for new scoped work | Worker | `escalation` |
 | `SUBMISSION` | immutable candidate and Worker report | Worker | `worker_done` (settled by Axiom) |
 
-- The product type is persisted in `payload.axiom.type`; `messages.type` is used for routing only and its CHECK enum is not extended (per D9, proposed).
+- The product type is persisted in `payload.axiom.type`; `messages.type` is used for routing only and its CHECK enum is not extended (D9).
 - Every message carries `missionId` plus the related `taskId`, `attemptId`, `decisionId`, or `artifactId`.
 - Workers must never send `merge_ready`, `dispatch`, or `decision_gate`; the Control Plane rejects them. `heartbeat` is an Execution Kernel liveness signal, not a product message type.
 - Put summaries in messages and detailed content in Artifacts. MessageRouter routes to affected subscribers by object relationship; do not broadcast (`@all`) by default.
@@ -296,7 +296,7 @@ Verified candidates enter a single Integration Queue. IntegrationController is t
 Branch model (D6):
 
 - integration base `axiom/integration/<missionId>`, written only by IntegrationController;
-- Attempt branch `axiom/attempt/<taskId>/<seq>` (seq = the Task's Attempt sequence number assigned by the Control Plane; the dispatch id that is the attemptId is minted after the worktree exists, so it cannot be in the branch name — D6a, proposed; `attempt_bindings` maps `dispatch_id ↔ seq ↔ branch`), created from the current integration base in the Attempt's child worktree; integration scratch branches are `axiom/integrating/<batchId>`;
+- Attempt branch `axiom/attempt/<taskId>/<seq>` (seq = the Task's Attempt sequence number assigned by the Control Plane; the dispatch id that is the attemptId is minted after the worktree exists, so it cannot be in the branch name — D6a; `attempt_bindings` maps `dispatch_id ↔ seq ↔ branch`), created from the current integration base in the Attempt's child worktree; integration scratch branches are `axiom/integrating/<batchId>`;
 - promotion (`PROMOTED`) = advancing the integration base to the batch's merge commit; Delivery = merging the integration base into the user's target branch (default: the repository's default branch) via `axiom.mission.deliver`, with Approval when policy requires it;
 - both the integration base and the target branch are protected: a Worker Attempt never merges into them directly.
 
@@ -505,7 +505,7 @@ Update documentation when a change modifies:
 - operator recovery procedures;
 - build, packaging, or deployment requirements.
 
-Record significant choices as Decisions with context, alternatives, rationale, consequences, and supersession rules. Append them to `docs/decisions/DECISION_LOG.md` (path per D13), continuing the D-numbering (D1–D16 and amendment D6a exist; the next is D17) with status `PROPOSED`, `ACCEPTED`, `REJECTED`, or `SUPERSEDED`; the `decisions` table in code is numbered from that log. Do not leave Mission-critical decisions only in a pull request, terminal transcript, or model conversation.
+Record significant choices as Decisions with context, alternatives, rationale, consequences, and supersession rules. Append them to `docs/decisions/DECISION_LOG.md` (path per D13), continuing the D-numbering from the last entry in that log with status `PROPOSED`, `ACCEPTED`, `REJECTED`, or `SUPERSEDED`; the `decisions` table in code is numbered from that log. Do not leave Mission-critical decisions only in a pull request, terminal transcript, or model conversation.
 
 ## Definition of Done for a Code Change
 
