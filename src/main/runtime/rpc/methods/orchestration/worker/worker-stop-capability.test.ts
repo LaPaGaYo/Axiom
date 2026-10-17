@@ -11,6 +11,7 @@ describe('federated worker stop capability', () => {
       last_error: reason
     }))
     const db = {
+      getDispatchContextById: vi.fn(() => undefined),
       getFederatedDispatch: vi.fn(() => ({
         dispatch_id: 'ctx_remote',
         environment_id: 'environment_linux',

@@ -187,7 +187,7 @@ CLI JSON 输出是 `{ ok, result, ... }` / `{ ok:false, error:{code,...}, ... }`
 2. dispatch 非 `dispatched` → `inactive_dispatch`。
 3. 同 Task 存在更高 seq（包括尚未绑定 dispatch 的 admission）→ `stale_dispatch`。
 4. 由 runtime 与 `orchestrationCallerIdentity` 解析 sender，调用内核 `verifyDispatchCapability`；缺失、错误、撤销的 capability 或 pane/process 不匹配 → `dispatch_capability_invalid`，保留内核 reason。
-5. 内核 `hasLifecycleAuthority` 失败 → `sender_not_assignee`。由于第 4 步已校验 pane，真实外来 pane 会先返回 `dispatch_capability_invalid`；第 5 步为纵深防御，不改变内核校验顺序。
+5. 内核 `hasLifecycleAuthority` 失败 → `sender_not_assignee`；外来 pane 会先返回 `dispatch_capability_invalid`，因为 `verifyDispatchCapability` 已在 `hasLifecycleAuthority` 之前强制校验 pane 等价性，`sender_not_assignee` 仅保留给缺少 `assignee_pane_key` 的 legacy row 的 handle 鉴权回退（仍须先通过 capability 校验）。
 6. binding、Task、Mission、Run 关联不一致 → `task_dispatch_mismatch`。
 
 CLI `axiom attempt <verb> --attempt <id> --dispatch-capability <token> --summary <text>` 支持 `--body` / `--body-file`（互斥）、可重复 `--artifact` / `--related-task`；子任务另需 `--title --objective --allowed-path --acceptance --evidence`，risk 默认 low。from 复用 `resolveOrchestrationTerminalHandle`（`--from` / `ORCA_TERMINAL_HANDLE`），pane metadata 来自 `ORCA_PANE_KEY`；runtime 自行解析 pane，不信任该参数授予权限。capability 放 envelope，mutation 复用 `callOrchestrationMutation` 与 `--retry-request <原 UUID>`。失败的新请求不留收据；已完成请求沿用内核回放语义，同 id + 同 params 不重复写入，改变 params → `request_mismatch`。
