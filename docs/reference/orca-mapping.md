@@ -1,7 +1,7 @@
 # Axiom ↔ Orca 映射参考（orca-mapping）V1
 
 更新日期：2026-09-26 · 审计快照：`stablyai/orca@646e9a5`（v1.4.197）· **冻结基线：`3eb1adec2`（tag `axiom-base`，D19）**——快照到基线之间唯一改变编排模型的提交是 #22555（party 解析，见 §4a 与 §9 第 14 条）· 仓库落位：`docs/reference/orca-mapping.md`
-术语与枚举以 `docs/GLOSSARY.md` 为准；决策编号引用 `docs/decisions/DECISION_LOG.md`（D6a、D9–D16 为提议中）。
+术语与枚举以 `docs/GLOSSARY.md` 为准；决策编号引用 `docs/decisions/DECISION_LOG.md`（D6a、D7a、D9–D16 已于 2026-10-17 拍板）。
 
 ## 1. 用途与阅读方式
 
@@ -121,7 +121,7 @@ Orca 九种类型在 Axiom 中的用途：
 |---|---|---|
 | `orchestration.runCreate`（`orchestration/runs/runs.ts`） | Mission 创建时建 Run | RPC 要求真实 coordinator party；Axiom 直接调 `db.createRun({coordinatorHandle: null, coordinatorPaneKey: null, coordinatorOrcaSessionId: <合成 id>})`（#22555 后已支持 session coordinator；D14） |
 | `orchestration.taskCreate`（`messaging/message-methods.ts`） | PlanRevision 批准时物化 Task | 直接调 `db.createTask({deps: [], runId})` |
-| `orchestration.workerStart`（`orchestration/worker/workers.ts` → `startLocalWorker`，`local-worker-start.ts`） | Scheduler 启动 Attempt | RPC 要求 `getCurrentRunForPane(coordinatorPane)`（否则 `consumer_fenced`）；`startLocalWorker` 又用 `params.from` 经 `resolveDispatchCallerWorktreeId` 解析终端 worktree。**需 additive 扩展**：允许 Control Plane caller（`creator: {kind:'system'}`，`db/dispatch-depth.ts` 已有此分支）直供预创建的 worktree id 与 `branchNameOverride`（分支 `axiom/attempt/<taskId>/<seq>`，D6a：dispatch id 在 worktree 之后才铸造，故用 Attempt 序号；`src/shared/worktree/create-types.ts`；`createWorkerWorktree` 目前只传 `name/baseBranch`）——D14，提议中 |
+| `orchestration.workerStart`（`orchestration/worker/workers.ts` → `startLocalWorker`，`local-worker-start.ts`） | Scheduler 启动 Attempt | RPC 要求 `getCurrentRunForPane(coordinatorPane)`（否则 `consumer_fenced`）；`startLocalWorker` 又用 `params.from` 经 `resolveDispatchCallerWorktreeId` 解析终端 worktree。**需 additive 扩展**：允许 Control Plane caller（`creator: {kind:'system'}`，`db/dispatch-depth.ts` 已有此分支）直供预创建的 worktree id 与 `branchNameOverride`（分支 `axiom/attempt/<taskId>/<seq>`，D6a：dispatch id 在 worktree 之后才铸造，故用 Attempt 序号；`src/shared/worktree/create-types.ts`；`createWorkerWorktree` 目前只传 `name/baseBranch`）——D14 |
 | `orchestration.workerStop` / `workerAbandon` / `workerRelease` / `workerRetain`（`worker/worker-stop.ts`、`worker-control.ts`、`worker-release.ts`） | 停止/放弃 Attempt、释放/保留 worktree 与终端 | 结算后候选未 superseded/INTEGRATED 前用 `workerRetain`（D4） |
 | `orchestration.workerShow` / `workerRead` / `workerList`（`worker-control.ts`、`worker-list-method.ts`） | Attempt 观测、终端回读、fleet 投影 | `workerShow` 返回 `dispatch/worker/projection(fleet 判定)/observation(inspectWorkerTerminal 状态)/terminalResource`，`workerRead` 另附 `status.liveness`（PTY）与 `projection`（Agent） |
 | `orchestration.dispatchShow`（`runs/dispatch-methods.ts:188`） | 展示 Attempt 的 dispatch 上下文 | `orchestration.dispatch` 本身不用（§4b） |
@@ -195,7 +195,7 @@ Envelope 字段（`RpcRequest`，`rpc/core.ts:44`）：`orchestrationContractVer
 | `projectGroup.*` | `list/create/update/delete/moveProject/scanNested/importNested` | `rpc/methods/repo.ts` |
 | `automation.*` | `list/show/create/update/delete/runNow/runs` | `rpc/methods/automations.ts` |
 | CLI `orca project` | 顶层命令 `project` | `cli-command-names.ts`；spec `src/cli/specs/project.ts` |
-| CLI 顶层 `check` | 浏览器 checkbox 命令 `path: ['check']` | `src/cli/specs/browser-basic.ts:108`——因此 Worker 命令统一挂在 `axiom attempt <verb>`（术语表 §5、D16 提议中），与 `axiom.attempt.*` 对齐；无残余冲突 |
+| CLI 顶层 `check` | 浏览器 checkbox 命令 `path: ['check']` | `src/cli/specs/browser-basic.ts:108`——因此 Worker 命令统一挂在 `axiom attempt <verb>`（术语表 §5、D16），与 `axiom.attempt.*` 对齐；无残余冲突 |
 
 现存顶层 RPC 命名空间（46 个，`axiom`/`mission` 均未被占用）：`accounts agent agentHooks agentSession agentTeams aiVault artifacts automation browser clipboard computer diagnostics emulator files folderWorkspace git github gitlab host hostedReview jira linear markdown nativeChat network notifications orchestration pairing plugins preflight project projectGroup projectHostSetup repo runtime session settings skills speech ssh stats status terminal ui updater workspacePorts worktree`。
 
@@ -304,7 +304,7 @@ M0-09 / D37：`orca-data.json` 的 GlobalSettings 增加可选 `providerActivati
 | 1 | Worker 报告即终局：`worker_done succeeded` 在同一事务把 Task 置 `completed` 并 `promoteReadyTasks`；`LEGAL_TRANSITIONS.task` 任意→任意，`taskUpdate` 可直接写 `completed`（`db/lifecycle-transition.ts`、`worker-report-settlement.ts:276`、`task-status-transition.ts:109`） | `completed` 只能解释为「Attempt 已结算」；权威在 `task_stages`；`taskUpdate` 与 `deps` 对 Mission Run 拦截（§4b、D2、D10） |
 | 2 | 自动调度器已退役：`Coordinator`（`orchestration/coordinator.ts`）、`coordinator_runs`、`orchestration.run/runStop`、CLI `coordinator-start` 返回 `orchestration_migration_required/command_retired`；现行 coordinator 是终端里跟 skill guide 的 LLM | 没有可复用的 Scheduler；MissionController 自建确定性、DB 驱动、可重启的调度，并作为 `run:<runId>` mailbox 消费者（`run-delivery.ts`） |
 | 3 | decision gate 不是 Approval：`resolveGate` 不校验 options、无 pending-only 守卫、无 resolver/expiry；`createGate` 在 supervised worker 活跃时拒绝，否则把活跃 dispatch 置 `completed`（`decision-gate-store.ts`） | Approval 独立建表（D7）；gate 仅用于无活跃 Attempt 的 Task 级 Question（§3e） |
-| 4 | 命名冲突：`project.*`、`projectHostSetup.*`、`projectGroup.*`、`automation.*`、CLI `project`、CLI 顶层 `check`；"Task" 在 GitHub/Linear/Jira 模块另有含义；重名启动即抛 `duplicate_rpc_method` | 全部走 `axiom.*` / `axiom …`（D1）；Worker 命令挂 `axiom attempt <verb>`（D16，提议中） |
+| 4 | 命名冲突：`project.*`、`projectHostSetup.*`、`projectGroup.*`、`automation.*`、CLI `project`、CLI 顶层 `check`；"Task" 在 GitHub/Linear/Jira 模块另有含义；重名启动即抛 `duplicate_rpc_method` | 全部走 `axiom.*` / `axiom …`（D1）；Worker 命令挂 `axiom attempt <verb>`（D16） |
 | 5 | 契约栅栏：所有 orchestration mutation 需 `orchestrationContractVersion: 1`；栅栏与幂等收据都由 `ORCHESTRATION_MUTATION_METHODS` 集合驱动，CLI 只对 `orchestration.` 前缀打版本戳 | `axiom.*` 必须 additive 接入该集合与 CLI 戳（§4c），否则既无栅栏也无幂等 |
 | 6 | 137/150 个 `orca-runtime-*.ts` 为 `@ts-nocheck`，含 `orca-runtime-core.ts` 与 `getOrchestrationDb` 所在模块 | Axiom 逻辑放独立强类型模块，注入 `OrchestrationDb`（§8） |
 | 7 | 厂商端点硬编码且部分强制（artifact API 必须 onorca.dev）；auth/feedback/artifact 服务端不在仓库；PostHog 无 key 静默，但 changelog/nudge/kill-list/feedback/login/relay/push 路径仍活跃 | M0 出口清单与自动化断言（§7）；不能只改品牌 |

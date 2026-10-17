@@ -3,7 +3,7 @@
 更新日期：2026-09-26
 基于：整体设计 V1（2026-09-26）；代码审计快照 `stablyai/orca@646e9a5`（Orca 1.4.197），**fork 冻结基线 `3eb1adec2`（tag `axiom-base`，D19）**，审计结论已在基线上复核，见 `docs/reference/orca-mapping.md`
 仓库落位：`docs/ARCHITECTURE.md`
-术语与枚举以 `docs/GLOSSARY.md` 为准；决策编号见 `docs/decisions/DECISION_LOG.md`（D1–D8 已拍板；D6a、D7a 为对已拍板决策的修正提议；D9 起为提议中）。
+术语与枚举以 `docs/GLOSSARY.md` 为准；决策编号见 `docs/decisions/DECISION_LOG.md`（D1–D8 已拍板；D6a、D7a 的修正与 D9–D16 已于 2026-10-17 拍板）。
 
 ## 1. 产品定义
 
@@ -60,7 +60,7 @@ Task 是长期存在的工作对象；Agent 只是某次 Attempt 的临时执行
 Worker 的 `SUBMISSION` 只能把 Task 推进到 `SUBMITTED`。`VERIFIED`、`INTEGRATION_READY`、`INTEGRATED` 只能由 VerificationService 与 IntegrationController 产生。
 
 ### 3.4 一个 Task 只有一个权威 stage
-项目级权威是 `task_stages.stage`（D2）。Orca `tasks.status` 是 Attempt 执行投影，其 `completed` 的含义是「当前 Attempt 已结算」，不是「任务完成」。Task DAG 只存于 `mission_task_edges`，不使用 Orca `tasks.deps`（D10，提议中）。
+项目级权威是 `task_stages.stage`（D2）。Orca `tasks.status` 是 Attempt 执行投影，其 `completed` 的含义是「当前 Attempt 已结算」，不是「任务完成」。Task DAG 只存于 `mission_task_edges`，不使用 Orca `tasks.deps`（D10）。
 
 ### 3.5 Typed messages，而不是无限聊天
 八种消息类型（`INFORM / REQUEST / QUESTION / DECISION / BLOCKED / HANDOFF / REQUEST_SUBTASK / SUBMISSION`），摘要在消息里、正文在 Artifact 里，按对象关系与订阅路由，不广播。
@@ -332,9 +332,9 @@ agentSpec:            # 内容寻址：id = sha256(spec)
 5. Scheduler 获取并发/预算许可；
 6. attempt-launcher 调用现有 `startLocalWorker`（`orchestration.workerStart` 的 service 层）。
 
-### 8.4 Attempt 启动的内核接入（D14，提议中）
-- Control Plane 不是终端。基线中的 #22555 已把 caller 统一为 party（pane key 或 Orca session id 均可绑定 Run），因此 Control Plane 以 **session party** 参与：每个 Mission 一个合成 Orca session id（持久化在 `missions`），用它创建 Run 并作为 `run:<runId>` 的 coordinator；进程内直接构造 `OrchestrationSessionCaller` 调用 `startLocalWorker`，dispatch creator 用既有 `{kind:'system'}`；`workerStart` 以 additive 方式增加可选的直供 `worktreeId` / `branchNameOverride`。旧客户端不传即行为不变（D14，提议中）。
-- 分支与 worktree：`axiom/attempt/<taskId>/<seq>`（seq = 该 Task 的 Attempt 序号，由 Control Plane 递增）。D6 原文用 `<attemptId>`，但 dispatch id 在 worktree 创建之后才存在，故改用序号；`attempt_bindings` 记录 `dispatch_id ↔ seq ↔ branch`（D6 修正，提议中）。
+### 8.4 Attempt 启动的内核接入（D14）
+- Control Plane 不是终端。基线中的 #22555 已把 caller 统一为 party（pane key 或 Orca session id 均可绑定 Run），因此 Control Plane 以 **session party** 参与：每个 Mission 一个合成 Orca session id（持久化在 `missions`），用它创建 Run 并作为 `run:<runId>` 的 coordinator；进程内直接构造 `OrchestrationSessionCaller` 调用 `startLocalWorker`，dispatch creator 用既有 `{kind:'system'}`；`workerStart` 以 additive 方式增加可选的直供 `worktreeId` / `branchNameOverride`。旧客户端不传即行为不变（D14）。
+- 分支与 worktree：`axiom/attempt/<taskId>/<seq>`（seq = 该 Task 的 Attempt 序号，由 Control Plane 递增）。D6 原文用 `<attemptId>`，但 dispatch id 在 worktree 创建之后才存在，故改用序号；`attempt_bindings` 记录 `dispatch_id ↔ seq ↔ branch`（D6a）。
 - Mission Run 内的 `workerStart`/`dispatch` 只接受 Control Plane 调用；`nestedWorkerMaxDepth` 固定 1；Worker 派生子工作只能走 `REQUEST_SUBTASK`。
 
 ## 9. Context Engineering
@@ -362,8 +362,8 @@ ContextPackage 是可寻址（`id = sha256(manifest)`）、可复现、最小充
 
 - 每条消息携带 `missionId` 与相关 `taskId / attemptId / decisionId / artifactId`；摘要在消息，详细内容在 Artifact。
 - 路由：按对象关系（依赖边、HANDOFF 目标）与订阅为主，DecisionEngine 评分为辅；不全局广播。
-- 持久化复用 Orca `messages`/`deliveries`/唤醒机制，产品类型放 `payload.axiom.type`（D9，提议中）；映射表见 `orca-mapping.md` §3c。Worker 不得发出 `merge_ready`、`dispatch`、`decision_gate`。
-- Worker 通道：`axiom attempt submit | ask | blocked | handoff | inform | request | request-subtask | check`，携带 Orca dispatch capability；stale / duplicate / mismatched / unauthorized 由 Orca 既有拒绝码与 `mutation_receipts` 幂等处理（D11、D16，提议中）。
+- 持久化复用 Orca `messages`/`deliveries`/唤醒机制，产品类型放 `payload.axiom.type`（D9）；映射表见 `orca-mapping.md` §3c。Worker 不得发出 `merge_ready`、`dispatch`、`decision_gate`。
+- Worker 通道：`axiom attempt submit | ask | blocked | handoff | inform | request | request-subtask | check`，携带 Orca dispatch capability；stale / duplicate / mismatched / unauthorized 由 Orca 既有拒绝码与 `mutation_receipts` 幂等处理（D11、D16）。
 - Control Plane → Worker 的回复（answer、DECISION）投递到 `dispatch:<attemptId>` mailbox，复用 Orca 的 nudge 与长轮询。
 
 ## 11. Verification 设计
@@ -484,7 +484,7 @@ terminal / PTY / daemon / orcad；Git / worktree / source control；provider ada
 
 ### MODIFY（全部 additive）
 - orchestration schema：迁移 v43 起新增 Axiom side tables（`orca-mapping.md` §6）；**不改既有 CHECK 枚举**；
-- RPC：新增 `axiom.*` 命名空间（`orca-mapping.md` §4c），纳入契约栅栏与幂等收据（D15，提议中）；
+- RPC：新增 `axiom.*` 命名空间（`orca-mapping.md` §4c），纳入契约栅栏与幂等收据（D15）；
 - `workerStart` / `startLocalWorker`：system principal 与直供 worktree（D14）；
 - messaging：`payload.axiom` 语义、Worker 禁发类型的拦截；
 - 拦截点：Mission 管理对象上的 `taskUpdate`、`workerStart`/`dispatch`、`reset`、`gateCreate/Resolve`、`runUse --takeover-legacy`、带 `deps` 的 `taskCreate`（统一守卫模块 `src/main/axiom/admission/`）；

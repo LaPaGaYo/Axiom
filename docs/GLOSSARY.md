@@ -189,7 +189,7 @@ APPLYING / TESTING → QUEUED（应用重启时由 RecoveryService 丢弃临时�
 | dispatch capability（`dcap_…`） | Attempt 的调用凭证，`axiom.*` RPC 复用其校验 |
 | decision gate | 仅承载无活跃 Attempt 时的 Task 级 QUESTION 阻塞；不是 Approval |
 | `ask` / question_threads | Attempt 运行中的 QUESTION 通道 |
-| session party / 合成 session id（提议中，D14） | Control Plane 参与 orchestration 的身份：每个 Mission 一个符合 `isOrcaSessionId` 格式的合成 Orca session id，作为 Run coordinator 与 `session:<id>` mailbox 地址；进程内直接构造 `OrchestrationSessionCaller`，dispatch creator `{kind:'system'}` |
+| session party / 合成 session id（D14） | Control Plane 参与 orchestration 的身份：每个 Mission 一个符合 `isOrcaSessionId` 格式的合成 Orca session id，作为 Run coordinator 与 `session:<id>` mailbox 地址；进程内直接构造 `OrchestrationSessionCaller`，dispatch creator `{kind:'system'}` |
 | party（#22555） | Orca 对 caller/target 的统一表示 `{address, terminalHandle, paneKey, orcaSessionId}`；PTY agent = 终端（handle + pane），结构化会话 = Orca session id |
 | federation / `--on <environment>` | 远端放置；V1 之后 |
 | child worktree | 每个 Attempt 一个 |

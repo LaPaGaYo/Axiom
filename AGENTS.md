@@ -21,7 +21,7 @@ Before making product or architecture changes, read:
 - `docs/GLOSSARY.md`;
 - `docs/reference/orca-mapping.md` for anything touching orchestration, the runtime, or the Execution Kernel;
 - `docs/STYLEGUIDE.md` for UI work;
-- `docs/decisions/DECISION_LOG.md` (path per D13, proposed);
+- `docs/decisions/DECISION_LOG.md` (path per D13);
 - the relevant document under `docs/reference/` for any subsystem being changed (for example `docs/reference/ssh-execution-boundary.md`, `docs/reference/git-compatibility.md`).
 
 Upstream orchestration documentation lives in `skill-guides/orchestration.md`, `skill-guides/orchestration/references/`, and `docs/site/content/docs/cli/orchestration.mdx`. Treat it as Execution Kernel reference: it describes the retired LLM-coordinator workflow, which Axiom does not use.
@@ -505,7 +505,7 @@ Update documentation when a change modifies:
 - operator recovery procedures;
 - build, packaging, or deployment requirements.
 
-Record significant choices as Decisions with context, alternatives, rationale, consequences, and supersession rules. Append them to `docs/decisions/DECISION_LOG.md` (path per D13, proposed), continuing the D-numbering (D1–D16 and amendment D6a exist; the next is D17) with status `PROPOSED`, `ACCEPTED`, `REJECTED`, or `SUPERSEDED`; the `decisions` table in code is numbered from that log. Do not leave Mission-critical decisions only in a pull request, terminal transcript, or model conversation.
+Record significant choices as Decisions with context, alternatives, rationale, consequences, and supersession rules. Append them to `docs/decisions/DECISION_LOG.md` (path per D13), continuing the D-numbering (D1–D16 and amendment D6a exist; the next is D17) with status `PROPOSED`, `ACCEPTED`, `REJECTED`, or `SUPERSEDED`; the `decisions` table in code is numbered from that log. Do not leave Mission-critical decisions only in a pull request, terminal transcript, or model conversation.
 
 ## Definition of Done for a Code Change
 

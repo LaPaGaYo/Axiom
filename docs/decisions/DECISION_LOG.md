@@ -50,9 +50,9 @@
 **决定**：
 - 集成基线分支：`axiom/integration/<missionId>`，由 IntegrationController 独占写入；
 - Attempt 分支：`axiom/attempt/<taskId>/<attemptId>`，在 child worktree 中从当前集成基线创建；（已由 D6a 取代）
-  **修正（提议中，D6a）**：dispatch id（≡ attemptId）由 Orca 在 `createDispatchContext` 时铸造，晚于 worktree 与分支创建，因此分支名改为 `axiom/attempt/<taskId>/<seq>`（seq = 该 Task 的 Attempt 序号，Control Plane 递增），`attempt_bindings` 记录 `dispatch_id ↔ seq ↔ branch`；集成临时分支 `axiom/integrating/<batchId>`。
+  **修正（D6a，ACCEPTED Henry 2026-10-17）**：dispatch id（≡ attemptId）由 Orca 在 `createDispatchContext` 时铸造，晚于 worktree 与分支创建，因此分支名改为 `axiom/attempt/<taskId>/<seq>`（seq = 该 Task 的 Attempt 序号，Control Plane 递增），`attempt_bindings` 记录 `dispatch_id ↔ seq ↔ branch`；集成临时分支 `axiom/integrating/<batchId>`。
 - promotion = 将集成基线合入用户指定的目标分支（默认仓库默认分支），按 policy 需 Approval；（措辞已由 D6a 修正）
-  **修正（提议中，D6a 续）**：术语表把两件事分开——批次 promotion（`PROMOTED`）= 集成基线 ref 前进到批次合并 commit；**Delivery** = 集成基线合入目标分支（`axiom.mission.deliver`），按 policy 需交付 Approval。
+  **修正（D6a 续，ACCEPTED Henry 2026-10-17）**：术语表把两件事分开——批次 promotion（`PROMOTED`）= 集成基线 ref 前进到批次合并 commit；**Delivery** = 集成基线合入目标分支（`axiom.mission.deliver`），按 policy 需交付 Approval。
 - 目标分支与集成基线都属于「受保护分支」：Worker Attempt 不得直接合入。
 **理由**：与指令「不得从 Worker Attempt 直接合入受保护的集成或主分支」一致；分支名前缀便于清理与识别。
 
@@ -60,7 +60,7 @@
 
 **背景**：Orca `decision_gates` 的 `resolveGate` 不校验 resolution 是否在 `options` 内、无 pending-only 守卫、不记录 resolver 身份与过期；`createGate` 会把活跃 dispatch 标 `completed` 并把 Task 置 `blocked`。
 **决定**：新建 `approvals` 表（action kind、scoped inputs hash、risk、requested_by、expires_at、resolver、resolution、outcome、executed_at）；Orca decision gate 仅用于 `QUESTION` 类阻塞。
-**修正（提议中，D7a）**：映射核查发现 `createGate` 在 supervised worker 活跃时会拒绝，因此 gate 只能承载**没有活跃 Attempt** 的 Task 级 QUESTION（Planner/人类澄清）；Worker 运行中的提问走 `axiom attempt ask` → Orca `question_threads`。
+**修正（D7a，ACCEPTED Henry 2026-10-17）**：映射核查发现 `createGate` 在 supervised worker 活跃时会拒绝，因此 gate 只能承载**没有活跃 Attempt** 的 Task 级 QUESTION（Planner/人类澄清）；Worker 运行中的提问走 `axiom attempt ask` → Orca `question_threads`。
 **理由**：Approval 必须绑定精确动作与有效期，gate 的语义与守卫都达不到。
 
 ## D8 · V1 范围 = M0–M4 + M5 抽象层 — ACCEPTED
@@ -70,48 +70,48 @@
 
 ---
 
-## D9 · 消息类型映射：产品类型放 payload，不改 Orca CHECK 枚举 — PROPOSED
+## D9 · 消息类型映射：产品类型放 payload，不改 Orca CHECK 枚举 — ACCEPTED（Henry 2026-10-17）
 
 **背景**：`messages.type` 有 CHECK 约束（九种 Orca 类型）；新增枚举需迁移重建表。
-**提议**：Axiom 八种类型作为 `payload.axiom.type` 持久化，`messages.type` 只用于路由语义，映射见术语表 §5；`merge_ready` 在 Axiom 中不允许由 Worker 发出（发出即拒绝）。
+**决定**：Axiom 八种类型作为 `payload.axiom.type` 持久化，`messages.type` 只用于路由语义，映射见术语表 §5；`merge_ready` 在 Axiom 中不允许由 Worker 发出（发出即拒绝）。
 **理由**：零 schema 变更、保留 Orca 的 mailbox / 唤醒 / 幂等机制；产品语义仍可查询（payload 为 JSON）。
 **风险**：按产品类型过滤需要 JSON 查询或额外索引表；如成为瓶颈再迁移。
 
-## D10 · Orca `tasks.deps` 对 Axiom 管理的 Task 保持为空，DAG 只存于 Axiom 边表 — PROPOSED
+## D10 · Orca `tasks.deps` 对 Axiom 管理的 Task 保持为空，DAG 只存于 Axiom 边表 — ACCEPTED（Henry 2026-10-17）
 
 **背景**：Orca `promoteReadyTasks` 只看 `tasks.deps` 与 `completed`，会在上游仅「提交」时把下游置 `ready`。
-**提议**：Axiom 创建 Orca Task 时 `deps = []`（Orca 侧立即 `ready`，仅表示「可被派发」这一必要条件）；依赖边存于 `mission_task_edges`；MissionController 的 Scheduler 是 Axiom Task 的唯一派发者，按 task stage 判断 READY；对 Axiom 管理的 Task，直接 `orchestration.workerStart` / `dispatch` 需被 admission 校验拒绝。
+**决定**：Axiom 创建 Orca Task 时 `deps = []`（Orca 侧立即 `ready`，仅表示「可被派发」这一必要条件）；依赖边存于 `mission_task_edges`；MissionController 的 Scheduler 是 Axiom Task 的唯一派发者，按 task stage 判断 READY；对 Axiom 管理的 Task，直接 `orchestration.workerStart` / `dispatch` 需被 admission 校验拒绝。
 **理由**：不与 Orca 的提升逻辑打架；readiness 权威单一。
 
-## D11 · Worker ↔ Control Plane 通道 = `axiom` CLI → `axiom.*` RPC，复用 Orca dispatch capability — PROPOSED
+## D11 · Worker ↔ Control Plane 通道 = `axiom` CLI → `axiom.*` RPC，复用 Orca dispatch capability — ACCEPTED（Henry 2026-10-17）
 
-**提议**：Worker 侧命令 `axiom attempt submit | ask | blocked | handoff | inform | request | request-subtask | check`（命令形状由 D16 定为 `axiom attempt <verb>`），直接调用 `axiom.attempt.*` RPC；RPC 层复用 Orca 的 `--dispatch-capability` 校验（`hasLifecycleAuthority` + capability hash + `consumer_generation` 栅栏 + `mutation_receipts` 幂等）；Control Plane → Worker 的回复仍通过 Orca `dispatch:<id>` mailbox 投递以复用唤醒/nudge 机制。不引入 MCP server。
+**决定**：Worker 侧命令 `axiom attempt submit | ask | blocked | handoff | inform | request | request-subtask | check`（命令形状由 D16 定为 `axiom attempt <verb>`），直接调用 `axiom.attempt.*` RPC；RPC 层复用 Orca 的 `--dispatch-capability` 校验（`hasLifecycleAuthority` + capability hash + `consumer_generation` 栅栏 + `mutation_receipts` 幂等）；Control Plane → Worker 的回复仍通过 Orca `dispatch:<id>` mailbox 投递以复用唤醒/nudge 机制。不引入 MCP server。
 **理由**：Orca 已有 stale/duplicate/unauthorized 拒绝码，正好满足章程的两条量化指标；避免第二套认证。
 
-## D12 · Axiom 代码放独立强类型模块，不进入 `@ts-nocheck` 的 `orca-runtime-*.ts` — PROPOSED
+## D12 · Axiom 代码放独立强类型模块，不进入 `@ts-nocheck` 的 `orca-runtime-*.ts` — ACCEPTED（Henry 2026-10-17）
 
 **背景**：约 150 个 `orca-runtime-*.ts` 非测试模块中 137 个 `@ts-nocheck`。
-**提议**：Control Plane 代码位于 `src/main/axiom/`（或等价目录），仅通过 RPC 方法注册与 service 边界接入 runtime；禁止在 `@ts-nocheck` 文件内新增 Axiom 逻辑。
+**决定**：Control Plane 代码位于 `src/main/axiom/`（或等价目录），仅通过 RPC 方法注册与 service 边界接入 runtime；禁止在 `@ts-nocheck` 文件内新增 Axiom 逻辑。
 
-## D13 · 文档语言与文件落位 — PROPOSED
+## D13 · 文档语言与文件落位 — ACCEPTED（Henry 2026-10-17；M0 期间已按此落位）
 
-**提议**：章程、架构、术语表、映射参考、决策日志为中文（英文术语保留）；`docs/PROJECT_CONSTITUTION.md` 与根 `AGENTS.md` 为英文（面向所有 AI 贡献者，与上游一致）。Claude Project 文档名 → 仓库路径：
+**决定**：章程、架构、术语表、映射参考、决策日志为中文（英文术语保留）；`docs/PROJECT_CONSTITUTION.md` 与根 `AGENTS.md` 为英文（面向所有 AI 贡献者，与上游一致）。Claude Project 文档名 → 仓库路径：
 `project-charter-v1.1.md → docs/PROJECT_CHARTER.md`；`architecture-v1.1.md → docs/ARCHITECTURE.md`；`glossary-v1.md → docs/GLOSSARY.md`；`project-constitution-v1.md → docs/PROJECT_CONSTITUTION.md`；`agents-md-v1.1.md → AGENTS.md`；`orca-mapping-v1.md → docs/reference/orca-mapping.md`；`decision-log-v1.md → docs/decisions/DECISION_LOG.md`。
-## D14 · Control Plane 以 session party 身份调用 Orca 运行时 — PROPOSED（按基线 3eb1adec2 修订）
+## D14 · Control Plane 以 session party 身份调用 Orca 运行时 — ACCEPTED（Henry 2026-10-17；按基线 3eb1adec2 修订；M1 首个任务做映射核实）
 
 **背景**：Orca 上游 #22555（已包含在冻结基线中）把所有 caller/target 统一解析为一个 orchestration party `{address, terminalHandle, paneKey, orcaSessionId}`（`src/main/runtime/orchestration/orchestration-party.ts`、`orchestration-caller-identity.ts`）；Run 绑定键是 pane key **或** Orca session id（`hasRunBindingKey`）；`createRun` 已接受 `coordinatorOrcaSessionId` 且 handle/pane 可为 null（`db/runs/run-create.ts`）；session caller 在 RPC 入口即被解析，`worker-start` 等动词对 session caller 不再要求 `from`。Axiom 的 Scheduler 是服务，不是终端。
-**提议**：Control Plane 作为 **session party** 参与 orchestration——为每个 Mission 铸造一个符合 `isOrcaSessionId` 格式的合成 session id（不以 `term_`/`structworker_` 开头，不对应真实 agent 会话），用它 `createRun({coordinatorHandle: null, coordinatorPaneKey: null, coordinatorOrcaSessionId})`；Control Plane 在进程内直接构造 `OrchestrationSessionCaller`（`workspaceId` = Mission 仓库工作区），经 service 边界调用 `startLocalWorker` 等，不走 env 注入、不走参数声明（`resolveDeclaredCallerParty` 会拒绝以参数声明的 chat 型 caller，进程内路径不受此限）；dispatch creator 用既有 `{kind:'system'}`（`db/dispatch-depth.ts`，深度恒为 1）；`workerStart` 仍需 additive 增加可选的直供 `worktreeId` / `branchNameOverride`（D6a）。
+**决定**：Control Plane 作为 **session party** 参与 orchestration——为每个 Mission 铸造一个符合 `isOrcaSessionId` 格式的合成 session id（不以 `term_`/`structworker_` 开头，不对应真实 agent 会话），用它 `createRun({coordinatorHandle: null, coordinatorPaneKey: null, coordinatorOrcaSessionId})`；Control Plane 在进程内直接构造 `OrchestrationSessionCaller`（`workspaceId` = Mission 仓库工作区），经 service 边界调用 `startLocalWorker` 等，不走 env 注入、不走参数声明（`resolveDeclaredCallerParty` 会拒绝以参数声明的 chat 型 caller，进程内路径不受此限）；dispatch creator 用既有 `{kind:'system'}`（`db/dispatch-depth.ts`，深度恒为 1）；`workerStart` 仍需 additive 增加可选的直供 `worktreeId` / `branchNameOverride`（D6a）。
 **风险**：`resolveOrcaSessionParty` 把未记录为 structured worker 的 session id 视为 chat（`terminalHandle: null`）——作为 Run coordinator 与 mailbox 地址（`session:<id>`）可行，但任何依赖 handle 的路径（如旧式 mail 键）需要逐一核实；合成 id 必须持久化在 `missions` 表并在重启后复用，否则 Run 绑定失效。
 
-## D15 · `axiom.*` mutation 纳入 Orca 契约栅栏与幂等收据 — PROPOSED
+## D15 · `axiom.*` mutation 纳入 Orca 契约栅栏与幂等收据 — ACCEPTED（Henry 2026-10-17）
 
 **背景**：契约栅栏（`orchestrationContractVersion`）与 `mutation_receipts` 幂等都由 `ORCHESTRATION_MUTATION_METHODS` 集合驱动，CLI 只给 `orchestration.` 前缀打版本戳。
-**提议**：additive 扩展该集合与 CLI 打戳逻辑，把 `axiom.*` 的 mutation 方法纳入同一栅栏与收据机制，而不是另起一套。
+**决定**：additive 扩展该集合与 CLI 打戳逻辑，把 `axiom.*` 的 mutation 方法纳入同一栅栏与收据机制，而不是另起一套。
 
-## D16 · Worker CLI 命令挂在 `axiom attempt <verb>` 下 — PROPOSED
+## D16 · Worker CLI 命令挂在 `axiom attempt <verb>` 下 — ACCEPTED（Henry 2026-10-17；M0-11 保留的 CLI 名已按此）
 
 **背景**：Orca CLI 已有顶层浏览器命令 `check`（`src/cli/specs/browser-basic.ts`），`axiom check` 会重名。
-**提议**：Worker 面向的命令统一为 `axiom attempt submit | ask | blocked | handoff | inform | request | request-subtask | check`；术语表已同步。
+**决定**：Worker 面向的命令统一为 `axiom attempt submit | ask | blocked | handoff | inform | request | request-subtask | check`；术语表已同步。
 
 ## D17 · 产品代号定为 Axiom — ACCEPTED
 
@@ -379,5 +379,5 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 
 **明确留到 M0 之后的**：Windows / Linux 打包与签名 / 公证；`package.json.name`、`CFBundleShortVersionString`、`orca-*` helper 可执行文件名与 NSIS 文案（DEF-3）；mobile 代码的 9 个 `import/no-cycle` 与 `ProtocolBlockScreen` 上游链接（hygiene 清单）；上游 `typecheck:e2e` 在 main 上本就红（hygiene）。
 
-**决定**（Henry 2026-10-17）：确认上表，**M0 关闭**（Axiom main `3a5c63832`，fixture `fixture-v1`）。M1 的前置 Decision 为 D6a、D7a、D9–D16（均 PROPOSED，待拍板），M1 的任务分解随后以 brief 形式提出。
+**决定**（Henry 2026-10-17）：确认上表，**M0 关闭**（Axiom main `3a5c63832`，fixture `fixture-v1`）。M1 的前置 Decision D6a、D7a、D9–D16 已于 2026-10-17 全部 ACCEPTED，M1 的任务分解随后以 brief 形式提出。
 **取代规则**：无。M0 之后发现的 M0 范围内缺口以新的 M0-nn Task 记录并在本条下追加一行，不重开里程碑。

@@ -243,7 +243,7 @@ Controlled fixture 上的成功证明确定性的端到端行为；blind fixture
 - DecisionEngine abstraction：RulesEngine 基线必备，Jev 作为可选 provider；
 - M0：Orca fork 的品牌、更新、telemetry 和第三方 notice 隔离，以及**网络出口清单 + 断言测试**；
 - `axiom.*` RPC 命名空间与 `axiom` CLI（D1）；
-- 文档：`docs/GLOSSARY.md`、`docs/PROJECT_CONSTITUTION.md`、`docs/reference/orca-mapping.md`（落位按 D13，提议中）。
+- 文档：`docs/GLOSSARY.md`、`docs/PROJECT_CONSTITUTION.md`、`docs/reference/orca-mapping.md`（落位按 D13）。
 
 ### Evidence Deliverables
 
@@ -386,12 +386,12 @@ CompletionReport 至少回答：
 | 1 | 文档头：Axiom（D17 确认）、V1.1、基于 V1；加「术语与枚举以 `docs/GLOSSARY.md` 为准」 | A12、D1 |
 | 2 | 领域对象 Project → Mission；用户仓库称 repository/仓库；原 §5 改「产品使命」；Project Control Plane → Control Plane；Project Intelligence → Mission Intelligence | D1、A6 |
 | 3 | Obj1 对象清单对齐术语表 §3，Milestone 仅为分组标签；新增 Goal 版本化 | A3、A7、A8 |
-| 4 | Obj4 消息类型改为八种 | A1、D9（提议中） |
+| 4 | Obj4 消息类型改为八种 | A1、D9 |
 | 5 | Obj5 引入 Submission/Candidate，review 不能推翻 `FAIL`；Obj6 改 IntegrationController、单候选批次、冲突规则；全文改用 task stage 名 | B5、D4、B9、A4、D5、D3、D2 |
 | 6 | Obj7 用 replan 分级词汇；Obj8 加「PlanRevision 接受（可按 policy 自动）」 | 术语表 §4.13、A10 |
 | 7 | §8 第 1 条改为 Mission 与 GoalRevision；第 4/6 条按 A2 拆分；第 7 条改八种消息；新增第 16 条网络出口验证 | A2、A1、C9 |
 | 8 | 新增 §9「V1 范围与里程碑」与「Demo 与验证 fixture」（双 fixture 制、FlowTask 候选与硬门槛）；原 §9–§15 顺延为 §10–§16 | G6、D8、G8、D18 |
-| 9 | §10 Engineering Deliverables：MissionController、IntegrationController、`task_stages`、`approvals`、Submission/Candidate、M0 网络出口清单 + 断言测试、`axiom` 命名空间、三份文档 | A4、D2、D7、C9、C11、D13（提议中） |
+| 9 | §10 Engineering Deliverables：MissionController、IntegrationController、`task_stages`、`approvals`、Submission/Candidate、M0 网络出口清单 + 断言测试、`axiom` 命名空间、三份文档 | A4、D2、D7、C9、C11、D13 |
 | 10 | §11 成功标准：拆分并行/provider；新增 0 个原厂请求；`worker_done` → 伪造或错误的 `SUBMISSION` 无法直接进入 `INTEGRATION_READY` | A2、C9、C1 |
 | 11 | §12 Non-Goals 新增多候选批次、远端/federation 与 mixed-version、Jev 超出接口与基线的实验 | D5、D8 |
 | 12 | §15 Completion Definition 对齐 Mission 状态与精确 stage 名 | B7、术语表 §4.1 |
