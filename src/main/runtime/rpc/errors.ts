@@ -98,6 +98,9 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'stable_pane_required',
   'consumer_fenced',
   'task_not_found',
+  // ArtifactStore codes.
+  'artifact_not_found',
+  'artifact_corrupt',
   'task_not_startable',
   'inject_rejected',
   'dispatch_not_found',

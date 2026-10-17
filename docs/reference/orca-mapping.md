@@ -187,7 +187,7 @@ M1-06 已注册下表标记「M1 已注册」的方法；其余方法留待后�
 | `axiom.integration.promote` | batchId、approvalId? | `PROMOTABLE/AWAITING_APPROVAL → PROMOTED`，基线 ref 前进 | M |
 | `axiom.approval.list` / `grant` / `deny` / `revoke` | missionId / approvalId、resolver、note | `approvals.status`；grant 后单次 CONSUMED | —/M/M/M |
 | `axiom.decision.propose` / `accept` / `reject` / `list` / `show` | missionId、decision 正文、provenance | `decisions`；accept 发 DECISION 通知 | M/M/M/—/— |
-| `axiom.artifact.put` / `read` / `list` | missionId、kind、内容或路径、关联 id | 内容寻址写入 + `artifacts` 行 | M/—/— |
+| `axiom.artifact.put` / `read` / `list`（M2-02 已注册） | put：missionId、kind、contentBase64（≤8 MiB）、mediaType、related、createdBy；read：id；list：missionId、kind?、relatedTo? | 原子内容寻址写入 + `artifacts` 元数据；read 校验 hash；CLI 挂 `mission artifact`，无新顶层命令 | M/—/— |
 | `axiom.message.list` / `send` / `answer` | missionId、taskId?、attemptId?、type? / 目标 attemptId / questionMessageId、body | `send`→`insertMessage` 到 `dispatch:<id>`；`answer`→`answerQuestion` | —/M/M |
 | `axiom.policy.show` / `update` | missionId、patch | 预算上调走 Approval | —/M |
 
@@ -259,11 +259,11 @@ M1-04～M1-08 的业务写入使用七张表：`missions`、`goal_revisions`、`
 | `mission_task_edges` | `mission_id`, `from_task_id`, `to_task_id`, `readiness_threshold`(`INTEGRATED` 或 `VERIFIED`), `plan_revision_id` | `PK(from_task_id, to_task_id)`；DAG 无环由 Control Plane 校验 |
 | `agent_specs` | `id PK`(sha256), `role`, `provider`, `model`, `reasoning`(JSON), `permissions`(JSON), `budget`(JSON), `workspace_strategy` | 内容寻址；Attempt 经 `attempt_bindings` 关联（下一行） |
 | `attempt_bindings` | `task_id`, `seq INTEGER`（`PK(task_id, seq)`）, `branch`, `dispatch_id`（可空，`UNIQUE`，`createDispatchContext` 后回填）, `agent_spec_id`, `context_package_id`, `created_at` | admission 时先写行（此时 dispatch 尚不存在，D6a），启动成功后回填 `dispatch_id` |
-| `context_packages` | `id PK`(sha256), `task_id`, `plan_revision_id`, `manifest`(JSON), `token_budget`, `mandatory_refs`(JSON), `ranked_refs`(JSON) | 内容在 Artifact 存储 |
+| `context_packages` | `id PK`(sha256), `task_id`, `plan_revision_id`, `manifest`(JSON), `token_budget`, `mandatory_refs`(JSON), `ranked_refs`(JSON) | M2-02 写/读；mandatory_refs 为 manifest/render Artifact id，ranked_refs 为已纳入上游 Artifact id；内容在 Artifact 存储 |
 | `submissions` | `id PK`, `dispatch_id UNIQUE`, `task_id`, `candidate_id`, `report`(JSON), `checks_run`(JSON), `limitations`(JSON), `follow_ups`(JSON) | 不可变 |
 | `candidates` | `id PK`, `dispatch_id`, `task_id`, `commit_sha`, `tree_sha`, `status`(`ACTIVE` 或 `SUPERSEDED`), `superseded_by`, `created_at` | `UNIQUE(task_id, commit_sha)` |
-| `artifacts` | `id PK`, `mission_id`, `kind`, `sha256`, `size_bytes`, `media_type`, `related`(JSON ids), `created_by` | 内容在 `<userData>/axiom/artifacts/<sha256>` |
-| `decisions` | `id PK`, `mission_id`, `status`, `title`, `options`(JSON), `resolution`, `authority`, `provenance`(JSON) | `supersedes_id` 列已建；Decision 写入者后续接入 |
+| `artifacts` | `id PK`, `mission_id`, `kind`, `sha256`, `size_bytes`, `media_type`, `related`(JSON ids), `created_by` | M2-02 写/读；内容在 `<userData>/axiom/artifacts/<sha256>` |
+| `decisions` | `id PK`, `mission_id`, `status`, `title`, `options`(JSON), `resolution`, `authority`, `provenance`(JSON) | M2-02 按 Mission/status 读取；`supersedes_id` 列已建；Decision 写入者后续接入 |
 | `verification_runs` | `id PK`, `candidate_id`, `task_id`, `status`, `verdict_detail`(JSON), `commands`(JSON), `tool_versions`(JSON), `verifier` | 证据引用走 `artifacts` |
 | `integration_batches` | `id PK`, `mission_id`, `base_commit`, `candidate_ids`(JSON，V1 长度 1), `status`, `merge_commit`, `conflicts`(JSON), `approval_id` | 单一集成权威串行写 |
 | `approvals` | `id PK`, `mission_id`, `action_kind`, `inputs_hash`, `risk`, `status`, `expires_at`, `resolver` | 已建 `requested_by`, `resolution`, `outcome`(JSON，执行结果), `executed_at` |

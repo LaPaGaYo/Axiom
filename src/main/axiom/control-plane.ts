@@ -1,3 +1,7 @@
+import path from 'node:path'
+import { getAppEnvironment } from '../../shared/app-environment'
+import { ArtifactStore } from './artifacts/artifact-store'
+import { ContextBuilder } from './context-builder/context-builder'
 import type { OrchestrationDb } from '../runtime/orchestration/db'
 import type { MissionSummary } from '../../shared/axiom-contract/mission-params'
 import type { TaskListItem } from '../../shared/axiom-contract/task-params'
@@ -20,12 +24,26 @@ export function getAxiomControlPlane(runtime: AxiomRuntime) {
 
 function createControlPlane(runtime: AxiomRuntime, db: OrchestrationDb) {
   const store = new AxiomStore(db)
+  const artifacts = new ArtifactStore(
+    store,
+    path.join(getAppEnvironment().getPath('userData'), 'axiom', 'artifacts')
+  )
+  const contextBuilder = new ContextBuilder(store, artifacts)
   const missions = new MissionController(db, store)
   const recovery = new RecoveryService(db, store, missions)
   // Only process-local cancellation handles are retained; statuses, stages,
   // binding and generation are loaded from the database at each new start.
   const consumers = new Map<string, RunMailboxConsumer>()
-  const plane = { store, missions, recovery, consumers, started: false, syncConsumer }
+  const plane = {
+    store,
+    artifacts,
+    contextBuilder,
+    missions,
+    recovery,
+    consumers,
+    started: false,
+    syncConsumer
+  }
 
   function syncConsumer(missionId: string): void {
     if (!plane.started) {

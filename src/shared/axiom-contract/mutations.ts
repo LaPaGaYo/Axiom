@@ -10,7 +10,8 @@ export const AXIOM_MUTATION_METHODS = [
   'axiom.plan.propose',
   'axiom.plan.approve',
   'axiom.plan.reject',
-  'axiom.task.cancel'
+  'axiom.task.cancel',
+  'axiom.artifact.put'
 ] as const
 
 const mutations: ReadonlySet<string> = new Set(AXIOM_MUTATION_METHODS)

@@ -4,11 +4,13 @@ import { runLifecycleWriteTransaction } from '../../runtime/orchestration/db/lif
 import { missionsStore } from './missions-store'
 import { revisionsStore } from './revisions-store'
 import { taskGraphStore } from './task-graph-store'
+import { artifactsStore } from './artifacts-store'
 import { policyAuditStore } from './policy-audit-store'
 
 type Missions = ReturnType<typeof missionsStore>
 type Revisions = ReturnType<typeof revisionsStore>
 type TaskGraph = ReturnType<typeof taskGraphStore>
+type Artifacts = ReturnType<typeof artifactsStore>
 type PolicyAudit = ReturnType<typeof policyAuditStore>
 
 // One injected store; table modules keep SQL and validation within the file-size gate.
@@ -43,7 +45,23 @@ export class AxiomStore {
   readonly appendAuditEvent: PolicyAudit['appendAuditEvent']
   readonly listAuditEvents: PolicyAudit['listAuditEvents']
 
+  readonly insertArtifact: Artifacts['insertArtifact']
+  readonly getArtifact: Artifacts['getArtifact']
+  readonly listArtifacts: Artifacts['listArtifacts']
+  readonly insertContextPackage: Artifacts['insertContextPackage']
+  readonly getContextPackage: Artifacts['getContextPackage']
+  readonly listDecisions: Artifacts['listDecisions']
+  readonly getContextTokenBudget: Artifacts['getContextTokenBudget']
+
   constructor(private readonly db: OrchestrationDb) {
+    const artifacts = artifactsStore(db)
+    this.insertArtifact = artifacts.insertArtifact
+    this.getArtifact = artifacts.getArtifact
+    this.listArtifacts = artifacts.listArtifacts
+    this.insertContextPackage = artifacts.insertContextPackage
+    this.getContextPackage = artifacts.getContextPackage
+    this.listDecisions = artifacts.listDecisions
+    this.getContextTokenBudget = artifacts.getContextTokenBudget
     const missions = missionsStore(db)
     this.updateRunObjective = missions.updateRunObjective
     this.insertMission = missions.insertMission

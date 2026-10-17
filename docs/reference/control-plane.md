@@ -1,4 +1,4 @@
-# Control Plane 子系统参考（M1 实装）
+# Control Plane 子系统参考（M1 + M2-02）
 
 更新：2026-10-17 · 适用：M1-01～M1-09 已合入的 Mission Facade；M1-10 出口证据另见 [M1-exit-e2e.md](../review-evidence/axiom-m1/M1-exit-e2e.md)。
 规范权威仍是 [Constitution](../PROJECT_CONSTITUTION.md) §1、ACCEPTED Decisions、[Glossary](../GLOSSARY.md) §4 与 [Architecture](../ARCHITECTURE.md)；本文定位实现，不新增权威或状态。
@@ -15,16 +15,18 @@ Execution Kernel 继续拥有 Run、Orca Task、dispatch、PTY、进程、worktr
 
 | 路径 | M1 职责 |
 |---|---|
-| `src/main/axiom/db/` | `axiom-store.ts` 聚合七张活跃 side table 的访问；`missions-store.ts`、`revisions-store.ts`、`task-graph-store.ts`、`policy-audit-store.ts` 分域 SQL；`axiom-rows.ts` / `row-codec.ts` 校验数据库行 |
+| `src/main/axiom/db/` | `axiom-store.ts` 聚合已启用的 side table 的访问；`missions-store.ts`、`revisions-store.ts`、`task-graph-store.ts`、`policy-audit-store.ts`、`artifacts-store.ts` 分域 SQL；`axiom-rows.ts` / `row-codec.ts` 校验数据库行 |
 | `src/main/axiom/mission-controller/` | `mission-controller.ts` 提供事务入口；`mission-lifecycle.ts`、`goal-lifecycle.ts`、`plan-materialization.ts`、`task-readiness.ts` 实现状态转换；`controller-context.ts` 定义错误与审计；`run-mailbox-consumer.ts` 消费 Run mailbox |
+| `src/main/axiom/artifacts/` | M2-02：`ArtifactStore` 以 sha256 寻址文件，原子写入、读取校验、Mission/kind/related 过滤；根目录由 Control Plane 注入 |
+| `src/main/axiom/context-builder/` | M2-02：七节强制集、确定性依赖 Artifact 排序、预算裁剪、脱敏、canonical manifest 和 Worker prompt template |
 | `src/main/axiom/admission/` | `mission-managed-run-guard.ts` 阻止 Orca RPC 修改 Mission 对象；四组测试固定 §4b 拦截 |
 | `src/main/axiom/recovery/` | `recovery-service.ts` 恢复非终态 Mission、检查绑定、重算 readiness；Attempt 恢复尚为空钩子 |
-| `src/main/axiom/control-plane.ts` | 按 `OrchestrationDb` WeakMap 缓存 store/controller/recovery，维护进程内消费者取消句柄并接入生命周期 |
+| `src/main/axiom/control-plane.ts` | 按 `OrchestrationDb` WeakMap 缓存 store/controller/recovery/artifacts/contextBuilder，维护进程内消费者取消句柄并接入生命周期 |
 | `src/main/axiom/control-plane-boot.ts` | `startAxiomControlPlane` / `stopAxiomControlPlane`；启动恢复和退出停止 |
 | `src/main/axiom/kernel-contract/` | M1-01 的 session party、Run/mailbox、Task 与 dispatch 身份契约测试；D14 的可执行依据 |
 | `src/shared/axiom-contract/` | zod 对象/params/响应、`lifecycle.ts` 合法转换、`plan-proposal.ts` 与 `plan-task-graph.ts` 校验、`mutations.ts` 分类、`stage-labels.ts` 文案 |
-| `src/main/runtime/rpc/methods/axiom/` | `mission.ts` / `goal.ts` / `plan.ts` / `task.ts`；`../axiom.ts` 聚合到 `ALL_RPC_METHODS` |
-| `src/cli/specs/axiom-*.ts` + `src/cli/handlers/axiom/` | `mission`、`mission goal`、`plan`、`task` CLI；`input-files.ts` 解析 Goal / Plan，`rpc-command.ts` 调用与输出 |
+| `src/main/runtime/rpc/methods/axiom/` | `mission.ts` / `goal.ts` / `plan.ts` / `task.ts` / `artifact.ts`；`../axiom.ts` 聚合到 `ALL_RPC_METHODS` |
+| `src/cli/specs/axiom-*.ts` + `src/cli/handlers/axiom/` | `mission`、`mission goal`、`mission artifact`、`plan`、`task` CLI；`input-files.ts` 解析 Goal / Plan，`rpc-command.ts` 调用与输出 |
 | `src/renderer/src/components/missions/` + `src/renderer/src/lib/axiom-client.ts` | Mission list/Home、Plan 审批、Task 表；共享 schema 校验与 mutation envelope；刷新后以服务端状态对账 |
 
 新增逻辑不能进入 `@ts-nocheck` 的 runtime 文件（D12）。扩展 RPC 仍遵循 [orca-mapping](orca-mapping.md) §4c 的五步注册与 catalog 检查。
@@ -43,21 +45,33 @@ Execution Kernel 继续拥有 Run、Orca Task、dispatch、PTY、进程、worktr
 | `mission_policies` | 使用：默认 concurrency/预算/阈值/审批与验证规则；`nested_worker_max_depth=1` |
 | `audit_events` | 使用：只追加的 sequence、actor、object、event、before/after、时间；mailbox 幂等依据 |
 | `agent_specs` | 表已建；M2 写入内容寻址的执行合同 |
-| `context_packages` | 表已建；M2 写入 ContextPackage manifest 与引用 |
+| `context_packages` | M2-02 已写/读：canonical manifest、预算；`mandatory_refs` = `[manifestArtifactId, renderArtifactId]`，`ranked_refs` = 已纳入候选 Artifact id |
 | `attempt_bindings` | 表已建；M2 关联 Task 序号、branch、dispatch、AgentSpec、ContextPackage（D6a） |
 | `submissions` | 表已建；M2 submit 形成不可变 Worker 报告 |
 | `candidates` | 表已建；M2 由 Control Plane 固定 commit/tree，Worker 不能自封候选 |
-| `artifacts` | 表已建；后续保存内容 hash/引用；内容寻址文件存储不在 M1 实装范围 |
-| `decisions` | 表已建；M1 的状态理由写 audit，尚无 Decision service/RPC 写入者 |
+| `artifacts` | M2-02 已写/读：Mission、kind、sha256、size、media type、related ids、createdBy；内容只存 `<userData>/axiom/artifacts/<sha256>` |
+| `decisions` | M2-02 `listDecisions({ missionId, status })` 只读；ContextBuilder 包含 ACCEPTED 的 title/resolution；Decision service/RPC 写入者仍待后续 |
 | `verification_runs` | 表已建；M3 独立验证使用 |
 | `integration_batches` | 表已建；M4 串行集成使用 |
 | `approvals` | 表已建；M4 ApprovalGateway 使用，不复用 decision gate |
 
-Milestone 存在 Plan JSON 内，没有独立表/状态机。Attempt 身份仍等于 Orca dispatch id，不存在 Axiom Attempt 表。其余十张表目前只有建表和清理支持，不能把表存在当成产品能力已完成。
+Milestone 存在 Plan JSON 内，没有独立表/状态机。Attempt 身份仍等于 Orca dispatch id，不存在 Axiom Attempt 表。M2-02 启用 Artifact/ContextPackage 写入和 Decision 读取；其余后续表目前只有建表和清理支持，不能把表存在当成产品能力已完成。
 
 `create-tables.ts` 每次打开执行幂等 DDL，`SCHEMA_VERSION=43`；9 个查询索引、3 个删除触发器沿用 additive 模式。Task 删除清理 stage/边/binding，dispatch 删除仅清空 binding 的 dispatch 引用，Run 删除清理所属 Mission side rows。没有声明外键；降级探针不依赖新表。详细列见映射 §6。
 
 所有 store 读取先用 zod 解析，不把 SQLite 行强制断言为领域对象。写入由 `runLifecycleWriteTransaction` 包裹，嵌套 savepoint 使 Run 创建和 Mission 创建能一起回滚；审计与状态同事务提交。
+
+### ContextPackage（M2-02）
+
+`plane.artifacts` 与 `plane.contextBuilder` 供后续 Scheduler、launcher、submit 服务复用。Artifact id = `art_` + sha256(canonical `{missionId,kind,sha256}`)；相同 Mission/kind/bytes 返回既有元数据（首次 related/createdBy 不被重写），跨 kind/Mission 共用内容文件。先写 `.tmp-<random>` 再 rename；read 重新检查 hash/size，缺文件或不匹配返回 `artifact_corrupt`。put 上限 8 MiB；RPC 用 `contentBase64`，CLI `mission artifact put --mission … --kind … --file … --related …` 在本机读文件。read 的 `--json` 保留 base64，文本输出按 UTF-8；list 支持 kind 和单一 related id。
+
+ContextBuilder 固定强制顺序：(1) Task spec；(2) PlanRevision revision/milestone/带邻居标题的入出边；(3) ACCEPTED Decisions；(4) 权限、Mission/Task 预算、并发、重试与 `axiom-submission-v1` 字段清单；(5) 目标分支的 AGENTS.md/CLAUDE.md，各最多 16 KiB（缺文件省略，读失败不静默忽略）；(6) policy 验证命令；(7) `none (first attempt)`，M3 补失败证据。只读这两个规则文件，不读工作区版本或 `.env*`。
+
+预算按 `ceil(UTF-8 bytes / 4)` 估计，调用参数优先，其次持久 policy budget JSON 的可选 `contextTokens`，否则 24,000。现有共享 policy mutation schema 尚不接受该扩展字段；本任务仅实现兼容读取。协议块计入第 4 节的 hash/token 数。强制集永不裁剪，超限设 `budgetExceededByMandatory: true`；候选按既有入边查询顺序（from_task_id）、再 created_at/id，去重后取直接上游的 handoff/worker_report，第一项放不下即停止，余项记 budget。
+
+规则与候选在纳入前脱敏：PRIVATE KEY 块、指定 provider token 前缀（兼容 hyphen/underscore）和 AKIA key 替换为 `[REDACTED]`；规则先脱敏再截断。候选的敏感部分在 omitted 中以 redacted 记录，安全替换文本仍可纳入；section header 标记 redacted。manifest ranked hash 绑定脱敏后的正文；强制 hash 绑定渲染节（第 4 节另含协议）。
+
+canonical manifest 无空白、对象键序固定，保留数组顺序，id = `ctx_` + sha256(canonical)。manifest 与完整 render template 均作为 Artifact 持久化，context row 只保留 JSON manifest/hash/引用。相同输入重复 build 不新增行或文件。模板最后的 `Axiom Worker protocol` 使用 D16 八个 `axiom attempt` verb；M2-05 必须在交付时替换所有 `{{attemptId}}` 和 `{{dispatchCapability}}`，不能把真实 capability 写回 template 或 package identity。
 
 ## 4. 状态机与 readiness
 
@@ -96,7 +110,7 @@ M1-01 契约证据见 `kernel-contract/*.test.ts` 与 [D14 spike](../review-evid
 
 ## 6. RPC、envelope 与错误
 
-M1 已注册 `axiom.mission.create/show/list/start/pause/resume/cancel`、`axiom.goal.propose/activate/show`、`axiom.plan.propose/approve/reject/list/show`、`axiom.task.list/show/cancel`；M0 的 `axiom.namespace.get` 保留。其他命名空间/方法在映射 §4c 标为后续。
+M1 已注册 `axiom.mission.create/show/list/start/pause/resume/cancel`、`axiom.goal.propose/activate/show`、`axiom.plan.propose/approve/reject/list/show`、`axiom.task.list/show/cancel`；M2-02 已注册 `axiom.artifact.put/read/list`（put 参与 mutation fence/收据）；M0 的 `axiom.namespace.get` 保留。其他命名空间/方法在映射 §4c 标为后续。
 
 `AXIOM_MUTATION_METHODS` → `isOrchestrationMutation` 同时接入契约栅栏与 durable mutation 收据。mutation envelope 必须带 `orchestrationContractVersion:1`，缺失/不匹配会被 `orchestration_migration_required` 拒绝；不要把版本字段放进 params。调用方按约定必须带 `orchestrationRequestId`；内核收到该字段时，以 caller fingerprint + id 查 `mutation_receipts`：同 payload 回放，异 payload 拒绝 `request_mismatch`。当前内核无 request id 时直接执行，不提供去重，调用方不得依赖它自动补幂等。
 
