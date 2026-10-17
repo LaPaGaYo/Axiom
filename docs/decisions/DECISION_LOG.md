@@ -357,7 +357,7 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 
 **取代规则**：更换仓库、基线 commit、manifest 版本或场景集合需新的 fixture-version Decision；本条不取代 D39 的分工（Orca 式合成仓库继续用于 M1–M4 的单测 / e2e）。
 
-## D43 · M0 出口检查清单 — PROPOSED（请 Henry 确认后 M0 关闭）
+## D43 · M0 出口检查清单 — ACCEPTED（Henry 2026-10-17：M0 关闭）
 
 **背景**：章程 §9 定义 M0 = 新产品身份与网络隔离（品牌、更新源、telemetry、第三方 notice、网络出口清单与断言测试）；D18 追加 fixture 资格测试；D40 追加打包证据；`DEFERRED.md` 要求里程碑出口逐条核对延期事项。下表逐项对照，每项都指向独立验证记录（`.axiom-work/verifications/`）或证据文档，没有一项靠 Worker 自述。
 
@@ -379,5 +379,5 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 
 **明确留到 M0 之后的**：Windows / Linux 打包与签名 / 公证；`package.json.name`、`CFBundleShortVersionString`、`orca-*` helper 可执行文件名与 NSIS 文案（DEF-3）；mobile 代码的 9 个 `import/no-cycle` 与 `ProtocolBlockScreen` 上游链接（hygiene 清单）；上游 `typecheck:e2e` 在 main 上本就红（hygiene）。
 
-**提议**：Henry 确认后本条改为 ACCEPTED，M0 关闭。M1 的前置 Decision 为 D6a、D7a、D9–D16（均 PROPOSED，待拍板），M1 的任务分解随后以 brief 形式提出。
-**取代规则**：无。若 Henry 要求补做某项，补做的工作以新的 M0-nn Task 记录，本条在补齐前保持 PROPOSED。
+**决定**（Henry 2026-10-17）：确认上表，**M0 关闭**（Axiom main `3a5c63832`，fixture `fixture-v1`）。M1 的前置 Decision 为 D6a、D7a、D9–D16（均 PROPOSED，待拍板），M1 的任务分解随后以 brief 形式提出。
+**取代规则**：无。M0 之后发现的 M0 范围内缺口以新的 M0-nn Task 记录并在本条下追加一行，不重开里程碑。
