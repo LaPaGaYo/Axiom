@@ -391,7 +391,7 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **后果**：`docs/plans/M1.md` 是 M1 的 PlanRevision 等价物（Axiom 自身的 Control Plane 尚不存在）；brief 在 `.axiom-work/briefs/M1-nn.md`，验证记录在 `.axiom-work/verifications/`；分解的拆分 / 合并 / 新增以本条下的修订行记录，不重写本条。
 **取代规则**：M1 出口 Decision 记录实际完成情况并关闭本条；范围变更经修订行。
 
-## D45 · DEF-1 复审：托管 CI 的后半部分 — PROPOSED（待 Henry；建议 A + C-lite）
+## D45 · DEF-1 复审：托管 CI 的后半部分 — ACCEPTED（Henry 2026-10-17：A + C-lite）
 
 **背景**：D41 选了 A（本地门禁为权威，上游工作流原样保留、只在 PR 上触发），并把 B / C 延到 M1 控制平面代码合入后复审（DEF-1）。触发点已到：M1-01～M1-10 全部合入 main。复审数据（2026-10-17）：
 
@@ -410,10 +410,10 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 - **C**：删上游工作流、只留 Axiom 自己的 `ci.yml`：丢掉全部上游覆盖，对上游的 diff 大，rebase 代价高。
 - **A + C-lite（建议）**：A 继续作为权威门禁；只**新增一个** Axiom 自己的小工作流 `.github/workflows/axiom-ci.yml`（`push: branches: [main]` + `workflow_dispatch`；`ubuntu-latest`、Node 24、`pnpm install --frozen-lockfile`）：`pnpm tc:node && pnpm tc:cli && pnpm tc:web`、`pnpm lint`、`pnpm test src/main/axiom src/shared/axiom-contract src/main/runtime/rpc/methods/axiom src/cli/specs src/cli/handlers/axiom src/renderer/src/components/missions src/renderer/src/lib/axiom-client.test.ts tests/e2e/helpers/fixture-plan-proposal.unit.test.ts`。估 6–10 min / push，Linux 上的第二信号，不碰任何上游工作流文件（它们保持 PR-only 休眠，rebase 零冲突）。前提：Henry 在 fork 的 Settings → Actions 里启用 Actions（fork 默认关闭）。fixture 出口 e2e 在 M1 仍只在宿主跑；若第二信号证明有用，M2 再加 xvfb 的 Electron e2e job。
 
-**决定**：待 Henry 选择。选定后：本条改为 ACCEPTED，`DEFERRED.md` 的 DEF-1 改为 `RESOLVED (D45)`；若选 A + C-lite，则以一个 M2-00 hygiene Task 提交 `axiom-ci.yml`（brief 由 verifier 写，Worker 实现，launcher 验证）。
+**决定**（Henry 2026-10-17）：**A + C-lite**。本地 launcher 门禁仍是权威；新增 `.github/workflows/axiom-ci.yml` 作为 Linux 上的第二信号，由 M2-00 hygiene Task 提交（brief 由 verifier 写，Worker 实现，launcher 验证）；上游工作流文件一律不动。`DEFERRED.md` 的 DEF-1 改为 `RESOLVED (D45)`。前提动作（Henry）：在 fork 的 Settings → Actions 启用 Actions。
 **取代规则**：CI 策略再变更以新 Decision 取代本条；D41 的 A 部分不受影响。
 
-## D46 · M1 出口检查清单 — PROPOSED（待 Henry 确认：M1 关闭）
+## D46 · M1 出口检查清单 — ACCEPTED（Henry 2026-10-17：M1 关闭）
 
 **背景**：架构 §20 给 M1 三条出口标准；D44 要求出口 = 三条 + `DEFERRED.md` 逐条核对；`docs/plans/M1.md` 另要求 M1-05 之后每次合入跑 `verify-main`、M1-08 之后跑一次全量 suite。下表逐项对照，每项都指向独立验证记录（`.axiom-work/verifications/`）或证据文档，没有一项靠 Worker 自述。M1 的十个 Task 共 15 个 attempt，全部在 2026-10-17 00:40–04:50 内完成并合入（main `4db3ad86c`）。
 
@@ -437,5 +437,5 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 
 **明确留到 M2 的**（均已写入各验证记录的 Observations 或 `docs/plans/M1.md`）：`MissionSummary` 不含 Run id 与暂停 / 阻塞 reason（renderer 已预留可选字段）；readiness 的 Question / Approval 存根与预算 / 并发 enforcement；consumer 退避与去重策略；Attempt 身份（= dispatch id）与 attempt-launcher seams（`startLocalWorker` additive 入参）；Planner；Settings 文案恢复 Apple 名称 + 注释笔误；UI 选择不跨重启、无轮询；出口 e2e 增加 Attempts / submissions / bound-coordinator 路径；环境 flake `pty-runtime-hidden-at-spawn-mark.test.ts` 在满负载时再现（3/4 次广泛运行失败、定向 8/8 通过）→ M2 hygiene 调查；上游 `typecheck:e2e` 基线 214 条（hygiene）。
 
-**决定**（待 Henry）：确认上表 → **M1 关闭**（Axiom main `4db3ad86c`（M1-10 合入；本条与 D45 的文档提交在其后），fixture `fixture-v1`）。M2 的任务分解随后以 brief 形式提出（Scheduler / AgentSpec / ContextPackage / Attempt / Worker / Submission）。
+**决定**（Henry 2026-10-17，回复"D43确认"——D43 已于 M0 关闭时接受，按上下文记为对本条的确认）：确认上表，**M1 关闭**（Axiom main `4db3ad86c` = M1-10 合入；本条与 D45 的文档提交在其后，fixture `fixture-v1`）。M2 的任务分解随后以 `docs/plans/M2.md` + Decision 提出（Scheduler / AgentSpec / ContextPackage / Attempt / Worker / Submission / Candidate；Planner 接入；admission 扩展）。
 **取代规则**：无。M1 之后发现的 M1 范围内缺口以新的 M1-nn Task 记录并在本条下追加一行，不重开里程碑。
