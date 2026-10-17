@@ -172,6 +172,7 @@ EXECUTING ↔ REPLANNING
 | `DRAFT → ANALYZING` | Mission 已绑定 repository 与目标分支，GoalRevision ACTIVE；启动 Planner |
 | `ANALYZING → PLAN_REVIEW` | `axiom.plan.propose` 写入 PROPOSED PlanRevision |
 | `PLAN_REVIEW → PLANNED` | PlanRevision APPROVED（人工或 policy 自动）；物化 Task、TaskEdge、`task_stages=DEFINED` |
+| `PLAN_REVIEW → ANALYZING` | PlanRevision REJECTED（`axiom.plan.reject`，记录理由）；等待新的提案 |
 | `PLANNED → EXECUTING` | 用户启动或 policy 自动启动；Scheduler 开始 admission |
 | `EXECUTING → REPLANNING` | Replan 分级为 `MAJOR_REPLAN`；暂停新 admission，活跃 Attempt 按 policy 继续或停止 |
 | `REPLANNING → EXECUTING` | 新 PlanRevision APPROVED，旧 revision SUPERSEDED，Task 继承/取消/重绑完成 |
