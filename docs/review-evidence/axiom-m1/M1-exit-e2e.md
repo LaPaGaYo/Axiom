@@ -12,7 +12,7 @@ AXIOM_FIXTURE_REPO=$HOME/Documents/flowtask-fixture ORCA_BACKGROUND_LAUNCH=1 pnp
 
 fixture 不在 Axiom 仓库内。`AXIOM_FIXTURE_REPO` 必须指向已有本地 clone；测试只以 `git clone --no-hardlinks --branch main <local-path> <temp>` 复制，限定 Git file protocol，无 fetch/网络 clone。目标 HEAD 同时等于 `fixture-v1^{commit}` 与 D42 固定值 `a6a8413ecdcbbdb1d34f36950ba7e1aaa5a1a642`；缺路径、缺 tag、main 漂移一律失败。唯一 skip 是变量未设置，不能将 skip 当出口 PASS。
 
-本 Worker 沙箱不能启动 Electron，因此未尝试实际 launch；下表明确保留 `pending host run`。已用 Playwright `--list` 证明一个 `electron-headless` 测试被发现，不能据此声称 e2e 通过。测试不 reveal 窗口，两次 launch 都显式 `ORCA_BACKGROUND_LAUNCH=1`。
+本 Worker 沙箱不能启动 Electron，因此未尝试实际 launch；下表由 verifier 在宿主实跑后填写（attempt 2 候选 `73e8e2a6f`）。已用 Playwright `--list` 证明一个 `electron-headless` 测试被发现，不能据此声称 e2e 通过。测试不 reveal 窗口，两次 launch 都显式 `ORCA_BACKGROUND_LAUNCH=1`。
 
 ## 三条出口合同的覆盖
 
@@ -34,17 +34,17 @@ UI 两次都从 `openMissionsPage()` 进入，通过 Mission list 中包含 Miss
 
 | 项目 | 预期 | 实测 |
 |---|---|---|
-| 候选 commit / 宿主版本 / 日志位置 | verifier 记录 | pending host run |
-| fixture HEAD / tag / D42 | 三者相同 | pending host run |
-| Task / edge / READY / DEFINED / Orca ready | 12 / 20 / 3 / 9 / 12 | pending host run |
-| reset 实际拒绝码 | mission_managed | pending host run |
-| task-update 实际拒绝码 | CLI 身份 no_active_sender_terminal；runtime 绑定 run_required / consumer_fenced；Mission 守卫 mission_managed（三层之一） | pending host run |
-| worker-start 实际拒绝码 | CLI 身份 no_active_sender_terminal；runtime 绑定 run_required / consumer_fenced；Mission 守卫 mission_managed（三层之一） | pending host run |
-| 拒绝前后 CLI / Mission status | 字节不变 / EXECUTING | pending host run |
-| 重启后 Mission/Goal/Plan/Task CLI 快照 | 字节相同 / EXECUTING | pending host run |
-| 两次 UI / recovery.run_binding_lost 数 | 相同 / 0 | pending host run |
-| clone、CLI setup、拒绝、重启断言、总时长（ms） | attach 测量 | pending host run |
-| e2e verdict | 必须实际通过，skip 不算通过 | pending host run |
+| 候选 commit / 宿主版本 / 日志位置 | verifier 记录 | `73e8e2a6f`（attempt 2）· macOS 宿主，Node v24.21.0 / pnpm 12.0.0 / Playwright electron-headless · `.axiom-work/logs/chain-20261017-044958.log`（attempt 1 的宿主诊断：`chain-20261017-043420.log`、`-043552.log`、`-043755.log`） |
+| fixture HEAD / tag / D42 | 三者相同 | `a6a8413ecdcbbdb1d34f36950ba7e1aaa5a1a642`（HEAD = `fixture-v1^{commit}` = D42） |
+| Task / edge / READY / DEFINED / Orca ready | 12 / 20 / 3 / 9 / 12 | 12 / 20 / 3 / 9 / 12（Mission `mission_614075e9282f`） |
+| reset 实际拒绝码 | mission_managed | `mission_managed` |
+| task-update 实际拒绝码 | CLI 身份 no_active_sender_terminal；runtime 绑定 run_required / consumer_fenced；Mission 守卫 mission_managed（三层之一） | `no_active_sender_terminal`（CLI 身份层，命令未到达 runtime） |
+| worker-start 实际拒绝码 | CLI 身份 no_active_sender_terminal；runtime 绑定 run_required / consumer_fenced；Mission 守卫 mission_managed（三层之一） | `no_active_sender_terminal`（CLI 身份层，命令未到达 runtime） |
+| 拒绝前后 CLI / Mission status | 字节不变 / EXECUTING | 字节不变 / EXECUTING（`cliSnapshotIdentical: true`） |
+| 重启后 Mission/Goal/Plan/Task CLI 快照 | 字节相同 / EXECUTING | 字节相同 / EXECUTING |
+| 两次 UI / recovery.run_binding_lost 数 | 相同 / 0 | 相同（`uiSnapshotIdentical: true`）/ 0 |
+| clone、CLI setup、拒绝、重启断言、总时长（ms） | attach 测量 | 164 / 965 / 637 / 1,761 / 5,124（spec 5.4 s；`pnpm run test:e2e` 含构建 16.3 s，chain 墙钟 17 s） |
+| e2e verdict | 必须实际通过，skip 不算通过 | **PASS** — `1 passed (16.3s)`，未 skip，无窗口（`ORCA_BACKGROUND_LAUNCH=1`，electron-headless） |
 
 ## 沙箱验证
 
