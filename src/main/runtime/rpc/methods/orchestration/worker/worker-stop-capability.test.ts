@@ -10,6 +10,7 @@ describe('federated worker stop capability', () => {
       state: 'stop_unknown',
       last_error: reason
     }))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial DB fixture; the federated worker-stop path reads only the methods stubbed here.
     const db = {
       getDispatchContextById: vi.fn(() => undefined),
       getFederatedDispatch: vi.fn(() => ({

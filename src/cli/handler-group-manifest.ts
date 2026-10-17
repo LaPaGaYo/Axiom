@@ -1,5 +1,6 @@
 import type { CommandHandler } from './dispatch'
 import { BROWSER_HANDLER_GROUPS } from './browser-handler-groups'
+import { AXIOM_HANDLER_GROUPS } from './axiom-handler-groups'
 
 export type HandlerGroup = {
   name: string
@@ -12,51 +13,7 @@ export type HandlerGroup = {
 // Why: `keys` mirrors each group's exported record and is verified against the
 // real exports by handler-group-manifest.test.ts, so drift fails CI, not dispatch.
 export const HANDLER_GROUPS: readonly HandlerGroup[] = [
-  {
-    name: 'axiom-mission',
-    keys: [
-      'mission create',
-      'mission show',
-      'mission list',
-      'mission start',
-      'mission pause',
-      'mission resume',
-      'mission cancel',
-      'mission goal propose',
-      'mission goal activate',
-      'mission goal show',
-      'mission artifact put',
-      'mission artifact read',
-      'mission artifact list',
-      'mission policy show',
-      'mission policy update'
-    ],
-    load: async () => (await import('./handlers/axiom/mission.js')).AXIOM_MISSION_HANDLERS
-  },
-  {
-    name: 'axiom-plan',
-    keys: ['plan propose', 'plan approve', 'plan reject', 'plan list', 'plan show'],
-    load: async () => (await import('./handlers/axiom/plan.js')).AXIOM_PLAN_HANDLERS
-  },
-  {
-    name: 'axiom-attempt',
-    keys: [
-      'attempt show',
-      'attempt list',
-      'attempt inform',
-      'attempt request',
-      'attempt blocked',
-      'attempt handoff',
-      'attempt request-subtask',
-      'attempt check'
-    ],
-    load: async () => (await import('./handlers/axiom/attempt.js')).AXIOM_ATTEMPT_HANDLERS
-  },
-  {
-    name: 'axiom-task',
-    keys: ['task list', 'task show', 'task cancel'],
-    load: async () => (await import('./handlers/axiom/task.js')).AXIOM_TASK_HANDLERS
-  },
+  ...AXIOM_HANDLER_GROUPS,
 
   {
     name: 'core',
