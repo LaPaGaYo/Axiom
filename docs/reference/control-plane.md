@@ -159,6 +159,8 @@ Mission 总 Attempts/wall-clock 耗尽通过既有 `blockMission(missionId, budg
 `axiom.attempt.show/list` 异步经 `inspectWorkerTerminal` 读取执行宿主的 liveness（`live/exited` 原样保留，其余状态 → `unverifiable`，可选 `livenessReason` 优先保留 reason、否则保留非 live/exited 的 status，无则 null），不用 fleet 的 agent-status 判定；state、workspace 与 worktreeId 继续取自 `projectFleetWorker`，NULL dispatch 的 liveness/livenessReason 仍为 null。
 
 
+M2-06b：pending question_threads 通过 attempt_bindings 关联 Task；`blockingQuestionOrApproval` 使该 Task 无法 admission 新 Attempt。回答后 pending 消失并重算 readiness；当前 Attempt 仍 RUNNING，问题不改变其执行状态。超时或取消等待不自动关闭问题；结算由内核 closeQuestionsForDispatch 关闭。
+
 ## 5. 合成 session party 与 Run 绑定（D14）
 
 每个 Mission 铸造独立 `axiom-mission-<uuid v4>`，满足 `isOrcaSessionId`，不以 `term_` / `structworker_` 开头；持久化到 `missions.coordinator_orca_session_id`。`createRun` 参数为 `coordinatorHandle:null`、`coordinatorPaneKey:null`、该 session id。Mission 的 Run mailbox 为 `run:<runId>`。
@@ -177,11 +179,11 @@ CLI `src/cli/runtime/client.ts` 为 `axiom.*` 打版本戳，为 durable mutatio
 
 CLI JSON 输出是 `{ ok, result, ... }` / `{ ok:false, error:{code,...}, ... }`；单对象 result 用 `mission` / `goalRevision` / `planRevision` / `task`，列表用 `missions` / `planRevisions` / `tasks`。MissionSummary 不包含 Run id；TaskListItem 的 `id` 是 Orca Task id，不是提案 id。
 
-### Worker channel（M2-06a，D9 / D11 / D16）
+### Worker channel（M2-06a/b，D9 / D11 / D16）
 
 已注册五个 mutation：`axiom.attempt.inform` / `request` / `blocked` / `handoff` / `request-subtask`。参数为 `{attemptId, from, senderPaneKey?, summary, body?, artifactIds?, related?, subtask?}`；只有 `request-subtask` 接受且必须带 `subtask`。严格 schema 不接受 `to`、自报 `type` 或 Mission/Task 身份。summary 与可选 body 各 ≤ 2,000 字符；较长内容先 `axiom mission artifact put`，再引用 Artifact id。`artifactIds` / `related.artifactId` 必须属于同 Mission，显式 `related.taskIds` 必须属于同 Mission，否则 `invalid_argument`，不写消息或审计。
 
-`execution/attempt-authority.ts` 在写入前按以下顺序校验（六动词共用）：
+`execution/attempt-authority.ts` 在写入前按以下顺序校验（含 ask 的七动词共用）：
 
 1. dispatch 不存在 → `unknown_dispatch`；没有 `attempt_bindings` → `unknown_dispatch`。
 2. dispatch 非 `dispatched` → `inactive_dispatch`。
@@ -190,11 +192,34 @@ CLI JSON 输出是 `{ ok, result, ... }` / `{ ok:false, error:{code,...}, ... }`
 5. 内核 `hasLifecycleAuthority` 失败 → `sender_not_assignee`；外来 pane 会先返回 `dispatch_capability_invalid`，因为 `verifyDispatchCapability` 已在 `hasLifecycleAuthority` 之前强制校验 pane 等价性，`sender_not_assignee` 仅保留给缺少 `assignee_pane_key` 的 legacy row 的 handle 鉴权回退（仍须先通过 capability 校验）。
 6. binding、Task、Mission、Run 关联不一致 → `task_dispatch_mismatch`。
 
-CLI `axiom attempt <verb> --attempt <id> --dispatch-capability <token> --summary <text>` 支持 `--body` / `--body-file`（互斥）、可重复 `--artifact` / `--related-task`；子任务另需 `--title --objective --allowed-path --acceptance --evidence`，risk 默认 low。from 复用 `resolveOrchestrationTerminalHandle`（`--from` / `ORCA_TERMINAL_HANDLE`），pane metadata 来自 `ORCA_PANE_KEY`；runtime 自行解析 pane，不信任该参数授予权限。capability 放 envelope，mutation 复用 `callOrchestrationMutation` 与 `--retry-request <原 UUID>`。失败的新请求不留收据；已完成请求沿用内核回放语义，同 id + 同 params 不重复写入，改变 params → `request_mismatch`。
+CLI `axiom attempt <verb> --attempt <id> --dispatch-capability <token> --summary <text>` 支持 `--body` / `--body-file`（互斥）、可重复 `--artifact` / `--related-task`；子任务另需 `--title --objective --allowed-path --acceptance --evidence`，risk 默认 low；M2-06b 可重复 `--depends-on` 对应 subtask.dependsOn。from 复用 `resolveOrchestrationTerminalHandle`（`--from` / `ORCA_TERMINAL_HANDLE`），pane metadata 来自 `ORCA_PANE_KEY`；runtime 自行解析 pane，不信任该参数授予权限。capability 放 envelope，mutation 复用 `callOrchestrationMutation` 与 `--retry-request <原 UUID>`。失败的新请求不留收据；已完成请求沿用内核回放语义，同 id + 同 params 不重复写入，改变 params → `request_mismatch`。
 
 `axiom.attempt.check {attemptId, from, senderPaneKey?, wait?, timeoutMs?, type?}` 是 read，不进 mutation 集合；鉴权后调用 `checkWorkerMailbox` 读取 `dispatch:<attemptId>`。type 是内核路由类型（可逗号分隔），保留 delivery replay、generation fence 与长轮询。CLI 为等待显式加 10 秒 transport grace；不新增 ack 参数，返回内核 deliveryId 等证据。
 
-`axiom.message.list {missionId, type?, taskId?, attemptId?, pendingOnly?}` 是 read，按 messages.sequence 从旧到新返回 `{messages:[{id,type,taskId,attemptId,summary,artifactIds,related,subtask?,createdAt,pending}]}`。读取 Mission Run 的全部严格 Axiom 载荷（包括投递副本），跳过普通/非法载荷；`REQUEST_SUBTASK` 在没有同 Mission、`objectKind: message`、`objectId: messageId` 的 `subtask.resolved` 审计时为 pending。M2-06b 写 resolution，本 Task 不创建 Task。
+`axiom.message.list {missionId, type?, taskId?, attemptId?, pendingOnly?}` 是 read，按 messages.sequence 从旧到新返回 `{messages:[{id,type,taskId,attemptId,summary,artifactIds,related,subtask?,createdAt,pending}]}`。读取 Mission Run 的全部严格 Axiom 载荷（包括投递副本），跳过普通/非法载荷；`REQUEST_SUBTASK` 在没有同 Mission、`objectKind: message`、`objectId: messageId` 的 `subtask.resolved` 审计时为 pending。M2-06b 增加内核 question_threads 的 QUESTION 投影：即使无 payload.axiom，也按 question message id 与 dispatch 关联识别；附带 question、options、answer（answer_body）、status，pending 仅在 status=pending 时为 true。CLI：`axiom message list --mission <id> [--type <T>] [--pending] --json`。
+
+### Questions 与 D50 待决项（M2-06b）
+
+`axiom.attempt.ask {attemptId, from, senderPaneKey?, question?, options?, timeoutMs?, resume?}` 为 mutation；question 与 resume 至少一项。鉴权后调用内核 `createQuestion`，直接使用它创建并投递到 `run:<runId>` 的消息，不创建第二封 QUESTION。先持久化 acceptance receipt，再通知 Run、长轮询 `dispatch:<attemptId>`：answered 返回 answer / answerMessageId；deadline 返回 timedOut；断连 signal 返回 cancelled；内核结算将 pending thread 关闭，等待者返回 dispatch_inactive。timeout 使用内核 clamp（默认 600 秒、上限 1800 秒）。resume 只接受同一 dispatch 的 question id；`--retry-request` 回放收据，恢复等待使用新请求 + resume。CLI 支持可重复 `--option` 与 `--timeout-ms`，transport 比内层等待多 5 秒。
+
+`axiom.message.answer {missionId, questionId, body}` 是唯一 Mission answer 路径：核对 Mission/Attempt 归属，以当前 `run.consumer_generation` 调用 `answerQuestion`，记录 question.answered / receipt、重算 readiness，再通知 `dispatch:<id>` 的 status waiter。同内容重答幂等，异内容 answer_conflict；closed → dispatch_inactive。ask / answer 的内核函数各自拥有 BEGIN IMMEDIATE，不能嵌入另一写事务；内核写入后同步保存 Axiom 审计及收据，再通知。CLI 为 `axiom message answer --mission <id> --question <messageId> --body <text>`。
+
+`axiom.task.create {missionId, task, dependsOn, provenance}` 经唯一的 `MissionController.createTask` 写入；task 为不带 id 的 TaskSpec，dependsOn 可为空。只允许 PLANNED / EXECUTING 且 active PlanRevision 为 APPROVED（否则 mission_not_executing / plan_pending）。事务内检查重复、依赖、预算；物化 tasks（deps=[]）、task_stages（DEFINED）与 mission_task_edges，写 task.created / plan.minor_adjustment，再重算 readiness（执行中 root 可立即 READY）。提交后触发 Scheduler。原 PlanRevision proposal 保留，新增 Task 绑定该 revision，不创建新 revision。CLI `axiom task create --mission <id> --file <task.json> [--depends-on <taskId>]* --json`；JSON 是 TaskSpec（无 id），user provenance 的 at 使用文件 mtime 保持重试稳定。D50 的 model provenance 只存本次 Task audit，不改变 PlanRevision provenance schema。
+
+| D50 检查 / 分支 | 确定性行为 |
+|---|---|
+| scope | 分隔符与点路径规范化后，每个 allowedPath 等于或在请求者 scope 内，按目录边界判断 |
+| depth | 请求者的 task.created.after.origin 不得是 request_subtask（最多一层） |
+| duplicate | Mission 内不得有规范化后相同路径集合或 trim + case-insensitive 相同标题 |
+| dependency | 所有 dependsOn 属于 Mission；追加原 Task → 新 Task 及请求依赖后 orderPlanTasks 无环 |
+| budget | policy.budget.maxAttempts 若设置，须大于 Mission attemptCount 总和 |
+| attempt | 请求者 binding 匹配 Task/Mission，dispatch 仍为 dispatched |
+| 全部通过，subtaskAutoCreate 严格 boolean true | 消费者在 subtask.requested 后经 createTask 创建；继承 retryPolicy、milestoneId，kind=task，risk 默认 low；边使用 Mission readinessThreshold；subtask.resolved.decision=auto_accept |
+| 检查失败 / 自动创建未启用 | 保持 pending；失败写 subtask.checks_failed（failed 数组），无 Task 创建 |
+| 人工 accept | `axiom.message.resolve {missionId,messageId,decision:'accept',rationale}` 重跑全部检查，再走相同 createTask；失败仍 pending |
+| 人工 reject | 同一 resolve，decision=reject；只写 subtask.resolved，不创建 Task |
+
+所有成功处置写 `subtask.resolved.after = {decision,reason,taskId?}`；再次 resolve 返回 invalid_argument。CLI `axiom message resolve --mission <id> --message <id> --accept|--reject --rationale <text>` 要求恰好一个决定。用户 task.create 无请求 Attempt，仅执行 duplicate / dependency / budget；来源请求的创建仍执行六项。answer、resolve、task.create 均进 AXIOM_MUTATION_METHODS，与 ask 一起使用既有 envelope 栅栏和收据。M4 接 Approval，M5 将请求量作为 replan 信号。
 
 ## 7. Admission 守卫（映射 §4b）
 
@@ -240,6 +265,8 @@ M2-06a `MessageRouter` 在 `store.transaction('message_route', …)` 内写 Cont
 恢复逐个检查非终态 Mission：Run 必须存在，合成 session id 必须有效且 `runBoundToCoordinator` 成立；否则 BLOCKED，记录一次 `recovery.run_binding_lost`，不悄悄重建 Run。正常恢复重算 readiness，**不会写 recovery 成功事件**；若 readiness 实际移动，仍按正常 Task 转换审计。
 
 `reconcileAttempts()` 明确返回 `no_attempts_in_m1`。Architecture §16.1 的 Attempt liveness、队列重驱、Approval 过期与周期 reconciliation 是后续全量目标；M1 没有宣称这些已完成。`docs/plans/M1.md` 的早期 M1-01 笔记写过先 drain 后注册，实际 M1-08 实现与测试为先注册再 drain，以实现为本节事实来源。
+
+M2-06b 审计：question.created / question.answered 的 objectKind=message、objectId=question message id；前者带 Task/Attempt，后者带 answerMessageId 与 status，不复制回答正文。消费者按 question_threads 识别无 Axiom payload 的 QUESTION，写 message.received。REQUEST_SUBTASK 的 subtask.requested、checks_failed、resolved 与 Task 创建在同批事务内；重放不重复创建。task.created 带 origin/provenance/messageId?；plan.minor_adjustment 带 classification=MINOR_ADJUSTMENT、origin=user|request_subtask、Task 与边。人工接受失败在返回 invalid_argument 前保留 checks_failed 审计，仍可修复后重试或拒绝。
 
 ## 9. 操作与后续里程碑
 

@@ -1,3 +1,4 @@
+import { AXIOM_MESSAGE_COMMAND_SPECS } from './axiom-message'
 import { AXIOM_ATTEMPT_COMMAND_SPECS } from './axiom-attempt'
 import { AXIOM_MISSION_COMMAND_SPECS } from './axiom-mission'
 import { AXIOM_PLAN_COMMAND_SPECS } from './axiom-plan'
@@ -28,6 +29,7 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...AXIOM_MISSION_COMMAND_SPECS,
   ...AXIOM_PLAN_COMMAND_SPECS,
   ...AXIOM_TASK_COMMAND_SPECS,
+  ...AXIOM_MESSAGE_COMMAND_SPECS,
   ...AXIOM_ATTEMPT_COMMAND_SPECS,
   ...CORE_COMMAND_SPECS,
   ...ARTIFACT_COMMAND_SPECS,

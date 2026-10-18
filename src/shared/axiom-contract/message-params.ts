@@ -42,7 +42,8 @@ export const SubtaskRequestSchema = z
     allowedPaths: z.array(z.string().min(1)).min(1),
     acceptanceCriteria: z.array(z.string().min(1)).min(1),
     requiredEvidence: z.array(z.string().min(1)).min(1),
-    risk: z.enum(['low', 'medium', 'high'])
+    risk: z.enum(['low', 'medium', 'high']).default('low'),
+    dependsOn: z.array(AxiomIdSchema).optional()
   })
   .strict()
 const MessageFieldsSchema = z
@@ -102,7 +103,22 @@ export const MessageSummaryResponseSchema = z.object({
   related: MessageRelatedSchema,
   subtask: SubtaskRequestSchema.optional(),
   createdAt: z.string(),
-  pending: z.boolean()
+  pending: z.boolean(),
+  question: z.string().optional(),
+  options: z.array(z.string()).optional(),
+  answer: z.string().nullable().optional(),
+  status: z.enum(['pending', 'answered', 'closed']).optional()
+})
+export const MessageAnswerParams = z.strictObject({
+  missionId: AxiomIdSchema,
+  questionId: AxiomIdSchema,
+  body: z.string().min(1)
+})
+export const MessageResolveParams = z.strictObject({
+  missionId: AxiomIdSchema,
+  messageId: AxiomIdSchema,
+  decision: z.enum(['accept', 'reject']),
+  rationale: MessageSummarySchema
 })
 export const MessageListResponseSchema = z.object({
   messages: z.array(MessageSummaryResponseSchema)

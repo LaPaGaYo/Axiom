@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { requiredString } from '../rpc-contract/rpc-param-primitives'
 import { TaskStageSchema } from './lifecycle'
-import { AxiomIdSchema, TaskEdgeSchema, TaskSpecSchema } from './mission-objects'
+import { AxiomIdSchema, ProvenanceSchema, TaskSpecSchema } from './mission-objects'
 
 export const TaskListParams = z.object({
   missionId: AxiomIdSchema,
@@ -11,12 +11,14 @@ export const TaskShowParams = z.object({ taskId: AxiomIdSchema })
 export const TaskCancelParams = TaskShowParams.extend({
   rationale: requiredString('Missing rationale')
 })
-export const TaskCreateParams = z.object({
+export const TaskCreateParams = z.strictObject({
   missionId: AxiomIdSchema,
-  spec: TaskSpecSchema,
-  edges: z.array(TaskEdgeSchema),
-  rationale: requiredString('Missing rationale'),
-  replanLevel: z.literal('MINOR_ADJUSTMENT')
+  task: TaskSpecSchema.omit({ id: true }),
+  dependsOn: z.array(AxiomIdSchema).default([]),
+  // D50 model provenance is audit evidence; it does not change PlanRevision provenance.
+  provenance: ProvenanceSchema.extend({
+    kind: z.enum(['user', 'planner', 'control_plane', 'model'])
+  })
 })
 
 export const TaskListItemSchema = z.object({

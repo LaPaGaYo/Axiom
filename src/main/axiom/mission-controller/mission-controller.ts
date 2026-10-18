@@ -1,4 +1,7 @@
 import type { ScheduleTrigger } from '../scheduler/scheduler'
+import { createTask } from './task-creation'
+import type { TaskCreateParams } from '../../../shared/axiom-contract/task-params'
+import type { SubtaskSource } from '../messaging/subtask-checks'
 import { randomUUID } from 'node:crypto'
 import type { z } from 'zod'
 import type { PlanProposeParams } from '../../../shared/axiom-contract/plan-params'
@@ -126,6 +129,11 @@ export class MissionController {
   }
   getTask(taskId: string) {
     return projectTask(this.ctx, requireTask(this.ctx, taskId))
+  }
+  createTask(input: z.input<typeof TaskCreateParams>, source?: SubtaskSource) {
+    const result = this.write('create_task', () => createTask(this.ctx, input, source))
+    this.scheduleAfterWrite(input.missionId, 'stage_change')
+    return result
   }
   startExecution(missionId: string) {
     const result = this.write('start_execution', () => {

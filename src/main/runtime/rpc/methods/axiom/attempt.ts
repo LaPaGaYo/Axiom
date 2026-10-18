@@ -1,7 +1,9 @@
 import { defineMethod, type RpcContext } from '../../core'
+import { askAttempt } from '../../../../axiom/execution/attempt-ask'
 import type { z } from 'zod'
 import {
   AttemptMessageParams,
+  AttemptAskParams,
   AttemptRequestSubtaskParams,
   AttemptCheckParams,
   AttemptListParams,
@@ -57,6 +59,7 @@ function sendAttemptMessage(
 }
 
 export const AXIOM_ATTEMPT_METHODS = [
+  defineMethod({ name: 'axiom.attempt.ask', params: AttemptAskParams, handler: askAttempt }),
   defineMethod({
     name: 'axiom.attempt.inform',
     params: AttemptMessageParams,

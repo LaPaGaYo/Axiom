@@ -13,6 +13,7 @@ import {
   ArtifactReadParams
 } from '../axiom-contract/artifact-params'
 import {
+  AttemptAskParams,
   AttemptBlockedParams,
   AttemptCheckParams,
   AttemptListParams,
@@ -20,7 +21,11 @@ import {
   AttemptShowParams
 } from '../axiom-contract/attempt-params'
 import { GoalActivateParams, GoalProposeParams } from '../axiom-contract/goal-params'
-import { MessageListParams } from '../axiom-contract/message-params'
+import {
+  MessageAnswerParams,
+  MessageListParams,
+  MessageResolveParams
+} from '../axiom-contract/message-params'
 import {
   MissionCancelParams,
   MissionCreateParams,
@@ -35,7 +40,12 @@ import {
   PlanShowParams
 } from '../axiom-contract/plan-params'
 import { PolicyShowParams, PolicyUpdateParams } from '../axiom-contract/policy-params'
-import { TaskCancelParams, TaskListParams, TaskShowParams } from '../axiom-contract/task-params'
+import {
+  TaskCancelParams,
+  TaskCreateParams,
+  TaskListParams,
+  TaskShowParams
+} from '../axiom-contract/task-params'
 import {
   BrowserClientFileChannelAbortParams,
   BrowserClientFileChannelReadParams,
@@ -407,7 +417,7 @@ import {
   InboxParams,
   ReplyParams,
   ResetParams,
-  TaskCreateParams,
+  TaskCreateParams as TaskCreateParamsOfOrchestrationParams,
   TaskListParams as TaskListParamsOfOrchestrationParams
 } from './orchestration-params'
 import { RequestShowParams } from './orchestration-runs-mutation-request-show-params'
@@ -648,6 +658,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'axiom.artifact.list': ArtifactListParams,
   'axiom.artifact.put': ArtifactPutParams,
   'axiom.artifact.read': ArtifactReadParams,
+  'axiom.attempt.ask': AttemptAskParams,
   'axiom.attempt.blocked': AttemptBlockedParams,
   'axiom.attempt.check': AttemptCheckParams,
   'axiom.attempt.handoff': AttemptBlockedParams,
@@ -659,7 +670,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'axiom.goal.activate': GoalActivateParams,
   'axiom.goal.propose': GoalProposeParams,
   'axiom.goal.show': GoalActivateParams,
+  'axiom.message.answer': MessageAnswerParams,
   'axiom.message.list': MessageListParams,
+  'axiom.message.resolve': MessageResolveParams,
   'axiom.mission.cancel': MissionCancelParams,
   'axiom.mission.create': MissionCreateParams,
   'axiom.mission.list': MissionListParams,
@@ -676,6 +689,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'axiom.policy.show': PolicyShowParams,
   'axiom.policy.update': PolicyUpdateParams,
   'axiom.task.cancel': TaskCancelParams,
+  'axiom.task.create': TaskCreateParams,
   'axiom.task.list': TaskListParams,
   'axiom.task.show': TaskShowParams,
   'browser.back': BrowserTarget,
@@ -1069,7 +1083,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.runShow': RunShowParams,
   'orchestration.runStop': RunStopParams,
   'orchestration.runUse': RunUseParams,
-  'orchestration.taskCreate': TaskCreateParams,
+  'orchestration.taskCreate': TaskCreateParamsOfOrchestrationParams,
   'orchestration.taskList': TaskListParamsOfOrchestrationParams,
   'orchestration.workerAbandon': WorkerDispatchParams,
   'orchestration.workerList': WorkerListParams,

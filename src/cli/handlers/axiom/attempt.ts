@@ -1,3 +1,4 @@
+import { askAttempt } from './attempt-ask'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { CommandHandler, HandlerContext } from '../../dispatch'
@@ -31,6 +32,7 @@ async function sendWorkerMessage(ctx: HandlerContext, verb: string) {
   if (body !== undefined && bodyFile !== undefined) {
     throw new RuntimeClientError('invalid_argument', 'Choose --body or --body-file, not both.')
   }
+  const dependsOn = repeated(flags, 'depends-on')
   const orchestrationCapability = required(flags, 'dispatch-capability')
   const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
   const result = await callOrchestrationMutation(
@@ -53,7 +55,8 @@ async function sendWorkerMessage(ctx: HandlerContext, verb: string) {
               allowedPaths: repeated(flags, 'allowed-path'),
               acceptanceCriteria: repeated(flags, 'acceptance'),
               requiredEvidence: repeated(flags, 'evidence'),
-              risk: optional(flags, 'risk') ?? 'low'
+              risk: optional(flags, 'risk') ?? 'low',
+              ...(dependsOn.length ? { dependsOn } : {})
             }
           }
         : {})
@@ -68,6 +71,7 @@ async function sendWorkerMessage(ctx: HandlerContext, verb: string) {
 }
 
 export const AXIOM_ATTEMPT_HANDLERS: Record<string, CommandHandler> = {
+  'attempt ask': askAttempt,
   'attempt inform': (ctx) => sendWorkerMessage(ctx, 'inform'),
   'attempt request': (ctx) => sendWorkerMessage(ctx, 'request'),
   'attempt blocked': (ctx) => sendWorkerMessage(ctx, 'blocked'),

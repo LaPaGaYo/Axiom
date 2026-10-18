@@ -1,9 +1,11 @@
 import { z } from 'zod'
 import {
   MessageListParams,
+  MessageSummaryResponseSchema,
   parseAxiomMessagePayload
 } from '../../../shared/axiom-contract/message-params'
 import type { OrchestrationDb } from '../../runtime/orchestration/db'
+import { projectQuestion } from '../messaging/question-projection'
 
 const Row = z.object({
   id: z.string(),
@@ -25,11 +27,16 @@ export function messagesStore(db: OrchestrationDb) {
       return rows.flatMap((raw) => {
         const row = Row.parse(raw)
         const payload = parseAxiomMessagePayload(row.payload)
-        if (!payload || payload.axiom.missionId !== p.missionId) {
+        const projected =
+          payload?.axiom.missionId === p.missionId ? payload.axiom : projectQuestion(db, row.id)
+        if (!projected) {
           return []
         }
-        const { type, taskId, attemptId, summary, artifactIds, related, subtask } = payload.axiom
-        const pending = type === 'REQUEST_SUBTASK' && row.resolved === 0
+        const { type, taskId, attemptId, summary, artifactIds, related } = projected
+        const pending =
+          'pending' in projected
+            ? projected.pending
+            : type === 'REQUEST_SUBTASK' && row.resolved === 0
         if (
           (p.type && p.type !== type) ||
           (p.taskId && p.taskId !== taskId) ||
@@ -39,7 +46,8 @@ export function messagesStore(db: OrchestrationDb) {
           return []
         }
         return [
-          {
+          MessageSummaryResponseSchema.parse({
+            ...projected,
             id: row.id,
             type,
             taskId,
@@ -47,10 +55,9 @@ export function messagesStore(db: OrchestrationDb) {
             summary,
             artifactIds,
             related,
-            ...(subtask ? { subtask } : {}),
             createdAt: row.created_at,
             pending
-          }
+          })
         ]
       })
     }

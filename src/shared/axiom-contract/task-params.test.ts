@@ -6,14 +6,13 @@ import {
   TaskListParams,
   TaskShowParams
 } from './task-params'
-import { makeProposal } from './contract-fixtures.test-support'
+import { makeProposal, provenance } from './contract-fixtures.test-support'
 
 const create = {
   missionId: 'm',
-  spec: makeProposal().tasks[0],
-  edges: [],
-  rationale: 'Repair integration regression',
-  replanLevel: 'MINOR_ADJUSTMENT'
+  task: makeProposal().tasks[0],
+  dependsOn: [],
+  provenance
 }
 describe('axiom.task params', () => {
   it.each([
@@ -35,13 +34,13 @@ describe('axiom.task params', () => {
     expect(schema.safeParse(valid).success).toBe(true)
     expect(schema.safeParse(invalid).success).toBe(false)
   })
-  it('accepts a FIX_TASK and defaults missing edge thresholds', () => {
+  it('accepts a FIX_TASK and defaults omitted dependencies to an empty root set', () => {
     const parsed = TaskCreateParams.parse({
       ...create,
-      spec: { ...create.spec, kind: 'fix' },
-      edges: [{ fromTaskId: 't', toTaskId: 'T01' }]
+      task: { ...create.task, kind: 'fix' },
+      dependsOn: undefined
     })
-    expect(parsed.edges[0].readinessThreshold).toBe('INTEGRATED')
+    expect(parsed.dependsOn).toEqual([])
     expect(TaskListParams.safeParse({ missionId: 'm' }).success).toBe(true)
   })
   it('keeps authoritative stage distinct from the Orca execution projection', () => {
