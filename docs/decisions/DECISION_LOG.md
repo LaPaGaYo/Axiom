@@ -519,3 +519,16 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **理由**：产品价值在 Control Plane，内核只回答"在哪里、以什么进程执行"；借用让 V1 更快到达可验证闭环，接口化让替换成为可控的工程而不是一次重写。
 **后果**：章程 §1 与架构 §4.5 各加一段长期方向（本次一并修改）；DEF-5 的方向定为"内置"；新增 DEF-6（AICU-Graph 借鉴项）与 DEF-7（替换路线图与上游同步截止点）；此后每个 brief 里引入借用组件时必须指明接口与基线。
 **取代规则**：每个子系统的替换由各自的 Decision 记录；本条原则只由 Henry 修订。
+
+## D56 · 上游同步策略：只摘取安全、平台（Electron / Node 升级）与 provider 适配修复 — ACCEPTED（Henry 2026-10-17）
+
+**背景**：D55 把上游同步截止点留给 DEF-7。2026-10-17 首次只读初筛（`git fetch --no-tags upstream main`）：fork 点 `3eb1adec2`（2026-09-26）之后 stablyai/orca 已有 **2,965** 个提交（三周，约 140 个 / 天；fix 1,229、test 323、feat 322、refactor 195、perf 110），upstream 头 `ce2d60834c`（2026-10-17）；双方都改过的文件 1,017 个；Electron 43.7.0 → 43.7.8，Node engines 仍为 24。整体合并已不现实。
+**决定**（Henry）：V1 期间只从上游摘取三类修复——**安全**（漏洞、凭据 / 权限、用户配置完整性）、**平台**（Electron / Node 升级、原生模块与 OS 兼容修复）、**provider 适配**（Axiom 实际使用的 provider 的启动 / 信任 / hooks / 就绪修复）；新功能、新增 provider、UI、重构、mobile / cloud / telemetry / marketplace、上游自身 CI 一律不摘。是否在 V1 出口冻结上游同步仍留在 DEF-7。
+**流程**：
+1. **初筛**：每周一次，另在出现安全公告或 provider CLI 行为变化时临时一次；从上次同步点起按路径（`package.json` 的 Electron / Node 行、`src/shared/tui-agent-config.ts`、`agent-trust*`、`src/main/agent-hooks/`、原生模块配置）与提交标题关键词做第一轮过滤，验证者逐条确认归类；upstream 只 `fetch --no-tags`，从不 push。
+2. **应用**：每批一个 `UPSTREAM-n` Task 走 A-lite 流水线；Worker 用 `git cherry-pick -x` 保留来源，冲突按 M0 品牌映射解决，上游重构导致无法干净 cherry-pick 时做最小语义移植；**依赖变更**（`package.json` / `pnpm-lock.yaml`、Electron 升级）不在 Codex 沙盒执行，由验证者经宿主 launcher 安装后提交锁文件；D55 之后已被 Axiom 取代的子系统，上游修复只做语义移植或记 N/A。
+3. **验证**：完整门禁 + 全量 suite + M0 网络隔离检查（vendor-egress 棘轮、`verify:egress-allowlist`、打包产物 egress 金丝雀——上游修复不得重新引入对原厂端点的请求）；provider 类修复加跑宿主 e2e（`mission-attempt-launch.spec.ts`）。
+4. **记录**：`docs/decisions/UPSTREAM_SYNC.md` 记每批的上游范围、已应用 SHA 与对应 Axiom 提交、跳过项及类别、冲突与移植、验证日志，并推进同步点。
+**理由**：上游节奏（约 140 提交 / 天）与 1,017 个重叠文件使整体合并不可行；安全与平台修复是 fork 最难独立获得的部分；provider 适配直接决定 Attempt 能否启动。
+**后果**：DEF-7 去掉"上游同步策略"一项（保留冻结时点与替换路线图）；首批候选记在 `UPSTREAM_SYNC.md`（未应用，开发恢复后排期）。
+**取代规则**：DEF-7 复审（V1 出口前）决定是否冻结；冻结时以新 Decision 取代本条。
