@@ -17,6 +17,8 @@
 
 平台以 Orca 衍生的 Execution Kernel 承载终端、PTY、Git、worktree、Agent 会话、SSH/WSL 和远端运行；我们的核心产品价值位于 Control Plane：规划、调度、上下文管理、验证、集成、重规划和人工治理。
 
+长期方向（D55）：借用的组件（Orca 内核子系统、内置的 CodeGraph 等）一律经 Axiom 定义的接口进入，并随 Axiom 推进按子系统逐步换成 Axiom 自有实现，最终整个产品都是 Axiom 自己的代码；V1 期间照常复用。
+
 ### 一句话描述
 
 > 将一个软件工程目标（Mission）转化为可执行、可验证的 Task DAG，并协调专业 AI Agent 团队持续推进直至完成。

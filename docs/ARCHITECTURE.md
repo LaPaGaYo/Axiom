@@ -129,6 +129,8 @@ interface DecisionEngine {
 
 Execution Kernel 只回答「在哪里、以什么进程和工作区执行」，不决定 Mission 应该做什么。
 
+**长期方向（D55）**：内核按子系统逐步换成 Axiom 自有实现（预期顺序见 D55，路线图与上游同步截止点见 DEF-7）；每次替换一条 Decision，原位替换、任何时刻只有一个权威实现；被替换前本节的复用清单照常有效。
+
 ### 4.6 Worker Plane
 Claude Code、Codex、Gemini、OpenCode 等是可替换的临时执行者。Worker 接收 ContextPackage，在授权 worktree 内执行，通过 `axiom attempt <verb>` 发出类型化消息与 SUBMISSION；heartbeat 由执行内核维持，不是产品消息。
 

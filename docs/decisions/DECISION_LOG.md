@@ -504,3 +504,18 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **实施**：延期，登记 **DEF-4**；触发点 = M2-09 Planner brief 定稿前（Task spec 需带 `role`）且 M3 Reviewer 角色落地前。在此之前 Worker 只用 provider 自带或用户机器上已有的 skills。
 **理由**：角色级预配确定、可审计、可复现（内容寻址进 AgentSpec）；逐 Task 由模型临场挑 skill 既难验证，又把权限面交给了模型，违反"LLM 提议、Control Plane 授权"的不变量 1。
 **取代规则**：DEF-4 复审时的 Decision 决定 RoleProfile 的 schema、存储与 UI 入口；Jev 参与 skill 排序需单独 Decision。
+
+## D55 · 长期演进原则：借用的组件放在接口之后、按子系统逐步换成 Axiom 自有实现；CodeGraph 先内置 — ACCEPTED（方向，Henry 2026-10-17）
+
+**背景**：2026-10-17 架构对齐。Henry 定下两条长期方向：(1) CodeGraph 现在内置进产品（代码智能数据源），之后换成 Axiom 自己的实现；(2) Orca 的代码随着 Axiom 推进逐步被 Axiom 自有实现取代，最终整个产品都是 Axiom 自己的东西。现状：main 与 upstream/main（stablyai/orca，2026-09-26 `3eb1adec2`）的 merge-base 就是该上游头，fork 之后未再同步；Axiom 在其上 318 个提交、与上游相差 2,598 个文件——Control Plane 全部是 Axiom 代码（`src/main/axiom/` 112 个文件、`src/shared/axiom-contract/` 33 个），其余多为 M0 的品牌与网络隔离；执行内核 `src/main/runtime/` 有 128 个文件改动（Axiom RPC 注册、M1-07 / M2-06a 的 §4b 拦截点、M2-01 的 service-only seam）。
+**决定（原则）**：
+1. **借用即为替换做准备**：任何借来的组件（Orca 内核子系统、CodeGraph、Jev）只能通过 Axiom 定义的接口 / seam 进入（`DecisionEngine`、`CodeIntelligence`、attempt-launcher 所用的 `startLocalWorker` seam 等）；Axiom 侧代码不得依赖借用方的内部词汇（CodeGraph 的 node / edge 命名要映射成 Axiom 自己的 schema）；基线实现必须存在，缺了借用方照常运行（不变量 10 的精神推广到全部借用组件）。
+2. **CodeGraph 先内置**：作为 `CodeIntelligence` 的第一个 provider 随 Axiom 打包（走 ripgrep `@vscode/ripgrep-universal` 按平台二进制随构建复制的先例）；条件与复审数据见 DEF-5；替换路径 = Axiom 自有的 tree-sitter 索引器实现同一接口 → 只读并行对照（不作为权威）→ 切换 → 移除依赖。
+3. **Orca 按子系统替换，不整体重写**：顺序由产品需要决定（预期：orchestration 的 Run / Dispatch / 消息层 → provider adapters 与 agent sessions → worktree / git 服务 → 终端 / PTY / daemon → UI 壳与 RPC 框架）；每个子系统的替换 = 一次 Decision + 迁移 + 对照测试（新实现先在接口后面跑通既有测试，再切换，再删旧码）。**原位替换**：任何时刻每个子系统只有一个权威实现（不变量 6；不允许第二套 worktree / terminal / worker 生命周期或 Task / 消息存储）；在被替换前照常复用，AGENTS.md 的 "Execution Kernel Boundary" 不变。
+4. **V1 范围不变**（D8）：V1 期间内核照常复用，不做子系统替换；若某个 Orca 子系统阻塞 V1，以单独 Decision 提前处理。
+5. **上游同步截止点另行决定**（DEF-7）：替换越多，合并 upstream 修复越难；在 V1 出口前、或首个内核子系统替换提出时评估是否冻结上游同步（fork freeze），冻结前一次性合入所需的上游修复（安全、Electron / Node 升级、provider 适配）。
+6. **署名与许可**：Orca 为 MIT；`NOTICE.md` 的衍生声明在最后一段 Orca 代码移除前都保留，每次子系统替换后更新通告范围；CodeGraph（MIT）内置时加入通告。
+7. **范围**：本条针对 Orca 与 CodeGraph 的代码；Electron、node-pty、SQLite、tree-sitter 等通用开源库不是 Orca 或 CodeGraph 的代码，不在本条范围（是否替换由各自的 Decision 决定）。
+**理由**：产品价值在 Control Plane，内核只回答"在哪里、以什么进程执行"；借用让 V1 更快到达可验证闭环，接口化让替换成为可控的工程而不是一次重写。
+**后果**：章程 §1 与架构 §4.5 各加一段长期方向（本次一并修改）；DEF-5 的方向定为"内置"；新增 DEF-6（AICU-Graph 借鉴项）与 DEF-7（替换路线图与上游同步截止点）；此后每个 brief 里引入借用组件时必须指明接口与基线。
+**取代规则**：每个子系统的替换由各自的 Decision 记录；本条原则只由 Henry 修订。
