@@ -487,6 +487,7 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **取代规则**：M2 出口 Decision 记录实际完成情况并关闭本条；范围变更经修订行。
 - **修订 2026-10-17（M2-06 拆分）**：M2-06 拆为两个 Task 以保持单次 attempt 可完成：**M2-06a** = Worker 动词 `axiom attempt inform / request / blocked / handoff / request-subtask / check`（dispatch capability 校验、D9 载荷、MessageRouter M2 子集、`axiom.message.list`）+ 映射 §4b 新增拦截点（workerStop / Abandon / Release / Retain / TerminalUserInput、ask / reply、群发、federation）；**M2-06b** = `axiom attempt ask` + `axiom.message.answer`、D50 的确定性检查与 `axiom.task.create`、待决项 `axiom.message.resolve`。顺序 M2-06a → M2-06b → M2-07，其余不变。另记：M2-05 用了 6 个 attempt，其中 3 次是只有宿主才能证伪的 brief 事实（`--effort` 需 `--model`；fleet 投影的 liveness 只看 hook；daemon 让 PTY 跨重启存活），已写入 `.axiom-work/verifications/M2-05-6.md`。
 - **修订 2026-10-17（M2-06c 新增，D53）**：在 M2-06b 之后、M2-07 之前插入 **M2-06c** = provider 退休规则（`ProviderFilterReason.retired`、`RETIRED_PROVIDERS = { gemini }`、`preferredProviders` 唯一覆盖、文档示例名改 Antigravity），1 个 attempt；本条决定行中的"Mac 上可用的真实 provider：Codex、Claude Code、Gemini CLI"由 D53 取代为 Codex、Claude Code、Antigravity CLI。
+- **修订 2026-10-17（M2-06c 改为 D57）**：M2-06c 的范围由 D53 的 provider 退休规则改为 D57 Worker 认证矩阵的 V1 子集（`not_certified`、`endpointProfile`、产品内置的四个 `provisional` 组合）；brief 待恢复开发时重写。
 
 ## D53 · Gemini CLI 退役与 Antigravity CLI 接替（provider 退休规则）— ACCEPTED（Henry 2026-10-17）
 
@@ -496,6 +497,7 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **理由**：退役是产品级事实而非单机配置；规则确定性、可审计（`selection.filtered` 留痕）、可覆盖（显式偏好），符合"Decision Engine 只对过滤后的闭集排序"的边界；改动小（一个枚举值、一个常量、一个过滤分支）。
 **后果**：`AgentSpec.selection.filtered.reason` 枚举变化 → 术语表 §4.13 增加 `ProviderFilterReason` 行；M2-03 测试里 tier-B 示例改用 `antigravity`；M2-11 出口 e2e 在 Henry 机器上应看到 `gemini` 被记为 `retired`、`antigravity` 可被选中。Codex 流水线不受影响（Axiom 自身的 Worker 仍是 Codex；`~/.codex/config.toml` 自 2026-10-17 18:00 起 `model_reasoning_effort = "max"`）。
 **取代规则**：Google 恢复个人账号服务，或 Orca 上游在 `TUI_AGENT_CONFIG` 中引入 provider 生命周期标记时，由新 Decision 收缩或移除 `RETIRED_PROVIDERS`。
+- **修订 2026-10-17（D57）**：退休名单机制由 D57 的认证矩阵取代——gemini 不在矩阵中即不可用，过滤原因改为 `not_certified`（不再新增 `retired`）；Gemini CLI 停服与 Antigravity 接替的事实、文档示例名改动保留；M2-06c 改为实现 D57 的 V1 子集。
 
 ## D54 · Skills 分配：按 agent 分工预配 skill 包、人工确认后生效；实施延期（DEF-4）— ACCEPTED（方向，Henry 2026-10-17）
 
@@ -532,3 +534,17 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **理由**：上游节奏（约 140 提交 / 天）与 1,017 个重叠文件使整体合并不可行；安全与平台修复是 fork 最难独立获得的部分；provider 适配直接决定 Attempt 能否启动。
 **后果**：DEF-7 去掉"上游同步策略"一项（保留冻结时点与替换路线图）；首批候选记在 `UPSTREAM_SYNC.md`（未应用，开发恢复后排期）。
 **取代规则**：DEF-7 复审（V1 出口前）决定是否冻结；冻结时以新 Decision 取代本条。
+
+## D57 · Worker 认证矩阵：身体（harness）× 大脑（model）× 接入方式（endpoint profile），只有登记的组合才能承担 Attempt — ACCEPTED（Henry 2026-10-17）
+
+**背景**：2026-10-17 架构对齐（"Axiom 是办公室、agent 是员工、模型是大脑、skills 是经验"）时厘清：Codex CLI、Claude Code、Antigravity、OpenCode、CodeBuddy 等是 agent harness（身体与工作方式），不是模型。Orca 支持三四十种 harness 是它作为多 agent 终端的卖点（上游三周 2,965 个提交里有 332 个与 provider 适配有关）。M2-03 的选择规则是"已安装即候选"（A 级 = 结构化会话的 `claude` / `codex`，其余 TuiAgent 为 B 级），因此 Henry 的 Mac 上从未验证过 `axiom attempt` 协议的 `continue` 也会成为 B 级候选；D53 的退休名单只覆盖了 gemini 这一个特例。Orca 现有启动目录（`worker-launch-preferences`）：`claude` 接受任意模型名（如 `aws-bedrock-opus-5`），`antigravity` 接受账号范围的模型名，`opencode` 2 的 TUI 不接受 `--model`。
+**决定**：
+1. **三分**：Worker 的执行身份 = `provider`（harness）× `model`（模型，或 `harness-default` = 由 harness 自己的配置决定）× `endpointProfile`（接入方式：`subscription` = 用户在 harness 中已登录的订阅或已自行配置的凭据；以后可有 `api-key:<vendor>`、`gateway:<name>`、`local:<runtime>`）。AgentSpec 新增 `endpointProfile`（V1 只取 `subscription`）；凭据只以引用出现，绝不写入 AgentSpec 或 ContextPackage（两者内容寻址并存档）。
+2. **认证矩阵（允许清单）**：AgentFactory 只在矩阵登记的组合中选择；已安装但未登记的 harness 记过滤原因 `not_certified`（新增；过滤顺序 `not_installed → not_certified → disallowed → tier_too_low`）。每条登记：provider、模型选择方式（启动参数 / harness 默认）、endpointProfile、可承担的角色（planner / worker）与最高风险等级、状态（`provisional` = 由 Decision 列入、证据待补；`certified` = 附宿主协议一致性 e2e 证据：收到 preamble → `axiom attempt inform` → 产出候选 → `axiom attempt submit` 合法报告）、认证时的 harness 版本。
+3. **V1 初始矩阵**（均为 `provisional`；M2-07 合入后补认证证据；V1 出口前所有用到的组合必须为 `certified`）：Claude Code + Claude（启动参数选模型；A 级：planner 与全部风险等级）；Codex + GPT（同上，A 级）；Antigravity + Gemini（启动参数选模型；B 级：worker，低 / 中风险）；OpenCode + harness 默认模型（B 级：worker，仅低风险——它的大脑由用户在 OpenCode 中的配置决定，Axiom 看不见）。其余 harness（含 `gemini`、`continue`、`codebuddy`）登记前不承担 Attempt。
+4. **路由**：RulesEngine 只在矩阵组合的闭集上排序（Mission 的 `preferredProviders` / `disallowedProviders` 照旧生效）；NEEDS_FIX 后的新 Attempt 沿 `selection.ranked` 升级到更强组合；按历史通过率与成本学习排序属 V1 之后（D8，经 DecisionEngine）。独立验证（M3）对所有组合一视同仁，便宜组合做砸了由验证拦截，不因组合而放宽。
+5. **延期（DEF-8）**：Axiom 自管的非订阅接入方式（API key / 网关 / 本地 runtime：复用 Orca `src/main/host/electron-secret-store.ts`、按 Attempt 注入环境变量、凭据范围扩大需 Approval）；用户在产品内对新组合运行一致性测试完成本机认证；`opencode` 等不可启动选模型的 harness 经 worktree 级配置按 Attempt 选模型（与 DEF-4 同一物化机制，物化文件必须排除在 Candidate 快照之外）；harness 版本变化后的复验规则。M2 的固定约定"V1 不新增 API key 存储"不变。
+6. **与 D53 的关系**：Gemini CLI 停服与 Antigravity 接替的事实、文档示例名改动保留；退休名单机制由本条取代（gemini 不在矩阵即不可用）。M2-06c 改为实现本条的 V1 子集，恢复开发时重写 brief。
+**理由**：自治系统只应把真实工作交给验证过能遵守协议的组合；允许清单比退休名单安全（上游每周都在新增 provider，denylist 永远追不上）；三分让"同一身体换大脑""同一大脑换接入方式"都成为显式、可审计的选择，也为 D55 的自有 harness 留好接口。
+**后果**：`ProviderFilterReason` 改为 `not_installed | not_certified | disallowed | tier_too_low`（术语表 §4.13 随 M2-06c 更新）；`selection.filtered` 只需列出已安装未登记的 harness 与登记未安装的组合，顺带解决 M2-11 记录的 `not_installed` 膨胀；D56 上游初筛的"provider 适配"范围收窄为矩阵内的 harness。
+**取代规则**：矩阵条目的增删以本条下的修订行记录；DEF-8 复审时的 Decision 决定非订阅接入方式与本机认证。
