@@ -496,3 +496,11 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **理由**：退役是产品级事实而非单机配置；规则确定性、可审计（`selection.filtered` 留痕）、可覆盖（显式偏好），符合"Decision Engine 只对过滤后的闭集排序"的边界；改动小（一个枚举值、一个常量、一个过滤分支）。
 **后果**：`AgentSpec.selection.filtered.reason` 枚举变化 → 术语表 §4.13 增加 `ProviderFilterReason` 行；M2-03 测试里 tier-B 示例改用 `antigravity`；M2-11 出口 e2e 在 Henry 机器上应看到 `gemini` 被记为 `retired`、`antigravity` 可被选中。Codex 流水线不受影响（Axiom 自身的 Worker 仍是 Codex；`~/.codex/config.toml` 自 2026-10-17 18:00 起 `model_reasoning_effort = "max"`）。
 **取代规则**：Google 恢复个人账号服务，或 Orca 上游在 `TUI_AGENT_CONFIG` 中引入 provider 生命周期标记时，由新 Decision 收缩或移除 `RETIRED_PROVIDERS`。
+
+## D54 · Skills 分配：按 agent 分工预配 skill 包、人工确认后生效；实施延期（DEF-4）— ACCEPTED（方向，Henry 2026-10-17）
+
+**背景**：2026-10-17 架构对齐时 Henry 提出希望系统（含 Jev）能"分配 skills"。现有设计没有 skills 这一一等概念：AgentSpec 的 `capabilities` 由 Task 的 scope 路径确定性推导（M2-03）；ContextPackage 只有强制集 + 排序候选集（M2-02）；provider 侧的 skills（Orca 的 skill recipes、各 CLI 的项目级 skills 目录，例如 Codex Worker 用的 `branch-finish`）属于 Worker plane，Axiom 目前不干预。可借鉴的外部做法：AICU-Graph 用角色 YAML 引用 `skills_dir` 与 MCP 名，运行时把 skill 目录 symlink 进各 CLI 的项目级 skills 目录（评估见项目文档 `claude/external-projects-review-v1.md`）。
+**决定（方向）**：skills 按 **agent 分工（角色）预配**，不由模型逐 Task 临场挑选：引入版本化、内容寻址的 **RoleProfile**（角色 → skill 包 + MCP 服务器 + 角色规则）；AgentFactory 把 RoleProfile 解析出的 skills 写进 AgentSpec（新字段 `skills`，与 `capabilities` 并列，进入 spec 的内容寻址）；attempt-launcher 在 Attempt worktree 中按 provider 把 skill 目录物化到该 CLI 的项目级 skills 目录（复用 Orca 既有的 skills 安装与 manifest 校验，不新造一套）。**人工确认**：RoleProfile 由用户维护与批准（作为 Mission policy 的一部分，改动走 `policy.updated` 审计）；Planner 提案的每个 Task 带 `role`，PlanRevision 的批准即确认该分工与对应 skill 包；RulesEngine 基线按角色匹配，Jev 之后只对候选 skill 做 advisory 排序（D8、不变量 10）。Worker 不能自行扩展 skills——等同权限扩展，需 Approval。
+**实施**：延期，登记 **DEF-4**；触发点 = M2-09 Planner brief 定稿前（Task spec 需带 `role`）且 M3 Reviewer 角色落地前。在此之前 Worker 只用 provider 自带或用户机器上已有的 skills。
+**理由**：角色级预配确定、可审计、可复现（内容寻址进 AgentSpec）；逐 Task 由模型临场挑 skill 既难验证，又把权限面交给了模型，违反"LLM 提议、Control Plane 授权"的不变量 1。
+**取代规则**：DEF-4 复审时的 Decision 决定 RoleProfile 的 schema、存储与 UI 入口；Jev 参与 skill 排序需单独 Decision。
