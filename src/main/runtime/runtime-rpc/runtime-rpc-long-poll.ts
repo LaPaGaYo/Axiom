@@ -26,6 +26,10 @@ export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollCla
   if (request.method === 'orchestration.workerStart') {
     return 'wait'
   }
+  // Why: Mission planning waits for agent readiness through the same worker-start path.
+  if (request.method === 'axiom.mission.plan') {
+    return 'wait'
+  }
   if (request.method === 'browser.clientHost.attach') {
     return 'browser-host'
   }

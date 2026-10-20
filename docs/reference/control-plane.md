@@ -169,6 +169,8 @@ M2-06b：pending question_threads 通过 attempt_bindings 关联 Task；`blockin
 
 `axiom.mission.plan` / `axiom mission plan --mission <id> [--json]` 在 ANALYZING 启动一个 Planner。前置检查：Mission 存在、ACTIVE Goal 已绑定、没有 PROPOSED Plan、没有 dispatched 或 starting/ready/start_unknown/stopping/stop_unknown 的 Planner、Mission 总 Attempt 预算未耗尽、D57 有合格的 planner combo。失败不推进 Mission；无候选返回 `no_eligible_provider`，RPC error data 保留 filtered。Mission 不存在、已有提案、状态不符分别返回 `mission_not_found`、`plan_pending`、`illegal_transition`；已有活跃 Planner 返回带说明的 `invalid_argument`。并发启动在构建前与 admission 事务内都检查；尚未结束的 NULL dispatch binding 同样阻止重复启动。
 
+`axiom.mission.plan` 因等待 Agent readiness，在本地 transport 上作为带 keepalive 的 long-poll 处理，CLI handler 已使用 120 s timeout。
+
 `execution/planner-launcher.ts` 负责前置检查与 admission，实际 worktree + `startLocalWorker` 顺序复用 `createAttemptLauncher`，没有第二份启动序列、内核 manager 或 provider。AgentFactory 使用 `role: planner`、planning capability、`permissions.write=[]`、planner-worktree 与现有 model/effort 规则。基线 ref `axiom/integration/<missionId>` 存在则沿用，否则从 Mission targetBranch 创建；本入口不创建或推进集成基线。worktree 名为 `planner-<missionId>-<n>`，branch 为 `axiom/planner/<missionId>/<n>`。
 
 每次规划创建一个 Orca pseudo-task：`spec={kind:'planner',missionId,goalRevisionId,seq:n}`、title=Planner、deps=[]、runId=Mission Run。它只有内核执行历史，**没有 task_stages 行**，不进入 DAG/readiness，也不出现在 `axiom task list`。每个 pseudo-task 只有一次 Attempt，binding.seq=1；branch 中的 n 为 Mission planner binding 数量 + 1。`listPlannerBindings(missionId)` 以 branch 前缀查询，运行时角色由绑定的 AgentSpec.role 确认，无新列。Planner 不占 Task 并发，但计入 Mission budget.maxAttempts；Worker readiness、admission 和子任务预算使用相同计数。
