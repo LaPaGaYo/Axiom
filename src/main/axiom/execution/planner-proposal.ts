@@ -9,6 +9,8 @@ import { getAxiomControlPlane } from '../control-plane'
 import { resolveAttemptSender } from './attempt-authority'
 import { stopPlanner } from './planner-stop'
 
+export const PLANNER_STOP_GRACE_MS = 2_000
+
 export async function proposePlannerPlan(
   p: z.infer<typeof PlanProposeParams> & { attemptId: string },
   ctx: RpcContext
@@ -110,6 +112,19 @@ export async function proposePlannerPlan(
     ctx.recordMutationReceipt?.(response)
     return response
   })
-  await stopPlanner(runtime, store, { missionId: binding.missionId, dispatchId: p.attemptId })
+  // Let the CLI receive its receipt before closing its process tree; recovery covers a lost timer.
+  setTimeout(() => {
+    void stopPlanner(
+      runtime,
+      store,
+      { missionId: binding.missionId, dispatchId: p.attemptId },
+      'plan_proposed'
+    ).catch(() => {
+      console.warn('[axiom] Planner stop failed', {
+        missionId: binding.missionId,
+        dispatchId: p.attemptId
+      })
+    })
+  }, PLANNER_STOP_GRACE_MS).unref()
   return result
 }

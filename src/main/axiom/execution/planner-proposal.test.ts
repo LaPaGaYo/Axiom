@@ -1,12 +1,16 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { plannerFixture } from './planner-fixture.test-support'
 import { createPlannerLauncher } from './planner-launcher'
+import { PLANNER_STOP_GRACE_MS } from './planner-proposal'
+import * as plannerStop from './planner-stop'
+import { RecoveryService } from '../recovery/recovery-service'
 import {
   makeProposal,
   provenance
 } from '../../../shared/axiom-contract/contract-fixtures.test-support'
 import * as stop from '../../runtime/rpc/methods/orchestration/worker/local-worker-stop'
 import * as release from '../../runtime/rpc/methods/orchestration/worker/local-worker-release'
+import * as observation from '../../runtime/rpc/methods/orchestration/worker/worker-observation'
 
 let f: Awaited<ReturnType<typeof plannerFixture>>
 let attemptId: string
@@ -24,8 +28,11 @@ beforeEach(async () => {
     processAction: 'none',
     archive: null
   })
+  vi.useFakeTimers()
 })
 afterEach(async () => {
+  vi.clearAllTimers()
+  vi.useRealTimers()
   await f.close()
 })
 function propose(envelope = { orchestrationCapability: f.capability() }) {
@@ -93,7 +100,7 @@ it('rejects a missing planner worktree before any Plan or Mission change', async
   expect(stop.stopLocalWorker).not.toHaveBeenCalled()
   expect(release.releaseLocalWorker).not.toHaveBeenCalled()
 })
-it('stamps planner provenance, settles then stops/releases, and preserves role through approval/task show', async () => {
+it('returns the proposal receipt before stop/release and preserves role through approval/task show', async () => {
   const response = await propose()
   expect(response).toMatchObject({
     ok: true,
@@ -104,13 +111,30 @@ it('stamps planner provenance, settles then stops/releases, and preserves role t
   expect(f.missions.getMission(f.mission.id).status).toBe('PLAN_REVIEW')
   const plan = f.missions.listPlans(f.mission.id)[0]
   expect(plan.provenance.model).toBeUndefined()
-  expect(stop.stopLocalWorker).toHaveBeenCalledExactlyOnceWith(f.runtime, attemptId)
-  expect(release.releaseLocalWorker).toHaveBeenCalledExactlyOnceWith(f.runtime, attemptId)
+  expect(stop.stopLocalWorker).not.toHaveBeenCalled()
+  expect(release.releaseLocalWorker).not.toHaveBeenCalled()
   expect(f.store.listAuditEvents({ missionId: f.mission.id })).toContainEqual(
     expect.objectContaining({
       event: 'planner.proposed',
       objectId: attemptId,
       after: expect.objectContaining({ planRevisionId: plan.id, rootCount: 3 })
+    })
+  )
+  expect(f.store.listAuditEvents({ missionId: f.mission.id })).not.toContainEqual(
+    expect.objectContaining({ event: 'planner.stopped' })
+  )
+  expect(PLANNER_STOP_GRACE_MS).toBe(2_000)
+  await vi.advanceTimersByTimeAsync(PLANNER_STOP_GRACE_MS - 1)
+  expect(stop.stopLocalWorker).not.toHaveBeenCalled()
+  expect(release.releaseLocalWorker).not.toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(1)
+  expect(stop.stopLocalWorker).toHaveBeenCalledExactlyOnceWith(f.runtime, attemptId)
+  expect(release.releaseLocalWorker).toHaveBeenCalledExactlyOnceWith(f.runtime, attemptId)
+  expect(f.store.listAuditEvents({ missionId: f.mission.id })).toContainEqual(
+    expect.objectContaining({
+      event: 'planner.stopped',
+      objectId: attemptId,
+      after: { state: 'stopped', releaseDisposition: 'released', reason: 'plan_proposed' }
     })
   )
   await f.call('axiom.plan.approve', { planRevisionId: plan.id, resolver: 'tester' })
@@ -179,10 +203,52 @@ it('rechecks authority after git IO', async () => {
 it('preserves committed proposal and audits an unknown stop for recovery', async () => {
   vi.mocked(stop.stopLocalWorker).mockResolvedValue({ state: 'stop_unknown' })
   expect(await propose()).toMatchObject({ ok: true })
+  await vi.advanceTimersByTimeAsync(PLANNER_STOP_GRACE_MS)
   expect(f.store.listAuditEvents({ missionId: f.mission.id })).toContainEqual(
     expect.objectContaining({
       event: 'planner.stopped',
       after: expect.objectContaining({ state: 'stop_unknown' })
     })
   )
+})
+it('recovers a live planner with a committed proposal when the scheduled stop is lost', async () => {
+  expect(await propose()).toMatchObject({ ok: true })
+  expect(stop.stopLocalWorker).not.toHaveBeenCalled()
+  // Simulate a runtime exit during the grace window: only the durable proposal survives.
+  vi.clearAllTimers()
+  vi.spyOn(observation, 'inspectWorkerTerminal').mockResolvedValue({
+    status: 'live',
+    exact: true,
+    terminal: null
+  })
+  const recovery = new RecoveryService(f.db, f.store, f.missions, {
+    runtime: f.runtime,
+    artifacts: f.artifacts
+  })
+  expect(await recovery.reconcileAttempts()).toMatchObject({
+    attempts: [expect.objectContaining({ attemptId, action: 'stopped' })]
+  })
+  expect(stop.stopLocalWorker).toHaveBeenCalledExactlyOnceWith(f.runtime, attemptId)
+  expect(release.releaseLocalWorker).toHaveBeenCalledExactlyOnceWith(f.runtime, attemptId)
+  expect(f.missions.getMission(f.mission.id).status).toBe('PLAN_REVIEW')
+  expect(f.store.listAuditEvents({ missionId: f.mission.id })).toContainEqual(
+    expect.objectContaining({
+      event: 'planner.stopped',
+      objectId: attemptId,
+      after: { state: 'stopped', releaseDisposition: 'released', reason: 'plan_proposed' }
+    })
+  )
+})
+it('logs only planner identities when the scheduled stop fails', async () => {
+  vi.spyOn(plannerStop, 'stopPlanner').mockRejectedValue(new Error('sensitive host details'))
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  expect(await propose()).toMatchObject({ ok: true })
+  expect(warn).not.toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(PLANNER_STOP_GRACE_MS)
+  expect(warn).toHaveBeenCalledExactlyOnceWith('[axiom] Planner stop failed', {
+    missionId: f.mission.id,
+    dispatchId: attemptId
+  })
+  expect(f.missions.getMission(f.mission.id).status).toBe('PLAN_REVIEW')
+  expect(f.missions.listPlans(f.mission.id)).toHaveLength(1)
 })
