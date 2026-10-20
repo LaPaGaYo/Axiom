@@ -80,3 +80,22 @@ it('worker params cannot choose type, recipient or Mission authority', () => {
     AttemptCheckParams.safeParse({ from: 'term_worker', attemptId: 'a', timeoutMs: -1 }).success
   ).toBe(false)
 })
+it('accepts an optional Submission relation while keeping related fields strict', () => {
+  const payload = { axiom: { ...fields, type: 'SUBMISSION' } }
+  expect(AxiomMessagePayloadSchema.parse(payload).axiom.related).toEqual({})
+  expect(
+    AxiomMessagePayloadSchema.parse({
+      axiom: { ...payload.axiom, related: { submissionId: 'submission_1' } }
+    }).axiom.related
+  ).toEqual({ submissionId: 'submission_1' })
+  for (const related of [{ submissionId: '' }, { submissionId: 1 }, { unknown: 'submission_1' }]) {
+    expect(
+      AxiomMessagePayloadSchema.safeParse({ axiom: { ...payload.axiom, related } }).success
+    ).toBe(false)
+  }
+  expect(
+    AxiomMessagePayloadSchema.safeParse({
+      axiom: { ...payload.axiom, summary: 'x'.repeat(2001) }
+    }).success
+  ).toBe(false)
+})

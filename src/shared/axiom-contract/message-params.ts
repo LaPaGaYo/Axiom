@@ -32,7 +32,8 @@ export const MessageRelatedSchema = z
   .object({
     taskIds: z.array(AxiomIdSchema).optional(),
     decisionId: AxiomIdSchema.optional(),
-    artifactId: AxiomIdSchema.optional()
+    artifactId: AxiomIdSchema.optional(),
+    submissionId: AxiomIdSchema.optional()
   })
   .strict()
 export const SubtaskRequestSchema = z

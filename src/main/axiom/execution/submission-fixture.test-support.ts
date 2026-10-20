@@ -22,12 +22,7 @@ export function submissionFixture() {
     treeSha: 'b'.repeat(40),
     snapshotCommitted: true
   })
-  // The unchanged kernel retain method cannot nest. The separate real-retain regression
-  // deliberately remains red pending the scoped kernel exception; no other kernel is stubbed.
-  const retain = vi.spyOn(f.db, 'retainWorkerTerminalResource').mockReturnValue({
-    disposition: 'no_owned_resource',
-    resource: null
-  })
+  const retain = vi.spyOn(f.db, 'retainWorkerTerminalResource')
   const params = (worker = f.t01) => ({ attemptId: worker.attemptId, from: worker.from, report })
   const submit = (worker = f.t01) =>
     f.call('axiom.attempt.submit', params(worker), {

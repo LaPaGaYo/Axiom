@@ -11,26 +11,53 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-// These are acceptance tests, not expected failures. The brief requires leaving tests red
-// when their fix needs an out-of-scope edit; the exact additions are in M2-07-1.md.
-it('scope exception required: real kernel retention nests in the submit transaction', async () => {
+it('retains the real terminal resource after settlement commits and before SUBMISSION mail', async () => {
   f.retain.mockRestore()
+  const retain = f.db.retainWorkerTerminalResource.bind(f.db)
+  vi.spyOn(f.db, 'retainWorkerTerminalResource').mockImplementationOnce((attemptId) => {
+    expect(f.db.db.isTransaction).toBe(false)
+    expect(f.store.getSubmissionByDispatch(attemptId)).toBeDefined()
+    expect(f.store.getTaskStage(f.t01.taskId)?.stage).toBe('SUBMITTED')
+    expect(f.db.getDispatchContextById(attemptId)?.status).toBe('completed')
+    expect(f.store.listVerificationRuns({ missionId: f.mission.id })).toHaveLength(1)
+    expect(f.store.listMessages({ missionId: f.mission.id })).toHaveLength(0)
+    return retain(attemptId)
+  })
   const result = await f.submit()
   expect(result, JSON.stringify(result)).toMatchObject({ ok: true })
+  expect(f.db.getWorkerTerminalResourceByOwner(f.t01.attemptId)?.release_state).toBe('retained')
+  const events = f.store.listAuditEvents({ missionId: f.mission.id })
+  const submitted = events.find((event) => event.event === 'attempt.submitted')!
+  const retained = events.find((event) => event.event === 'attempt.terminal_retained')!
+  const sent = events.find((event) => event.event === 'message.sent')!
+  expect(retained).toMatchObject({
+    objectKind: 'attempt',
+    objectId: f.t01.attemptId,
+    after: { retainDisposition: 'retained' }
+  })
+  expect(submitted.sequence).toBeLessThan(retained.sequence)
+  expect(retained.sequence).toBeLessThan(sent.sequence)
 })
-it('scope exception required: a valid 4,000-character report summary reaches SUBMISSION mail', async () => {
-  const result = await f.call(
-    'axiom.attempt.submit',
-    {
-      ...f.params(),
-      report: { ...report, summary: 'x'.repeat(4000) }
-    },
-    { orchestrationCapability: f.t01.capability }
-  )
-  expect(result, JSON.stringify(result)).toMatchObject({ ok: true })
-  expect(f.store.listMessages({ missionId: f.mission.id })[0]?.summary).toHaveLength(4000)
-})
-it('scope exception required: SUBMISSION mail relates the immutable Submission id', async () => {
+it.each([2000, 2001, 4000])(
+  'stores a %i-character report summary and bounds SUBMISSION mail',
+  async (length) => {
+    const summary = 'x'.repeat(length)
+    const result = await f.call(
+      'axiom.attempt.submit',
+      {
+        ...f.params(),
+        report: { ...report, summary }
+      },
+      { orchestrationCapability: f.t01.capability }
+    )
+    expect(result, JSON.stringify(result)).toMatchObject({ ok: true })
+    expect(f.store.getSubmissionByDispatch(f.t01.attemptId)?.report.summary).toBe(summary)
+    expect(f.store.listMessages({ missionId: f.mission.id })[0]?.summary).toBe(
+      length > 2000 ? `${'x'.repeat(1999)}…` : summary
+    )
+  }
+)
+it('SUBMISSION mail relates the immutable Submission id', async () => {
   const result = await f.submit()
   expect(result).toMatchObject({ ok: true })
   if (!result.ok) {

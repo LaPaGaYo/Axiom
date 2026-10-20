@@ -67,7 +67,7 @@ it.each(['mission', 'relation'] as const)(
     expect(f.snapshotGit).not.toHaveBeenCalled()
   }
 )
-it.each(['retained', 'already_released', 'release_committed'] as const)(
+it.each(['retained', 'already_released', 'release_committed', 'no_owned_resource'] as const)(
   'records the %s retain disposition without making it an error',
   async (disposition) => {
     const resource = f.db.getWorkerTerminalResourceByOwner(f.t01.attemptId)
@@ -75,11 +75,15 @@ it.each(['retained', 'already_released', 'release_committed'] as const)(
     if (!resource) {
       throw new Error('Fixture terminal resource missing')
     }
-    f.retain.mockReturnValueOnce({ disposition, resource })
+    f.retain.mockReturnValueOnce(
+      disposition === 'no_owned_resource'
+        ? { disposition, resource: null }
+        : { disposition, resource }
+    )
     expect(await f.submit()).toMatchObject({ ok: true })
     expect(f.store.listAuditEvents({ missionId: f.mission.id })).toContainEqual(
       expect.objectContaining({
-        event: 'attempt.submitted',
+        event: 'attempt.terminal_retained',
         after: expect.objectContaining({ retainDisposition: disposition })
       })
     )
@@ -148,23 +152,36 @@ it('recovers a missing post-commit message through authenticated duplicate submi
   vi.spyOn(f.db, 'insertMessage').mockImplementationOnce(() => {
     throw new Error('message write failed')
   })
-  expect(await f.submit()).toMatchObject({ ok: false })
+  expect(
+    await f.call(
+      'axiom.attempt.submit',
+      { ...f.params(), report: { ...report, summary: 'x'.repeat(4000) } },
+      { orchestrationCapability: f.t01.capability }
+    )
+  ).toMatchObject({ ok: false })
   const stored = f.store.getSubmissionByDispatch(f.t01.attemptId)
-  expect(stored).toBeDefined()
+  expect(stored?.report.summary).toBe('x'.repeat(4000))
   expect(await f.submit()).toMatchObject({
     ok: true,
     result: { duplicate: true, submission: stored }
   })
-  expect(f.store.listMessages({ missionId: f.mission.id })).toHaveLength(1)
+  expect(f.store.listMessages({ missionId: f.mission.id })).toEqual([
+    expect.objectContaining({
+      summary: `${'x'.repeat(1999)}…`,
+      related: { submissionId: stored?.id }
+    })
+  ])
   expect(f.snapshotGit).toHaveBeenCalledTimes(1)
 })
 it('schedules only after commit and suppresses the stage trigger on rollback', async () => {
   const schedule = vi
     .spyOn(getAxiomControlPlane(f.runtime).scheduler, 'scheduleRound')
     .mockResolvedValue({ admitted: [], skipped: [] })
-  f.retain.mockImplementationOnce(() => {
-    throw new Error('retention unavailable')
-  })
+  vi.spyOn(getAxiomControlPlane(f.runtime).store, 'insertVerificationRun').mockImplementationOnce(
+    () => {
+      throw new Error('verification queue unavailable')
+    }
+  )
   expect(await f.submit()).toMatchObject({ ok: false })
   await Promise.resolve()
   expect(schedule).not.toHaveBeenCalled()

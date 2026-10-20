@@ -59,8 +59,8 @@ async function settleSubmission(input: z.infer<typeof AttemptSubmitParams>, ctx:
       }
     }
   }
-  // Validate the router contract before Git/settlement. The existing shared message contract
-  // still caps summaries at 2,000 and cannot carry related.submissionId (scoped exception in report).
+  // Mail carries a bounded summary; the immutable Submission keeps the full report.
+  const summary = existing?.report.summary ?? report.summary
   const message = AxiomMessagePayloadSchema.safeParse({
     axiom: {
       version: 1,
@@ -68,7 +68,7 @@ async function settleSubmission(input: z.infer<typeof AttemptSubmitParams>, ctx:
       missionId: mission.id,
       taskId: task.taskId,
       attemptId,
-      summary: existing?.report.summary ?? report.summary,
+      summary: summary.length > 2000 ? `${summary.slice(0, 1999)}…` : summary,
       artifactIds: existing?.report.artifacts ?? report.artifacts,
       related: {}
     }
@@ -88,7 +88,7 @@ async function settleSubmission(input: z.infer<typeof AttemptSubmitParams>, ctx:
       routeWorkerMessage(
         { runtime, db, store, recordMutationReceipt: () => recordMutationReceipt?.(result) },
         {
-          ...message.data,
+          axiom: { ...message.data.axiom, related: { submissionId: result.submission.id } },
           sender
         }
       )
@@ -201,7 +201,6 @@ async function settleSubmission(input: z.infer<typeof AttemptSubmitParams>, ctx:
       actor: 'AttemptSettlement',
       reason: 'submission'
     })
-    const retained = db.retainWorkerTerminalResource(attemptId)
     const verification = store.insertVerificationRun({
       id: `vrun_${randomUUID()}`,
       missionId: mission.id,
@@ -236,12 +235,37 @@ async function settleSubmission(input: z.infer<typeof AttemptSubmitParams>, ctx:
         taskId: task.taskId,
         submissionId: submission.id,
         candidateId: candidate.id,
-        verificationRunId: verification.id,
-        retainDisposition: retained.disposition
+        verificationRunId: verification.id
       }
     })
     return { submission, candidate, duplicate: false }
   })
+  // The kernel owns the retention transaction. A crash or failure here leaves a settled
+  // Submission and a not_requested resource for RecoveryService (M2-08) to retain later.
+  let retainDisposition:
+    | ReturnType<OrchestrationDb['retainWorkerTerminalResource']>['disposition']
+    | undefined
+  try {
+    retainDisposition = db.retainWorkerTerminalResource(attemptId).disposition
+  } catch {
+    // Persist the failure below without exposing raw kernel errors or undoing settlement.
+  }
+  store.transaction('attempt_retain', () =>
+    store.appendAuditEvent({
+      missionId: mission.id,
+      actor: 'AttemptSettlement',
+      objectKind: 'attempt',
+      objectId: attemptId,
+      event: retainDisposition ? 'attempt.terminal_retained' : 'attempt.terminal_retain_failed',
+      before: null,
+      after: {
+        taskId: task.taskId,
+        submissionId: result.submission.id,
+        candidateId: result.candidate.id,
+        ...(retainDisposition ? { retainDisposition } : {})
+      }
+    })
+  )
   // Never send worker_done through orchestration.send: the dispatch is already settled here.
   return publish(result)
 }

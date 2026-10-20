@@ -73,7 +73,6 @@ describe('Attempt submission settlement', () => {
       expect.objectContaining({
         event: 'attempt.submitted',
         after: expect.objectContaining({
-          retainDisposition: 'no_owned_resource',
           submissionId: submission.id
         })
       })
@@ -145,14 +144,35 @@ describe('Attempt submission settlement', () => {
     expect(f.store.listSubmissions(f.mission.id)).toEqual([])
     expect(f.notify).not.toHaveBeenCalled()
   })
-  it('rolls back settlement when retention fails, including its capability revocation', async () => {
+  it('audits retention failure without rolling back settlement or preventing SUBMISSION mail', async () => {
     f.retain.mockImplementationOnce(() => {
       throw new Error('retain failed')
     })
-    const before = f.snapshot()
-    expect(await f.submit()).toMatchObject({ ok: false })
-    expect(f.snapshot()).toEqual(before)
-    expect(f.notify).not.toHaveBeenCalled()
+    const { submission, candidate } = await accepted()
+    expect(f.store.listSubmissions(f.mission.id)).toEqual([submission])
+    expect(f.store.listCandidates(f.mission.id)).toEqual([candidate])
+    expect(f.store.getTaskStage(f.t01.taskId)?.stage).toBe('SUBMITTED')
+    expect(f.store.listVerificationRuns({ missionId: f.mission.id })).toEqual([
+      expect.objectContaining({ candidateId: candidate.id, status: 'QUEUED' })
+    ])
+    expect(f.db.getDispatchContextById(f.t01.attemptId)?.status).toBe('completed')
+    expect(f.db.getDispatchContextById(f.t01.attemptId)?.capability_revoked_at).toBeTruthy()
+    expect(f.db.getWorkerTerminalResourceByOwner(f.t01.attemptId)?.release_state).toBe(
+      'not_requested'
+    )
+    const events = f.store.listAuditEvents({ missionId: f.mission.id })
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        event: 'attempt.terminal_retain_failed',
+        objectKind: 'attempt',
+        objectId: f.t01.attemptId
+      })
+    )
+    expect(events.some((event) => event.event === 'attempt.terminal_retained')).toBe(false)
+    expect(f.store.listMessages({ missionId: f.mission.id })).toHaveLength(1)
+    expect(f.notify).toHaveBeenCalledWith(`run:${f.mission.runId}`, 'worker_done')
+    expect(await accepted()).toEqual({ submission, candidate, duplicate: true })
+    expect(f.retain).toHaveBeenCalledTimes(1)
   })
   it('guards RUNNING → SUBMITTED against every actor except AttemptSettlement', () => {
     const before = f.snapshot()
