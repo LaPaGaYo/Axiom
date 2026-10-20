@@ -75,3 +75,9 @@
 | `9f4311598f` | `src/main/agent-trust-presets.ts`、`.test.ts` | 删除 Git 布局推断，只信任 `canonicalize(workspacePath)`；保留旧主 checkout 条目及双 home 写入。实二进制 contract test 不移植；`5b3366f78e` (a) launch-env HOME 继续推迟。 |
 
 `orca-mapping.md` 不变：本批没有改变 Control Plane / Execution Kernel seam、RPC、持久化 schema 或权威归属。
+
+## 2026-10-20 · UPSTREAM-2 已合入（merge `5e1df6f29d`，候选 `c2acb4b145`，记录 `.axiom-work/verifications/UPSTREAM-2-2.md`）+ UPSTREAM-2b 宿主步骤
+
+- 语义移植四项（上表"已应用（UPSTREAM-2）"）经两次 attempt（21 + 6 min）合入；attempt 2 只补了 `config/tsconfig.cli.json` 的三条登记（CLI 项目用显式文件列表，上游同一提交也加了这三条）。合入后 verify-main 只剩已知环境项；宿主 e2e（submit / launch）通过。
+- **UPSTREAM-2b（验证者宿主执行，`launchers/electron-bump.command`，`044491d60d`）**：Electron 43.7.0 → 43.7.8（`pnpm add -D electron@43.7.8`，13 s；native runtime 检查通过；floor 测试常量 43.7.8；去掉 `pnpm-workspace.yaml` 里对 `electron@43.7.0` 的 minimumReleaseAge 豁免）。上游随同的 `browser-find-frame-traversal` Electron 测试与 `src/shared/node-runtime-pin.ts` 在本树不存在，不移植。新 Electron 下宿主 e2e（submit / launch）各 27 s 通过。
+- 同步点不变（`ce2d60834c` 初筛点）。未摘取项的触发点：Claude 预信任 → `claude` 组合 D57 认证前；OpenCode 两条 → OpenCode 认证前；agent-launch 系列 → M2-09 真 Codex smoke 后评估 preamble 投递；`5b3366f78e` (a) 与跨实例锁 → 下一次 trust 批次。
