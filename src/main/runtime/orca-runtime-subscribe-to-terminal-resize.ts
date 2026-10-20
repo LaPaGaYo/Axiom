@@ -24,6 +24,7 @@ import {
 } from './orchestration/worker-terminal-process-liveness'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { buildOrchestrationTaskDisplayMetadata } from '../../shared/orchestration-task-display'
+import { isShellProcess } from '../../shared/shell-process-detection'
 
 export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApplyMobileDisplayMode {
   subscribeToTerminalResize(
@@ -191,14 +192,21 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
         this.getLivePtyForHandle(handle)?.pty.ptyId ??
         this.resolveLiveLeafForHandle(handle)?.ptyId ??
         null
-      if (!ptyId || !this.ptyController?.confirmShellForeground) {
+      if (!ptyId || !this.ptyController) {
         return false
       }
-      const confirmed = await withTimeoutResult(
-        this.ptyController.confirmShellForeground(ptyId),
+      const foreground = await withTimeoutResult<string | null>(
+        this.ptyController.confirmForegroundProcess
+          ? this.ptyController.confirmForegroundProcess(ptyId)
+          : this.ptyController.getForegroundProcess(ptyId),
         PTY_CONTROLLER_LIST_TIMEOUT_MS
       )
-      return confirmed.ok && confirmed.value === true
+      if (!foreground.ok || typeof foreground.value !== 'string') {
+        return false
+      }
+      // Login shells may prefix their name with '-'; blank names are not exit evidence.
+      const name: string = foreground.value.trim().replace(/^-/, '')
+      return name.length > 0 && isShellProcess(name)
     } catch {
       return false
     }
