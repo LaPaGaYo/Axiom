@@ -25,3 +25,7 @@
 
 ## Verdict
 PASS — merged `--no-ff` into `main` as `5e1df6f29d`; verify-main and host e2e recorded below.
+
+## Merged-tree check (verify-main, union M1-01 … M2-08 + UPSTREAM-2) and host e2e
+- `verify-merged-891f75509b-20261020-023828.log` (main `891f75509b`): unit tests 2,504 files passed / 4 failed / 9 skipped — the four failures are all on the known-environmental list (`skill-recipe-shell`, `pty-runtime-hidden-at-spawn-mark`, `orchestration-cli-subprocess`, plus the timing-sensitive `mobile-web-app-session-terminal-init.test.mjs`); `tc:node` / `tc:cli` / `tc:web` PASS; changed-code quality PASS; all 357 sidecar extras PASS; full lint PASS (83 s) → **merged tree accepted**.
+- Host e2e on the merged main (`chain-20261020-024646.log`): `mission-attempt-submit.spec.ts` 1 passed (27.8 s), `mission-attempt-launch.spec.ts` 1 passed (26.6 s) — the test-provider launches (which go through the Codex trust preset for the Attempt worktree) are unaffected by the worktree-keyed trust entry.
