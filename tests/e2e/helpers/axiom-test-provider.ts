@@ -2,7 +2,7 @@ import { FAKE_AGENT_PASTE_END_SCANNER_SOURCE } from './fake-agent-paste-end-scan
 
 /** D49: capture the preamble; the submit spec supplies a compiled CLI to run the frozen stub. */
 export const AXIOM_TEST_PROVIDER_SOURCE = `
-const { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs')
+const { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs')
 const { createHash } = require('node:crypto')
 const { spawn, spawnSync } = require('node:child_process')
 const path = require('node:path')
@@ -26,6 +26,15 @@ async function submitFixture(attemptId, capability, missionId, taskId) {
   while (!cli(['attempt', 'show', '--attempt', attemptId]).response.ok) {
     if (Date.now() >= deadline) throw new Error('Attempt binding timeout')
     await new Promise(resolve => setTimeout(resolve, 100))
+  }
+  const crashMarker = process.env.AXIOM_E2E_LEDGER + '.crash-' + taskId
+  if (existsSync(crashMarker)) {
+    rmSync(crashMarker)
+    appendFileSync(process.env.AXIOM_E2E_LEDGER, JSON.stringify({ kind: 'crash', attemptId, taskId }) + '\\n')
+    const crashed = spawnSync(process.execPath, ['scenarios/stub-worker/worker.mjs', '--scenario', 'agent-crash', '--mode', 'crash', '--cwd', process.cwd()], {
+      cwd: process.cwd(), env: process.env, encoding: 'utf8', timeout: 60000
+    })
+    process.exit(crashed.status || 1)
   }
   const command = ['scenarios/stub-worker/worker.mjs', '--scenario', 'retry', '--attempt', '1', '--mode', 'succeed', '--cwd', process.cwd()]
   const started = Date.now()

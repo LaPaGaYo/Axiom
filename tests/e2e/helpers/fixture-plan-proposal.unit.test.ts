@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { decomposition } from '../../../src/shared/axiom-contract/contract-fixtures.test-support'
 import {
   PlanProposalSchema,
@@ -10,6 +10,100 @@ import { createRequire } from 'node:module'
 import { AXIOM_TEST_PROVIDER_SOURCE } from './axiom-test-provider'
 
 const at = '2026-10-17T12:00:00Z'
+
+it('consumes a Task crash marker before the stub, exits without submitting, then retries normally', async () => {
+  const files = new Set(['/ledger.crash-task-1'])
+  const events: string[] = []
+  const spawnSync = vi.fn((_command: string, args: string[]) => {
+    if (args.includes('--mode')) {
+      expect(files.has('/ledger.crash-task-1')).toBe(false)
+      return { status: args.includes('crash') ? 137 : 0 }
+    }
+    if (args[0] === 'diff') {
+      return { status: 0, stdout: 'src/retry.ts\n' }
+    }
+    return {
+      status: 0,
+      stdout: JSON.stringify({ ok: true, result: { artifact: { id: 'art_report' } } })
+    }
+  })
+  const exit = vi.fn((code: number) => {
+    throw new Error(`provider exit ${code}`)
+  })
+  const nativeRequire = createRequire(import.meta.url)
+  const context = {
+    require: (name: string) => {
+      if (name === 'node:fs') {
+        return {
+          existsSync: (file: string) => files.has(file),
+          rmSync: (file: string) => files.delete(file),
+          appendFileSync: (_file: string, body: string) => events.push(body),
+          mkdtempSync: () => '/virtual-report',
+          writeFileSync() {}
+        }
+      }
+      if (name === 'node:child_process') {
+        return { spawnSync }
+      }
+      return nativeRequire(name)
+    },
+    process: {
+      argv: [],
+      env: { AXIOM_E2E_LEDGER: '/ledger', ORCA_E2E_CLI_ENTRY: '/cli' },
+      execPath: '/node',
+      cwd: () => '/fixture',
+      exit,
+      stdout: { write() {} },
+      stdin: { setEncoding() {}, on() {}, resume() {} }
+    },
+    setInterval() {}
+  }
+  await expect(
+    runInNewContext(
+      `${AXIOM_TEST_PROVIDER_SOURCE}
+submitFixture('attempt-1', 'dcap_fixture', 'mission-1', 'task-1')`,
+      context
+    )
+  ).rejects.toThrow('provider exit 137')
+  expect(exit).toHaveBeenCalledWith(137)
+  expect(events).toEqual([
+    `${JSON.stringify({ kind: 'crash', attemptId: 'attempt-1', taskId: 'task-1' })}\n`
+  ])
+  expect(spawnSync.mock.calls.map((call) => call[1])).toEqual([
+    ['/cli', 'attempt', 'show', '--attempt', 'attempt-1', '--json'],
+    [
+      'scenarios/stub-worker/worker.mjs',
+      '--scenario',
+      'agent-crash',
+      '--mode',
+      'crash',
+      '--cwd',
+      '/fixture'
+    ]
+  ])
+  spawnSync.mockClear()
+  await runInNewContext(
+    `${AXIOM_TEST_PROVIDER_SOURCE}
+submitFixture('attempt-2', 'dcap_fixture', 'mission-1', 'task-1')`,
+    { ...context }
+  )
+  expect(spawnSync.mock.calls[1]![1]).toEqual([
+    'scenarios/stub-worker/worker.mjs',
+    '--scenario',
+    'retry',
+    '--attempt',
+    '1',
+    '--mode',
+    'succeed',
+    '--cwd',
+    '/fixture'
+  ])
+  expect(
+    spawnSync.mock.calls.some((call) => call[1][1] === 'attempt' && call[1][2] === 'submit')
+  ).toBe(true)
+  expect(exit).toHaveBeenCalledTimes(1)
+})
+
 function fixtureInput() {
   return {
     goalId: 'goal-sprints-v1',
