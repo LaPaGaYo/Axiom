@@ -567,3 +567,21 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **后果**：D57 的 `codex` 组合继续 `provisional`；`certified-providers.ts` 不动。接受后新增 M2 内或 M3 前的 Task（通道实现 + 权限映射 + e2e），UPSTREAM-2 的 Codex 预信任移植保留但不再作为依赖。
 
 **取代规则**：由接受本条的修订行指定通道与映射；D57 认证证据的形式随之更新。
+
+## D59 · TUI 通道 Attempt 的 agent 退出证据：由执行宿主的进程表证明"spawned shell 独占 PTY 前台"，Recovery 据此折叠为 `exited` — ACCEPTED（验证者 2026-10-20，M2-11 出口 e2e 的发现；在已批准架构内的 MINOR_ADJUSTMENT，Henry 可否决）
+
+**背景**：M2-11 的出口 e2e（`tests/e2e/mission-exit-m2.spec.ts`，`axiom/attempt/M2-11/1` + 验证者诊断分支 `axiom/verify-diag/M2-11`，日志 `.axiom-work/logs/chain-20261020-075835.log`）让 D49 provider 的一个 Worker 在 `ACK` 后以 137 退出。120 s 后 Task 仍 `RUNNING`、Attempt `liveness = live`、内核 worker `ready`：Orca 的 PTY 在交互式 shell 里启动 agent，agent 退出后 shell 回到提示符、PTY 仍 `connected`；内核只在 **PTY** 退出时 fail dispatch（`failActiveDispatchOnExit`），`inspectWorkerTerminal` 把 connected PTY 折叠为 `live`。在 Orca 里这由 coordinator LLM 读终端判断；Axiom 没有 coordinator LLM，Task 会一直 RUNNING 到 `maxRuntimeMinutes`（默认 45 分钟）才按运行时预算停止——crash → retry 这半个出口准则 4 实际并未成立。同一轮还发现：内核先 fail dispatch 时（`failActiveDispatchOnExit` 先于 reconcile），Recovery 规则 b 结算 Task 但不写 `attempt.failed`；启动时 `recover()` 只在 readiness 实际移动 Task 时触发调度，已经 READY 的 Task 可能等不到一轮。
+
+**决定**：
+1. **agent 退出证据（规则 c′）**：Recovery 每个 tick 对 `live`、exact、PTY 通道（`terminal !== null`）、内核 `ready` 的 Attempt 多做一次**执行宿主**询问——新增 `OrcaRuntimeService.confirmTerminalShellForeground(handle)`（进程内、非 RPC，直通 daemon 既有的 `confirmShellForeground`：进程表证明 spawned shell 在 PTY 前台、无 stopped 子进程；Windows 为 shell 独占 job）。答 `true` 即折叠为 `exited`，走既有规则 c：`failDispatch(workerProcessExited, process_exited)`、`attempt.failed{reason: process_exited, evidence: shell_foreground}`、NEEDS_FIX → READY/BLOCKED；Planner 同样（`planner.attempt_failed{no_proposal, evidence}`）。`starting / start_unknown / stopping / stop_unknown`、structured 会话、SSH 适配器（答 `false`）一律不适用；不缓存、不计数、不用 title / hook / agent-status 推断。
+2. **规则 b 的审计**：内核先 fail 的 dispatch，在结算同事务写 `attempt.failed{reason: kernel_failed, lastError}`，幂等。
+3. **启动调度**：`startAxiomControlPlane` 在 recover 后对每个 `EXECUTING` 且 Run 绑定完好的 Mission 触发一轮 `resume` 调度（合并、无 READY 时不留审计）。
+4. 验证词汇 `live / unverifiable / exited`、`inspectWorkerTerminal`、`foldAttemptLiveness`、`axiom.attempt.show/list`、fleet 投影都不变：`attempt show` 在 agent 退出后最多一个 reconcile 间隔内仍可报 `live`，Recovery 是把它变成 `FAILED` 的唯一权威。
+
+**备选**：(a) 让 Axiom 的 Worker shell 在 agent 退出后自行退出（`exec` 或 `; exit`）——改内核 PTY 启动投递，跨平台（Windows shell、WSL、SSH）风险高，且 Worker 终端的退出痕迹随之消失；(b) 订阅 shell integration 的 `command-finished` 事实——即时但依赖 shell integration 存在且重启后不可重建；(c) 用 Orca 的 `agent-exited` / title / foreground-agent 推断——对 fixture provider 不成立（title 不变、进程名非 agent），且章程明言不以 agent activity 推断死亡。(b) 可作为 c′ 的"立即触发"补充，记入 DEFERRED 复审。
+
+**理由**：执行宿主拥有执行真相（不变量 9）；进程表前台证明是宿主事实而非模型 / 标题推断；改动局限在 Control Plane 的恢复边界 + 一个附加访问器，不碰 RPC、schema、内核表与生命周期枚举，上游同步面最小。
+
+**后果**：M2-12（本条实现 + 单元测试 + 文档）；M2-11 attempt 2 在其上重跑出口 e2e；检测延迟 = reconcile 间隔（60 s），记为已知限制；`control-plane.md` §4 规则表加 c′、规则 b 审计、§8 审计词汇与启动段落；`orca-mapping.md` 加访问器行。
+
+**取代规则**：若 D58 选 A（`codex exec` 非交互通道），进程退出即 PTY/子进程退出，规则 c′ 对该通道自然不触发但保留；"立即触发"若实现，以本条修订行记录。
