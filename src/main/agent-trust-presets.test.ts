@@ -51,11 +51,14 @@ const { runExclusivelyForCodexTrustConfig } =
 beforeEach(() => {
   testState.fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-trust-presets-'))
   testState.userDataDir = mkdtempSync(join(tmpdir(), 'orca-trust-presets-user-data-'))
+  vi.stubEnv('HOME', testState.fakeHomeDir)
+  vi.stubEnv('USERPROFILE', testState.fakeHomeDir)
   testState.previousUserDataPath = process.env.ORCA_USER_DATA_PATH
   process.env.ORCA_USER_DATA_PATH = testState.userDataDir
 })
 
 afterEach(() => {
+  vi.unstubAllEnvs()
   rmSync(testState.fakeHomeDir, { recursive: true, force: true })
   rmSync(testState.userDataDir, { recursive: true, force: true })
   if (testState.previousUserDataPath === undefined) {
@@ -132,7 +135,7 @@ describe('markCopilotFolderTrusted', () => {
       writeFileSync(configPath, JSON.stringify({ copilotTokens: { a: 'secret' } }), {
         mode: 0o600
       })
-      markCopilotFolderTrusted(workspace, testState.fakeHomeDir)
+      markCopilotFolderTrusted(workspace)
       expect(statSync(configPath).mode & 0o777).toBe(0o600)
       expect(JSON.parse(readFileSync(configPath, 'utf-8')).copilotTokens).toEqual({ a: 'secret' })
     } finally {
@@ -148,7 +151,7 @@ describe('markCopilotFolderTrusted', () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-copilot-ws-'))
     const originalUmask = process.umask(0o022)
     try {
-      markCopilotFolderTrusted(workspace, testState.fakeHomeDir)
+      markCopilotFolderTrusted(workspace)
       const configPath = join(testState.fakeHomeDir, '.copilot', 'config.json')
       expect(statSync(configPath).mode & 0o777).toBe(0o600)
     } finally {

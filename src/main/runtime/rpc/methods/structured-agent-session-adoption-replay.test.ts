@@ -93,6 +93,10 @@ async function call(dispatcher: RpcDispatcher, params: unknown, client = CLIENT)
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-adoption-rpc-replay-'))
+  // Why: the adopting create pre-trusts its folder in ~/.codex and Orca's managed Codex home.
+  vi.stubEnv('HOME', join(root, 'home'))
+  vi.stubEnv('USERPROFILE', join(root, 'home'))
+  vi.stubEnv('ORCA_USER_DATA_PATH', join(root, 'user-data'))
 })
 
 afterEach(async () => {
@@ -101,6 +105,7 @@ afterEach(async () => {
   await host?.close(SESSION)
   await rm(root, { recursive: true, force: true })
   vi.restoreAllMocks()
+  vi.unstubAllEnvs()
 })
 
 describe('committed adopting create RPC replay', () => {

@@ -39,6 +39,8 @@ let runtimeHomeDir: string
 beforeEach(() => {
   testState.fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-concurrent-home-'))
   testState.userDataDir = mkdtempSync(join(tmpdir(), 'orca-concurrent-userdata-'))
+  vi.stubEnv('HOME', testState.fakeHomeDir)
+  vi.stubEnv('USERPROFILE', testState.fakeHomeDir)
   testState.previousUserDataPath = process.env.ORCA_USER_DATA_PATH
   process.env.ORCA_USER_DATA_PATH = testState.userDataDir
   runtimeHomeDir = join(testState.userDataDir, 'codex-runtime-home', 'home')
@@ -50,6 +52,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.unstubAllEnvs()
   _internals.setGrantSessionRunner(null)
   setCodexTrustGrantTelemetry(() => {})
   codexAppServerCapabilityCache.clear()
