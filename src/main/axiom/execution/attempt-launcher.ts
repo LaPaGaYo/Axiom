@@ -26,7 +26,7 @@ type LauncherRuntime = Pick<OrcaRuntimeService, 'createManagedWorktree' | 'getCl
 export type AttemptWorkerStartArgs = Omit<Parameters<typeof startLocalWorker>[0], 'runtime'> & {
   runtime: LauncherRuntime
 }
-type Dependencies = {
+export type AttemptLauncherDependencies = {
   db: OrchestrationDb
   store: AxiomStore
   missions: MissionController
@@ -42,7 +42,10 @@ const Receipt = z.object({
   state: z.enum(['ready', 'failed', 'outcome_unknown'])
 })
 
-export function createAttemptLauncher(deps: Dependencies): AttemptLaunch {
+export function createAttemptLauncher(
+  deps: AttemptLauncherDependencies,
+  planner?: { goalRevisionId: string; baseBranch: string; runSeq: number }
+): AttemptLaunch {
   const { db, store, missions, artifacts } = deps
   const audit = (
     attempt: AdmittedAttempt,
@@ -52,33 +55,44 @@ export function createAttemptLauncher(deps: Dependencies): AttemptLaunch {
   ) => {
     store.appendAuditEvent({
       missionId: attempt.missionId,
-      actor: 'Scheduler',
-      event,
+      actor: planner ? 'MissionController' : 'Scheduler',
+      event: planner ? event.replace('attempt.', 'planner.') : event,
       objectKind: 'attempt',
       objectId: dispatchId ?? `${attempt.taskId}/${attempt.seq}`,
       before: null,
-      after,
+      after: planner
+        ? {
+            missionId: attempt.missionId,
+            goalRevisionId: planner.goalRevisionId,
+            seq: planner.runSeq,
+            branch: attempt.branch,
+            provider: store.getAgentSpec(attempt.agentSpecId)?.spec.provider ?? null,
+            ...(typeof after === 'object' && after !== null && !Array.isArray(after) ? after : {})
+          }
+        : after,
       createdAt: deps.now?.() ?? new Date().toISOString()
     })
   }
   const fail = (attempt: AdmittedAttempt) =>
-    settleAttemptWithoutSubmission(
-      { store, missions },
-      {
-        taskId: attempt.taskId,
-        seq: attempt.seq,
-        dispatchId: store.getAttemptBinding(attempt.taskId, attempt.seq)?.dispatchId ?? null,
-        reason: 'launch_failed',
-        actor: 'Scheduler'
-      }
-    )
+    planner
+      ? undefined
+      : settleAttemptWithoutSubmission(
+          { store, missions },
+          {
+            taskId: attempt.taskId,
+            seq: attempt.seq,
+            dispatchId: store.getAttemptBinding(attempt.taskId, attempt.seq)?.dispatchId ?? null,
+            reason: 'launch_failed',
+            actor: 'Scheduler'
+          }
+        )
   return async (attempt) => {
     try {
       const binding = store.getAttemptBinding(attempt.taskId, attempt.seq)
       if (
         !binding ||
         binding.dispatchId !== null ||
-        store.getTaskStage(attempt.taskId)?.stage !== 'RUNNING'
+        (!planner && store.getTaskStage(attempt.taskId)?.stage !== 'RUNNING')
       ) {
         return
       }
@@ -92,20 +106,25 @@ export function createAttemptLauncher(deps: Dependencies): AttemptLaunch {
         !existingTask ||
         existingTask.run_id !== run.id ||
         !spec ||
-        !context ||
-        spec.role !== 'worker' ||
-        spec.taskId !== attempt.taskId ||
         spec.missionId !== attempt.missionId ||
-        spec.contextPackageId !== context.id ||
-        context.taskId !== attempt.taskId ||
-        context.missionId !== attempt.missionId
+        (planner
+          ? spec.role !== 'planner' ||
+            spec.goalRevisionId !== planner.goalRevisionId ||
+            mission.status !== 'ANALYZING' ||
+            mission.activeGoalRevisionId !== planner.goalRevisionId
+          : !context ||
+            spec.role !== 'worker' ||
+            spec.taskId !== attempt.taskId ||
+            spec.contextPackageId !== context.id ||
+            context.taskId !== attempt.taskId ||
+            context.missionId !== attempt.missionId)
       ) {
         throw new OrchestrationError(
           'invalid_argument',
           'Invalid admitted Attempt contracts or Run binding.'
         )
       }
-      const renderId = context.mandatoryRefs[1]
+      const renderId = planner ? attempt.contextPackageId : context?.mandatoryRefs[1]
       if (!renderId) {
         throw new OrchestrationError('invalid_argument', 'Missing ContextPackage render.')
       }
@@ -117,8 +136,10 @@ export function createAttemptLauncher(deps: Dependencies): AttemptLaunch {
       }
       const created = await deps.runtime.createManagedWorktree({
         repoSelector: `id:${mission.repoId}`,
-        name: `attempt-${attempt.taskId}-${attempt.seq}`,
-        baseBranch: `axiom/integration/${attempt.missionId}`,
+        name: planner
+          ? `planner-${attempt.missionId}-${planner.runSeq}`
+          : `attempt-${attempt.taskId}-${attempt.seq}`,
+        baseBranch: planner?.baseBranch ?? `axiom/integration/${attempt.missionId}`,
         branchNameOverride: attempt.branch,
         runHooks: false,
         setupDecision: 'run',
@@ -161,10 +182,29 @@ export function createAttemptLauncher(deps: Dependencies): AttemptLaunch {
           worktreeId,
           dispatchMaxDepth: 1,
           callerIdentity: caller,
-          preambleBuilder: (p) =>
-            render
+          preambleBuilder: (p) => {
+            // The provider can propose before startLocalWorker returns its readiness receipt.
+            // Bind before delivering its capability-bearing preamble.
+            if (planner) {
+              const current = missions.getMission(attempt.missionId)
+              if (
+                current.status !== 'ANALYZING' ||
+                current.activeGoalRevisionId !== planner.goalRevisionId
+              ) {
+                throw new OrchestrationError(
+                  'invalid_argument',
+                  'Planner launch is no longer current.'
+                )
+              }
+              if (!store.bindAttemptDispatch(attempt.taskId, attempt.seq, p.dispatchId) &&
+                  store.getAttemptBinding(attempt.taskId, attempt.seq)?.dispatchId !== p.dispatchId) {
+                throw new OrchestrationError('invalid_argument', 'Planner dispatch binding changed.')
+              }
+            }
+            return render
               .replaceAll('{{attemptId}}', p.dispatchId)
               .replaceAll('{{dispatchCapability}}', p.dispatchCapability ?? '')
+          }
         }
       }
       // Lazy import keeps the fake-kernel contract independent of Electron and host services.
@@ -177,7 +217,10 @@ export function createAttemptLauncher(deps: Dependencies): AttemptLaunch {
       if (receipt.taskId !== attempt.taskId) {
         throw new OrchestrationError('invalid_argument', 'Worker receipt Task mismatch.')
       }
-      if (!store.bindAttemptDispatch(attempt.taskId, attempt.seq, receipt.dispatchId)) {
+      if (
+        !store.bindAttemptDispatch(attempt.taskId, attempt.seq, receipt.dispatchId) &&
+        store.getAttemptBinding(attempt.taskId, attempt.seq)?.dispatchId !== receipt.dispatchId
+      ) {
         return
       }
       const event =

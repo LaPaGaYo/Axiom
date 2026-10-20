@@ -10,6 +10,27 @@ import { makeProposal } from './contract-fixtures.test-support'
 
 const { provenance, ...planRevision } = makeProposal()
 describe('axiom.plan params', () => {
+  it('accepts exactly one of user provenance or a planner Attempt', () => {
+    expect(
+      PlanProposeParams.safeParse({ missionId: 'm', planRevision, attemptId: 'd' }).success
+    ).toBe(true)
+    for (const identity of [{}, { attemptId: 'd', provenance }]) {
+      expect(
+        PlanProposeParams.safeParse({ missionId: 'm', planRevision, ...identity }).success
+      ).toBe(false)
+    }
+  })
+  it('preserves the optional Task role label', () => {
+    const parsed = PlanProposeParams.parse({
+      missionId: 'm',
+      provenance,
+      planRevision: {
+        ...planRevision,
+        tasks: planRevision.tasks.map((t) => ({ ...t, role: 'reviewer' }))
+      }
+    })
+    expect(parsed.planRevision.tasks[0]).toHaveProperty('role', 'reviewer')
+  })
   it.each([
     [
       'propose',

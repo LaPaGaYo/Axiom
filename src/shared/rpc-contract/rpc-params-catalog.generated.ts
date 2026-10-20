@@ -31,7 +31,7 @@ import {
   MissionCancelParams,
   MissionCreateParams,
   MissionListParams,
-  MissionShowParams
+  MissionPlanParams
 } from '../axiom-contract/mission-params'
 import {
   PlanApproveParams,
@@ -679,9 +679,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'axiom.mission.create': MissionCreateParams,
   'axiom.mission.list': MissionListParams,
   'axiom.mission.pause': MissionCancelParams,
+  'axiom.mission.plan': MissionPlanParams,
   'axiom.mission.resume': MissionCancelParams,
-  'axiom.mission.show': MissionShowParams,
-  'axiom.mission.start': MissionShowParams,
+  'axiom.mission.show': MissionPlanParams,
+  'axiom.mission.start': MissionPlanParams,
   'axiom.namespace.get': null,
   'axiom.plan.approve': PlanApproveParams,
   'axiom.plan.list': PlanListParams,

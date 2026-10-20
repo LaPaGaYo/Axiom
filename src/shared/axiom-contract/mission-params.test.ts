@@ -7,6 +7,8 @@ import {
   MissionPauseParams,
   MissionResumeParams,
   MissionShowParams,
+  MissionPlanParams,
+  MissionPlanResponseSchema,
   MissionSummarySchema
 } from './mission-params'
 import { goal, mission, policy } from './contract-fixtures.test-support'
@@ -20,6 +22,7 @@ describe('axiom.mission params', () => {
       { repo: '', targetBranch: 'main', goal, policy }
     ],
     ['show', MissionShowParams, { missionId: 'm' }, { missionId: '' }],
+    ['plan', MissionPlanParams, { missionId: 'm' }, { missionId: '' }],
     [
       'list',
       MissionListParams,
@@ -47,6 +50,13 @@ describe('axiom.mission params', () => {
     expect(MissionListParams.safeParse({}).success).toBe(true)
     expect(MissionSummarySchema.safeParse(mission).success).toBe(true)
     expect(MissionSummarySchema.safeParse({ ...mission, status: 'completed' }).success).toBe(false)
+  })
+  it('accepts both bound and pre-dispatch Planner launch receipts', () => {
+    for (const attemptId of ['dispatch-1', null]) {
+      expect(MissionPlanResponseSchema.safeParse({ attempt: {
+        attemptId, seq: 1, branch: 'axiom/planner/m/1', worktreeId: null, provider: 'codex'
+      } }).success).toBe(true)
+    }
   })
   it('accepts legacy cancel responses and additive Attempt reconciliation entries', () => {
     expect(MissionCancelResponseSchema.safeParse({ mission }).success).toBe(true)

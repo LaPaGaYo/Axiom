@@ -78,6 +78,15 @@ export function attemptBindingsStore(db: OrchestrationDb) {
             .get(AxiomIdSchema.parse(taskId))
         ).seq
     },
+    listPlannerBindings(missionId: string) {
+      return readRows(
+        AttemptBindingRowCodec,
+        db.db
+          .prepare(`SELECT ${columns} FROM attempt_bindings
+          WHERE mission_id = ? AND branch LIKE 'axiom/planner/%' ORDER BY created_at, task_id`)
+          .all(AxiomIdSchema.parse(missionId))
+      )
+    },
     hasPendingQuestionForTask(taskId: string): boolean {
       return (
         db.db

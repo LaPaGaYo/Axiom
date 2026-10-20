@@ -17,6 +17,16 @@ export const MissionCreateParams = RepoSelector.extend({
 })
 export const MissionShowParams = z.object({ missionId: AxiomIdSchema })
 export const MissionStartParams = MissionShowParams
+export const MissionPlanParams = MissionShowParams
+export const MissionPlanResponseSchema = z.object({
+  attempt: z.object({
+    attemptId: AxiomIdSchema.nullable(),
+    seq: z.number().int().positive(),
+    branch: z.string().min(1),
+    worktreeId: z.string().nullable(),
+    provider: z.string().min(1)
+  })
+})
 export const MissionListParams = z.object({
   repo: OptionalString,
   status: MissionStatusSchema.optional(),

@@ -9,7 +9,7 @@ import { hasLifecycleAuthority } from '../../runtime/orchestration/lifecycle-rec
 import { orchestrationCallerIdentity } from '../../runtime/rpc/methods/orchestration/runs/run-scope'
 import type { AxiomStore } from '../db/axiom-store'
 
-export function resolveAttemptSender(input: {
+type SenderInput = {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
   store: AxiomStore
@@ -18,7 +18,43 @@ export function resolveAttemptSender(input: {
   orchestrationCaller?: OrchestrationSessionCaller
   orchestrationCapability?: string
   allowSubmissionReplay?: boolean
-}) {
+}
+
+export function resolveAttemptSender(
+  input: SenderInput & { role: 'planner' }
+): ReturnType<typeof resolveAttemptIdentity>
+export function resolveAttemptSender(
+  input: SenderInput & { role?: 'worker' }
+): ReturnType<typeof resolveWorkerSender>
+export function resolveAttemptSender(input: SenderInput & { role?: 'planner' | 'worker' }) {
+  const identity = resolveAttemptIdentity(input)
+  if (input.role === 'planner') {
+    const spec = input.store.getAgentSpec(identity.binding.agentSpecId)?.spec
+    if (
+      !identity.binding.branch.startsWith(`axiom/planner/${identity.mission.id}/`) ||
+      spec?.role !== 'planner' ||
+      spec.missionId !== identity.mission.id ||
+      input.store.getTaskStage(identity.binding.taskId)
+    ) {
+      throw new OrchestrationError('task_dispatch_mismatch', 'Attempt is not a Planner binding.')
+    }
+    return identity
+  }
+  return resolveWorkerSender(input, identity)
+}
+
+function resolveWorkerSender(
+  input: SenderInput,
+  identity: ReturnType<typeof resolveAttemptIdentity>
+) {
+  const task = input.store.getTaskStage(identity.binding.taskId)
+  if (!task || task.missionId !== identity.mission.id) {
+    throw new OrchestrationError('task_dispatch_mismatch', 'Attempt has no Mission Task stage.')
+  }
+  return { ...identity, task }
+}
+
+function resolveAttemptIdentity(input: SenderInput) {
   const { runtime, db, store, from, attemptId, orchestrationCaller, orchestrationCapability } =
     input
   const dispatch = db.getDispatchContextById(attemptId)
@@ -67,14 +103,14 @@ export function resolveAttemptSender(input: {
     throw new OrchestrationError('sender_not_assignee', 'Sender is not the Attempt assignee.')
   }
   const mission = store.getMission(binding.missionId)
-  const task = store.getTaskStage(binding.taskId)
+  const task = db.getTask(binding.taskId)
   const run = db.getRun(dispatch.run_id)
   if (
     !mission ||
     !task ||
     !run ||
-    task.taskId !== dispatch.task_id ||
-    task.missionId !== mission.id ||
+    task.id !== dispatch.task_id ||
+    task.run_id !== mission.runId ||
     mission.runId !== run.id
   ) {
     throw new OrchestrationError(
@@ -82,7 +118,7 @@ export function resolveAttemptSender(input: {
       'Attempt, Task and Mission Run do not match.'
     )
   }
-  return { mission, task, binding, dispatch, run, sender }
+  return { mission, binding, dispatch, run, sender }
 }
 function verifySubmissionReplay(
   dispatch: NonNullable<ReturnType<OrchestrationDb['getDispatchContextById']>>,

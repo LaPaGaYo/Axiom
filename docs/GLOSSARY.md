@@ -60,7 +60,7 @@
 | **Integration Queue** | 按序等待集成的 `INTEGRATION_READY` 候选集合，由 IntegrationController 串行消费；持久化为 `integration_batches.status = QUEUED` 的批次 | `integration_batches` | 无 |
 | **Attempt** | Task 的一次执行；`attemptId ≡ Orca dispatchId`（A5） | Orca `dispatch_contexts` + `worker_dispatches` + liveness；Axiom 轻表 `attempt_bindings`（`dispatch_id`、`seq`、`branch`、`agent_spec_id`、`context_package_id`） | 直接复用 + 绑定表 |
 | **AgentSpec** | Attempt 的执行合同（非人格）：role、capabilities、provider/model/reasoning、permissions、budget、workspace 策略、contextPackageId、submission contract | `agent_specs`（内容寻址） | `WorkerStartParams` 的 `agent/model/effort` 等为投影 |
-| **ContextPackage** | 本次 Attempt 的最小充分上下文，内容寻址、可复现 | `context_packages` + Artifact 存储 | 无 |
+| **ContextPackage** | 本次 Attempt 的最小充分上下文，内容寻址、可复现；Planner 尚无 PlanRevision，M2-09 只存 manifest/render Artifacts，binding 的 contextPackageId 指向 render Artifact | Worker：`context_packages` + Artifact 存储；Planner：Artifact 存储 | 无 |
 | **Submission** | Worker 提交的不可变记录：attemptId、candidate、report、artifacts、checksRun、limitations、questions、followUps（B5） | `submissions` | 扩展 Orca `worker_done` 结算（D11） |
 | **Candidate** | 不可变候选身份：commit + tree hash，由 Control Plane 快照生成（D4） | `candidates` | `attempt_observation_facts` 的 `artifact_git` facet 可追加写入 |
 | **Artifact** | 可寻址输出：代码 diff、报告、契约、截图、日志 | `artifacts`（元数据）+ 内容寻址存储 | 无 |
@@ -164,6 +164,7 @@ APPLYING / TESTING → QUEUED（应用重启时由 RecoveryService 丢弃临时�
 
 | 词汇 | 值与含义 |
 |---|---|
+| `TaskSpec.role` | 可选的非空字符串标签（M2-09 / DEF-4）；提案、批准物化与 Task spec 保留它，不参与 provider 路由、角色权限或 skills 物化。省略时保持既有行为。 |
 | `ProviderFilterReason` | `not_installed \| not_certified \| disallowed \| tier_too_low`，按此顺序取首个命中原因（D57）。 |
 | `endpointProfile` | `subscription`（V1）：用户在 harness 中已有的登录或自行配置的凭据；进入 AgentSpec 的内容寻址，不包含凭据本身（D57）。 |
 

@@ -3,6 +3,13 @@ import { GLOBAL_FLAGS } from '../args'
 
 export const AXIOM_MISSION_COMMAND_SPECS: CommandSpec[] = [
   {
+    path: ['mission', 'plan'],
+    summary: 'Launch a read-only Planner for the Mission goal',
+    usage: 'axiom mission plan --mission <id> [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'mission', 'retry-request'],
+    examples: ['axiom mission plan --mission mission_123 --json']
+  },
+  {
     path: ['mission', 'policy', 'show'],
     summary: 'Show Mission policy',
     usage: 'axiom mission policy show --mission <id> [--json]',

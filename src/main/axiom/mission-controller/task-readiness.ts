@@ -38,12 +38,7 @@ export function canBecomeReady(
     return false
   }
   const maxAttempts = policy.budget.maxAttempts
-  if (
-    maxAttempts !== undefined &&
-    ctx.store
-      .listTaskStages({ missionId: mission.id })
-      .reduce((sum, row) => sum + row.attemptCount, 0) >= maxAttempts
-  ) {
+  if (maxAttempts !== undefined && missionAttemptCount(ctx.store, mission.id) >= maxAttempts) {
     return false
   }
   return ctx.store.listUpstreamEdges(task.taskId).every((edge) => {
@@ -189,3 +184,4 @@ export function listTasks(ctx: ControllerContext, input: { missionId: string; st
   requireMission(ctx, input.missionId)
   return ctx.store.listTaskStages(input).map((row) => projectTask(ctx, row))
 }
+import { missionAttemptCount } from '../scheduler/admission-budget'

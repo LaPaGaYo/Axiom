@@ -1,6 +1,7 @@
 import path from 'node:path'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { createAttemptLauncher } from './execution/attempt-launcher'
+import { createPlannerLauncher } from './execution/planner-launcher'
 import { Scheduler } from './scheduler/scheduler'
 import { detectInstalledAgentsWithShellPathHydration } from '../preflight/agent-detection'
 import { AgentFactory } from './agent-factory/agent-factory'
@@ -53,6 +54,15 @@ function createControlPlane(runtime: OrcaRuntimeService, db: OrchestrationDb) {
     launch: createAttemptLauncher({ runtime, db, store, missions, artifacts })
   })
   const recovery = new RecoveryService(db, store, missions, { runtime, artifacts })
+  const planner = createPlannerLauncher({
+    runtime,
+    db,
+    store,
+    missions,
+    artifacts,
+    contextBuilder,
+    agentFactory
+  })
   // Only process-local cancellation handles are retained; statuses, stages,
   // binding and generation are loaded from the database at each new start.
   const consumers = new Map<string, RunMailboxConsumer>()
@@ -67,6 +77,7 @@ function createControlPlane(runtime: OrcaRuntimeService, db: OrchestrationDb) {
     decisionEngine,
     missions,
     scheduler,
+    planner,
     recovery,
     consumers,
     ...lifecycle,
@@ -184,7 +195,7 @@ export function missionSummary(
 
 export function taskListItem(
   task: ReturnType<MissionController['listTasks']>[number]
-): TaskListItem {
+): TaskListItem & { spec: typeof task.spec } {
   return {
     id: task.taskId,
     missionId: task.missionId,
@@ -192,6 +203,7 @@ export function taskListItem(
     title: task.title,
     stage: task.stage,
     orcaStatus: task.orcaStatus,
+    spec: task.spec,
     ...(task.previousStage === null ? {} : { previousStage: task.previousStage })
   }
 }

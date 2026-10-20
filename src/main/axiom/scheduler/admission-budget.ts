@@ -9,13 +9,20 @@ export type BudgetExhaustion = {
 }
 const StatusSnapshot = z.object({ status: z.string() })
 
+export function missionAttemptCount(store: AxiomStore, missionId: string): number {
+  return (
+    store.listPlannerBindings(missionId).length +
+    store.listTaskStages({ missionId }).reduce((sum, task) => sum + task.attemptCount, 0)
+  )
+}
+
 export function budgetExhaustion(
   store: AxiomStore,
   missionId: string,
   policy: Policy,
   now: () => string
 ): BudgetExhaustion | undefined {
-  const attempts = store.listTaskStages({ missionId }).reduce((sum, t) => sum + t.attemptCount, 0)
+  const attempts = missionAttemptCount(store, missionId)
   if (policy.budget.maxAttempts !== undefined && attempts >= policy.budget.maxAttempts) {
     return { dimension: 'maxAttempts', limit: policy.budget.maxAttempts, used: attempts }
   }

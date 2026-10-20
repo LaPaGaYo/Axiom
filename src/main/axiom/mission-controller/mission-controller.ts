@@ -4,7 +4,6 @@ import type { TaskCreateParams } from '../../../shared/axiom-contract/task-param
 import type { SubtaskSource } from '../messaging/subtask-checks'
 import { randomUUID } from 'node:crypto'
 import type { z } from 'zod'
-import type { PlanProposeParams } from '../../../shared/axiom-contract/plan-params'
 import type { GoalBody, Provenance } from '../../../shared/axiom-contract/mission-objects'
 import type { TaskStage } from '../../../shared/axiom-contract/lifecycle'
 import type { OrchestrationDb } from '../../runtime/orchestration/db/orchestration-db'
@@ -102,7 +101,7 @@ export class MissionController {
       .listMissions(filter)
       .map((mission) => projectMission(this.ctx, mission.id))
   }
-  proposePlan(input: z.input<typeof PlanProposeParams>) {
+  proposePlan(input: Parameters<typeof proposePlan>[1]) {
     return this.write('propose_plan', () => proposePlan(this.ctx, input))
   }
   approvePlan(input: { planRevisionId: string; resolver: string; provenance: Provenance }) {

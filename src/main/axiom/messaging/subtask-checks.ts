@@ -82,7 +82,7 @@ export function checkSubtask(
   if (
     !policy ||
     (policy.budget.maxAttempts !== undefined &&
-      tasks.reduce((sum, row) => sum + row.attemptCount, 0) >= policy.budget.maxAttempts)
+      missionAttemptCount(store, missionId) >= policy.budget.maxAttempts)
   ) {
     failed.push('budget')
   }
@@ -102,3 +102,4 @@ export function checkSubtask(
   }
   return failed.length ? { ok: false, failed } : { ok: true }
 }
+import { missionAttemptCount } from '../scheduler/admission-budget'

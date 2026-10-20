@@ -165,6 +165,34 @@ Mission 总 Attempts/wall-clock 耗尽通过既有 `blockMission(missionId, budg
 
 M2-06b：pending question_threads 通过 attempt_bindings 关联 Task；`blockingQuestionOrApproval` 使该 Task 无法 admission 新 Attempt。回答后 pending 消失并重算 readiness；当前 Attempt 仍 RUNNING，问题不改变其执行状态。超时或取消等待不自动关闭问题；结算由内核 closeQuestionsForDispatch 关闭。
 
+### Planner（M2-09）
+
+`axiom.mission.plan` / `axiom mission plan --mission <id> [--json]` 在 ANALYZING 启动一个 Planner。前置检查：Mission 存在、ACTIVE Goal 已绑定、没有 PROPOSED Plan、没有 dispatched 或 starting/ready/start_unknown/stopping/stop_unknown 的 Planner、Mission 总 Attempt 预算未耗尽、D57 有合格的 planner combo。失败不推进 Mission；无候选返回 `invalid_argument` / `no_eligible_provider`，service error data 带 filtered。并发启动在构建前与 admission 事务内都检查；尚未结束的 NULL dispatch binding 同样阻止重复启动。
+
+`execution/planner-launcher.ts` 负责前置检查与 admission，实际 worktree + `startLocalWorker` 顺序复用 `createAttemptLauncher`，没有第二份启动序列、内核 manager 或 provider。AgentFactory 使用 `role: planner`、planning capability、`permissions.write=[]`、planner-worktree 与现有 model/effort 规则。基线 ref `axiom/integration/<missionId>` 存在则沿用，否则从 Mission targetBranch 创建；本入口不创建或推进集成基线。worktree 名为 `planner-<missionId>-<n>`，branch 为 `axiom/planner/<missionId>/<n>`。
+
+每次规划创建一个 Orca pseudo-task：`spec={kind:'planner',missionId,goalRevisionId,seq:n}`、title=Planner、deps=[]、runId=Mission Run。它只有内核执行历史，**没有 task_stages 行**，不进入 DAG/readiness，也不出现在 `axiom task list`。每个 pseudo-task 只有一次 Attempt，binding.seq=1；branch 中的 n 为 Mission planner binding 数量 + 1。`listPlannerBindings(missionId)` 以 branch 前缀查询，运行时角色由绑定的 AgentSpec.role 确认，无新列。Planner 不占 Task 并发，但计入 Mission budget.maxAttempts；Worker readiness、admission 和子任务预算使用相同计数。
+
+ContextBuilder 的 planner 形式为 `{missionId,role:'planner',goalRevisionId}`（launcher 另传本次基线 repositoryRef）。渲染顺序固定为：
+
+1. Active GoalRevision id、objective、constraints、acceptanceCriteria。
+2. 仓库规则，沿用 Worker 的 `readRepositoryRules`，读取本次基线的根 AGENTS.md / CLAUDE.md，分别脱敏并限制为 16 KiB，缺失省略。
+3. `z.toJSONSchema(PlanProposalSchema.omit({provenance:true}))` 生成的 JSON Schema，以及唯一 Task id、合法边端点、默认 INTEGRATED、无环、至少一个 root、合法 milestoneId、kind/risk/maxAttempts 与可选 role 标签规则。
+4. 两个 Task、一条边的最小示例。
+5. `axiom plan propose --mission <id> --attempt {{attemptId}} --dispatch-capability {{dispatchCapability}} --file <proposal.json> --json` 配方，要求 worktree 保持 clean，并明确将 proposal JSON 写到 worktree 外。
+
+Planner 无 PlanRevision，因此只持久化 `context_package_manifest` 与 `context_package_render` 两个内容寻址 Artifacts，**不插入 context_packages**（其 plan_revision_id 为 NOT NULL）。binding.contextPackageId 为 render Artifact 的 `art_…` id；launcher 用 `artifacts.read` 取模板。capability 只在 preambleBuilder 交付时替换，不写回 Artifact。Planner dispatch 在该回调交付 preamble 前绑定，以支持快速 provider 在 readiness receipt 返回前提交。
+
+`axiom.plan.propose` 的 planner 形式通过同一 `resolveAttemptSender` capability / assignee / generation 链鉴权，但显式要求 planner AgentSpec、同 Mission/Goal/Run 的 pseudo-task 与 planner branch；Worker 通道仍要求真实 Task stage。提交前对记录的 worker.worktree_id 执行 `git status --porcelain`，非空返回 `invalid_argument: planner_worktree_dirty` 并写 planner.rejected，Plan/Mission 不变。Git IO 后再次鉴权。干净提案经原 `missions.proposePlan` 完成 ANALYZING → PLAN_REVIEW；provenance 由服务写为 `{kind:'planner',actor:provider,model?:explicitModel,at}`（遵循 M2-09 brief 与现行 ProvenanceSchema；D48 旧文的 model kind 不作为新增枚举）。
+
+Plan 与 planner.proposed 的 Attempt 归属、mutation receipt 在同一外层事务提交，防止结算与停止之间崩溃丢失归属。提交后调用现有 `stopLocalWorker` / `releaseLocalWorker`，记录 stop state 与 releaseDisposition；stop_unknown 或资源维护失败交恢复处理，不回滚提案。只读权限是合同约束；CLI Agent 没有运行时 filesystem write-scope 强制，G2 在 propose 时拒绝脏工作树，不自动清理文件或提交。
+
+Recovery 扫描所有 planner bindings：未提案的 terminal worker 或确定 exited → planner.attempt_failed（去重），active exited 先 failDispatch，再请求 release；unverifiable / stop_unknown 沿用持久 liveness facet 时钟，容忍期后 abandon + planner.abandoned 与证据，再请求 release；live 超过 Mission policy.budget.maxRuntimeMinutes 时停止；已提案但未停止的 live Planner 补 stop/release。无 dispatch 的 orphan 经两倍 readiness window 留失败审计。以上不改变 Mission status；Mission cancel 沿用原 rule h，涵盖没有 stage 的 Planner。
+
+审计事件：`planner.started / planner.launch_failed / planner.start_unknown`（missionId、goalRevisionId、seq、branch、worktreeId、provider）；`planner.proposed`（attemptId、planRevisionId、taskCount、edgeCount、rootCount）；`planner.rejected`（reason、files）；`planner.stopped`（state、releaseDisposition）；`planner.attempt_failed / planner.abandoned`（reason、放弃证据）。绑定后的 objectKind=attempt、objectId=dispatchId，绑定前失败以 pseudo-task id/seq 标识。
+
+`TaskSpec.role?: string` 仅为 DEF-4 的非空标签，提案/批准/Task spec 原样保留；Task JSON 投影附带 spec。没有 skills 物化、CodeGraph（DEF-5）或 DEF-10 ①②③。
+
 ### Recovery（M2-08）
 
 `RecoveryService.recover()` 保留同步 Mission report；独立的 `async reconcileAttempts({missionId?})` 处理 Attempt。每次重新读取 binding、Task stage、worker/dispatch 与执行宿主观测；仅保存进行中的 Promise，重叠调用等待前一轮后重读持久状态。扫描非终态 Task 的 bindings，加上仍活跃的 kernel worker 对应 binding；CANCELED Task 的已结算资源也重查，补齐 kernel commit 与 release/audit 之间的崩溃窗口。旧 seq 不得结算最新 RUNNING admission。
@@ -203,6 +231,8 @@ Liveness 与 `axiom.attempt.show/list` 共用 `foldAttemptLiveness`：live/exite
 M1-01 契约证据见 `kernel-contract/*.test.ts` 与 [D14 spike](../review-evidence/axiom-m1/D14-session-party-spike.md)。M2-01 已在 `src/main/runtime/rpc/methods/orchestration/worker/local-worker-start.ts` 增加 service-only `controlPlane?: ControlPlaneWorkerStart`（类型在同目录 `control-plane-worker-start.ts`），首个实际调用者为 M2-05 `execution/attempt-launcher.ts`：六个 seam 字段的用法为 `dispatchCreator: {kind:'system'}`、精确的预创建 `worktreeId`、`branchNameOverride` 在此 bag 中省略（只传给预创建 worktree service）、ContextPackage 的 `preambleBuilder`、`dispatchMaxDepth: 1` 与 `callerIdentity`。同时填 `params.from = caller.address`，把同一合成身份作为 `coordinator` 和 `callerSession`，并传 Mission Task 为 `existingTask`。预创建 worktree 仅允许省略 `params.worktree` 或设为 `current`；branch / 所有权校验由 launcher 负责；深度 cap 取 runtime 与服务入参的较小值，preamble 在 cap 1 时不提示 sub-workers；null terminal handle 不作终端 lineage。省略 bag 保持原行为，文本替换沿用原有投递、turn observation 和失败路径。字段不进入 RPC schema，`workers.ts` 不传 bag，M1-07 对 Mission Run 的直接 `orchestration.workerStart` 拒绝保持不变（D10）；不得通过 RPC 参数自报 `caller:'control_plane'`。
 
 ## 6. RPC、envelope 与错误
+
+M2-09 增加 mutation `axiom.mission.plan {missionId}`，响应 `{attempt:{attemptId:string|null,seq,branch,worktreeId:string|null,provider}}`；CLI 成功文本为 `Planner started: attempt <id> on <branch>`。`axiom.plan.propose` 的两个互斥形式为 `{missionId,planRevision,provenance}`（既有人工作法）或 `{missionId,planRevision,attemptId,from?}`（Planner）。后者由 CLI 的 `--attempt` / `--dispatch-capability` 提供身份，from 复用 Worker terminal/session 解析，capability 放 envelope，仍使用既有契约版本与 mutation receipts。传入 attemptId 时不得自报 provenance。`plan_pending` / `illegal_transition` 继续由原 proposal settlement 返回。共享 RPC error mapper 当前丢弃 invalid_argument 的领域 data；M2-09 保留其红测，精确越界修复位置见 `.axiom-work/reports/M2-09-1.md`。
 
 M1 已注册 `axiom.mission.create/show/list/start/pause/resume/cancel`、`axiom.goal.propose/activate/show`、`axiom.plan.propose/approve/reject/list/show`、`axiom.task.list/show/cancel`；M2-02 已注册 `axiom.artifact.put/read/list`（put 参与 mutation fence/收据）；M2-05 已注册只读 `axiom.attempt.show {attemptId}` / `list {missionId, taskId?}`；返回 `attempt` / `attempts`（Glossary §4.6），未知 dispatch 返回 `attempt_not_found`，CLI 为 `axiom attempt show/list`。M0 的 `axiom.namespace.get` 保留。其他命名空间/方法在映射 §4c 标为后续。
 

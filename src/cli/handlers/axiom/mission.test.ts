@@ -6,6 +6,37 @@ import { COMMAND_SPECS } from '../../specs'
 import { mission } from '../../../shared/axiom-contract/contract-fixtures.test-support'
 
 afterEach(() => vi.restoreAllMocks())
+it('starts a Planner through the registered mission plan command', async () => {
+  const parsed = parseArgs(
+    ['mission', 'plan', '--mission', mission.id],
+    COMMAND_SPECS.map((s) => s.path),
+    COMMAND_SPECS
+  )
+  validateCommandAndFlags(COMMAND_SPECS, parsed)
+  const client = new RuntimeClient('/tmp', 500, null, null)
+  const call = vi.spyOn(client, 'call').mockResolvedValue({
+    id: 'rpc',
+    ok: true,
+    result: {
+      attempt: {
+        attemptId: 'd1',
+        seq: 1,
+        branch: 'axiom/planner/m/1',
+        worktreeId: 'wt',
+        provider: 'codex'
+      }
+    },
+    _meta: { runtimeId: 'test' }
+  })
+  const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+  await dispatch(parsed.commandPath, { flags: parsed.flags, client, cwd: '/tmp', json: false })
+  expect(call).toHaveBeenCalledWith(
+    'axiom.mission.plan',
+    { missionId: mission.id },
+    expect.anything()
+  )
+  expect(log).toHaveBeenCalledWith('Planner started: attempt d1 on axiom/planner/m/1')
+})
 it.each([true, false])('prints cancel settlement evidence (json=%s)', async (json) => {
   const parsed = parseArgs(
     ['mission', 'cancel', '--mission', mission.id, '--reason', 'user request'],

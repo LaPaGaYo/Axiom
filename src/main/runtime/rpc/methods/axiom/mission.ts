@@ -5,6 +5,7 @@ import {
   MissionShowParams,
   MissionListParams,
   MissionStartParams,
+  MissionPlanParams,
   MissionPauseParams,
   MissionResumeParams,
   MissionCancelParams
@@ -12,6 +13,11 @@ import {
 import { getAxiomControlPlane, missionSummary } from '../../../../axiom/control-plane'
 
 export const AXIOM_MISSION_METHODS = [
+  defineMethod({
+    name: 'axiom.mission.plan',
+    params: MissionPlanParams,
+    handler: (p, { runtime }) => getAxiomControlPlane(runtime).planner.start(p.missionId)
+  }),
   defineMethod({
     name: 'axiom.mission.create',
     params: MissionCreateParams,
