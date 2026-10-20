@@ -9,22 +9,40 @@ import type { MissionSummary } from '../../../../shared/axiom-contract/mission-p
 import type { CreateMissionInput } from './MissionCreateDialog'
 import type { MissionAction } from './MissionActions'
 
-async function readMission(missionId: string) {
-  const [{ mission }, { tasks }, { planRevisions }] = await Promise.all([
-    axiomClient.showMission({ missionId }),
-    axiomClient.listTasks({ missionId }),
-    axiomClient.listPlans({ missionId })
-  ])
+async function readMission(missionId: string, taskId: string | null) {
+  const [{ mission }, { tasks }, { planRevisions }, { attempts }, { messages }, taskDetail] =
+    await Promise.all([
+      axiomClient.showMission({ missionId }),
+      axiomClient.listTasks({ missionId }),
+      axiomClient.listPlans({ missionId }),
+      axiomClient.listAttempts({ missionId }),
+      axiomClient.listMessages({ missionId, pendingOnly: true }),
+      taskId
+        ? Promise.all([
+            axiomClient.listAttempts({ missionId, taskId }),
+            axiomClient.listMessages({ missionId, taskId })
+          ]).then(([attempts, messages]) => ({ taskId, ...attempts, ...messages }))
+        : null
+    ])
   const goal = mission.activeGoalRevisionId
     ? (await axiomClient.showGoal({ missionId, goalRevisionId: mission.activeGoalRevisionId }))
         .goalRevision
     : null
-  return { mission, tasks, plans: planRevisions, goal }
+  return {
+    mission,
+    tasks,
+    plans: planRevisions,
+    goal,
+    attempts,
+    pendingMessages: messages,
+    taskDetail
+  }
 }
 
 export function useMissionsPageController() {
   useTranslation()
   const selectedId = useAppStore((s) => s.selectedMissionId)
+  const selectedTaskId = useAppStore((s) => s.selectedTaskId)
   const createOpen = useAppStore((s) => s.missionCreateOpen)
   const error = useAppStore((s) => s.missionError)
   const requests = useAppStore((s) => s.missionRequests)
@@ -43,12 +61,12 @@ export function useMissionsPageController() {
   }, [])
   const refresh = useCallback(async () => {
     const current = ++generation.current
-    const id = useAppStore.getState().selectedMissionId
+    const { selectedMissionId: id, selectedTaskId: taskId } = useAppStore.getState()
     setLoading(true)
     try {
       const [list, next] = await Promise.all([
         axiomClient.listMissions(),
-        id ? readMission(id) : null
+        id ? readMission(id, taskId) : null
       ])
       if (current !== generation.current) {
         return
@@ -71,7 +89,7 @@ export function useMissionsPageController() {
     return () => {
       generation.current += 1
     }
-  }, [selectedId, refresh])
+  }, [selectedId, selectedTaskId, refresh])
 
   const mutate = async (key: string, operation: (id: string) => Promise<unknown>) => {
     const store = useAppStore.getState()
@@ -134,6 +152,8 @@ export function useMissionsPageController() {
     const run = () =>
       mutate(JSON.stringify([action, params]), (id) => {
         switch (action) {
+          case 'plan':
+            return axiomClient.planMission({ missionId: selectedId }, id)
           case 'start':
             return axiomClient.startMission({ missionId: selectedId }, id)
           case 'pause':
@@ -161,6 +181,22 @@ export function useMissionsPageController() {
     const params = { planRevisionId, resolver: 'desktop-user' }
     void mutate(JSON.stringify(['approve', params]), (id) => axiomClient.approvePlan(params, id))
   }
+  const answer = (questionId: string, body: string) => {
+    if (!selectedId) {
+      return
+    }
+    const params = { missionId: selectedId, questionId, body }
+    return mutate(JSON.stringify(['answer', params]), (id) => axiomClient.answerMessage(params, id))
+  }
+  const resolve = (messageId: string, decision: 'accept' | 'reject', rationale: string) => {
+    if (!selectedId) {
+      return
+    }
+    const params = { missionId: selectedId, messageId, decision, rationale }
+    return mutate(JSON.stringify(['resolve', params]), (id) =>
+      axiomClient.resolveMessage(params, id)
+    )
+  }
   const reject = (planRevisionId: string, reason: string) => {
     const params = { planRevisionId, resolver: 'desktop-user', reason }
     void confirmAction(
@@ -176,6 +212,11 @@ export function useMissionsPageController() {
     missions,
     detail: detail?.mission.id === selectedId ? detail : null,
     selectedId,
+    selectedTaskId,
+    taskDetail:
+      detail?.mission.id === selectedId && detail.taskDetail?.taskId === selectedTaskId
+        ? detail.taskDetail
+        : null,
     loading,
     busy: loading || confirming || Object.values(requests).some((request) => request.pending),
     error,
@@ -185,6 +226,9 @@ export function useMissionsPageController() {
     missionAction,
     approve,
     reject,
+    answer,
+    resolve,
+    selectTask: useAppStore.getState().selectMissionTask,
     select: useAppStore.getState().selectMission,
     setCreateOpen: useAppStore.getState().setMissionCreateOpen
   }

@@ -12114,7 +12114,7 @@
           "confirm": "Stop cleanup"
         },
         "shortcutDefinitionCatalog": {
-          "missionControlConflict": "Blocked by macOS system shortcuts. Remap here or change it in System Settings."
+          "missionControlConflict": "Blocked by Mission Control. Remap here or change it in System Settings."
         },
         "NativeChatSupportedAgents": {
           "label": "Supported agents:"
@@ -18439,10 +18439,10 @@
     "reasonUnavailable": "The runtime has not supplied a reason.",
     "noPending": "No plan awaiting review.",
     "nextStep": "Next step",
-    "awaitPlan": "Awaiting a plan proposal (M1: axiom plan propose).",
+    "awaitPlan": "Start Planner to propose a plan for review.",
     "reviewNext": "Review the proposed plan below.",
     "startNext": "Start the approved plan when ready.",
-    "executingNext": "No further action in M1. Worker execution arrives in M2.",
+    "executingNext": "{{running}} Attempt(s) running, {{submitted}} submitted — verification arrives in M3.",
     "statusNext": "Review the Mission status and pending items.",
     "cancelConsequence": "Cancel this Mission and its unfinished Tasks? This Mission cannot be resumed after cancellation.",
     "rejectConsequence": "Reject this proposal? Its Tasks will not be approved. A new proposal will be needed to proceed.",
@@ -18473,6 +18473,49 @@
       "BLOCKED": "Blocked",
       "FAILED": "Failed",
       "CANCELED": "Canceled"
-    }
+    },
+    "attemptLaunchPending": "Launch pending",
+    "attemptStarting": "Starting",
+    "attemptRunning": "Running",
+    "attemptSubmitted": "Submitted",
+    "attemptFailed": "Failed",
+    "attemptStopped": "Stopped",
+    "attemptAbandoned": "Abandoned",
+    "attemptStartUnknown": "Start unknown",
+    "attemptStopUnknown": "Stop unknown",
+    "attempts": "Attempts",
+    "noAttempts": "No Attempts yet.",
+    "attemptSeq": "Attempt",
+    "branch": "Branch",
+    "provider": "Provider",
+    "attemptState": "State",
+    "liveness": "Liveness",
+    "workspace": "Workspace",
+    "created": "Created",
+    "updated": "Updated",
+    "taskDetail": "Task detail",
+    "startPlanner": "Start Planner",
+    "plannerDisabled": "Planning requires an Analyzing Mission with no Planner in progress or proposed plan.",
+    "submissionSummary": "Submission summary",
+    "noSubmission": "No Submission yet.",
+    "candidate": "Candidate",
+    "candidateCommit": "Candidate commit",
+    "candidateTree": "Candidate tree",
+    "filesChanged": "Files changed",
+    "limitations": "Limitations",
+    "followUps": "Follow-ups",
+    "noneReported": "None reported.",
+    "checksRun": "Checks run",
+    "answer": "Answer",
+    "rationale": "Rationale",
+    "sendAnswer": "Send answer",
+    "acceptSubtask": "Accept",
+    "rejectSubtask": "Reject",
+    "taskMessages": "Task messages",
+    "noMessages": "No messages yet.",
+    "attemptNumber": "Attempt {{seq}}",
+    "attemptProgress": "{{running}} running / {{submitted}} submitted",
+    "plannerInProgress": "Planner in progress",
+    "pendingCount": "{{total}} pending item(s)"
   }
 }

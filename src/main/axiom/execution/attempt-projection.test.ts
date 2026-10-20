@@ -17,7 +17,10 @@ beforeEach(() => {
     contextPackageId: 'context'
   })
 })
-afterEach(() => f.db.close())
+afterEach(() => {
+  f.db.close()
+  vi.restoreAllMocks()
+})
 
 function fleetWorker() {
   return projectOrchestrationFleet({
@@ -52,6 +55,7 @@ it('leaves pending admission uninspected with null liveness and workspace', asyn
   )
   expect(attempt).toMatchObject({
     attemptId: null,
+    role: 'worker',
     state: 'LAUNCH_PENDING',
     liveness: null,
     livenessReason: null,
@@ -62,6 +66,82 @@ it('leaves pending admission uninspected with null liveness and workspace', asyn
   expect(inspectTerminal).not.toHaveBeenCalled()
   const { livenessReason: _reason, ...legacyAttempt } = attempt
   expect(AttemptSummarySchema.safeParse(legacyAttempt).success).toBe(true)
+})
+
+it('projects the bound role and immutable submission evidence', async () => {
+  const binding = { ...f.store.getAttemptBinding('task', 1)!, dispatchId: 'd1' }
+  const spec = f.store.insertAgentSpec({
+    version: 1,
+    role: 'planner',
+    missionId: 'mission',
+    goalRevisionId: 'goal',
+    capabilities: ['planning'],
+    provider: 'codex',
+    model: 'policy-default',
+    reasoning: { effort: 'medium' },
+    endpointProfile: 'subscription',
+    permissions: { write: [], network: 'restricted', tools: ['shell', 'git-readonly'] },
+    budget: { maxRuntimeMinutes: 45 },
+    workspace: { strategy: 'planner-worktree' },
+    submissionContract: 'axiom-submission-v1',
+    selection: {
+      installed: ['codex'],
+      filtered: [],
+      ranked: ['codex'],
+      chosen: 'codex',
+      rationale: 'Test'
+    }
+  })
+  const candidate = f.store.insertCandidate({
+    id: 'candidate',
+    missionId: 'mission',
+    taskId: 'task',
+    attemptId: 'd1',
+    commitSha: 'a'.repeat(40),
+    treeSha: 'b'.repeat(40),
+    status: 'ACTIVE',
+    supersededBy: null
+  })
+  const report = {
+    summary: 'Ready for independent verification',
+    filesChanged: ['src/task.ts'],
+    checksRun: [{ command: 'pnpm test', result: 'pass' as const, note: 'Unit checks' }],
+    artifacts: [],
+    limitations: ['No host run'],
+    risks: ['Pending verification'],
+    questions: [],
+    followUps: ['Verify candidate']
+  }
+  const submission = f.store.insertSubmission({
+    id: 'submission',
+    missionId: 'mission',
+    taskId: 'task',
+    attemptId: 'd1',
+    candidateId: candidate.id,
+    report
+  })
+  const result = await projectAttempt(
+    f.store,
+    { ...binding, agentSpecId: spec.id },
+    fleetWorker,
+    async () => ({ status: 'live', exact: true, terminal: null })
+  )
+  expect(result).toMatchObject({
+    role: 'planner',
+    provider: 'codex',
+    submission: {
+      id: submission.id,
+      candidateId: candidate.id,
+      commitSha: candidate.commitSha,
+      treeSha: candidate.treeSha,
+      filesChanged: report.filesChanged,
+      checksRun: report.checksRun,
+      limitations: report.limitations,
+      risks: report.risks,
+      followUps: report.followUps,
+      createdAt: submission.createdAt
+    }
+  })
 })
 
 it.each<{

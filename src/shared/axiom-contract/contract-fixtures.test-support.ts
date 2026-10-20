@@ -75,6 +75,49 @@ export const mission = {
   coordinatorOrcaSessionId: 'axiom-mission-session'
 }
 
+export const attempt = {
+  attemptId: 'attempt-1',
+  missionId: mission.id,
+  taskId: 'task-1',
+  seq: 1,
+  branch: 'axiom/attempt/task-1/1',
+  agentSpecId: 'spec-1',
+  contextPackageId: 'context-1',
+  role: 'worker' as const,
+  provider: 'codex',
+  state: 'SUBMITTED' as const,
+  liveness: 'exited' as const,
+  livenessReason: 'process_exited',
+  workspace: 'retained' as const,
+  worktreeId: 'worktree-1',
+  createdAt: '2026-10-20T12:00:00Z',
+  updatedAt: '2026-10-20T12:05:00Z',
+  submission: {
+    id: 'submission-1',
+    candidateId: 'candidate-1',
+    commitSha: 'a'.repeat(40),
+    treeSha: 'b'.repeat(40),
+    filesChanged: ['src/task.ts'],
+    checksRun: [{ command: 'pnpm test', result: 'pass' as const, note: 'Unit checks' }],
+    limitations: ['No host run'],
+    risks: ['Pending verification'],
+    followUps: ['Verify candidate'],
+    createdAt: '2026-10-20T12:05:00Z'
+  }
+}
+
+export const message = {
+  id: 'message-1',
+  type: 'QUESTION' as const,
+  taskId: attempt.taskId,
+  attemptId: attempt.attemptId,
+  summary: 'Which behavior should apply?',
+  artifactIds: [],
+  related: {},
+  createdAt: '2026-10-20T12:01:00Z',
+  pending: true
+}
+
 export function makeProposal() {
   return {
     goalRevisionId: 'goal-1',

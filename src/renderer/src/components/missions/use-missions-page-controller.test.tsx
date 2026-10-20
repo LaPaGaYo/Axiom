@@ -8,7 +8,9 @@ import { ConfirmationDialogContext } from '@/components/confirmation-dialog-cont
 import {
   goal,
   mission,
-  policy
+  policy,
+  attempt,
+  message
 } from '../../../../shared/axiom-contract/contract-fixtures.test-support'
 
 vi.mock('@/store', async () => {
@@ -60,7 +62,12 @@ async function mount() {
 }
 beforeEach(() => {
   vi.stubGlobal('window', { api: { runtime: { call } } })
-  useAppStore.setState({ selectedMissionId: mission.id, missionRequests: {}, missionError: null })
+  useAppStore.setState({
+    selectedMissionId: mission.id,
+    selectedTaskId: null,
+    missionRequests: {},
+    missionError: null
+  })
   call.mockReset().mockImplementation(async ({ method, params }) => {
     if (method === 'axiom.mission.list') {
       return success({ missions: [mission] })
@@ -74,6 +81,12 @@ beforeEach(() => {
     if (method === 'axiom.plan.list') {
       return success({ planRevisions: [] })
     }
+    if (method === 'axiom.attempt.list') {
+      return success({ attempts: [attempt] })
+    }
+    if (method === 'axiom.message.list') {
+      return success({ messages: [message] })
+    }
     throw new Error(`Unexpected method: ${method}`)
   })
 })
@@ -83,6 +96,64 @@ afterEach(() => {
 })
 
 describe('Mission page reconciliation', () => {
+  it('loads Task detail and re-reads pending messages after an uncertain answer', async () => {
+    await mount()
+    await act(async () => controller.selectTask(attempt.taskId))
+    expect(controller.taskDetail?.messages).toEqual([message])
+    expect(
+      call.mock.calls.some(
+        ([a]) => a.method === 'axiom.attempt.list' && a.params.taskId === attempt.taskId
+      )
+    ).toBe(true)
+    const base = call.getMockImplementation()!
+    call.mockImplementation((args) =>
+      args.method === 'axiom.message.answer'
+        ? Promise.reject(new Error('lost response'))
+        : base(args)
+    )
+    const before = call.mock.calls.length
+    await act(async () => controller.answer(message.id, 'Use A'))
+    expect(
+      call.mock.calls
+        .slice(before)
+        .some(([a]) => a.method === 'axiom.message.list' && a.params.pendingOnly)
+    ).toBe(true)
+    await act(async () => controller.answer(message.id, 'Use A'))
+    const answers = call.mock.calls.filter(([a]) => a.method === 'axiom.message.answer')
+    expect(answers[0][0]).toEqual(answers[1][0])
+    await act(async () => controller.select('mission-2'))
+    expect(useAppStore.getState().selectedTaskId).toBeNull()
+    expect(controller.taskDetail).toBeNull()
+  })
+  it('holds the Planner busy state until its response and reconciles subtask resolution', async () => {
+    await mount()
+    const base = call.getMockImplementation()!
+    let settle: ((value: unknown) => void) | undefined
+    call.mockImplementation((args) => {
+      if (args.method === 'axiom.mission.plan') {
+        return new Promise((resolve) => {
+          settle = resolve
+        })
+      }
+      if (args.method === 'axiom.message.resolve') {
+        return Promise.resolve(
+          success({ resolved: true, decision: 'accept', reason: 'In scope', taskId: 'new-task' })
+        )
+      }
+      return base(args)
+    })
+    act(() => {
+      controller.missionAction('plan')
+      controller.missionAction('plan')
+    })
+    expect(controller.busy).toBe(true)
+    expect(call.mock.calls.filter(([a]) => a.method === 'axiom.mission.plan')).toHaveLength(1)
+    await act(async () => settle?.(success({ attempt })))
+    expect(controller.busy).toBe(false)
+    const before = call.mock.calls.length
+    await act(async () => controller.resolve('subtask', 'accept', 'In scope'))
+    expect(call.mock.calls.slice(before).some(([a]) => a.method === 'axiom.task.list')).toBe(true)
+  })
   it('prevents double clicks and never displays a mutation response as status', async () => {
     await mount()
     let settle: ((value: unknown) => void) | undefined

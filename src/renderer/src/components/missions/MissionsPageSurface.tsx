@@ -6,9 +6,12 @@ import { MissionCreateDialog } from './MissionCreateDialog'
 import { MissionHome } from './MissionHome'
 import { PlanReviewPanel } from './PlanReviewPanel'
 import { TaskStageTable } from './TaskStageTable'
+import { TaskDetail } from './TaskDetail'
+import { activateWorktreeFromSidebar } from '@/lib/sidebar-worktree-activation'
 import type { MissionsPageController } from './use-missions-page-controller'
 
 export function MissionsPageSurface({ controller: c }: { controller: MissionsPageController }) {
+  const selectedTask = c.detail?.tasks.find((task) => task.id === c.selectedTaskId)
   return (
     <main className="flex h-full min-h-0 flex-col bg-background pt-5 text-foreground md:pt-6">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 pb-4">
@@ -50,6 +53,7 @@ export function MissionsPageSurface({ controller: c }: { controller: MissionsPag
                 proposedPlans={c.detail.plans.filter((plan) => plan.status === 'PROPOSED').length}
                 busy={c.busy}
                 onAction={c.missionAction}
+                onSelectTask={c.selectTask}
               />
               {c.detail.plans
                 .filter(
@@ -68,7 +72,23 @@ export function MissionsPageSurface({ controller: c }: { controller: MissionsPag
                     onReject={(reason) => c.reject(plan.id, reason)}
                   />
                 ))}
-              <TaskStageTable tasks={c.detail.tasks} />
+              <TaskStageTable
+                tasks={c.detail.tasks}
+                selectedTaskId={c.selectedTaskId}
+                onSelect={c.selectTask}
+              />
+              {selectedTask && c.taskDetail && (
+                <TaskDetail
+                  key={selectedTask.id}
+                  task={selectedTask}
+                  attempts={c.taskDetail.attempts}
+                  messages={c.taskDetail.messages}
+                  busy={c.busy}
+                  onAnswer={c.answer}
+                  onResolve={c.resolve}
+                  onOpenWorktree={(id) => void activateWorktreeFromSidebar(id)}
+                />
+              )}
             </>
           ) : (
             !c.loading && (

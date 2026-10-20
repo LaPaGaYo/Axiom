@@ -53,6 +53,7 @@ it('reads revisions and Task stage projections and routes cancellation, pause an
   const { mission, goalRevision } = MissionCreateResponseSchema.parse(
     result(await f.call('axiom.mission.create', createParams))
   )
+  expect(mission.runId).toBe(f.store.getMission(mission.id)?.runId)
   expect(
     MissionListResponseSchema.parse(
       result(await f.call('axiom.mission.list', { repo: 'fixture', status: 'ANALYZING' }))
@@ -101,10 +102,16 @@ it('reads revisions and Task stage projections and routes cancellation, pause an
   ).toMatchObject({ task: { id: tasks[0].id, stage: 'CANCELED' } })
   expect(
     result(await f.call('axiom.mission.pause', { missionId: mission.id, reason: 'break' }))
-  ).toMatchObject({ mission: { status: 'PAUSED' } })
+  ).toMatchObject({ mission: { status: 'PAUSED', reason: 'break', runId: mission.runId } })
+  expect(result(await f.call('axiom.mission.show', { missionId: mission.id }))).toMatchObject({
+    mission: { reason: 'break', runId: mission.runId }
+  })
+  expect(result(await f.call('axiom.mission.list', {}))).toMatchObject({
+    missions: [{ reason: 'break', runId: mission.runId }]
+  })
   expect(
     result(await f.call('axiom.mission.resume', { missionId: mission.id, reason: 'continue' }))
-  ).toMatchObject({ mission: { status: 'EXECUTING' } })
+  ).toMatchObject({ mission: { status: 'EXECUTING', reason: 'continue' } })
   expect(
     f.store
       .listAuditEvents({ missionId: mission.id })
@@ -112,7 +119,7 @@ it('reads revisions and Task stage projections and routes cancellation, pause an
   ).toBe(true)
   expect(
     result(await f.call('axiom.mission.cancel', { missionId: mission.id, reason: 'stop' }))
-  ).toMatchObject({ mission: { status: 'CANCELED' } })
+  ).toMatchObject({ mission: { status: 'CANCELED', reason: 'stop' } })
   expect(
     f.store.listTaskStages({ missionId: mission.id }).every((t) => t.stage === 'CANCELED')
   ).toBe(true)

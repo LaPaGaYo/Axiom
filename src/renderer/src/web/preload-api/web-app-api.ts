@@ -38,7 +38,7 @@ export function createWebAppApi(): Partial<PreloadApi> {
       recoverLegacyWorkerTerminalsForRendererStartup: () => Promise.resolve(),
       startupDiagnostic: () => Promise.resolve(),
       getKeyboardInputSourceId: () => Promise.resolve(null),
-      // The web client cannot inspect local macOS system shortcuts shortcuts.
+      // The web client cannot inspect local Mission Control shortcuts.
       getMacCapturedDigitRowChords: () => Promise.resolve([]),
       getKeyboardLayoutSnapshot: () => Promise.resolve(null),
       onKeyboardLayoutChanged: () => () => undefined,

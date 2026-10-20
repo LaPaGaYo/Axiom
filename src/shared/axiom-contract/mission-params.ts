@@ -40,6 +40,7 @@ export const MissionCancelParams = MissionPauseParams
 
 export const MissionSummarySchema = MissionSchema.pick({
   id: true,
+  runId: true,
   repoId: true,
   repoPath: true,
   targetBranch: true,
