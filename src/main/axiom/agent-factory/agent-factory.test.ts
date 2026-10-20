@@ -85,7 +85,7 @@ beforeEach(async () => {
     new ArtifactStore(store, path.join(root, 'artifacts'))
   ).build({ missionId, taskId })
   contextPackageId = context.packageId
-  installed = ['codex', 'claude', 'gemini', 'claude-agent-teams']
+  installed = ['codex', 'claude', 'antigravity', 'claude-agent-teams']
   engine = new RulesEngine(PROVIDER_SELECTION_RULES)
   factory = new AgentFactory(store, engine, async () => installed)
 })
@@ -113,19 +113,23 @@ describe('AgentFactory', () => {
     const first = await build()
     expect(await build()).toEqual(first)
     expect(first.id).toBe(`spec_${sha256(canonicalAgentSpec(first.spec))}`)
+    expect(first.id).not.toBe(
+      `spec_${sha256(canonicalAgentSpec(first.spec).replace('"endpointProfile":"subscription"', '"endpointProfile":"api-key:example"'))}`
+    )
     expect(first.spec).toMatchObject({
       role: 'worker',
       provider: 'claude',
       model: 'policy-default',
+      endpointProfile: 'subscription',
       acceptanceCriteria: ['Checks pass'],
       capabilities: ['src'],
       budget: { maxRuntimeMinutes: 120 },
       reasoning: { effort: 'medium' },
       permissions: { write: ['src/storage/'] },
       selection: {
-        installed: ['claude', 'codex', 'gemini'],
+        installed: ['claude', 'codex', 'antigravity'],
         chosen: 'claude',
-        ranked: ['claude', 'codex', 'gemini']
+        ranked: ['claude', 'codex', 'antigravity']
       }
     })
     expect(canonicalAgentSpec(first.spec)).not.toMatch(/maxAttempts|claude-agent-teams/)
@@ -136,7 +140,7 @@ describe('AgentFactory', () => {
     expect(events()[0].after).toEqual(first.spec.selection)
     expect(store.getTaskStage(taskId)).toEqual(before)
     expect(db.db.prepare('SELECT * FROM attempt_bindings').all()).toEqual([])
-    installed = ['gemini', 'claude', 'codex', 'claude']
+    installed = ['antigravity', 'claude', 'codex', 'claude']
     expect((await build()).id).toBe(first.id)
     if (process.env.AXIOM_SPEC_EXAMPLE) {
       await writeFile(
@@ -145,8 +149,23 @@ describe('AgentFactory', () => {
       )
     }
   })
+  it('persists and audits the D57 medium-risk certification selection', async () => {
+    installed = ['claude', 'codex', 'gemini', 'antigravity', 'opencode']
+    patchTask({ risk: 'medium' })
+    const { id, spec } = await build()
+    expect(spec.selection).toMatchObject({
+      chosen: 'claude',
+      ranked: ['claude', 'codex', 'antigravity'],
+      filtered: [
+        { provider: 'gemini', reason: 'not_certified' },
+        { provider: 'opencode', reason: 'tier_too_low' }
+      ]
+    })
+    expect(store.getAgentSpec(id)?.spec).toEqual(spec)
+    expect(events()[0].after).toEqual(spec.selection)
+  })
   it('applies high-risk tiers before preferences and carries Task budget overrides', async () => {
-    routing({ preferredProviders: ['gemini'], models: { claude: 'configured-model' } })
+    routing({ preferredProviders: ['antigravity'], models: { claude: 'configured-model' } })
     patchTask({ risk: 'high', budget: { maxRuntimeMinutes: 9, maxTokens: 300 } })
     const { spec } = await build()
     expect(spec).toMatchObject({
@@ -156,17 +175,23 @@ describe('AgentFactory', () => {
       budget: { maxRuntimeMinutes: 9, maxTokens: 300 }
     })
     expect(spec.selection.ranked).toEqual(['claude', 'codex'])
-    expect(spec.selection.filtered).toContainEqual({ provider: 'gemini', reason: 'tier_too_low' })
+    expect(spec.selection.filtered).toContainEqual({
+      provider: 'antigravity',
+      reason: 'tier_too_low'
+    })
   })
   it('changes identity with routing and records disallowed and unavailable candidates', async () => {
     const first = await build()
-    routing({ disallowedProviders: ['codex'], preferredProviders: ['gemini'] })
+    routing({ disallowedProviders: ['codex'], preferredProviders: ['antigravity'] })
     const next = await build()
     expect(next.id).not.toBe(first.id)
-    expect(next.spec.selection).toMatchObject({ chosen: 'gemini', ranked: ['gemini', 'claude'] })
+    expect(next.spec.selection).toMatchObject({
+      chosen: 'antigravity',
+      ranked: ['antigravity', 'claude']
+    })
     expect(next.spec.selection.filtered).toContainEqual({ provider: 'codex', reason: 'disallowed' })
     expect(next.spec.selection.filtered).toContainEqual({
-      provider: 'aider',
+      provider: 'opencode',
       reason: 'not_installed'
     })
     expect(store.listAgentSpecs(missionId)).toHaveLength(2)
@@ -179,25 +204,30 @@ describe('AgentFactory', () => {
     })
     expect(store.listAgentSpecs(missionId)).toEqual([])
     expect(events()).toEqual([])
-    installed = ['claude-agent-teams', 'gemini']
-    routing({ disallowedProviders: ['gemini'] })
+    installed = ['claude-agent-teams', 'antigravity']
+    routing({ disallowedProviders: ['antigravity'] })
     await expect(build()).rejects.toMatchObject({ code: 'no_eligible_provider' })
     expect(events()).toEqual([])
   })
   it('makes read-only planner contracts with tier A only', async () => {
-    routing({ preferredProviders: ['gemini', 'codex'] })
+    routing({ preferredProviders: ['antigravity', 'codex'] })
     const { spec } = await factory.build({ missionId, role: 'planner', goalRevisionId })
     expect(spec).toMatchObject({
       role: 'planner',
       goalRevisionId,
       capabilities: ['planning'],
       provider: 'codex',
+      endpointProfile: 'subscription',
+      reasoning: { effort: 'medium' },
       permissions: { write: [] },
       workspace: { strategy: 'planner-worktree' }
     })
     expect(spec.selection.ranked).toEqual(['codex', 'claude'])
-    expect(spec.selection.filtered).toContainEqual({ provider: 'gemini', reason: 'tier_too_low' })
-    installed = ['gemini']
+    expect(spec.selection.filtered).toContainEqual({
+      provider: 'antigravity',
+      reason: 'tier_too_low'
+    })
+    installed = ['antigravity']
     await expect(
       factory.build({ missionId, role: 'planner', goalRevisionId })
     ).rejects.toMatchObject({ code: 'no_eligible_provider' })
@@ -234,7 +264,7 @@ describe('AgentFactory', () => {
   it('rejects an engine that violates the eligible permutation', async () => {
     routing({ disallowedProviders: ['codex'] })
     vi.spyOn(engine, 'rank').mockReturnValue({
-      ranked: ['codex', 'claude', 'gemini'],
+      ranked: ['codex', 'claude', 'antigravity'],
       confidence: 1,
       rationale: 'bad advice',
       engine: 'rules'

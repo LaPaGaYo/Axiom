@@ -83,14 +83,18 @@ canonical manifest 无空白、对象键序固定，保留数组顺序，id = `c
 
 AgentFactory.build 接受 worker 的 missionId/taskId/contextPackageId，或 planner 的 missionId/goalRevisionId；引用必须存在且归属匹配。ContextPackage 是输入，不由 Factory 创建。主机安装集合由注入的 listInstalledProviders 提供，Control Plane 注入 detectInstalledAgentsWithShellPathHydration；此处不新增认证探测或网络调用。
 
-| Tier | Provider | 可选择范围 |
-|---|---|---|
-| A | structured-session enum 的 codex、claude | 一般/高风险 Worker、Planner |
-| B | 其他 TuiAgent | 一般风险 Worker |
+执行身份由 provider（harness）、model 与 endpointProfile 组成。D57 的允许清单在 `src/main/axiom/agent-factory/certified-providers.ts` 的 `CERTIFIED_PROVIDER_COMBOS`；V1 只有下列四个组合，`endpointProfile` 均为 `subscription`（用户在 harness 中已有的登录或自行配置），不存储凭据。当前状态均为 `provisional`：M2-07 的宿主协议一致性 e2e 后逐组合补 evidence，证明收到 preamble → `axiom attempt inform` → 产出候选 → 合法 `axiom attempt submit`，再改为 `certified`；V1 出口前所有用到的组合必须完成认证。
 
-先按 TUI_AGENT_CONFIG 的顺序规范安装集合，排除 claude-agent-teams（Claude launch mode）。对已知 provider 依次记录 not_installed、disallowed、tier_too_low；高风险与 Planner 仅允许 A。无候选返回 no_eligible_provider，附 installed/filtered，无 spec 或 audit 写入。
+| Provider | 模型选择方式 | Tier | 角色 | 最高风险 |
+|---|---|---|---|---|
+| claude | launch-arg | A | planner、worker | high |
+| codex | launch-arg | A | planner、worker | high |
+| antigravity | launch-arg | B | worker | medium |
+| opencode | harness-default | B | worker | low |
 
-RulesEngine 只对过滤后的闭集排序：preferredProviders 首次匹配得分 100 − index，然后 A 在 B 前，同分保持配置顺序。所有 verb 都从输入集合取结果，Factory 再检查返回值是 eligible 集合的完整排列。model = routing.models[provider] 或 policy-default；高风险 effort=high，否则 medium。selection 持久化 installed/filtered/ranked/chosen/rationale，ranked 是后续 fallback 顺序。
+先按 TUI_AGENT_CONFIG 的顺序规范安装集合，排除 claude-agent-teams（Claude launch mode）。只检查矩阵内或已安装的 harness，按首个命中原因过滤：`not_installed`（矩阵内但未安装）→ `not_certified`（已安装但不在矩阵）→ `disallowed`（routing.disallowedProviders）→ `tier_too_low`（角色不在组合 roles、风险超过 maxRisk，或 highRiskTier=A 时高风险选择了非 A）。Planner 的筛选风险固定为 high；A 级仍由 structured-session enum 的 codex、claude 定义。filtered 按上述原因顺序排列，同原因保持配置顺序；未安装且未登记的 harness 不进入 filtered。无候选返回 no_eligible_provider，附 installed/filtered，无 spec 或 audit 写入。
+
+RulesEngine 只对过滤后的闭集排序：preferredProviders 首次匹配得分 100 − index，然后 A 在 B 前，同分保持配置顺序。preferredProviders / disallowedProviders 只在矩阵范围内生效，偏好不能放行未认证的 harness（包括 gemini、continue）。所有 verb 都从输入集合取结果，Factory 再检查返回值是 eligible 集合的完整排列。model = routing.models[provider] 或 policy-default；OpenCode 使用 harness 自身默认模型，V1 不新增模型配置物化。每份 AgentSpec 固定 endpointProfile=subscription；Worker 高风险 effort=high，否则 medium，Planner 保持 medium。selection 持久化 installed/filtered/ranked/chosen/rationale，并写入 agent_spec.created 审计；ranked 是后续 fallback 顺序。
 
 AgentSpec 的预算只含本次 Attempt 的 maxRuntimeMinutes（Task → Mission → 45）与可选 maxTokens（Task → Mission），不含 maxAttempts。worker 复制验收标准、scope.allowedPaths 写权限和首段路径去重排序后的 capabilities；planner 固定 planning、空写权限与 planner-worktree。规范 JSON 按 schema 键序生成并 sha256 寻址；INSERT OR IGNORE 只在插入时追加 agent_spec.created，两者同一事务。Factory 不改 Task stage、readiness、权限许可或 attempt_bindings，不创建 worktree、不启动 Worker。
 

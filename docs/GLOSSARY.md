@@ -162,6 +162,11 @@ APPLYING / TESTING → QUEUED（应用重启时由 RecoveryService 丢弃临时�
 - 风险等级：`low / medium / high`；`high` 默认需要 Approval。
 - Verification check 结果：`pass / fail / inconclusive / skipped`（`skipped` 需给出策略依据）。
 
+| 词汇 | 值与含义 |
+|---|---|
+| `ProviderFilterReason` | `not_installed \| not_certified \| disallowed \| tier_too_low`，按此顺序取首个命中原因（D57）。 |
+| `endpointProfile` | `subscription`（V1）：用户在 harness 中已有的登录或自行配置的凭据；进入 AgentSpec 的内容寻址，不包含凭据本身（D57）。 |
+
 ## 5. 消息类型与 Orca 映射（D9）
 
 | Axiom 类型 | 谁可发 | 典型接收者 | Orca `messages.type`（仅路由） | 说明 |
