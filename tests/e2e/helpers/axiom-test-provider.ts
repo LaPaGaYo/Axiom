@@ -2,9 +2,9 @@ import { FAKE_AGENT_PASTE_END_SCANNER_SOURCE } from './fake-agent-paste-end-scan
 
 /** D49: capture the preamble; the submit spec supplies a compiled CLI to run the frozen stub. */
 export const AXIOM_TEST_PROVIDER_SOURCE = `
-const { appendFileSync, mkdtempSync, rmSync, writeFileSync } = require('node:fs')
+const { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs')
 const { createHash } = require('node:crypto')
-const { spawnSync } = require('node:child_process')
+const { spawn, spawnSync } = require('node:child_process')
 const path = require('node:path')
 const os = require('node:os')
 if (process.argv.slice(2).includes('app-server')) {
@@ -60,6 +60,46 @@ async function submitFixture(attemptId, capability, missionId, taskId) {
     rmSync(temp, { recursive: true, force: true })
   }
 }
+function fixtureProposal(tasks, goalRevisionId) {
+  return {
+    goalRevisionId,
+    milestones: [{ id: 'm1', title: 'M1 exit', exitCriteria: ['all 12 Tasks integrated'] }],
+    tasks: tasks.map(task => ({
+      id: task.id, title: task.title, objective: task.title,
+      scope: { allowedPaths: task.scope },
+      acceptanceCriteria: task.acceptance.map(entry => entry.must),
+      requiredEvidence: [...new Set(task.acceptance.map(entry => entry.command))],
+      risk: 'low', retryPolicy: { maxAttempts: 2 }, kind: 'task', milestoneId: 'm1'
+    })),
+    edges: tasks.flatMap(task => task.dependsOn.map(dep => ({
+      fromTaskId: dep, toTaskId: task.id, readinessThreshold: 'INTEGRATED'
+    }))),
+    risks: []
+  }
+}
+function submitPlannerFixture(attemptId, capability, missionId, goalRevisionId) {
+  const decomposition = JSON.parse(readFileSync(path.join(process.cwd(), 'scenarios', 'goal', 'decomposition.json'), 'utf8'))
+  const temp = mkdtempSync(path.join(os.tmpdir(), 'axiom-plan-proposal-'))
+  try {
+    const file = path.join(temp, 'proposal.json')
+    writeFileSync(file, JSON.stringify(fixtureProposal(decomposition.tasks, goalRevisionId)))
+    const result = cli(['plan', 'propose', '--mission', missionId, '--attempt', attemptId, '--dispatch-capability', capability, '--file', file])
+    appendFileSync(process.env.AXIOM_E2E_LEDGER, JSON.stringify({ kind: 'proposal', attemptId, ...result }) + '\\n')
+  } finally {
+    rmSync(temp, { recursive: true, force: true })
+  }
+}
+// Proposal settlement stops the provider before replying. A short-lived detached reporter
+// finishes recording that response even after the provider's PTY process group is closed.
+if (process.argv[2] === '--planner-submit') {
+  try {
+    submitPlannerFixture(...process.argv.slice(3))
+    process.exit(0)
+  } catch (error) {
+    appendFileSync(process.env.AXIOM_E2E_LEDGER, JSON.stringify({ kind: 'error', attemptId: process.argv[3], message: error.message }) + '\\n')
+    process.exit(1)
+  }
+}
 let delivered = ''
 let recorded = false
 process.stdout.write('\\u001b]0;Codex Ready\\u0007OpenAI Codex\\nmodel: e2e\\ndirectory: e2e\\n')
@@ -92,6 +132,15 @@ process.stdin.on('data', chunk => {
     setTimeout(() => process.stdout.write('\\u001b]0;Codex Ready\\u0007'), 10)
     // The M2-05 launch/restart spec intentionally leaves ORCA_E2E_CLI_ENTRY unset.
     if (process.env.ORCA_E2E_CLI_ENTRY) {
+      const plannerRecipe = preamble.match(/axiom plan propose --mission (\\S+)/)
+      if (plannerRecipe) {
+        const goalRevisionId = preamble.match(/"goalRevisionId":\\s*"([^"]+)"/)?.[1]
+        if (!goalRevisionId) throw new Error('Missing planner GoalRevision')
+        spawn(process.execPath, [__filename, '--planner-submit', attemptId, capability, plannerRecipe[1], goalRevisionId], {
+          cwd: process.cwd(), env: process.env, detached: true, stdio: 'ignore'
+        }).unref()
+        return
+      }
       if (!artifactRecipe) throw new Error('Missing Artifact protocol recipe')
       void submitFixture(attemptId, capability, artifactRecipe[1], artifactRecipe[2]).catch(error => {
         appendFileSync(process.env.AXIOM_E2E_LEDGER, JSON.stringify({ kind: 'error', attemptId, message: error.message }) + '\\n')

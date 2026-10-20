@@ -26,7 +26,10 @@ function validatedProposal(input: unknown) {
   return { proposal: PlanProposalSchema.parse(input), order: validation.order }
 }
 
-export function proposePlan(ctx: ControllerContext, input: z.input<typeof PlanProposeParams>) {
+export function proposePlan(
+  ctx: ControllerContext,
+  input: z.input<typeof PlanProposeParams> & { provenance: Provenance }
+) {
   const mission = requireMission(ctx, input.missionId)
   const pending = ctx.store.listPlanRevisions(mission.id).find((p) => p.status === 'PROPOSED')
   if (pending) {

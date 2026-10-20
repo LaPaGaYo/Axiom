@@ -10,10 +10,18 @@ import type { ArtifactStore } from '../artifacts/artifact-store'
 import { sha256 } from '../artifacts/artifact-store'
 import { mandatorySections, markdownSection } from './render'
 import { redactContext } from './redaction'
+import { buildPlannerContext } from './planner-render'
 
 const BuildParams = z.object({
   missionId: AxiomIdSchema,
   taskId: AxiomIdSchema,
+  tokenBudget: z.number().int().nonnegative().optional()
+})
+const PlannerBuildParams = z.object({
+  missionId: AxiomIdSchema,
+  role: z.literal('planner'),
+  goalRevisionId: AxiomIdSchema,
+  repositoryRef: z.string().min(1).optional(),
   tokenBudget: z.number().int().nonnegative().optional()
 })
 
@@ -27,7 +35,15 @@ export class ContextBuilder {
     private readonly artifacts: ArtifactStore
   ) {}
 
-  async build(input: z.input<typeof BuildParams>) {
+  build(input: z.input<typeof PlannerBuildParams>): ReturnType<typeof buildPlannerContext>
+  build(input: z.input<typeof BuildParams>): ReturnType<ContextBuilder['buildWorker']>
+  build(input: z.input<typeof BuildParams> | z.input<typeof PlannerBuildParams>) {
+    return 'role' in input
+      ? buildPlannerContext(this.store, this.artifacts, PlannerBuildParams.parse(input))
+      : this.buildWorker(input)
+  }
+
+  private async buildWorker(input: z.input<typeof BuildParams>) {
     const p = BuildParams.parse(input)
     const tokenBudget = p.tokenBudget ?? this.store.getContextTokenBudget(p.missionId) ?? 24_000
     const { task, incoming, sections, protocol } = await mandatorySections(

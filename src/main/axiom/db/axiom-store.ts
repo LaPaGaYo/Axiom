@@ -43,6 +43,7 @@ export class AxiomStore {
   readonly getAttemptBindingByDispatch: AttemptBindings['getAttemptBindingByDispatch']
   readonly getAttemptBinding: AttemptBindings['getAttemptBinding']
   readonly listAttemptBindings: AttemptBindings['listAttemptBindings']
+  readonly listPlannerBindings: AttemptBindings['listPlannerBindings']
   readonly nextAttemptSeq: AttemptBindings['nextAttemptSeq']
   readonly hasPendingQuestionForTask: AttemptBindings['hasPendingQuestionForTask']
   readonly countRunningTasksForProvider: AttemptBindings['countRunningTasksForProvider']
@@ -112,6 +113,7 @@ export class AxiomStore {
     this.getAttemptBindingByDispatch = bindings.getAttemptBindingByDispatch
     this.getAttemptBinding = bindings.getAttemptBinding
     this.listAttemptBindings = bindings.listAttemptBindings
+    this.listPlannerBindings = bindings.listPlannerBindings
     this.nextAttemptSeq = bindings.nextAttemptSeq
     this.hasPendingQuestionForTask = bindings.hasPendingQuestionForTask
     this.countRunningTasksForProvider = bindings.countRunningTasksForProvider

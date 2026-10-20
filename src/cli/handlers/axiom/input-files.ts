@@ -48,6 +48,11 @@ export function readGoalFile(cwd: string, file: string) {
 export function readPlanFile(cwd: string, file: string) {
   return readInput(cwd, file, (text) => PlanProposalSchema.parse(JSON.parse(text)))
 }
+export function readPlannerPlanFile(cwd: string, file: string) {
+  return readInput(cwd, file, (text) =>
+    PlanProposalSchema.omit({ provenance: true }).parse(JSON.parse(text))
+  )
+}
 
 export function readRoutingFile(cwd: string, file: string) {
   return readInput(cwd, file, (text) => RoutingPolicySchema.parse(JSON.parse(text)))

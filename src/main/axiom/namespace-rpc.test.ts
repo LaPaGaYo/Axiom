@@ -12,6 +12,7 @@ import { isOrchestrationMutation } from '../../shared/orchestration-rpc-contract
 
 describe('Axiom RPC namespace', () => {
   it('classifies every registered method exactly once and registers every mutation', () => {
+    expect(AXIOM_MUTATION_METHODS).toContain('axiom.mission.plan')
     const reads = [
       'axiom.namespace.get',
       'axiom.attempt.show',

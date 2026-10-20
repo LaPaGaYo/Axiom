@@ -11,6 +11,7 @@ import { stopLocalWorker } from '../../runtime/rpc/methods/orchestration/worker/
 import { releaseLocalWorker } from '../../runtime/rpc/methods/orchestration/worker/local-worker-release'
 import { foldAttemptLiveness } from '../execution/attempt-projection'
 import { settleAttemptWithoutSubmission } from '../execution/attempt-settlement'
+import { reconcilePlanner } from './planner-reconciliation'
 import {
   abandonmentEvidence,
   auditAttempt,
@@ -47,6 +48,7 @@ export async function reconcileAttempt(
 ): Promise<AttemptReconcileEntry> {
   const { db, store, runtime } = ctx
   const { dispatchId, taskId, seq } = binding
+  const planner = store.getAgentSpec(binding.agentSpecId)?.spec.role === 'planner'
   const entry: AttemptReconcileEntry = {
     attemptId: dispatchId,
     taskId,
@@ -55,6 +57,17 @@ export async function reconcileAttempt(
     action: 'unchanged'
   }
   if (!dispatchId) {
+    if (planner) {
+      if (
+        !lastAttemptAudit(ctx, binding, 'planner.launch_failed') &&
+        ctx.now() - Date.parse(exposeUtcTimestamp(binding.createdAt)!) >
+          2 * resolveWorkerStartReadinessTimeoutMs(undefined)
+      ) {
+        auditAttempt(ctx, binding, 'planner.attempt_failed', { reason: 'launch_pending_orphan' })
+        entry.action = 'launch_pending_orphan'
+      }
+      return entry
+    }
     if (
       currentRunning(ctx, binding) &&
       ctx.now() - Date.parse(exposeUtcTimestamp(binding.createdAt)!) >
@@ -91,11 +104,17 @@ export async function reconcileAttempt(
   const task = store.getTaskStage(taskId)
   const mission = store.getMission(binding.missionId)
   worker = db.getWorkerDispatch(dispatchId)
-  if (!task || !mission) {
+  if (!mission) {
     return entry
   }
-  if (task.stage === 'CANCELED' || TERMINAL_MISSION_STATUSES.has(mission.status)) {
+  if (task?.stage === 'CANCELED' || TERMINAL_MISSION_STATUSES.has(mission.status)) {
     entry.action = await cancelAttempt(ctx, binding, observation)
+    return entry
+  }
+  if (planner) {
+    return reconcilePlanner(ctx, binding, observation, entry)
+  }
+  if (!task) {
     return entry
   }
   if (task.stage === 'SUBMITTED') {

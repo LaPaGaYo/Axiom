@@ -6,10 +6,12 @@ export async function callAxiom<T>(
   ctx: HandlerContext,
   method: string,
   params: unknown,
-  formatter: (value: T) => string
+  formatter: (value: T) => string,
+  options?: { timeoutMs: number }
 ) {
   const result = await ctx.client.call<T>(method, params, {
-    orchestrationRequestId: readRetryRequestFlag(ctx.flags)
+    orchestrationRequestId: readRetryRequestFlag(ctx.flags),
+    ...options
   })
   printResult(result, ctx.json, formatter)
 }

@@ -56,10 +56,11 @@ export class RecoveryService {
       for (const binding of this.store.listAttemptBindings({ missionId: mission.id })) {
         const stage = this.store.getTaskStage(binding.taskId)?.stage
         if (
-          stage &&
-          (!TERMINAL_TASK_STAGES.has(stage) ||
-            stage === 'CANCELED' ||
-            TERMINAL_MISSION_STATUSES.has(mission.status))
+          this.store.getAgentSpec(binding.agentSpecId)?.spec.role === 'planner' ||
+          (stage &&
+            (!TERMINAL_TASK_STAGES.has(stage) ||
+              stage === 'CANCELED' ||
+              TERMINAL_MISSION_STATUSES.has(mission.status)))
         ) {
           bindings.set(`${binding.taskId}/${binding.seq}`, binding)
         }

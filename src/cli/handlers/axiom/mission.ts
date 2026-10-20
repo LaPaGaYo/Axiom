@@ -1,4 +1,7 @@
-import { MissionCancelResponseSchema } from '../../../shared/axiom-contract/mission-params'
+import {
+  MissionCancelResponseSchema,
+  MissionPlanResponseSchema
+} from '../../../shared/axiom-contract/mission-params'
 import { AXIOM_POLICY_HANDLERS } from './policy'
 import { AXIOM_ARTIFACT_HANDLERS } from './artifact'
 import type { CommandHandler } from '../../dispatch'
@@ -11,6 +14,18 @@ import { callAxiom } from './rpc-command'
 export const AXIOM_MISSION_HANDLERS: Record<string, CommandHandler> = {
   ...AXIOM_ARTIFACT_HANDLERS,
   ...AXIOM_POLICY_HANDLERS,
+  'mission plan': async (ctx) => {
+    await callAxiom(
+      ctx,
+      'axiom.mission.plan',
+      { missionId: required(ctx.flags, 'mission') },
+      (value) => {
+        const { attempt } = MissionPlanResponseSchema.parse(value)
+        return `Planner started: attempt ${attempt.attemptId} on ${attempt.branch}`
+      },
+      { timeoutMs: 120_000 }
+    )
+  },
   'mission create': async (ctx) => {
     const params = {
       repo: required(ctx.flags, 'repo'),

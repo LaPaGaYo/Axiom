@@ -73,6 +73,7 @@ export const TaskSpecSchema = z.object({
   title: Text,
   objective: Text,
   scope: z.object({ allowedPaths: z.array(Text) }),
+  role: Text.optional(),
   acceptanceCriteria: z.array(Text),
   requiredEvidence: z.array(Text),
   risk: RiskLevelSchema,

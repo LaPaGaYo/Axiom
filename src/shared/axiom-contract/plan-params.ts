@@ -5,11 +5,19 @@ import { PlanProposalSchema } from './plan-proposal'
 
 // §4c keeps provenance beside planRevision; validatePlanProposal receives their
 // combination. Shape parsing alone does not replace the controller's DAG check.
-export const PlanProposeParams = z.object({
-  missionId: AxiomIdSchema,
-  planRevision: PlanProposalSchema.omit({ provenance: true }),
-  provenance: ProvenanceSchema
-})
+export const PlanProposeParams = z
+  .object({
+    missionId: AxiomIdSchema,
+    planRevision: PlanProposalSchema.omit({ provenance: true }),
+    provenance: ProvenanceSchema.optional(),
+    attemptId: AxiomIdSchema.optional(),
+    from: z.string().min(1).optional()
+  })
+  .superRefine((p, ctx) => {
+    if ((p.provenance === undefined) === (p.attemptId === undefined)) {
+      ctx.addIssue({ code: 'custom', message: 'Supply exactly one of provenance or attemptId.' })
+    }
+  })
 export const PlanApproveParams = z.object({
   planRevisionId: AxiomIdSchema,
   resolver: requiredString('Missing resolver')

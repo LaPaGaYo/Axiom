@@ -15,6 +15,7 @@ export const AXIOM_HANDLER_GROUPS: readonly HandlerGroup[] = [
       'mission show',
       'mission list',
       'mission start',
+      'mission plan',
       'mission pause',
       'mission resume',
       'mission cancel',

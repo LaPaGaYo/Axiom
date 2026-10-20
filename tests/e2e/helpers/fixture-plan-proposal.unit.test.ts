@@ -5,6 +5,9 @@ import {
   validatePlanProposal
 } from '../../../src/shared/axiom-contract/plan-proposal'
 import { fixturePlanProposal } from './fixture-plan-proposal'
+import { runInNewContext } from 'node:vm'
+import { createRequire } from 'node:module'
+import { AXIOM_TEST_PROVIDER_SOURCE } from './axiom-test-provider'
 
 const at = '2026-10-17T12:00:00Z'
 function fixtureInput() {
@@ -22,6 +25,24 @@ function fixtureInput() {
 }
 
 describe('fixture-v1 PlanProposal conversion', () => {
+  it('keeps the executable D49 planner conversion identical to the fixture mapping', () => {
+    const input = fixtureInput()
+    const result: unknown = runInNewContext(
+      `${AXIOM_TEST_PROVIDER_SOURCE}\nfixtureProposal(input.tasks, 'goal-1')`,
+      {
+        input,
+        require: createRequire(import.meta.url),
+        process: {
+          argv: [],
+          stdout: { write() {} },
+          stdin: { setEncoding() {}, on() {}, resume() {} }
+        },
+        setInterval() {}
+      }
+    )
+    const { provenance: _provenance, ...expected } = fixturePlanProposal(input, 'goal-1', at)
+    expect(JSON.parse(JSON.stringify(result))).toEqual(expected)
+  })
   it('preserves twelve Tasks, twenty edges and the three expected READY roots', () => {
     const input = fixtureInput()
     const proposal = fixturePlanProposal(input, 'active-goal-1', at)
