@@ -12,6 +12,7 @@ import type { ContextBuilder } from '../context-builder/context-builder'
 import { AgentFactoryError, type AgentFactory } from '../agent-factory/agent-factory'
 import { blockingQuestionOrApproval } from './admission-blockers'
 import { orderByCriticalPath } from './critical-path'
+import { settleAttemptWithoutSubmission } from '../execution/attempt-settlement'
 
 export type ScheduleTrigger = 'mission_start' | 'stage_change' | 'resume' | 'manual'
 export type AdmittedAttempt = {
@@ -219,6 +220,16 @@ export class Scheduler {
             'attempt',
             `${admitted.taskId}/${admitted.seq}`,
             { reason: 'launch_rejected' }
+          )
+          // The helper only settles this unbound admission; bound dispatches belong to recovery.
+          settleAttemptWithoutSubmission(
+            { store: this.store, missions: this.missions },
+            {
+              ...admitted,
+              dispatchId: null,
+              reason: 'launch_rejected',
+              actor: 'Scheduler'
+            }
           )
         }
       }

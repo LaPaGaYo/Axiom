@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   MissionCancelParams,
+  MissionCancelResponseSchema,
   MissionCreateParams,
   MissionListParams,
   MissionPauseParams,
@@ -46,5 +47,18 @@ describe('axiom.mission params', () => {
     expect(MissionListParams.safeParse({}).success).toBe(true)
     expect(MissionSummarySchema.safeParse(mission).success).toBe(true)
     expect(MissionSummarySchema.safeParse({ ...mission, status: 'completed' }).success).toBe(false)
+  })
+  it('accepts legacy cancel responses and additive Attempt reconciliation entries', () => {
+    expect(MissionCancelResponseSchema.safeParse({ mission }).success).toBe(true)
+    const attempts = [
+      { attemptId: 'dispatch-1', taskId: 'task-1', seq: 1, liveness: 'live', action: 'stopped' }
+    ]
+    expect(MissionCancelResponseSchema.parse({ mission, attempts }).attempts).toEqual(attempts)
+    expect(
+      MissionCancelResponseSchema.safeParse({
+        mission,
+        attempts: [{ ...attempts[0], liveness: 'dead' }]
+      }).success
+    ).toBe(false)
   })
 })

@@ -1,3 +1,4 @@
+import { settleAttemptWithoutSubmission } from './attempt-settlement'
 import { z } from 'zod'
 import type { AuditEvent } from '../../../shared/axiom-contract/mission-objects'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
@@ -60,19 +61,17 @@ export function createAttemptLauncher(deps: Dependencies): AttemptLaunch {
       createdAt: deps.now?.() ?? new Date().toISOString()
     })
   }
-  const fail = (attempt: AdmittedAttempt) => {
-    const task = store.getTaskStage(attempt.taskId)
-    if (task?.stage !== 'RUNNING') {
-      return
-    }
-    const exhausted = task.attemptCount >= task.retryPolicy.maxAttempts
-    missions.transitionTaskStage({
-      taskId: attempt.taskId,
-      to: exhausted ? 'BLOCKED' : 'NEEDS_FIX',
-      actor: 'Scheduler',
-      reason: exhausted ? 'retry_budget_exhausted' : 'launch_failed'
-    })
-  }
+  const fail = (attempt: AdmittedAttempt) =>
+    settleAttemptWithoutSubmission(
+      { store, missions },
+      {
+        taskId: attempt.taskId,
+        seq: attempt.seq,
+        dispatchId: store.getAttemptBinding(attempt.taskId, attempt.seq)?.dispatchId ?? null,
+        reason: 'launch_failed',
+        actor: 'Scheduler'
+      }
+    )
   return async (attempt) => {
     try {
       const binding = store.getAttemptBinding(attempt.taskId, attempt.seq)
@@ -141,7 +140,10 @@ export function createAttemptLauncher(deps: Dependencies): AttemptLaunch {
         agent: spec.provider,
         model: spec.model === 'policy-default' ? undefined : spec.model,
         effort: spec.model === 'policy-default' ? undefined : spec.reasoning.effort,
-        timeoutMs
+        timeoutMs,
+        retryOf: ['failed', 'blocked'].includes(existingTask.status)
+          ? db.getDispatchContext(attempt.taskId)?.id
+          : undefined
       })
       const args: Omit<AttemptWorkerStartArgs, 'runtime'> = {
         params,

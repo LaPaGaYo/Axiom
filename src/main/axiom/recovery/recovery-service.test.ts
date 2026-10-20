@@ -1,6 +1,7 @@
+import { ArtifactStore } from '../artifacts/artifact-store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fixture, planned } from '../mission-controller/controller-fixture.test-support'
-import { replaceRunBinding } from '../mailbox-runtime.test-support'
+import { replaceRunBinding, mailboxRuntime } from '../mailbox-runtime.test-support'
 import { RecoveryService } from './recovery-service'
 
 describe('M1 RecoveryService', () => {
@@ -8,14 +9,17 @@ describe('M1 RecoveryService', () => {
   let recovery: RecoveryService
   beforeEach(() => {
     f = planned(fixture())
-    recovery = new RecoveryService(f.db, f.store, f.controller)
+    recovery = new RecoveryService(f.db, f.store, f.controller, {
+      runtime: mailboxRuntime(f.db),
+      artifacts: new ArtifactStore(f.store, '/tmp/axiom-m1-unused')
+    })
   })
   afterEach(() => {
     vi.restoreAllMocks()
     f.db.close()
   })
 
-  it('derives readiness from durable stages and explicitly has no M1 Attempts', () => {
+  it('derives readiness synchronously without running asynchronous Attempt reconciliation', () => {
     const reconcile = vi.spyOn(recovery, 'reconcileAttempts')
     // Durable EXECUTING state with readiness not yet computed (interrupted startup).
     f.store.updateMissionStatus({
@@ -33,7 +37,7 @@ describe('M1 RecoveryService', () => {
       missions: [{ id: f.missionId, status: 'EXECUTING', moved: ready }],
       blocked: []
     })
-    expect(reconcile).toHaveReturnedWith('no_attempts_in_m1')
+    expect(reconcile).not.toHaveBeenCalled()
     expect(recovery.recover().missions[0]?.moved).toEqual([])
   })
 

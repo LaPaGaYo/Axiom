@@ -15,8 +15,8 @@ export const subtask = {
 export const workerVerbs = ['inform', 'request', 'blocked', 'handoff', 'request-subtask'] as const
 export const workerTypes = ['INFORM', 'REQUEST', 'BLOCKED', 'HANDOFF', 'REQUEST_SUBTASK'] as const
 
-export function channelFixture() {
-  const f = rpcFixture()
+export function channelFixture(dbPath = ':memory:') {
+  const f = rpcFixture(dbPath)
   const { missions } = getAxiomControlPlane(f.runtime)
   const { mission, goalRevision } = missions.createMission(createInput)
   const plan = propose(missions, mission.id, goalRevision.id)

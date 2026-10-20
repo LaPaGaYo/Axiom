@@ -77,6 +77,7 @@ export class AxiomStore {
   readonly getPolicy: PolicyAudit['getPolicy']
   readonly appendAuditEvent: PolicyAudit['appendAuditEvent']
   readonly listAuditEvents: PolicyAudit['listAuditEvents']
+  readonly hasMessageAudit: PolicyAudit['hasMessageAudit']
 
   readonly insertAgentSpec: AgentSpecs['insertAgentSpec']
   readonly getAgentSpec: AgentSpecs['getAgentSpec']
@@ -160,6 +161,7 @@ export class AxiomStore {
     this.getPolicy = policyAudit.getPolicy
     this.appendAuditEvent = policyAudit.appendAuditEvent
     this.listAuditEvents = policyAudit.listAuditEvents
+    this.hasMessageAudit = policyAudit.hasMessageAudit
   }
 
   transaction<T>(savepoint: string, operation: () => T): T {

@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { MessageRow } from '../../runtime/orchestration/types'
 import { OrchestrationError } from '../../runtime/orchestration/orchestration-error'
@@ -11,6 +12,8 @@ import { processSubtaskRequest } from '../messaging/subtask-resolution'
 export type AxiomRuntime = Pick<OrcaRuntimeService, 'getOrchestrationDb' | 'waitForMessage'>
 type ConsumerIdentity = { missionId: string; runId: string; consumerGeneration: number }
 
+export const MAX_CONSECUTIVE_BATCH_FAILURES = 8
+
 export class RunMailboxConsumer {
   private abort: AbortController | undefined
 
@@ -18,7 +21,8 @@ export class RunMailboxConsumer {
     private readonly runtime: AxiomRuntime,
     private readonly store: AxiomStore,
     private readonly missions: MissionController,
-    private readonly identity: ConsumerIdentity
+    private readonly identity: ConsumerIdentity,
+    private readonly hooks?: { onEscalation?: (missionId: string) => void }
   ) {}
 
   async start(): Promise<'stopped' | 'waiter_exists'> {
@@ -27,6 +31,7 @@ export class RunMailboxConsumer {
     }
     this.abort = new AbortController()
     const signal = this.abort.signal
+    let failures = 0
     try {
       while (!signal.aborted) {
         const iteration = new AbortController()
@@ -46,6 +51,7 @@ export class RunMailboxConsumer {
             break
           }
           this.drain()
+          failures = 0
           if ((await waiting) === 'cancelled') {
             break
           }
@@ -62,15 +68,19 @@ export class RunMailboxConsumer {
             reason: fenced ? 'consumer_fenced' : 'handler_error'
           })
           if (fenced) {
-            this.blockFencedMission()
+            this.blockFailedMission('consumer_fenced')
             break
           }
-          // ponytail: fixed 250ms backoff for M1; M2 owns bounded retry/escalation policy.
+          failures += 1
+          if (failures >= MAX_CONSECUTIVE_BATCH_FAILURES) {
+            this.blockFailedMission('consumer_retry_exhausted')
+            break
+          }
           // An empty type filter keeps notifications from bypassing the backoff.
           const backoff = await this.runtime.waitForMessage(`run:${this.identity.runId}`, {
             exclusive: true,
             typeFilter: [],
-            timeoutMs: 250,
+            timeoutMs: Math.min(250 * 2 ** (failures - 1), 30_000),
             signal
           })
           if (backoff === 'waiter_exists') {
@@ -113,23 +123,34 @@ export class RunMailboxConsumer {
       }
       this.handle(batch.messages)
       db.acknowledgeRunDelivery({ ...this.identity, deliveryId: batch.delivery.id })
+      if (
+        batch.messages.some((message) => {
+          if (message.type !== 'escalation') {
+            return false
+          }
+          let payload: unknown
+          try {
+            payload = JSON.parse(message.payload ?? 'null')
+          } catch {
+            return false
+          }
+          const parsed = z.object({ dispatchId: z.string() }).safeParse(payload)
+          return (
+            parsed.success &&
+            this.store.getAttemptBindingByDispatch(parsed.data.dispatchId)?.missionId ===
+              this.identity.missionId
+          )
+        })
+      ) {
+        this.hooks?.onEscalation?.(this.identity.missionId)
+      }
     }
   }
 
   handle(messages: readonly MessageRow[]): void {
     this.store.transaction('mailbox_message_batch', () => {
-      // ponytail: scan Mission audit history once per batch in M1; M2 can add
-      // an indexed audit lookup when message volume justifies the migration.
-      const seen = new Set(
-        this.store
-          .listAuditEvents({ missionId: this.identity.missionId })
-          .filter(
-            (event) => event.event === 'mailbox.message' || event.event === 'message.received'
-          )
-          .map((event) => event.objectId)
-      )
       for (const message of messages) {
-        if (seen.has(message.id)) {
+        if (this.store.hasMessageAudit(this.identity.missionId, message.id)) {
           continue
         }
         const parsed = parseAxiomMessagePayload(message.payload)
@@ -178,32 +199,31 @@ export class RunMailboxConsumer {
             after: after!
           })
         }
-        seen.add(message.id)
       }
       this.missions.recomputeReadiness(this.identity.missionId)
     })
   }
 
-  private blockFencedMission(): void {
-    this.store.transaction('mailbox_consumer_fenced', () => {
+  private blockFailedMission(reason: 'consumer_fenced' | 'consumer_retry_exhausted'): void {
+    this.store.transaction('mailbox_consumer_failed', () => {
       const mission = this.missions.getMission(this.identity.missionId)
       if (TERMINAL_MISSION_STATUSES.has(mission.status)) {
         return
       }
       if (mission.status !== 'BLOCKED') {
-        this.missions.blockMission(mission.id, 'consumer_fenced')
+        this.missions.blockMission(mission.id, reason)
       }
       this.store.appendAuditEvent({
         missionId: mission.id,
         actor: 'MissionController',
         objectKind: 'mission',
         objectId: mission.id,
-        event: 'mailbox.consumer_fenced',
+        event: reason === 'consumer_fenced' ? 'mailbox.consumer_fenced' : 'mailbox.retry_exhausted',
         before: null,
         after: {
           runId: this.identity.runId,
           consumerGeneration: this.identity.consumerGeneration,
-          reason: 'consumer_fenced'
+          reason
         }
       })
     })

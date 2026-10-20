@@ -225,6 +225,8 @@ ${AXIOM_INDEXES_AND_DELETE_TRIGGERS_SQL}
 }
 
 export const AXIOM_INDEXES_AND_DELETE_TRIGGERS_SQL = `
+CREATE INDEX IF NOT EXISTS idx_audit_events_object ON audit_events(mission_id, object_kind, object_id);
+
 CREATE INDEX IF NOT EXISTS idx_task_stages_mission_stage ON task_stages(mission_id, stage);
 CREATE INDEX IF NOT EXISTS idx_mission_task_edges_to_task ON mission_task_edges(to_task_id);
 CREATE INDEX IF NOT EXISTS idx_goal_revisions_mission ON goal_revisions(mission_id);

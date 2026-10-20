@@ -252,7 +252,7 @@ describe('Scheduler admission', () => {
     ).toEqual([1, 2])
     expect(f.store.countRunningTasksForProvider(f.missionId, 'claude')).toBe(2)
   })
-  it('records sanitized launch failures, retaining admission and continuing the round', async () => {
+  it('settles rejected launches for retry, retaining evidence and continuing the round', async () => {
     const failing = vi.fn(launch).mockRejectedValueOnce(new Error('secret-token-must-not-leak'))
     const result = await round(makeScheduler(failing))
     expect(result.admitted).toHaveLength(3)
@@ -263,7 +263,10 @@ describe('Scheduler admission', () => {
       objectId: `${task('T01').taskId}/1`
     })
     expect(JSON.stringify(events('attempt.launch_failed'))).not.toContain('secret-token')
-    expect(f.store.countTaskStages(f.missionId).RUNNING).toBe(3)
+    expect(f.store.countTaskStages(f.missionId)).toMatchObject({ RUNNING: 2, READY: 1 })
+    expect(events('task.stage')).toContainEqual(
+      expect.objectContaining({ after: expect.objectContaining({ reason: 'launch_rejected' }) })
+    )
   })
   it('coalesces overlapping requests to one follow-up round without duplicate admission', async () => {
     const entered = Promise.withResolvers<void>()
@@ -297,6 +300,22 @@ describe('Scheduler admission', () => {
     })
     expect((await round()).admitted).toEqual([])
     expect(f.store.listAttemptBindings({ missionId: f.missionId })).toEqual([])
+  })
+
+  it('pauses new admission while an existing Attempt remains RUNNING, then resumes admission', async () => {
+    policy({ concurrencyLimit: 1 })
+    await round()
+    const bindings = f.store.listAttemptBindings({ missionId: f.missionId })
+    expect(bindings).toHaveLength(1)
+    policy({ concurrencyLimit: 2 })
+    f.controller.pauseMission(f.missionId)
+    expect(await round()).toEqual({ admitted: [], skipped: [] })
+    expect(task('T01').stage).toBe('RUNNING')
+    expect(task('T02').stage).toBe('READY')
+    expect(f.store.listAttemptBindings({ missionId: f.missionId })).toEqual(bindings)
+    f.controller.resumeMission(f.missionId)
+    expect((await round()).admitted).toMatchObject([{ taskId: task('T02').taskId, seq: 1 }])
+    expect(task('T01').stage).toBe('RUNNING')
   })
   it('rolls back admission if its audit fails', async () => {
     const append = f.store.appendAuditEvent

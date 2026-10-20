@@ -114,9 +114,7 @@ export function transitionTaskStage(ctx: ControllerContext, input: TransitionTas
       }
     )
   }
-  if (to === 'CANCELED') {
-    stopAttemptsForCancellation()
-  }
+  // Cancellation commits intent first; RecoveryService stops/releases Attempts after commit.
   const previousStage = to === 'BLOCKED' ? from : null
   if (
     !ctx.store.updateTaskStage({
@@ -139,11 +137,6 @@ export function transitionTaskStage(ctx: ControllerContext, input: TransitionTas
     after: { stage: to, previousStage, reason: input.reason }
   })
   return requireTask(ctx, task.taskId)
-}
-
-function stopAttemptsForCancellation(): void {
-  // Explicit no-op: M1 cannot launch Attempts. M2 must stop/abandon active Attempts
-  // through the Execution Kernel before permitting cancellation.
 }
 
 export function cancelMissionTasks(ctx: ControllerContext, missionId: string, reason: string) {

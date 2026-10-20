@@ -6,6 +6,14 @@ import type { OrchestrationFleetWorker } from '../../../shared/orchestration-fle
 import type { inspectWorkerTerminal } from '../../runtime/rpc/methods/orchestration/worker/worker-observation'
 import type { AxiomStore } from '../db/axiom-store'
 
+export function foldAttemptLiveness(
+  observation: Awaited<ReturnType<typeof inspectWorkerTerminal>>
+) {
+  return observation.status === 'live' || observation.status === 'exited'
+    ? observation.status
+    : 'unverifiable'
+}
+
 export async function projectAttempt(
   store: AxiomStore,
   binding: NonNullable<ReturnType<AxiomStore['getAttemptBinding']>>,
@@ -14,11 +22,7 @@ export async function projectAttempt(
 ) {
   const worker = binding.dispatchId === null ? null : projectFleetWorker(binding.dispatchId)
   const observation = binding.dispatchId === null ? null : await inspectTerminal(binding.dispatchId)
-  const liveness = observation
-    ? observation.status === 'live' || observation.status === 'exited'
-      ? observation.status
-      : 'unverifiable'
-    : null
+  const liveness = observation ? foldAttemptLiveness(observation) : null
   const release = worker?.resource.state === 'absent' ? null : worker?.resource.releaseState
   return AttemptSummarySchema.parse({
     ...binding,

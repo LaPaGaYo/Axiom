@@ -52,10 +52,13 @@ function createControlPlane(runtime: OrcaRuntimeService, db: OrchestrationDb) {
   const scheduler = new Scheduler(db, store, missions, contextBuilder, agentFactory, {
     launch: createAttemptLauncher({ runtime, db, store, missions, artifacts })
   })
-  const recovery = new RecoveryService(db, store, missions)
+  const recovery = new RecoveryService(db, store, missions, { runtime, artifacts })
   // Only process-local cancellation handles are retained; statuses, stages,
   // binding and generation are loaded from the database at each new start.
   const consumers = new Map<string, RunMailboxConsumer>()
+  const lifecycle: { started: boolean; attemptReconcileTimer?: ReturnType<typeof setInterval> } = {
+    started: false
+  }
   const plane = {
     store,
     artifacts,
@@ -66,7 +69,7 @@ function createControlPlane(runtime: OrcaRuntimeService, db: OrchestrationDb) {
     scheduler,
     recovery,
     consumers,
-    started: false,
+    ...lifecycle,
     syncConsumer
   }
 
@@ -87,11 +90,23 @@ function createControlPlane(runtime: OrcaRuntimeService, db: OrchestrationDb) {
     if (!run) {
       return
     } // Recovery above records missing/broken Run bindings.
-    const consumer = new RunMailboxConsumer(runtime, store, missions, {
-      missionId,
-      runId: run.id,
-      consumerGeneration: run.consumer_generation
-    })
+    const consumer = new RunMailboxConsumer(
+      runtime,
+      store,
+      missions,
+      {
+        missionId,
+        runId: run.id,
+        consumerGeneration: run.consumer_generation
+      },
+      {
+        onEscalation: (id) => {
+          void recovery.reconcileAttempts({ missionId: id }).catch(() => {
+            console.warn('[axiom] Attempt reconciliation failed', { missionId: id })
+          })
+        }
+      }
+    )
     consumers.set(missionId, consumer)
     void consumer
       .start()
