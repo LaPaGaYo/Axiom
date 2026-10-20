@@ -12,6 +12,7 @@ import { releaseLocalWorker } from '../../runtime/rpc/methods/orchestration/work
 import { foldAttemptLiveness } from '../execution/attempt-projection'
 import { settleAttemptWithoutSubmission } from '../execution/attempt-settlement'
 import { reconcilePlanner } from './planner-reconciliation'
+import { observeAgentExit } from './agent-exit-observation'
 import {
   abandonmentEvidence,
   auditAttempt,
@@ -99,7 +100,8 @@ export async function reconcileAttempt(
     }
   }
   const observation = await inspectWorkerTerminal(runtime, db, dispatchId)
-  entry.liveness = foldAttemptLiveness(observation)
+  const agentExit = await observeAgentExit(ctx, binding, observation, worker)
+  entry.liveness = agentExit.exited ? 'exited' : foldAttemptLiveness(observation)
   // Inspection and kernel calls await host IO. Always re-read durable authority afterwards.
   const task = store.getTaskStage(taskId)
   const mission = store.getMission(binding.missionId)
@@ -112,7 +114,7 @@ export async function reconcileAttempt(
     return entry
   }
   if (planner) {
-    return reconcilePlanner(ctx, binding, observation, entry)
+    return reconcilePlanner(ctx, binding, observation, entry, agentExit)
   }
   if (!task) {
     return entry
@@ -127,6 +129,12 @@ export async function reconcileAttempt(
   const terminalReason = worker && terminalReasons.get(worker.state)
   if (terminalReason) {
     store.transaction('recovery_terminal', () => {
+      if (worker?.state === 'failed' && !lastAttemptAudit(ctx, binding, 'attempt.failed')) {
+        auditAttempt(ctx, binding, 'attempt.failed', {
+          reason: 'kernel_failed',
+          lastError: worker.last_error ?? null
+        })
+      }
       // Reattach evidence if the process died after kernel abandonment but before Axiom settlement.
       const evidence =
         worker?.state === 'abandoned'
@@ -155,11 +163,17 @@ export async function reconcileAttempt(
   if (!stopUnknown && entry.liveness === 'exited' && worker && activeStates.has(worker.state)) {
     store.transaction('recovery_process_exit', () => {
       // failDispatch owns a savepoint and is explicitly safe inside the Axiom transaction.
-      db.failDispatch(dispatchId, 'Worker process exited without a Submission', {
-        workerProcessExited: true,
-        terminationReason: 'process_exited'
+      db.failDispatch(
+        dispatchId,
+        agentExit.exited
+          ? 'Worker agent exited without a Submission'
+          : 'Worker process exited without a Submission',
+        { workerProcessExited: true, terminationReason: 'process_exited' }
+      )
+      auditAttempt(ctx, binding, 'attempt.failed', {
+        reason: 'process_exited',
+        ...(agentExit.exited ? { evidence: agentExit.evidence } : {})
       })
-      auditAttempt(ctx, binding, 'attempt.failed', { reason: 'process_exited' })
       settle(ctx, binding, 'attempt_failed')
     })
     entry.action = 'failed'

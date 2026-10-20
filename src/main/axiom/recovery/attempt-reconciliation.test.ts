@@ -29,10 +29,13 @@ describe('Attempt recovery', () => {
       artifacts,
       now: () => now
     })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: observation reads only terminal existence and agentWait; liveness and identity are separate spies.
-    vi.spyOn(f.runtime, 'showTerminal').mockResolvedValue({ agentWait: null } as Awaited<
-      ReturnType<typeof f.runtime.showTerminal>
-    >)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: recovery reads terminal handle, connection and agentWait; liveness and identity are separate spies.
+    vi.spyOn(f.runtime, 'showTerminal').mockResolvedValue({
+      handle: f.t01.from,
+      connected: true,
+      agentWait: null
+    } as Awaited<ReturnType<typeof f.runtime.showTerminal>>)
+    vi.spyOn(f.runtime, 'confirmTerminalShellForeground').mockResolvedValue(false)
     vi.spyOn(f.runtime, 'getTerminalLivenessVerdict').mockReturnValue({
       status: 'live',
       ptyIds: []
@@ -82,6 +85,79 @@ describe('Attempt recovery', () => {
     const after = audits()
     await recovery.reconcileAttempts()
     expect(audits()).toEqual(after)
+  })
+  it('fails an agent that exited inside a live shell, then makes its Task READY', async () => {
+    vi.mocked(f.runtime.confirmTerminalShellForeground).mockResolvedValue(true)
+    const fail = vi.spyOn(f.db, 'failDispatch')
+    const before = audits().length
+    expect(await recovery.reconcileAttempts()).toMatchObject({
+      attempts: [{ attemptId: f.t01.attemptId, liveness: 'exited', action: 'failed' }]
+    })
+    expect(f.runtime.confirmTerminalShellForeground).toHaveBeenCalledExactlyOnceWith(f.t01.from)
+    expect(fail).toHaveBeenCalledExactlyOnceWith(
+      f.t01.attemptId,
+      'Worker agent exited without a Submission',
+      { workerProcessExited: true, terminationReason: 'process_exited' }
+    )
+    expect(worker()?.state).toBe('failed')
+    expect(stage()).toMatchObject({ stage: 'READY', attemptCount: 1 })
+    expect(audits().slice(before)).toMatchObject([
+      {
+        event: 'attempt.failed',
+        after: { reason: 'process_exited', evidence: 'shell_foreground' }
+      },
+      { event: 'task.stage', after: { stage: 'NEEDS_FIX' } },
+      { event: 'task.stage', after: { stage: 'READY' } }
+    ])
+    const after = audits()
+    await recovery.reconcileAttempts()
+    expect(audits()).toEqual(after)
+    expect(fail).toHaveBeenCalledOnce()
+  })
+  it('keeps a live agent RUNNING when the host cannot prove shell foreground', async () => {
+    const before = audits()
+    expect(await recovery.reconcileAttempts()).toMatchObject({
+      attempts: [{ liveness: 'live', action: 'unchanged' }]
+    })
+    expect(f.runtime.confirmTerminalShellForeground).toHaveBeenCalledExactlyOnceWith(f.t01.from)
+    expect(worker()?.state).toBe('ready')
+    expect(stage()?.stage).toBe('RUNNING')
+    expect(audits()).toEqual(before)
+  })
+  it('does not probe a starting worker even when the shell would be in the foreground', async () => {
+    f.db.db
+      .prepare('UPDATE worker_dispatches SET state = ?, runtime_epoch = ? WHERE dispatch_id = ?')
+      .run('starting', f.runtime.getRuntimeId(), f.t01.attemptId)
+    vi.mocked(f.runtime.confirmTerminalShellForeground).mockResolvedValue(true)
+    const before = audits()
+    expect(await recovery.reconcileAttempts()).toMatchObject({
+      attempts: [{ liveness: 'live', action: 'unchanged' }]
+    })
+    expect(f.runtime.confirmTerminalShellForeground).not.toHaveBeenCalled()
+    expect(worker()?.state).toBe('starting')
+    expect(stage()?.stage).toBe('RUNNING')
+    expect(audits()).toEqual(before)
+  })
+  it('re-reads Submission authority after the shell-foreground probe awaits host IO', async () => {
+    vi.spyOn(snapshots, 'snapshotCandidate').mockResolvedValue({
+      commitSha: 'a'.repeat(40),
+      treeSha: 'b'.repeat(40),
+      snapshotCommitted: false
+    })
+    vi.mocked(f.runtime.confirmTerminalShellForeground).mockImplementationOnce(async () => {
+      expect(
+        await f.call(
+          'axiom.attempt.submit',
+          { attemptId: f.t01.attemptId, from: f.t01.from, report },
+          { orchestrationCapability: f.t01.capability }
+        )
+      ).toMatchObject({ ok: true })
+      return true
+    })
+    await recovery.reconcileAttempts()
+    expect(worker()?.state).toBe('succeeded')
+    expect(stage()?.stage).toBe('SUBMITTED')
+    expect(audits().filter((e) => e.event === 'attempt.failed')).toEqual([])
   })
   it('persists one unverifiable clock across ticks and never admits a duplicate', async () => {
     unknown()
@@ -166,8 +242,17 @@ describe('Attempt recovery', () => {
       workerProcessExited: true,
       terminationReason: 'process_exited'
     })
+    const before = audits().length
     await recovery.reconcileAttempts()
     expect(stage()?.stage).toBe('READY')
+    expect(audits().slice(before)).toMatchObject([
+      { event: 'attempt.failed', after: { reason: 'kernel_failed', lastError: 'exit' } },
+      { event: 'task.stage', after: { stage: 'NEEDS_FIX' } },
+      { event: 'task.stage', after: { stage: 'READY' } }
+    ])
+    const after = audits()
+    await recovery.reconcileAttempts()
+    expect(audits()).toEqual(after)
   })
   it('leaves a fresh pending launch alone and settles an orphan after two readiness windows', async () => {
     f.db.db
