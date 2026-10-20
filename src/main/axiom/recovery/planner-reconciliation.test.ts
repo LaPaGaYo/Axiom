@@ -44,6 +44,38 @@ it('fails and releases an exited planner once without changing the Mission', asy
   await recovery.reconcileAttempts()
   expect(events('planner.attempt_failed')).toHaveLength(1)
 })
+it('fails and releases a ready planner whose agent exited inside a live shell without a proposal', async () => {
+  vi.mocked(observation.inspectWorkerTerminal).mockRestore()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: recovery reads only handle, connection and agentWait; the fixture supplies process identity separately.
+  vi.spyOn(f.runtime, 'showTerminal').mockResolvedValue({
+    handle: f.from,
+    connected: true,
+    agentWait: null
+  } as Awaited<ReturnType<typeof f.runtime.showTerminal>>)
+  vi.spyOn(f.runtime, 'getTerminalLivenessVerdict').mockReturnValue({
+    status: 'live',
+    ptyIds: ['pty-planner']
+  })
+  const confirm = vi.spyOn(f.runtime, 'confirmTerminalShellForeground').mockResolvedValue(true)
+  const fail = vi.spyOn(f.db, 'failDispatch')
+  expect(await recovery.reconcileAttempts()).toMatchObject({
+    attempts: [{ attemptId, liveness: 'exited', action: 'attempt_failed' }]
+  })
+  expect(confirm).toHaveBeenCalledExactlyOnceWith(f.from)
+  expect(fail).toHaveBeenCalledWith(attemptId, expect.any(String), {
+    workerProcessExited: true,
+    terminationReason: 'process_exited'
+  })
+  expect(f.db.getWorkerDispatch(attemptId)?.state).toBe('failed')
+  expect(events('planner.attempt_failed')).toMatchObject([
+    { after: { reason: 'no_proposal', evidence: 'shell_foreground' } }
+  ])
+  expect(release.releaseLocalWorker).toHaveBeenCalledWith(f.runtime, attemptId)
+  expect(f.missions.getMission(f.mission.id).status).toBe('ANALYZING')
+  await recovery.reconcileAttempts()
+  expect(events('planner.attempt_failed')).toHaveLength(1)
+  expect(confirm).toHaveBeenCalledOnce()
+})
 it('uses the durable unverifiable clock, then abandons/releases after tolerance', async () => {
   vi.mocked(observation.inspectWorkerTerminal).mockResolvedValue({
     status: 'unverifiable',

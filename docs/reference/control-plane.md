@@ -26,7 +26,7 @@ Execution Kernel 继续拥有 Run、Orca Task、dispatch、PTY、进程、worktr
 | `src/main/axiom/decision-engine/` | M2-03：闭集 choose/score/classify/rank 接口与确定性 RulesEngine；只能建议，不能修改 eligibility 或权威状态 |
 | `src/main/axiom/scheduler/` | `scheduler.ts` 逐轮从数据库排序/校验并事务性 admission；`critical-path.ts` 计算最长下游链；`admission-blockers.ts` 真查 Question/Approval；`admission-budget.ts` 校验 Mission 总 Attempts/wall-clock；typed launch seam 在 M2-05 注入 |
 | `src/main/axiom/admission/` | `mission-managed-run-guard.ts` 阻止 Orca RPC 修改 Mission 对象；四组测试固定 §4b 拦截 |
-| `src/main/axiom/recovery/` | `recovery-service.ts` 恢复非终态 Mission、检查绑定、重算 readiness；Attempt 恢复尚为空钩子 |
+| `src/main/axiom/recovery/` | `recovery-service.ts` 恢复非终态 Mission、检查绑定、重算 readiness；`attempt-reconciliation.ts` / `planner-reconciliation.ts` 对账 Attempt；`agent-exit-observation.ts` 读取 D59 的宿主 shell 前台证明 |
 | `src/main/axiom/control-plane.ts` | 按 `OrchestrationDb` WeakMap 缓存 store/controller/recovery/artifacts/contextBuilder/agentFactory/decisionEngine，维护进程内消费者取消句柄并接入生命周期 |
 | `src/main/axiom/control-plane-boot.ts` | `startAxiomControlPlane` / `stopAxiomControlPlane`；启动恢复和退出停止 |
 | `src/main/axiom/kernel-contract/` | M1-01 的 session party、Run/mailbox、Task 与 dispatch 身份契约测试；D14 的可执行依据 |
@@ -35,7 +35,7 @@ Execution Kernel 继续拥有 Run、Orca Task、dispatch、PTY、进程、worktr
 | `src/cli/specs/axiom-*.ts` + `src/cli/handlers/axiom/` | `mission`、`mission goal`、`mission artifact`、`mission policy`、`plan`、`task` CLI；`input-files.ts` 解析 Goal / Plan，`rpc-command.ts` 调用与输出 |
 | `src/renderer/src/components/missions/` + `src/renderer/src/lib/axiom-client.ts` | Mission list/Home、Plan 审批、Task 表与 Task Detail（Attempt、Submission、typed timeline）；共享 schema 校验与 mutation envelope；刷新后以服务端状态对账 |
 
-新增逻辑不能进入 `@ts-nocheck` 的 runtime 文件（D12）。扩展 RPC 仍遵循 [orca-mapping](orca-mapping.md) §4c 的五步注册与 catalog 检查。
+新增逻辑不能进入 `@ts-nocheck` 的 runtime 文件（D12）；D59 明确授权的例外仅为完全标注类型的进程内转发访问器 `confirmTerminalShellForeground`，恢复决策仍在强类型 Control Plane 模块内。扩展 RPC 仍遵循 [orca-mapping](orca-mapping.md) §4c 的五步注册与 catalog 检查。
 
 ## 3. 持久数据：17 张 side table
 
@@ -147,7 +147,7 @@ ContextBuilder/AgentFactory 的异步构建在 admission 事务之前完成。�
 
 Mission 总 Attempts/wall-clock 耗尽通过既有 `blockMission(missionId, budget_exhausted)` 保留 `previous_status = EXECUTING`，同事务追加 `budget.exhausted {dimension, limit, used}`；Approval 请求对象留给 M4。并发满额、无可选 provider 与 Question/Approval 不视为预算耗尽。
 
-每轮返回 admitted（有序身份）与 skipped（taskId/reason）；skip reason 为 concurrency、provider_concurrency、task_attempts、question、approval、no_eligible_provider 或 stale。只有本轮 admitted 非空或 Mission 被预算阻塞才写一条 `scheduler.round {trigger, admitted, skipped}`；空轮和全部跳过的轮不写此事件。构建合同可留下可复用的内容寻址行，这不等于 admission。每个新实例必须重新请求一轮（启动时的调度/未发出的 binding 恢复由 M2-08 接入）。
+每轮返回 admitted（有序身份）与 skipped（taskId/reason）；skip reason 为 concurrency、provider_concurrency、task_attempts、question、approval、no_eligible_provider 或 stale。只有本轮 admitted 非空或 Mission 被预算阻塞才写一条 `scheduler.round {trigger, admitted, skipped}`；空轮和全部跳过的轮不写此事件。构建合同可留下可复用的内容寻址行，这不等于 admission。M2-12 / D59 在 boot recover 与消费者同步后，对每个 EXECUTING 且未因 Run 绑定丢失而 blocked 的 Mission 显式请求一轮 resume，覆盖已持久化 READY、readiness 没有变化的情形；没有 READY 时仍不写 scheduler.round。
 
 
 ### Attempt launch（M2-05）
@@ -206,15 +206,18 @@ Recovery 扫描所有 planner bindings：未提案的 terminal worker 或确定 
 | 规则 | 读取与 kernel 操作 | 审计 / Axiom stage |
 |---|---|---|
 | a | starting/stopping 的 runtime_epoch 不同于当前 runtime：先 markWorkerStartUnknown / markWorkerStopUnknown，再 inspectWorkerTerminal | 保持 Task；后续按实际宿主 liveness 处置 |
-| b | RUNNING、worker failed/stopped/abandoned、无 Submission | 共享 settlement；放弃已提交而 Axiom consequence 未提交时，从关联 evidence Artifact 补回 attempt.abandoned |
-| c | RUNNING、活跃 worker（stop_unknown 除外）、宿主明确 exited：failDispatch(workerProcessExited=true, terminationReason=process_exited) | attempt.failed → RUNNING → NEEDS_FIX → READY/BLOCKED |
-| d | live 且非 stop_unknown：通常不动；now-createdAt 大于 Task spec.budget.maxRuntimeMinutes（无则 policy.budget.maxRuntimeMinutes，无 cap 不限）时 stopLocalWorker | stopped：attempt.stopped + settlement(runtime_budget_exceeded)；stop_unknown：只在首次停止结果写 attempt.stop_unknown，保持 RUNNING；下一 tick 无论宿主观测如何均走 e |
+| b | RUNNING、worker failed/stopped/abandoned、无 Submission | 共享 settlement；failed 且无既有 attempt.failed 时，在同一 recovery_terminal 事务内先补 attempt.failed{reason: kernel_failed, lastError: worker.last_error ?? null}，再 settlement；重复 tick 不追加。放弃已提交而 Axiom consequence 未提交时，从关联 evidence Artifact 补回 attempt.abandoned；stopped / abandoned 其余行为不变，kernel-first stop 的补审计不在本次范围 |
+| c | RUNNING、活跃 worker（stop_unknown 除外）、宿主明确 exited：failDispatch(workerProcessExited=true, terminationReason=process_exited) | attempt.failed{reason: process_exited} → RUNNING → NEEDS_FIX → READY/BLOCKED |
+| c′（D59） | inspectWorkerTerminal.status=live、exact=true、terminal 非 null（PTY 通道）、worker.state=ready（preamble readiness 已结算），且 confirmTerminalShellForeground(terminal.handle) 返回 true：执行宿主证明 spawned shell 拥有 PTY 前台、无 stopped 后代（Windows：shell 独占 job）。每 tick 一次新证明，不缓存、不计数；SSH 返回 false、structured 无 terminal，均不适用 | 对账 entry.liveness 折叠为 exited，沿用 c 的 failDispatch 与重试，attempt.failed{reason: process_exited, evidence: shell_foreground}；last_error 为 Worker agent exited without a Submission。Planner 无提案时同样 fail/release，planner.attempt_failed{reason: no_proposal, evidence: shell_foreground}，沿用该次证明、不重探测，后续 tick 保留该审计 |
+| d | live、未命中 c′ 且非 stop_unknown：通常不动；now-createdAt 大于 Task spec.budget.maxRuntimeMinutes（无则 policy.budget.maxRuntimeMinutes，无 cap 不限）时 stopLocalWorker | stopped：attempt.stopped + settlement(runtime_budget_exceeded)；stop_unknown：只在首次停止结果写 attempt.stop_unknown，保持 RUNNING；下一 tick 无论宿主观测如何均走 e |
 | e | unverifiable 或 worker stop_unknown：写 liveness facet 的变化；stop_unknown 固定记 `{status: unverifiable, reason: stop_unknown}`；到 unverifiableToleranceMinutes 后先 put evidence，再 abandonWorkerDispatch | attempt.unverifiable；超时 attempt.abandoned（含 evidenceArtifactId、disposition）+ settlement(unverifiable_tolerance_exceeded)；等待期间不重复 stop、不启动新 Attempt |
 | f | RUNNING、最新 binding.dispatchId=null，超过两倍默认 readiness timeout（当前 120,000ms） | attempt.launch_pending_orphan + settlement；较新 pending 不动 |
 | g | SUBMITTED 且 terminal resource.release_state=not_requested：retainWorkerTerminalResource | attempt.terminal_retained / attempt.terminal_retain_failed，沿用 M2-07 的 taskId/submissionId/candidateId/retainDisposition；不改变 stage |
 | h | Task CANCELED 或 Mission 终态：stop_unknown 无论宿主观测如何均 abandonWorkerDispatch；其他活跃且 live/exact 用 stopLocalWorker（start_unknown 仍可 stop），否则 abandonWorkerDispatch；结算后 releaseLocalWorker | attempt.stopped / attempt.abandoned，reason=mission_canceled；从 stop_unknown 放弃时另记 priorStop=stop_unknown 与放弃时折叠的 liveness；after.release 保留 requested completion / retained / already_released 真实收据；stage 不再变；已提交 Candidate 不提前释放 |
 
-Liveness 与 `axiom.attempt.show/list` 共用 `foldAttemptLiveness`：live/exited 原样，unattached/missing/identity_changed/unverifiable → unverifiable，不读 Agent activity 推断死亡。starting/stopping 的新 runtime 归一化不代替宿主 liveness。SQLite UTC 时间戳经内核 exposeUtcTimestamp 解析，避免本地时区改变 runtime/orphan deadline。
+基础 liveness 与 `axiom.attempt.show/list` 共用 `foldAttemptLiveness`：live/exited 原样，unattached/missing/identity_changed/unverifiable → unverifiable。c′ 只在 Recovery 折叠额外的执行宿主证明；不改 `inspectWorkerTerminal`、`foldAttemptLiveness`、show/list 或 fleet 投影，不以 title、hook、Agent activity 推断死亡。`starting / start_unknown / stopping / stop_unknown` 与终态 worker 不满足 c′ 的 ready 条件。访问器仅在主进程内调用既有 daemon `confirmShellForeground`；无 live PTY、无 controller 方法、异常或超过 `PTY_CONTROLLER_LIST_TIMEOUT_MS` 均返回 false。两次宿主 IO await 结束后重新读取 Task、Mission、worker 的持久权威，Submission / cancel / 新 Attempt 的栅栏仍优先。
+
+agent 退出后到下一次成功 reconcile（≤ 一个 60 s 间隔），`attempt show` 仍可显示 RUNNING / liveness=live。reconciliation 是将其转为 FAILED 并触发 retry 的权威；show/list 的 liveness 仍表示 PTY，shell 未退出时即使 Attempt 已 FAILED 也可继续为 live。starting/stopping 的新 runtime 归一化不代替宿主 liveness。SQLite UTC 时间戳经内核 exposeUtcTimestamp 解析，避免本地时区改变 runtime/orphan deadline。
 
 `attempt_observation_facts` 最新 liveness facet 的 homeReceivedAt 是持久的 unverifiable-since：进入 unverifiable 只写一条；连续 tick 不写；恢复 live 写一条 live，下一次失联重新计时。stop_unknown 的停止结果仍未确认，即使宿主再次 live，也不写 live fact 重置该时钟；runtime-budget stop 的下一 tick 开始按 e 计时。reconcile report 的 liveness 仍保留实际宿主折叠值，stop_unknown 的计时事实与证据明确记录 reason=stop_unknown。证据 JSON 含 taskId/attemptId/seq/branch/worktreeId、workerState/dispatchStatus、liveness/reason、since/abandonedAt/toleranceMinutes 与该 Attempt 的 observationFacts；Artifact kind=evidence、related=[Task,dispatch]。无宿主退出证据时不冷启动同一 Attempt/worktree。
 
@@ -348,6 +351,8 @@ M2-06a 的 `admission-worker-control.test.ts` 与 `admission-rpc.test.ts` 覆盖
 
 M2-08 新审计：attempt.unverifiable（taskId/seq/reason/since）、attempt.abandoned（reason/disposition/evidenceArtifactId?）、attempt.failed、attempt.stopped、attempt.stop_unknown、attempt.launch_pending_orphan；取消的停止/放弃事件还含 release 收据。attempt 对象 id 为 dispatchId，未绑定 launch 用 taskId/seq；无变化不追加相同结果。mailbox.retry_exhausted 为 Mission 对象事件，含 runId/consumerGeneration/reason；message 去重和 Attempt 结果审计使用 idx_audit_events_object，索引为 CREATE INDEX IF NOT EXISTS，无 schema version 变化。
 
+M2-12 / D59：`attempt.failed.after.reason` 为 `process_exited | kernel_failed`；前者来自 Recovery 的宿主退出证明，c′ 另带可选 `after.evidence = shell_foreground`，PTY 退出不加该字段；后者补齐内核先失败的事件，另带 `after.lastError`（string 或 null）。kernel_failed 补审计与 Task settlement 同事务，既有 attempt.failed 不重写。`planner.attempt_failed` 在 c′ 无提案失败时保留 `reason = no_proposal`，同样带 `evidence = shell_foreground`；没有增加生命周期枚举。
+
 M2-07 提交审计：`attempt.submitted` 的 objectKind=attempt、objectId=dispatchId，after 含 stage=SUBMITTED、taskId、submissionId、candidateId、verificationRunId。`candidate.superseded` 的 objectKind=candidate、objectId=旧 Candidate id，after 含 SUPERSEDED 与 supersededBy；二者与结算同事务。提交后的独立 `attempt_retain` 事务记录 `attempt.terminal_retained` 或 `attempt.terminal_retain_failed`（同一 Attempt，after 含 taskId/submissionId/candidateId）；成功另带 retainDisposition（retained/already_released/no_owned_resource/release_committed），失败不持久化原始内核错误内容。消费者已有 `message.received` 路径覆盖 SUBMISSION，只记收件审计，不二次结算或验证。
 
 M2-05 启动审计：`attempt.started` / `attempt.launch_failed` / `attempt.start_unknown` 的 objectKind 为 attempt，绑定后 objectId = dispatchId，after 含 taskId/seq/branch/worktreeId/provider；绑定前失败的 objectId = taskId/seq，after 含脱敏 message。`integration.base_created` / `integration.base_reused` 的 objectKind 为 mission，after 含 sha。这些事件不代表 Submission、验证或完成。
@@ -362,7 +367,7 @@ M2-06a `MessageRouter` 在 `store.transaction('message_route', …)` 内写 Cont
 
 `message.received.after = {type, taskId, attemptId, messageId}`；REQUEST_SUBTASK 在同事务另写 `subtask.requested.after = {...ids, subtask}`，作为 D50 step 1 的可查询待决项；BLOCKED 另写 `attempt.blocked_reported`。这三个事件的 objectKind 都是 message，objectId 是收到的消息 id，重放不重复记录。BLOCKED 只是 Worker 报告，在 M2 不改 Task stage 或 Attempt：Worker 仍可能运行，后续 RecoveryService / submit 才结算。
 
-`startAxiomControlPlane` 在桌面 `src/main/startup/main-process-runtime-service.ts` 与 daemon `src/main/orcad/orcad-entry.ts` 接入。每次启动先 `RecoveryService.recover()`，再为 ANALYZING / PLAN_REVIEW / PLANNED / EXECUTING 启消费者；boot 幂等，quit 停止全部消费者。create/start/resume/unblock 同步启动，pause/block/cancel 停止；持久状态不依赖这些内存句柄。
+`startAxiomControlPlane` 在桌面 `src/main/startup/main-process-runtime-service.ts` 与 daemon `src/main/orcad/orcad-entry.ts` 接入。每次启动先 `RecoveryService.recover()`，再为 ANALYZING / PLAN_REVIEW / PLANNED / EXECUTING 启消费者；全部消费者同步后，对 report.missions 中每个 EXECUTING 且不在 report.blocked 的 Mission 触发 `scheduleRound(missionId, 'resume')`（M2-12 / D59）。因此即使 Task 已 READY、readiness 没有移动，也会重新调度；按 Mission 合并，空轮不写 scheduler.round，PAUSED / BLOCKED / 终态不请求轮次。调用失败沿用 control-plane.ts 的 catch + console.warn，不抛回 boot。boot 幂等，quit 停止全部消费者。create/start/resume/unblock 同步启动，pause/block/cancel 停止；持久状态不依赖这些内存句柄。
 
 恢复逐个检查非终态 Mission：Run 必须存在，合成 session id 必须有效且 `runBoundToCoordinator` 成立；否则 BLOCKED，记录一次 `recovery.run_binding_lost`，不悄悄重建 Run。正常恢复重算 readiness，**不会写 recovery 成功事件**；若 readiness 实际移动，仍按正常 Task 转换审计。
 

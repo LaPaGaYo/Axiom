@@ -20,6 +20,13 @@ export function startAxiomControlPlane(runtime: OrcaRuntimeService): RecoveryRep
   for (const mission of report.missions) {
     plane.syncConsumer(mission.id)
   }
+  for (const mission of report.missions) {
+    if (mission.status === 'EXECUTING' && !report.blocked.some(({ id }) => id === mission.id)) {
+      void plane.scheduler.scheduleRound(mission.id, 'resume').catch(() => {
+        console.warn('[axiom] Scheduler round failed', { missionId: mission.id, trigger: 'resume' })
+      })
+    }
+  }
   return report
 }
 
