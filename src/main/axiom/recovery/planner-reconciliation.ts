@@ -3,6 +3,7 @@ import { exposeUtcTimestamp } from '../../runtime/orchestration/db/utc-timestamp
 import { releaseLocalWorker } from '../../runtime/rpc/methods/orchestration/worker/local-worker-release'
 import type { inspectWorkerTerminal } from '../../runtime/rpc/methods/orchestration/worker/worker-observation'
 import { stopPlanner } from '../execution/planner-stop'
+import type { observeAgentExit } from './agent-exit-observation'
 import {
   abandonmentEvidence,
   auditAttempt,
@@ -16,7 +17,8 @@ export async function reconcilePlanner(
   ctx: RecoveryContext,
   binding: AttemptBinding,
   observation: Awaited<ReturnType<typeof inspectWorkerTerminal>>,
-  entry: AttemptReconcileEntry
+  entry: AttemptReconcileEntry,
+  agentExit: Awaited<ReturnType<typeof observeAgentExit>>
 ): Promise<AttemptReconcileEntry> {
   const { db, store, runtime } = ctx
   const dispatchId = binding.dispatchId!
@@ -26,7 +28,7 @@ export async function reconcilePlanner(
   }
   const proposed = Boolean(lastAttemptAudit(ctx, binding, 'planner.proposed'))
   if (['failed', 'stopped', 'abandoned'].includes(worker.state)) {
-    if (!proposed) {
+    if (!proposed && !lastAttemptAudit(ctx, binding, 'planner.attempt_failed')) {
       auditAttempt(ctx, binding, 'planner.attempt_failed', { reason: 'no_proposal' })
     }
     const release = await releaseLocalWorker(runtime, dispatchId)
@@ -47,7 +49,10 @@ export async function reconcilePlanner(
       terminationReason: 'process_exited'
     })
     if (!proposed) {
-      auditAttempt(ctx, binding, 'planner.attempt_failed', { reason: 'no_proposal' })
+      auditAttempt(ctx, binding, 'planner.attempt_failed', {
+        reason: 'no_proposal',
+        ...(agentExit.exited ? { evidence: agentExit.evidence } : {})
+      })
     }
     await releaseLocalWorker(runtime, dispatchId)
     entry.action = proposed ? 'released' : 'attempt_failed'

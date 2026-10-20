@@ -7,6 +7,8 @@ import { provenance } from '../../shared/axiom-contract/contract-fixtures.test-s
 import { createInput, propose } from './mission-controller/controller-fixture.test-support'
 import { insertMail, mailboxRuntime, replaceRunBinding } from './mailbox-runtime.test-support'
 import { RunMailboxConsumer } from './mission-controller/run-mailbox-consumer'
+import { MissionController } from './mission-controller/mission-controller'
+import * as launcher from './execution/attempt-launcher'
 import { getAxiomControlPlane } from './control-plane'
 import { startAxiomControlPlane, stopAxiomControlPlane } from './control-plane-boot'
 
@@ -26,6 +28,80 @@ describe('M1 Control Plane boot', () => {
     rmSync(directory, { recursive: true, force: true })
     vi.useRealTimers()
     vi.restoreAllMocks()
+  })
+
+  it('requests one resume round for persisted EXECUTING Missions with READY Tasks and no bindings', () => {
+    vi.spyOn(launcher, 'createAttemptLauncher').mockReturnValue(vi.fn(async () => {}))
+    const cp = getAxiomControlPlane(runtime)
+    // Persist the interrupted state without the running plane's scheduling hooks.
+    const missions = new MissionController(db, cp.store)
+    const { mission, goalRevision } = missions.createMission(createInput)
+    const plan = propose(missions, mission.id, goalRevision.id)
+    missions.approvePlan({ planRevisionId: plan.id, resolver: 'tester', provenance })
+    missions.startExecution(mission.id)
+    expect(missions.listTasks({ missionId: mission.id, stage: 'READY' })).toHaveLength(3)
+    expect(cp.store.listAttemptBindings({ missionId: mission.id })).toEqual([])
+    const schedule = vi
+      .spyOn(cp.scheduler, 'scheduleRound')
+      .mockResolvedValue({ admitted: [], skipped: [] })
+
+    expect(startAxiomControlPlane(runtime)).toEqual({
+      missions: [{ id: mission.id, status: 'EXECUTING', moved: [] }],
+      blocked: []
+    })
+    startAxiomControlPlane(runtime)
+    expect(schedule).toHaveBeenCalledExactlyOnceWith(mission.id, 'resume')
+  })
+
+  it.each(['PAUSED', 'BLOCKED', 'CANCELED', 'COMPLETED', 'ANALYZING', 'PLANNED'] as const)(
+    'does not request a boot round for a %s Mission',
+    (status) => {
+      const cp = getAxiomControlPlane(runtime)
+      const { mission } = cp.missions.createMission(createInput)
+      cp.store.updateMissionStatus({
+        id: mission.id,
+        from: mission.status,
+        to: status,
+        previousStatus: null
+      })
+      const schedule = vi.spyOn(cp.scheduler, 'scheduleRound')
+      startAxiomControlPlane(runtime)
+      expect(schedule).not.toHaveBeenCalled()
+    }
+  )
+
+  it('does not schedule an EXECUTING Mission whose Run binding was lost', () => {
+    const cp = getAxiomControlPlane(runtime)
+    const { mission } = cp.missions.createMission(createInput)
+    cp.store.updateMissionStatus({
+      id: mission.id,
+      from: mission.status,
+      to: 'EXECUTING',
+      previousStatus: null
+    })
+    replaceRunBinding(db, mission.coordinatorOrcaSessionId)
+    const schedule = vi.spyOn(cp.scheduler, 'scheduleRound')
+    expect(startAxiomControlPlane(runtime)?.blocked).toEqual([
+      { id: mission.id, reason: 'run_binding_lost' }
+    ])
+    expect(schedule).not.toHaveBeenCalled()
+  })
+
+  it('keeps an empty resume round audit-silent', async () => {
+    const cp = getAxiomControlPlane(runtime)
+    const { mission } = cp.missions.createMission(createInput)
+    cp.store.updateMissionStatus({
+      id: mission.id,
+      from: mission.status,
+      to: 'EXECUTING',
+      previousStatus: null
+    })
+    const before = cp.store.listAuditEvents({ missionId: mission.id })
+    const schedule = vi.spyOn(cp.scheduler, 'scheduleRound')
+    startAxiomControlPlane(runtime)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(schedule).toHaveBeenCalledExactlyOnceWith(mission.id, 'resume')
+    expect(cp.store.listAuditEvents({ missionId: mission.id })).toEqual(before)
   })
 
   it('reopens all Mission objects and stages, resumes the persisted generation, drains and acknowledges once', async () => {

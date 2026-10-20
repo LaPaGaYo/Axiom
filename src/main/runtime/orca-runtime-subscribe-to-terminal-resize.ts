@@ -185,6 +185,25 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
     return classifyWorkerTerminalProcessIncarnation(processIncarnation, listed.value)
   }
 
+  async confirmTerminalShellForeground(handle: string): Promise<boolean> {
+    try {
+      const ptyId: string | null =
+        this.getLivePtyForHandle(handle)?.pty.ptyId ??
+        this.resolveLiveLeafForHandle(handle)?.ptyId ??
+        null
+      if (!ptyId || !this.ptyController?.confirmShellForeground) {
+        return false
+      }
+      const confirmed = await withTimeoutResult(
+        this.ptyController.confirmShellForeground(ptyId),
+        PTY_CONTROLLER_LIST_TIMEOUT_MS
+      )
+      return confirmed.ok && confirmed.value === true
+    } catch {
+      return false
+    }
+  }
+
   protected getTerminalTopologyRevision(worktreeId: string): number {
     const repoId = getRepoIdFromWorktreeId(worktreeId)
     return (
