@@ -17,10 +17,12 @@ import { ORCHESTRATION_MESSAGE_WAIT_DEFAULT_TIMEOUT_MS } from '../../../shared/o
 import { MAX_TIMER_DELAY_MS } from '../../../shared/timer-delay'
 import {
   AttemptResponseSchema,
+  AttemptSubmitResponseSchema,
   AttemptListResponseSchema,
   AttemptCheckResponseSchema,
   type AttemptSummary
 } from '../../../shared/axiom-contract/attempt-params'
+import { SubmissionReportSchema } from '../../../shared/axiom-contract/submission-params'
 import { callAxiom } from './rpc-command'
 const formatAttempt = (a: AttemptSummary) =>
   `${a.attemptId ?? `${a.taskId}/${a.seq}`}  ${a.state}  ${a.liveness ?? 'pending'}  ${a.branch}`
@@ -71,6 +73,41 @@ async function sendWorkerMessage(ctx: HandlerContext, verb: string) {
 }
 
 export const AXIOM_ATTEMPT_HANDLERS: Record<string, CommandHandler> = {
+  'attempt submit': async ({ flags, cwd, client, json }) => {
+    const orchestrationCapability = required(flags, 'dispatch-capability')
+    const content = await readFile(path.resolve(cwd, required(flags, 'report')), 'utf8')
+    let value: unknown
+    try {
+      value = JSON.parse(content)
+    } catch {
+      throw new RuntimeClientError('invalid_argument', 'Submission report must be valid JSON.')
+    }
+    const report = SubmissionReportSchema.safeParse(value)
+    if (!report.success) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Submission report does not match axiom-submission-v1.'
+      )
+    }
+    const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
+    const result = await callOrchestrationMutation(
+      client,
+      flags,
+      'axiom.attempt.submit',
+      {
+        attemptId: required(flags, 'attempt'),
+        from,
+        senderPaneKey: process.env.ORCA_PANE_KEY || undefined,
+        report: report.data
+      },
+      { orchestrationCapability }
+    )
+    printResult(
+      result,
+      json,
+      (value) => `Submitted ${AttemptSubmitResponseSchema.parse(value).submission.id}`
+    )
+  },
   'attempt ask': askAttempt,
   'attempt inform': (ctx) => sendWorkerMessage(ctx, 'inform'),
   'attempt request': (ctx) => sendWorkerMessage(ctx, 'request'),

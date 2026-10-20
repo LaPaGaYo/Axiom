@@ -43,6 +43,19 @@ export const ATTEMPT_STATES = [
 ] as const
 export const AttemptStateSchema = z.enum(ATTEMPT_STATES)
 export type AttemptState = z.infer<typeof AttemptStateSchema>
+export const CANDIDATE_STATUSES = ['ACTIVE', 'SUPERSEDED'] as const
+export const VERIFICATION_RUN_STATUSES = [
+  'QUEUED',
+  'RUNNING',
+  'PASS',
+  'FAIL',
+  'INCONCLUSIVE',
+  'SPECIALIST_REVIEW',
+  'HUMAN_REVIEW',
+  'CANCELED'
+] as const
+export const CandidateStatusSchema = z.enum(CANDIDATE_STATUSES)
+export const VerificationRunStatusSchema = z.enum(VERIFICATION_RUN_STATUSES)
 export const REPLAN_LEVELS = ['NO_REPLAN', 'MINOR_ADJUSTMENT', 'MAJOR_REPLAN'] as const
 export const BLOCKING_APPROVAL_ACTION_KINDS = ['budget_increase'] as const
 export const RISK_LEVELS = ['low', 'medium', 'high'] as const

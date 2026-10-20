@@ -2,12 +2,22 @@ import { z } from 'zod'
 import { AxiomIdSchema } from './mission-objects'
 import { AttemptStateSchema, type AttemptState } from './lifecycle'
 import { MessageRelatedSchema, MessageSummarySchema, SubtaskRequestSchema } from './message-params'
+import { CandidateSchema, SubmissionSchema, SubmissionReportSchema } from './submission-params'
 
 const AttemptSenderFields = {
   attemptId: AxiomIdSchema,
   from: z.string().min(1),
   senderPaneKey: z.string().min(1).optional()
 }
+export const AttemptSubmitParams = z.strictObject({
+  ...AttemptSenderFields,
+  report: SubmissionReportSchema
+})
+export const AttemptSubmitResponseSchema = z.object({
+  submission: SubmissionSchema,
+  candidate: CandidateSchema,
+  duplicate: z.boolean()
+})
 export const AttemptMessageParams = z
   .object({
     ...AttemptSenderFields,

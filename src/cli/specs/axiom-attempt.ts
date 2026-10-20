@@ -1,6 +1,23 @@
 import { GLOBAL_FLAGS, type CommandSpec } from '../args'
 export const AXIOM_ATTEMPT_COMMAND_SPECS: CommandSpec[] = [
   {
+    path: ['attempt', 'submit'],
+    summary: 'Submit an immutable Candidate and Worker report',
+    usage:
+      'axiom attempt submit --attempt <id> --dispatch-capability <dcap> --report <path.json> [--retry-request <id>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'attempt',
+      'from',
+      'dispatch-capability',
+      'report',
+      'retry-request'
+    ],
+    notes: [
+      'Attach REPORT.md first with axiom mission artifact put --kind worker_report; include its Artifact id in report.artifacts.'
+    ]
+  },
+  {
     path: ['attempt', 'ask'],
     summary: 'Ask a blocking Worker question',
     usage:

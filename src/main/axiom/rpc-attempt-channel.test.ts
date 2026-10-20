@@ -5,10 +5,137 @@ import {
   workerVerbs,
   workerTypes
 } from './execution/attempt-channel-fixture.test-support'
+import { submissionFixture, report } from './execution/submission-fixture.test-support'
 
 let f: ReturnType<typeof channelFixture>
 beforeEach(() => {
   f = channelFixture()
+})
+
+describe('axiom.attempt.submit authority and receipts', () => {
+  let s: ReturnType<typeof submissionFixture>
+  beforeEach(() => {
+    s = submissionFixture()
+  })
+  afterEach(() => s.db.close())
+  it.each([
+    'missing',
+    'wrong',
+    'stale',
+    'foreign',
+    'process',
+    'inactive',
+    'unknown',
+    'mismatch',
+    'assignee'
+  ] as const)(
+    'rejects %s without any domain, observation, resource, message, audit or receipt change',
+    async (reason) => {
+      const p = s.params()
+      if (reason === 'stale') {
+        s.store.insertAttemptBinding({
+          ...s.store.getAttemptBinding(s.t01.taskId, 1)!,
+          seq: 2,
+          branch: 'retry',
+          dispatchId: null
+        })
+      }
+      if (reason === 'foreign' || reason === 'assignee') {
+        s.panes.set(s.t01.from, 'foreign-pane')
+      }
+      if (reason === 'process') {
+        s.processes.set(s.t01.from, 'replacement')
+      }
+      if (reason === 'assignee') {
+        vi.spyOn(s.db, 'verifyDispatchCapability').mockReturnValue({ valid: true })
+      }
+      if (reason === 'inactive') {
+        s.db.settleWorkerReport({
+          taskId: s.t01.taskId,
+          dispatchId: s.t01.attemptId,
+          outcome: 'succeeded',
+          result: 'settled'
+        })
+      }
+      if (reason === 'unknown') {
+        p.attemptId = 'missing'
+      }
+      if (reason === 'mismatch') {
+        s.db.db
+          .prepare('UPDATE attempt_bindings SET mission_id = ? WHERE dispatch_id = ?')
+          .run('wrong', p.attemptId)
+      }
+      const before = s.snapshot()
+      const codes = {
+        missing: 'dispatch_capability_invalid',
+        wrong: 'dispatch_capability_invalid',
+        stale: 'stale_dispatch',
+        foreign: 'dispatch_capability_invalid',
+        process: 'dispatch_capability_invalid',
+        inactive: 'inactive_dispatch',
+        unknown: 'unknown_dispatch',
+        mismatch: 'task_dispatch_mismatch',
+        assignee: 'sender_not_assignee'
+      }
+      const capability =
+        reason === 'missing' ? undefined : reason === 'wrong' ? 'dcap_wrong' : s.t01.capability
+      expect(
+        await s.call('axiom.attempt.submit', p, { orchestrationCapability: capability })
+      ).toMatchObject({ ok: false, error: { code: codes[reason] } })
+      expect(s.snapshot()).toEqual(before)
+      expect(s.db.db.prepare('SELECT request_id FROM mutation_receipts').all()).toEqual([])
+      expect(s.snapshotGit).not.toHaveBeenCalled()
+    }
+  )
+  it.each([
+    { ...report, artifacts: ['unknown'] },
+    { ...report, extra: true },
+    { ...report, checksRun: [{ command: 'test', result: 'unknown' }] }
+  ])('rejects an invalid report before snapshotting %#', async (invalid) => {
+    const before = s.snapshot()
+    expect(
+      await s.call(
+        'axiom.attempt.submit',
+        { ...s.params(), report: invalid },
+        { orchestrationCapability: s.t01.capability }
+      )
+    ).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(s.snapshot()).toEqual(before)
+    expect(s.snapshotGit).not.toHaveBeenCalled()
+  })
+  it('replays the recorded receipt after capability revocation and rejects changed intent', async () => {
+    const envelope = {
+      orchestrationCapability: s.t01.capability,
+      orchestrationRequestId: 'submit-retry'
+    }
+    expect(await s.call('axiom.attempt.submit', s.params(), envelope)).toMatchObject({
+      ok: true,
+      result: { duplicate: false }
+    })
+    const before = s.snapshot()
+    expect(await s.call('axiom.attempt.submit', s.params(), envelope)).toMatchObject({
+      ok: true,
+      result: { duplicate: false, mutation: { replayed: true } }
+    })
+    expect(
+      await s.call(
+        'axiom.attempt.submit',
+        { ...s.params(), report: { ...report, summary: 'changed' } },
+        envelope
+      )
+    ).toMatchObject({ ok: false, error: { code: 'request_mismatch' } })
+    expect(s.snapshot()).toEqual(before)
+    expect(s.snapshotGit).toHaveBeenCalledTimes(1)
+  })
+  it('rejects a forged duplicate from another pane with no changes', async () => {
+    expect(await s.submit()).toMatchObject({ ok: true })
+    s.panes.set(s.t01.from, 'forged-pane')
+    const before = s.snapshot()
+    expect(
+      await s.call('axiom.attempt.submit', s.params(), { orchestrationCapability: 'dcap_wrong' })
+    ).toMatchObject({ ok: false, error: { code: 'dispatch_capability_invalid' } })
+    expect(s.snapshot()).toEqual(before)
+  })
 })
 afterEach(() => {
   f.db.close()
