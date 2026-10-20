@@ -17,3 +17,5 @@ config/scripts/build-native-for-platform.test.mjs
 src/main/ssh/ssh-remote-commands.test.ts
 # Timing-sensitive under load (observed once on 2026-10-16 after Playwright chromium + webkit were installed; green on the immediate re-run)
 config/scripts/mobile-web-app-session-terminal-init.test.mjs
+# Timing-sensitive under union load (2026-10-20 verify-main on d29f0aa316: the 800-trial fuzz timed out at 30 s; focused 4/4 passed, the file takes 11–13 s on its own, so the 30 s per-test cap is tight under parallel load)
+src/main/runtime/rpc/terminal-output-frame-chunks-equivalence.test.ts
