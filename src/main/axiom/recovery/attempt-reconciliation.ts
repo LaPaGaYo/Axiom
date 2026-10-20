@@ -1,7 +1,10 @@
 import { exposeUtcTimestamp } from '../../runtime/orchestration/db/utc-timestamp'
 import { z } from 'zod'
 import { TERMINAL_MISSION_STATUSES } from '../../../shared/axiom-contract/lifecycle'
-import type { AttemptReconcileEntry } from '../../../shared/axiom-contract/mission-params'
+import {
+  AttemptReconcileEntrySchema,
+  type AttemptReconcileEntry
+} from '../../../shared/axiom-contract/mission-params'
 import { resolveWorkerStartReadinessTimeoutMs } from '../../../shared/orchestration-timing-budgets'
 import { inspectWorkerTerminal } from '../../runtime/rpc/methods/orchestration/worker/worker-observation'
 import { stopLocalWorker } from '../../runtime/rpc/methods/orchestration/worker/local-worker-stop'
@@ -11,6 +14,7 @@ import { settleAttemptWithoutSubmission } from '../execution/attempt-settlement'
 import {
   abandonmentEvidence,
   auditAttempt,
+  lastAttemptAudit,
   observeAttemptLiveness,
   retainSubmission,
   type AttemptBinding,
@@ -127,7 +131,9 @@ export async function reconcileAttempt(
     entry.action = terminalReason
     return entry
   }
-  if (entry.liveness === 'exited' && worker && activeStates.has(worker.state)) {
+  // The kernel refuses a second stop; a stop_unknown receipt must use the tolerance clock.
+  const stopUnknown = worker?.state === 'stop_unknown'
+  if (!stopUnknown && entry.liveness === 'exited' && worker && activeStates.has(worker.state)) {
     store.transaction('recovery_process_exit', () => {
       // failDispatch owns a savepoint and is explicitly safe inside the Axiom transaction.
       db.failDispatch(dispatchId, 'Worker process exited without a Submission', {
@@ -141,7 +147,7 @@ export async function reconcileAttempt(
     return entry
   }
   const policy = store.getPolicy(binding.missionId)!
-  if (entry.liveness === 'live') {
+  if (!stopUnknown && entry.liveness === 'live') {
     observeAttemptLiveness(ctx, binding, { status: 'live', ptyIds: [] })
     const minutes = task.spec.budget?.maxRuntimeMinutes ?? policy.budget.maxRuntimeMinutes
     if (
@@ -161,12 +167,12 @@ export async function reconcileAttempt(
     }
     return entry
   }
-  if (entry.liveness !== 'unverifiable') {
+  if (!stopUnknown && entry.liveness !== 'unverifiable') {
     return entry
   }
   const verdict = {
     status: 'unverifiable' as const,
-    reason: observation.reason ?? observation.status
+    reason: stopUnknown ? 'stop_unknown' : (observation.reason ?? observation.status)
   }
   const since = observeAttemptLiveness(ctx, binding, verdict)
   if (ctx.now() - since < policy.unverifiableToleranceMinutes * 60_000) {
@@ -221,7 +227,7 @@ async function cancelAttempt(
   let state: string | undefined = worker?.state
   let disposition: string | undefined
   if (worker && activeStates.has(worker.state)) {
-    if (observation.exact && observation.status === 'live') {
+    if (worker.state !== 'stop_unknown' && observation.exact && observation.status === 'live') {
       state = StopReceipt.parse(await stopLocalWorker(ctx.runtime, dispatchId)).state
     } else {
       // A current stop owns its outcome until it finishes; next tick retries the durable cancellation.
@@ -250,10 +256,24 @@ async function cancelAttempt(
       : state === 'abandoned'
         ? 'attempt.abandoned'
         : 'attempt.terminal_released'
+  // Preserve the liveness at abandonment on release-only replays, even if the host changes later.
+  const previousStop = z
+    .object({
+      priorStop: z.literal('stop_unknown'),
+      liveness: AttemptReconcileEntrySchema.shape.liveness.unwrap()
+    })
+    .safeParse(JSON.parse(lastAttemptAudit(ctx, binding, event)?.after ?? 'null'))
+  const stopContext: Record<string, string> =
+    worker?.state === 'stop_unknown'
+      ? { priorStop: 'stop_unknown', liveness: foldAttemptLiveness(observation) }
+      : previousStop.success
+        ? previousStop.data
+        : {}
   const changed = ctx.store.transaction('recovery_cancel_release', () =>
     auditAttempt(ctx, binding, event, {
       reason: 'mission_canceled',
       ...(state === 'abandoned' ? { disposition: disposition ?? 'abandoned' } : {}),
+      ...stopContext,
       release
     })
   )

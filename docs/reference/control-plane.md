@@ -175,16 +175,16 @@ M2-06b：pending question_threads 通过 attempt_bindings 关联 Task；`blockin
 |---|---|---|
 | a | starting/stopping 的 runtime_epoch 不同于当前 runtime：先 markWorkerStartUnknown / markWorkerStopUnknown，再 inspectWorkerTerminal | 保持 Task；后续按实际宿主 liveness 处置 |
 | b | RUNNING、worker failed/stopped/abandoned、无 Submission | 共享 settlement；放弃已提交而 Axiom consequence 未提交时，从关联 evidence Artifact 补回 attempt.abandoned |
-| c | RUNNING、活跃 worker、宿主明确 exited：failDispatch(workerProcessExited=true, terminationReason=process_exited) | attempt.failed → RUNNING → NEEDS_FIX → READY/BLOCKED |
-| d | live：通常不动；now-createdAt 大于 Task spec.budget.maxRuntimeMinutes（无则 policy.budget.maxRuntimeMinutes，无 cap 不限）时 stopLocalWorker | stopped：attempt.stopped + settlement(runtime_budget_exceeded)；stop_unknown：attempt.stop_unknown，保持 RUNNING |
-| e | unverifiable：写 liveness facet 的变化；到 unverifiableToleranceMinutes 后先 put evidence，再 abandonWorkerDispatch | attempt.unverifiable；超时 attempt.abandoned（含 evidenceArtifactId、disposition）+ settlement(unverifiable_tolerance_exceeded) |
+| c | RUNNING、活跃 worker（stop_unknown 除外）、宿主明确 exited：failDispatch(workerProcessExited=true, terminationReason=process_exited) | attempt.failed → RUNNING → NEEDS_FIX → READY/BLOCKED |
+| d | live 且非 stop_unknown：通常不动；now-createdAt 大于 Task spec.budget.maxRuntimeMinutes（无则 policy.budget.maxRuntimeMinutes，无 cap 不限）时 stopLocalWorker | stopped：attempt.stopped + settlement(runtime_budget_exceeded)；stop_unknown：只在首次停止结果写 attempt.stop_unknown，保持 RUNNING；下一 tick 无论宿主观测如何均走 e |
+| e | unverifiable 或 worker stop_unknown：写 liveness facet 的变化；stop_unknown 固定记 `{status: unverifiable, reason: stop_unknown}`；到 unverifiableToleranceMinutes 后先 put evidence，再 abandonWorkerDispatch | attempt.unverifiable；超时 attempt.abandoned（含 evidenceArtifactId、disposition）+ settlement(unverifiable_tolerance_exceeded)；等待期间不重复 stop、不启动新 Attempt |
 | f | RUNNING、最新 binding.dispatchId=null，超过两倍默认 readiness timeout（当前 120,000ms） | attempt.launch_pending_orphan + settlement；较新 pending 不动 |
 | g | SUBMITTED 且 terminal resource.release_state=not_requested：retainWorkerTerminalResource | attempt.terminal_retained / attempt.terminal_retain_failed，沿用 M2-07 的 taskId/submissionId/candidateId/retainDisposition；不改变 stage |
-| h | Task CANCELED 或 Mission 终态：活跃且 live/exact 用 stopLocalWorker，否则 abandonWorkerDispatch；结算后 releaseLocalWorker | attempt.stopped / attempt.abandoned，reason=mission_canceled，after.release 保留 requested completion / retained / already_released 真实收据；stage 不再变；已提交 Candidate 不提前释放 |
+| h | Task CANCELED 或 Mission 终态：stop_unknown 无论宿主观测如何均 abandonWorkerDispatch；其他活跃且 live/exact 用 stopLocalWorker（start_unknown 仍可 stop），否则 abandonWorkerDispatch；结算后 releaseLocalWorker | attempt.stopped / attempt.abandoned，reason=mission_canceled；从 stop_unknown 放弃时另记 priorStop=stop_unknown 与放弃时折叠的 liveness；after.release 保留 requested completion / retained / already_released 真实收据；stage 不再变；已提交 Candidate 不提前释放 |
 
 Liveness 与 `axiom.attempt.show/list` 共用 `foldAttemptLiveness`：live/exited 原样，unattached/missing/identity_changed/unverifiable → unverifiable，不读 Agent activity 推断死亡。starting/stopping 的新 runtime 归一化不代替宿主 liveness。SQLite UTC 时间戳经内核 exposeUtcTimestamp 解析，避免本地时区改变 runtime/orphan deadline。
 
-`attempt_observation_facts` 最新 liveness facet 的 homeReceivedAt 是持久的 unverifiable-since：进入 unverifiable 只写一条；连续 tick 不写；恢复 live 写一条 live，下一次失联重新计时。证据 JSON 含 taskId/attemptId/seq/branch/worktreeId、workerState/dispatchStatus、liveness/reason、since/abandonedAt/toleranceMinutes 与该 Attempt 的 observationFacts；Artifact kind=evidence、related=[Task,dispatch]。无宿主退出证据时不冷启动同一 Attempt/worktree。
+`attempt_observation_facts` 最新 liveness facet 的 homeReceivedAt 是持久的 unverifiable-since：进入 unverifiable 只写一条；连续 tick 不写；恢复 live 写一条 live，下一次失联重新计时。stop_unknown 的停止结果仍未确认，即使宿主再次 live，也不写 live fact 重置该时钟；runtime-budget stop 的下一 tick 开始按 e 计时。reconcile report 的 liveness 仍保留实际宿主折叠值，stop_unknown 的计时事实与证据明确记录 reason=stop_unknown。证据 JSON 含 taskId/attemptId/seq/branch/worktreeId、workerState/dispatchStatus、liveness/reason、since/abandonedAt/toleranceMinutes 与该 Attempt 的 observationFacts；Artifact kind=evidence、related=[Task,dispatch]。无宿主退出证据时不冷启动同一 Attempt/worktree。
 
 `settleAttemptWithoutSubmission` 在一个 store transaction 中只处理最新且无 Submission 的 RUNNING binding：RUNNING → NEEDS_FIX（原 reason），再按权威 attemptCount < retryPolicy.maxAttempts 转 READY（retry）或 BLOCKED（retry_budget_exhausted，previousStage=NEEDS_FIX）。不增加 attemptCount。launcher 的 launch_failed 与 Scheduler 的未绑定 launch_rejected 共用该入口；Orca Task failed/blocked 时，launcher 传最新 dispatch 为 retryOf，包含 abandoned/circuit_broken 后的新 Attempt。READY 触发既有 stage_change 调度，暂停 Mission 不 admission。
 
@@ -192,7 +192,7 @@ Liveness 与 `axiom.attempt.show/list` 共用 `foldAttemptLiveness`：live/exite
 
 `axiom.mission.cancel` 先同步持久化 CANCELED/Task CANCELED，再 await reconciliation；返回 `{mission, attempts?}`，entries 为 `{attemptId,taskId,seq,liveness,action}`。CLI 每 Attempt 输出 action；旧响应省略 attempts 仍兼容。pause 只停止 admission；RUNNING Attempt 继续，cancel/restart 的剩余清理由同一恢复路径处理。
 
-**当前内核边界（M2-08-1 scope gap）**：stop_unknown 且宿主再次 live/exact 时，现有 beginWorkerStop 拒绝重试，且内核 worker lifecycle 不允许 stop_unknown → stopping；旧 runtime stranded stopping 先归一化为 stop_unknown 后也受此限制。当前保留 Task/Attempt 真实状态并报告 reconcile_failed，不绕过 kernel；回归测试保留红色，详见 `.axiom-work/reports/M2-08-1.md`。非 exact/unverifiable 的 stop_unknown 可以正常 abandon；RUNNING 的该情况等待 tolerance 后留证据放弃。同 runtime 正在 stopping 的调用仍拥有结果，恢复不抢占。
+**stop_unknown 的内核边界（M2-08 Attempt 2）**：beginWorkerStop 拒绝第二次 stop，受支持的退出路径是 abandon；这与 verifier 核对的上游 Orca `ce2d60834c` 一致，不需要改内核或增加生命周期边。取消时下一 tick 直接 abandon（无 evidence Artifact），记录 priorStop、放弃时的宿主 liveness 与 release 收据；RUNNING 时无论宿主观测如何，按 e 等待 tolerance 后带 evidence abandon。abandon 只结束执行权威，不宣称进程退出；possibly-live 资源仍由内核保留，通常 release 为 retained / identity_unproven。旧 runtime stranded stopping 归一化后遵守同一规则；同 runtime 正在 stopping 的调用仍拥有结果，恢复不抢占。后续 tick 不重复 attempt.stop_unknown，取消审计重放保留最初的 priorStop/liveness，不因宿主观测变化重复记录。`.axiom-work/reports/M2-08-1.md` 保留为历史证据，其 scope-gap 判断由本规则取代；修复与验证记录见 `.axiom-work/reports/M2-08-2.md`。
 
 ## 5. 合成 session party 与 Run 绑定（D14）
 

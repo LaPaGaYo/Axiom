@@ -18,16 +18,9 @@ export type RecoveryContext = {
 }
 export type AttemptBinding = NonNullable<ReturnType<AxiomStore['getAttemptBinding']>>
 
-// Kernel mutations commit independently; replay only writes a new audit when its result changed.
-export function auditAttempt(
-  ctx: RecoveryContext,
-  binding: AttemptBinding,
-  event: string,
-  after: Record<string, AuditEvent['after']>
-): boolean {
+export function lastAttemptAudit(ctx: RecoveryContext, binding: AttemptBinding, event: string) {
   const objectId = binding.dispatchId ?? `${binding.taskId}/${binding.seq}`
-  const value = { taskId: binding.taskId, seq: binding.seq, ...after }
-  const previous = z
+  return z
     .object({ after: z.string().nullable() })
     .optional()
     .parse(
@@ -38,6 +31,18 @@ export function auditAttempt(
         )
         .get(binding.missionId, objectId, event)
     )
+}
+
+// Kernel mutations commit independently; replay only writes a new audit when its result changed.
+export function auditAttempt(
+  ctx: RecoveryContext,
+  binding: AttemptBinding,
+  event: string,
+  after: Record<string, AuditEvent['after']>
+): boolean {
+  const objectId = binding.dispatchId ?? `${binding.taskId}/${binding.seq}`
+  const value = { taskId: binding.taskId, seq: binding.seq, ...after }
+  const previous = lastAttemptAudit(ctx, binding, event)
   if (previous?.after === JSON.stringify(value)) {
     return false
   }

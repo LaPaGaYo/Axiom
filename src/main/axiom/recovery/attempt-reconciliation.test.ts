@@ -294,6 +294,79 @@ describe('Attempt recovery', () => {
     expect(worker()?.state).toBe('abandoned')
     expect(stage()?.stage).toBe('READY')
   })
+  it.each(['live', 'exited'] as const)(
+    'uses the tolerance clock for a runtime-budget stop_unknown while the host reports %s',
+    async (status) => {
+      f.store.upsertPolicy(f.mission.id, {
+        ...f.store.getPolicy(f.mission.id)!,
+        budget: { maxRuntimeMinutes: 1 }
+      })
+      const beginStop = vi.spyOn(f.db, 'beginWorkerStop')
+      const insert = vi.spyOn(f.store, 'insertAttemptBinding')
+      vi.mocked(f.runtime.closeTerminal).mockResolvedValue({
+        handle: f.t01.from,
+        tabId: 'tab',
+        ptyKilled: false
+      })
+      now += 61_000
+      await recovery.reconcileAttempts()
+      expect(worker()?.state).toBe('stop_unknown')
+      expect(stage()).toMatchObject({ stage: 'RUNNING', attemptCount: 1 })
+      expect(audits().filter((e) => e.event === 'attempt.stop_unknown')).toHaveLength(1)
+      expect(facts()).toEqual([])
+
+      vi.mocked(f.runtime.getTerminalLivenessVerdict).mockReturnValue(
+        status === 'live' ? { status, ptyIds: [] } : { status }
+      )
+      now += 60_000
+      const since = now
+      const observed = await recovery.reconcileAttempts()
+      expect(observed.attempts).toMatchObject([{ liveness: status, action: 'unchanged' }])
+      expect(worker()?.state).toBe('stop_unknown')
+      expect(stage()?.stage).toBe('RUNNING')
+      expect(facts()).toMatchObject([
+        { payload: { status: 'unverifiable', reason: 'stop_unknown' }, homeReceivedAt: since }
+      ])
+      expect(audits().filter((e) => e.event === 'attempt.unverifiable')).toMatchObject([
+        { after: { reason: 'stop_unknown', since } }
+      ])
+      const before = audits()
+      now += 30 * 60_000 - 1
+      await recovery.reconcileAttempts()
+      expect(worker()?.state).toBe('stop_unknown')
+      expect(stage()?.stage).toBe('RUNNING')
+      expect(audits()).toEqual(before)
+      expect(facts()).toHaveLength(1)
+      expect(insert).not.toHaveBeenCalled()
+
+      now += 1
+      await recovery.reconcileAttempts()
+      expect(worker()?.state).toBe('abandoned')
+      expect(stage()).toMatchObject({ stage: 'READY', attemptCount: 1 })
+      expect(beginStop).toHaveBeenCalledOnce()
+      expect(f.runtime.closeTerminal).toHaveBeenCalledOnce()
+      const evidence = artifacts.list({ missionId: f.mission.id, kind: 'evidence' })[0]
+      expect(evidence.related).toEqual([f.t01.taskId, f.t01.attemptId])
+      expect(JSON.parse((await artifacts.read(evidence.id)).content.toString())).toMatchObject({
+        workerState: 'stop_unknown',
+        liveness: { status: 'unverifiable', reason: 'stop_unknown' },
+        since,
+        abandonedAt: now
+      })
+      expect(audits().filter((e) => e.event === 'attempt.abandoned')).toMatchObject([
+        {
+          after: {
+            reason: 'unverifiable_tolerance_exceeded',
+            disposition: 'abandoned',
+            evidenceArtifactId: evidence.id
+          }
+        }
+      ])
+      const after = audits()
+      await recovery.reconcileAttempts()
+      expect(audits()).toEqual(after)
+    }
+  )
   it('retains a SUBMITTED terminal left not_requested by a crash after settlement', async () => {
     vi.spyOn(snapshots, 'snapshotCandidate').mockResolvedValue({
       commitSha: 'a'.repeat(40),
@@ -401,7 +474,14 @@ describe('Attempt recovery', () => {
       await recovery.reconcileAttempts()
       expect(worker()?.state).toBe(expected)
       expect(stage()?.stage).toBe('RUNNING')
-      expect(facts()).toMatchObject([{ payload: { status: 'unverifiable', reason: 'missing' } }])
+      expect(facts()).toMatchObject([
+        {
+          payload: {
+            status: 'unverifiable',
+            reason: state === 'stopping' ? 'stop_unknown' : 'missing'
+          }
+        }
+      ])
     }
   )
   it('awaits an in-flight reconciliation before re-reading durable state', async () => {
@@ -416,8 +496,8 @@ describe('Attempt recovery', () => {
     expect(stage()?.stage).toBe('RUNNING')
     expect(facts()).toEqual([])
   })
-  it('retries cancellation of a stop_unknown worker when the host is live again (kernel scope gap)', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
+  it('abandons a stop_unknown worker on the next cancellation tick (kernel refuses a second stop)', async () => {
+    const beginStop = vi.spyOn(f.db, 'beginWorkerStop')
     f.missions.cancelMission(f.mission.id, 'user request')
     vi.mocked(f.runtime.closeTerminal).mockResolvedValueOnce({
       handle: f.t01.from,
@@ -426,8 +506,30 @@ describe('Attempt recovery', () => {
     })
     await recovery.reconcileAttempts()
     expect(worker()?.state).toBe('stop_unknown')
-    await recovery.reconcileAttempts()
-    expect(worker()?.state).toBe('stopped')
+    expect(audits().filter((e) => e.event === 'attempt.stop_unknown')).toHaveLength(1)
+    expect(await recovery.reconcileAttempts()).toMatchObject({
+      attempts: [{ attemptId: f.t01.attemptId, liveness: 'live', action: 'abandoned' }]
+    })
+    expect(worker()?.state).toBe('abandoned')
+    expect(stage()?.stage).toBe('CANCELED')
+    expect(beginStop).toHaveBeenCalledOnce()
+    expect(f.runtime.closeTerminal).toHaveBeenCalledOnce()
+    expect(audits().filter((e) => e.event === 'attempt.abandoned')).toMatchObject([
+      {
+        after: {
+          reason: 'mission_canceled',
+          priorStop: 'stop_unknown',
+          liveness: 'live',
+          disposition: 'abandoned',
+          release: { state: 'retained', reason: 'identity_unproven' }
+        }
+      }
+    ])
+    expect(artifacts.list({ missionId: f.mission.id, kind: 'evidence' })).toEqual([])
     expect(f.db.listLegacyWorkerTerminalRecoveryRows()).toEqual([])
+    const after = audits()
+    unknown()
+    await recovery.reconcileAttempts()
+    expect(audits()).toEqual(after)
   })
 })
