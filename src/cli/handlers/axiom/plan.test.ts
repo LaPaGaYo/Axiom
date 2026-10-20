@@ -2,7 +2,8 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { RuntimeClient } from '../../runtime-client'
+import { RuntimeClient, RuntimeRpcFailureError } from '../../runtime-client'
+import { reportCliError } from '../../cli-error'
 import { dispatch } from '../../dispatch'
 import { parseArgs, validateCommandAndFlags } from '../../args'
 import { COMMAND_SPECS } from '../../specs'
@@ -12,6 +13,29 @@ afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
 })
+it('prints dirty planner files and preserves their structured JSON details', () => {
+  const files = [' M src/file.ts', '?? proposal.json']
+  const response = {
+    id: 'planner-proposal',
+    ok: false as const,
+    error: {
+      code: 'planner_worktree_dirty',
+      message: `Planner worktree must be clean before proposing a plan:\n${files.join('\n')}`,
+      data: { files }
+    },
+    _meta: { runtimeId: 'test' }
+  }
+  const error = new RuntimeRpcFailureError(response)
+  const stderr = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const stdout = vi.spyOn(console, 'log').mockImplementation(() => {})
+  reportCliError(error, false, { commandPath: ['plan', 'propose'] })
+  expect(stderr).toHaveBeenCalledExactlyOnceWith(
+    `planner_worktree_dirty: ${response.error.message}`
+  )
+  reportCliError(error, true, { commandPath: ['plan', 'propose'] })
+  expect(stdout).toHaveBeenCalledExactlyOnceWith(JSON.stringify(response, null, 2))
+})
+
 it.each([true, false])(
   'routes a planner/user proposal with the correct identity (planner=%s)',
   async (planner) => {

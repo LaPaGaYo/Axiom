@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { AgentFactory, AgentFactoryError } from '../agent-factory/agent-factory'
+import type { AgentFactory } from '../agent-factory/agent-factory'
 import type { ContextBuilder } from '../context-builder/context-builder'
 import { gitExecFileAsync } from '../../git/runner'
 import { gitOptionsForWorktree } from '../../git/git-runtime-options'
@@ -17,16 +17,23 @@ const LaunchAudit = z.object({ worktreeId: z.string() })
 export function createPlannerLauncher(deps: Dependencies) {
   const { store, db } = deps
   const pending = new Set<string>()
-  const refuse = (reason: string, data = {}) => {
-    throw new OrchestrationError('invalid_argument', reason, { reason, ...data })
+  const refuse = (message: string, data?: Record<string, unknown>) => {
+    throw new OrchestrationError('invalid_argument', message, data)
   }
   function preflight(missionId: string) {
-    const mission = store.getMission(missionId)
-    if (!mission) return refuse('mission_not_found')
-    if (store.listPlanRevisions(missionId).some((p) => p.status === 'PROPOSED'))
-      return refuse('plan_pending')
-    if (mission.status !== 'ANALYZING') return refuse('mission_not_analyzing')
-    if (!mission.activeGoalRevisionId) return refuse('goal_revision_missing')
+    const mission = deps.missions.getMission(missionId)
+    if (store.listPlanRevisions(missionId).some((p) => p.status === 'PROPOSED')) {
+      throw new OrchestrationError('plan_pending', 'A proposed PlanRevision is awaiting review.')
+    }
+    if (mission.status !== 'ANALYZING') {
+      throw new OrchestrationError(
+        'illegal_transition',
+        `Mission must be ANALYZING to start a Planner Attempt; current status is ${mission.status}.`
+      )
+    }
+    if (!mission.activeGoalRevisionId) {
+      return refuse('Mission has no active GoalRevision.')
+    }
     const bindings = store.listPlannerBindings(missionId)
     if (
       bindings.some((b) =>
@@ -42,16 +49,20 @@ export function createPlannerLauncher(deps: Dependencies) {
               )
       )
     ) {
-      return refuse('planner_active')
+      return refuse('A Planner Attempt is already active for this Mission.')
     }
     const max = store.getPolicy(missionId)?.budget.maxAttempts
     const used = missionAttemptCount(store, missionId)
-    if (max !== undefined && used >= max) return refuse('budget_exhausted')
+    if (max !== undefined && used >= max) {
+      return refuse('budget_exhausted', { reason: 'budget_exhausted' })
+    }
     return { mission, goalRevisionId: mission.activeGoalRevisionId, runSeq: bindings.length + 1 }
   }
   return {
     async start(missionId: string) {
-      if (pending.has(missionId)) return refuse('planner_active')
+      if (pending.has(missionId)) {
+        return refuse('A Planner Attempt is already active for this Mission.')
+      }
       const initial = preflight(missionId)
       pending.add(missionId)
       try {
@@ -64,8 +75,11 @@ export function createPlannerLauncher(deps: Dependencies) {
             gitOptionsForWorktree(mission.repoPath)
           )
         } catch (error) {
-          if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 1))
+          if (
+            !(typeof error === 'object' && error !== null && 'code' in error && error.code === 1)
+          ) {
             throw error
+          }
           baseBranch = mission.targetBranch
         }
         const context = await deps.contextBuilder.build({
@@ -76,7 +90,9 @@ export function createPlannerLauncher(deps: Dependencies) {
         })
         const { attempt, runSeq } = store.transaction('planner_admission', () => {
           const current = preflight(missionId)
-          if (current.goalRevisionId !== goalRevisionId) return refuse('planner_goal_changed')
+          if (current.goalRevisionId !== goalRevisionId) {
+            return refuse('Planner Goal changed during launch.')
+          }
           const task = db.createTask({
             spec: JSON.stringify({
               kind: 'planner',
@@ -122,11 +138,6 @@ export function createPlannerLauncher(deps: Dependencies) {
               (parsed.success ? parsed.data.worktreeId : null)
           }
         }
-      } catch (error) {
-        if (error instanceof AgentFactoryError && error.code === 'no_eligible_provider') {
-          return refuse('no_eligible_provider', error.data)
-        }
-        throw error
       } finally {
         pending.delete(missionId)
       }

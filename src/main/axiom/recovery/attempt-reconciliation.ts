@@ -111,8 +111,12 @@ export async function reconcileAttempt(
     entry.action = await cancelAttempt(ctx, binding, observation)
     return entry
   }
-  if (planner) return reconcilePlanner(ctx, binding, observation, entry)
-  if (!task) return entry
+  if (planner) {
+    return reconcilePlanner(ctx, binding, observation, entry)
+  }
+  if (!task) {
+    return entry
+  }
   if (task.stage === 'SUBMITTED') {
     entry.action = retainSubmission(ctx, binding) ?? 'unchanged'
     return entry

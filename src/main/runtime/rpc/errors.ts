@@ -96,6 +96,8 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'mission_managed',
   'approval_required',
   'no_eligible_provider',
+  'planner_worktree_dirty',
+  'planner_worktree_missing',
   WORKTREE_CREATE_COLLISION_CODE,
   'worktree_id_requires_full_path',
   'run_not_found',

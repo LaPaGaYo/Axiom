@@ -55,7 +55,7 @@ it('launches one read-only Planner through the worker start seam, outside the Ta
   )
   await expect(start()).rejects.toMatchObject({
     code: 'invalid_argument',
-    data: { reason: 'planner_active' }
+    message: 'A Planner Attempt is already active for this Mission.'
   })
 })
 
@@ -73,22 +73,28 @@ it('falls back to the target branch and permits another run after a failed launc
 })
 
 it.each([
-  'mission_not_analyzing',
-  'plan_pending',
-  'no_eligible_provider',
-  'goal_revision_missing'
-] as const)('refuses %s before creating a pseudo-task or binding', async (reason) => {
-  if (reason === 'mission_not_analyzing') f.missions.pauseMission(f.mission.id, 'review')
-  if (reason === 'plan_pending')
+  ['mission_not_analyzing', 'illegal_transition'],
+  ['plan_pending', 'plan_pending'],
+  ['no_eligible_provider', 'no_eligible_provider'],
+  ['goal_revision_missing', 'invalid_argument']
+] as const)('refuses %s before creating a pseudo-task or binding', async (reason, code) => {
+  if (reason === 'mission_not_analyzing') {
+    f.missions.pauseMission(f.mission.id, 'review')
+  }
+  if (reason === 'plan_pending') {
     f.missions.proposePlan({
       missionId: f.mission.id,
       planRevision: { ...makeProposal(), goalRevisionId: f.goalRevision.id },
       provenance
     })
-  if (reason === 'no_eligible_provider') f.installed.mockResolvedValue([])
-  if (reason === 'goal_revision_missing')
+  }
+  if (reason === 'no_eligible_provider') {
+    f.installed.mockResolvedValue([])
+  }
+  if (reason === 'goal_revision_missing') {
     f.store.setActiveRevisions({ id: f.mission.id, activeGoalRevisionId: null })
-  await expect(start()).rejects.toMatchObject({ code: 'invalid_argument', data: { reason } })
+  }
+  await expect(start()).rejects.toMatchObject({ code })
   expect(f.store.listAttemptBindings({ missionId: f.mission.id })).toEqual([])
   expect(f.startWorker).not.toHaveBeenCalled()
 })

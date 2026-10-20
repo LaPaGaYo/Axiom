@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import type { z } from 'zod'
 import type { PlanProposeParams } from '../../../shared/axiom-contract/plan-params'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { gitExecFileAsync } from '../../git/runner'
@@ -44,9 +44,10 @@ export async function proposePlannerPlan(
   const worktreeId = db.getWorkerDispatch(p.attemptId)?.worktree_id
   const worktree = worktreeId ? splitWorktreeIdForFilesystem(worktreeId) : undefined
   if (!worktree?.worktreePath || !worktree.repoId) {
-    throw new OrchestrationError('invalid_argument', 'planner_worktree_missing', {
-      reason: 'planner_worktree_missing'
-    })
+    throw new OrchestrationError(
+      'planner_worktree_missing',
+      'Planner Attempt has no worktree path.'
+    )
   }
   const status = await gitExecFileAsync(
     ['status', '--porcelain'],
@@ -63,10 +64,11 @@ export async function proposePlannerPlan(
       before: null,
       after: { reason: 'planner_worktree_dirty', files }
     })
-    throw new OrchestrationError('invalid_argument', 'planner_worktree_dirty', {
-      reason: 'planner_worktree_dirty',
-      files
-    })
+    throw new OrchestrationError(
+      'planner_worktree_dirty',
+      `Planner worktree must be clean before proposing a plan:\n${files.join('\n')}`,
+      { files }
+    )
   }
   const result = store.transaction('planner_proposal', () => {
     const { spec } = authority()

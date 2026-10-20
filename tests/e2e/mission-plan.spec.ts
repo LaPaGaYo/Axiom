@@ -36,7 +36,9 @@ function git(args: string[]) {
     encoding: 'utf8',
     timeout: 30_000
   })
-  if (result.error) throw result.error
+  if (result.error) {
+    throw result.error
+  }
   expect(result.status, result.stderr).toBe(0)
   return result.stdout.trim()
 }
@@ -55,7 +57,9 @@ function invoke(userData: string, args: string[]) {
       timeout: 130_000
     }
   )
-  if (result.error) throw result.error
+  if (result.error) {
+    throw result.error
+  }
   return result
 }
 function cli(userData: string, args: string[]): unknown {
@@ -264,12 +268,14 @@ test('M2-09: a read-only Planner proposes the fixture DAG and releases after PLA
     expect(denied.status).not.toBe(0)
     expect(JSON.parse(denied.stdout)).toMatchObject({
       ok: false,
-      error: { code: 'invalid_argument', message: 'mission_not_analyzing' }
+      error: { code: 'illegal_transition' }
     })
     expect(git(['-C', clone, 'rev-parse', 'refs/heads/main'])).toBe(FIXTURE_COMMIT)
   } finally {
     try {
-      if (app) await session.close(app)
+      if (app) {
+        await session.close(app)
+      }
     } finally {
       try {
         await session.dispose()

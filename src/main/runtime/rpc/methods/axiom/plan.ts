@@ -15,8 +15,12 @@ export const AXIOM_PLAN_METHODS = [
     name: 'axiom.plan.propose',
     params: PlanProposeParams,
     handler: (p, ctx) => {
-      if (p.attemptId) return proposePlannerPlan({ ...p, attemptId: p.attemptId }, ctx)
-      if (!p.provenance) throw new OrchestrationError('invalid_argument', 'Missing provenance.')
+      if (p.attemptId) {
+        return proposePlannerPlan({ ...p, attemptId: p.attemptId }, ctx)
+      }
+      if (!p.provenance) {
+        throw new OrchestrationError('invalid_argument', 'Missing provenance.')
+      }
       return {
         planRevision: getAxiomControlPlane(ctx.runtime).missions.proposePlan({
           ...p,

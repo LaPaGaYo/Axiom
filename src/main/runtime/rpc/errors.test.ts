@@ -24,6 +24,25 @@ class LineageError extends Error {
 }
 
 describe('mapRuntimeError', () => {
+  it.each([
+    ['planner_worktree_dirty', { files: [' M src/file.ts', '?? proposal.json'] }],
+    ['planner_worktree_missing', undefined],
+    ['no_eligible_provider', { filtered: [{ provider: 'codex', reason: 'not_installed' }] }]
+  ] as const)('preserves the Planner failure %s and its details', (code, data) => {
+    expect(
+      mapRuntimeError(
+        'req_planner',
+        { runtimeId: 'runtime-1' },
+        new OrchestrationError(code, code, data)
+      )
+    ).toEqual({
+      id: 'req_planner',
+      ok: false,
+      error: data === undefined ? { code, message: code } : { code, message: code, data },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+  })
+
   it('preserves the stable skill failure category and retryability across RPC', () => {
     expect(
       mapRuntimeError(

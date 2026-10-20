@@ -49,7 +49,10 @@ it('rejects a dirty planner worktree before any Plan or Mission change', async (
   f.gitRun.mockResolvedValue({ stdout: ' M src/file.ts\n?? proposal.json\n', stderr: '' })
   expect(await propose()).toMatchObject({
     ok: false,
-    error: { code: 'invalid_argument', message: 'planner_worktree_dirty' }
+    error: {
+      code: 'planner_worktree_dirty',
+      data: { files: [' M src/file.ts', '?? proposal.json'] }
+    }
   })
   expect(f.gitRun).toHaveBeenLastCalledWith(
     ['status', '--porcelain'],
@@ -63,12 +66,32 @@ it('rejects a dirty planner worktree before any Plan or Mission change', async (
     after: { reason: 'planner_worktree_dirty', files: [' M src/file.ts', '?? proposal.json'] }
   })
 })
-it('preserves dirty-file details through the shared RPC error mapper', async () => {
+it('preserves dirty-file details and the CLI-facing message through RPC', async () => {
   f.gitRun.mockResolvedValue({ stdout: ' M src/file.ts\n', stderr: '' })
+  const response = await propose()
+  expect(response).toMatchObject({
+    ok: false,
+    error: {
+      code: 'planner_worktree_dirty',
+      message: expect.stringContaining(' M src/file.ts'),
+      data: { files: [' M src/file.ts'] }
+    }
+  })
+})
+it('rejects a missing planner worktree before any Plan or Mission change', async () => {
+  vi.spyOn(f.db, 'getWorkerDispatch').mockReturnValue(undefined)
+  const before = f.store.listAuditEvents({ missionId: f.mission.id })
+  f.gitRun.mockClear()
   expect(await propose()).toMatchObject({
     ok: false,
-    error: { data: { reason: 'planner_worktree_dirty', files: [' M src/file.ts'] } }
+    error: { code: 'planner_worktree_missing' }
   })
+  expect(f.gitRun).not.toHaveBeenCalled()
+  expect(f.missions.getMission(f.mission.id).status).toBe('ANALYZING')
+  expect(f.missions.listPlans(f.mission.id)).toEqual([])
+  expect(f.store.listAuditEvents({ missionId: f.mission.id })).toEqual(before)
+  expect(stop.stopLocalWorker).not.toHaveBeenCalled()
+  expect(release.releaseLocalWorker).not.toHaveBeenCalled()
 })
 it('stamps planner provenance, settles then stops/releases, and preserves role through approval/task show', async () => {
   const response = await propose()
@@ -101,15 +124,17 @@ it('stamps planner provenance, settles then stops/releases, and preserves role t
 it.each(['forged', 'inactive', 'non-planner'] as const)(
   'rejects %s authority without state changes',
   async (mode) => {
-    if (mode === 'inactive')
+    if (mode === 'inactive') {
       f.db.failDispatch(attemptId, 'failed', {
         workerProcessExited: true,
         terminationReason: 'process_exited'
       })
-    if (mode === 'non-planner')
+    }
+    if (mode === 'non-planner') {
       f.db.db
         .prepare('UPDATE attempt_bindings SET branch = ? WHERE dispatch_id = ?')
         .run('axiom/attempt/fake/1', attemptId)
+    }
     const before = f.store.listAuditEvents({ missionId: f.mission.id })
     const result = await propose({
       orchestrationCapability: mode === 'forged' ? 'dcap_forged' : f.capability()

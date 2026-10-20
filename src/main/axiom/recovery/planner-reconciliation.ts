@@ -21,10 +21,14 @@ export async function reconcilePlanner(
   const { db, store, runtime } = ctx
   const dispatchId = binding.dispatchId!
   const worker = db.getWorkerDispatch(dispatchId)
-  if (!worker) return entry
+  if (!worker) {
+    return entry
+  }
   const proposed = Boolean(lastAttemptAudit(ctx, binding, 'planner.proposed'))
   if (['failed', 'stopped', 'abandoned'].includes(worker.state)) {
-    if (!proposed) auditAttempt(ctx, binding, 'planner.attempt_failed', { reason: 'no_proposal' })
+    if (!proposed) {
+      auditAttempt(ctx, binding, 'planner.attempt_failed', { reason: 'no_proposal' })
+    }
     const release = await releaseLocalWorker(runtime, dispatchId)
     if (proposed) {
       auditAttempt(ctx, binding, 'planner.stopped', {
@@ -42,7 +46,9 @@ export async function reconcilePlanner(
       workerProcessExited: true,
       terminationReason: 'process_exited'
     })
-    if (!proposed) auditAttempt(ctx, binding, 'planner.attempt_failed', { reason: 'no_proposal' })
+    if (!proposed) {
+      auditAttempt(ctx, binding, 'planner.attempt_failed', { reason: 'no_proposal' })
+    }
     await releaseLocalWorker(runtime, dispatchId)
     entry.action = proposed ? 'released' : 'attempt_failed'
     return entry
@@ -65,7 +71,9 @@ export async function reconcilePlanner(
     }
     return entry
   }
-  if (!stopUnknown && entry.liveness !== 'unverifiable') return entry
+  if (!stopUnknown && entry.liveness !== 'unverifiable') {
+    return entry
+  }
   const verdict = {
     status: 'unverifiable' as const,
     reason: stopUnknown ? 'stop_unknown' : (observation.reason ?? observation.status)
@@ -75,8 +83,9 @@ export async function reconcilePlanner(
     ctx.now() - since < policy.unverifiableToleranceMinutes * 60_000 ||
     worker.state === 'stopping' ||
     worker.state === 'succeeded'
-  )
+  ) {
     return entry
+  }
   const evidence = await abandonmentEvidence(
     ctx,
     binding,
@@ -85,9 +94,13 @@ export async function reconcilePlanner(
     policy.unverifiableToleranceMinutes
   )
   // Host IO may have overlapped proposal settlement or a kernel state transition.
-  if (db.getWorkerDispatch(dispatchId)?.state !== worker.state) return entry
+  if (db.getWorkerDispatch(dispatchId)?.state !== worker.state) {
+    return entry
+  }
   const disposition = db.abandonWorkerDispatch(dispatchId).disposition
-  if (disposition === 'stale') return { ...entry, action: 'stale' }
+  if (disposition === 'stale') {
+    return { ...entry, action: 'stale' }
+  }
   auditAttempt(ctx, binding, 'planner.abandoned', {
     reason: 'unverifiable_tolerance_exceeded',
     disposition,
