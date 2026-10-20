@@ -279,68 +279,64 @@ describe('markCodexProjectTrusted', () => {
     }
   })
 
-  it('trusts the main repository root for a linked worktree without reading commondir', async () => {
-    const fixtureRoot = mkdtempSync(join(tmpdir(), 'orca-codex-linked-ws-'))
-    const repository = join(fixtureRoot, 'repo')
-    const workspace = join(fixtureRoot, 'worktrees', 'feature')
-    const worktreeGitDir = join(repository, '.git', 'worktrees', 'feature')
-    try {
+  it.each(['linked', 'bare', 'separate-git-dir', 'main'] as const)(
+    'trusts only the workspace realpath for a %s checkout',
+    async (layout) => {
+      const fixtureRoot = join(testState.fakeHomeDir, 'fixture')
+      const repository = join(fixtureRoot, 'repo')
+      const workspace = layout === 'main' ? repository : join(fixtureRoot, 'worktrees', 'feature')
+      const gitDir = layout === 'bare' ? repository : join(repository, '.git')
+      const worktreeGitDir = join(gitDir, 'worktrees', 'feature')
       mkdirSync(worktreeGitDir, { recursive: true })
       mkdirSync(workspace, { recursive: true })
-      writeFileSync(join(workspace, '.git'), `gitdir: ${worktreeGitDir}\n`, 'utf-8')
-      writeFileSync(join(worktreeGitDir, 'gitdir'), join(workspace, '.git'), 'utf-8')
-
-      await markCodexProjectTrusted(workspace)
-
-      const repositoryRoot = realpathSync.native(repository)
-      const workspaceRoot = realpathSync.native(workspace)
-      const configPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
-      const runtimeConfigPath = join(
-        testState.userDataDir,
-        'codex-runtime-home',
-        'home',
-        'config.toml'
-      )
-      for (const written of [
-        readFileSync(configPath, 'utf-8'),
-        readFileSync(runtimeConfigPath, 'utf-8')
-      ]) {
-        expect(written).toContain(`[projects."${escapeTomlBasicString(repositoryRoot)}"]`)
-        expect(written).not.toContain(`[projects."${escapeTomlBasicString(workspaceRoot)}"]`)
+      if (layout !== 'main') {
+        const metadata =
+          layout === 'separate-git-dir' ? join(fixtureRoot, 'metadata') : worktreeGitDir
+        mkdirSync(metadata, { recursive: true })
+        writeFileSync(join(workspace, '.git'), `gitdir: ${metadata}\n`)
+        writeFileSync(join(metadata, 'gitdir'), join(workspace, '.git'))
       }
-    } finally {
-      rmSync(fixtureRoot, { recursive: true, force: true })
+
+      await markCodexProjectTrusted(workspace)
+
+      for (const configPath of [
+        join(testState.fakeHomeDir, '.codex', 'config.toml'),
+        join(testState.userDataDir, 'codex-runtime-home', 'home', 'config.toml')
+      ]) {
+        const written = readFileSync(configPath, 'utf8')
+        expect(written).toBe(
+          `[projects."${escapeTomlBasicString(realpathSync.native(workspace))}"]\ntrust_level = "trusted"\n`
+        )
+      }
     }
-  })
+  )
 
-  it('does not broaden trust through arbitrary or adversarial Git metadata', async () => {
-    const fixtureRoot = mkdtempSync(join(tmpdir(), 'orca-codex-untrusted-gitdir-'))
-    const workspace = join(fixtureRoot, 'workspace')
-    const arbitraryGitDir = join(fixtureRoot, 'metadata', 'feature')
-    const unrelatedRoot = join(fixtureRoot, 'unrelated')
-    try {
-      mkdirSync(arbitraryGitDir, { recursive: true })
-      mkdirSync(workspace, { recursive: true })
-      mkdirSync(unrelatedRoot, { recursive: true })
-      writeFileSync(join(workspace, '.git'), `gitdir: ${arbitraryGitDir}\n`, 'utf-8')
-      writeFileSync(join(arbitraryGitDir, 'commondir'), join(unrelatedRoot, '.git'), 'utf-8')
+  it('preserves an older main-checkout trust entry while trusting a linked workspace', async () => {
+    const repository = join(testState.fakeHomeDir, 'repo')
+    const workspace = join(testState.fakeHomeDir, 'worktree')
+    const metadata = join(repository, '.git', 'worktrees', 'feature')
+    mkdirSync(metadata, { recursive: true })
+    mkdirSync(workspace)
+    writeFileSync(join(workspace, '.git'), `gitdir: ${metadata}\n`)
+    writeFileSync(join(metadata, 'gitdir'), join(workspace, '.git'))
+    const oldEntry = `# user's existing decision\n[projects."${escapeTomlBasicString(realpathSync.native(repository))}"]\ntrust_level = "untrusted"\n`
+    const configDirs = [
+      join(testState.fakeHomeDir, '.codex'),
+      join(testState.userDataDir, 'codex-runtime-home', 'home')
+    ]
+    for (const dir of configDirs) {
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, 'config.toml'), oldEntry)
+    }
 
-      await markCodexProjectTrusted(workspace)
-      const structuredGitDir = join(unrelatedRoot, '.git', 'worktrees', 'feature')
-      mkdirSync(structuredGitDir, { recursive: true })
-      writeFileSync(join(workspace, '.git'), `gitdir: ${structuredGitDir}\n`, 'utf-8')
-      writeFileSync(join(structuredGitDir, 'gitdir'), join(unrelatedRoot, '.git'), 'utf-8')
-      await markCodexProjectTrusted(workspace)
+    await markCodexProjectTrusted(workspace)
 
-      const written = readFileSync(join(testState.fakeHomeDir, '.codex', 'config.toml'), 'utf-8')
+    for (const dir of configDirs) {
+      const written = readFileSync(join(dir, 'config.toml'), 'utf8')
+      expect(written).toContain(oldEntry)
       expect(written).toContain(
-        `[projects."${escapeTomlBasicString(realpathSync.native(workspace))}"]`
+        `[projects."${escapeTomlBasicString(realpathSync.native(workspace))}"]\ntrust_level = "trusted"`
       )
-      expect(written).not.toContain(
-        `[projects."${escapeTomlBasicString(realpathSync.native(unrelatedRoot))}"]`
-      )
-    } finally {
-      rmSync(fixtureRoot, { recursive: true, force: true })
     }
   })
 

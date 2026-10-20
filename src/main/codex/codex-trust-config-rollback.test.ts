@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import * as fs from 'node:fs'
 import {
   chmodSync,
   lstatSync,
@@ -14,9 +15,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { captureCodexTrustConfig, restoreCodexTrustConfig } from './codex-trust-config-rollback'
 
+vi.mock('node:fs', async (importOriginal) => ({ ...(await importOriginal<typeof fs>()) }))
+
 const roots: string[] = []
 
 afterEach(() => {
+  vi.restoreAllMocks()
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
@@ -29,6 +33,66 @@ function tempConfigPath(): string {
 }
 
 describe('Codex trust config rollback', () => {
+  it('restores the original bytes when the rebase generation is still present', () => {
+    const configPath = tempConfigPath()
+    writeFileSync(configPath, '# original\n')
+    const snapshot = {
+      ...captureCodexTrustConfig(configPath),
+      generation: Buffer.from('# rebased\n')
+    }
+    writeFileSync(configPath, snapshot.generation)
+
+    restoreCodexTrustConfig(configPath, snapshot)
+
+    expect(readFileSync(configPath, 'utf8')).toBe('# original\n')
+  })
+
+  it.each([true, false])('preserves a later save when the original existed=%s', (existed) => {
+    const configPath = tempConfigPath()
+    if (existed) {
+      writeFileSync(configPath, '# original\n')
+    }
+    const snapshot = {
+      ...captureCodexTrustConfig(configPath),
+      generation: Buffer.from('# rebased\n')
+    }
+    writeFileSync(configPath, '# user saved\n')
+    const write = vi.spyOn(fs, 'writeFileSync')
+    const unlink = vi.spyOn(fs, 'unlinkSync')
+    const chmod = vi.spyOn(fs, 'chmodSync')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    restoreCodexTrustConfig(configPath, snapshot)
+
+    expect(readFileSync(configPath, 'utf8')).toBe('# user saved\n')
+    expect(write).not.toHaveBeenCalled()
+    expect(unlink).not.toHaveBeenCalled()
+    expect(chmod).not.toHaveBeenCalled()
+    expect(warn).toHaveBeenCalledExactlyOnceWith(
+      '[codex-trust-config] config.toml changed during the trust session; leaving it as found',
+      { path: configPath }
+    )
+  })
+
+  it('compares unknown Codex writes against the settled session bytes', () => {
+    const configPath = tempConfigPath()
+    writeFileSync(configPath, '# original\n')
+    const snapshot = captureCodexTrustConfig(configPath)
+    const settled = Buffer.from('# Codex partial grant\n')
+    writeFileSync(configPath, settled)
+    // A save after the settled-generation capture must still defeat rollback.
+    vi.spyOn(fs, 'readFileSync').mockImplementationOnce(() => {
+      writeFileSync(configPath, '# later save\n')
+      return settled
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    restoreCodexTrustConfig(configPath, snapshot)
+
+    expect(readFileSync(configPath, 'utf8')).toBe('# later save\n')
+    expect(warn).toHaveBeenCalledTimes(1)
+  })
+
   it('treats a missing config as absent and tolerates it remaining absent', () => {
     const configPath = tempConfigPath()
     const snapshot = captureCodexTrustConfig(configPath)

@@ -28,6 +28,7 @@ import {
   type WslCanonicalPathSettlement
 } from './codex-wsl-hook-install-plan'
 import type { CodexTrustEntry } from './config-toml-trust'
+import { removeRealHomeCodexHook } from './codex-real-home-hook-install'
 
 /** Lane-scoped so the hooks-on install never joins the hooks-off refresh. */
 function launchPrepKey(lane: 'install' | 'refresh', runtimeHomePath: string): string {
@@ -261,7 +262,10 @@ export class CodexHookService {
     )
   }
 
-  remove(): Promise<AgentHookInstallStatus> {
+  async remove(): Promise<AgentHookInstallStatus> {
+    // Why: only an explicit settings opt-out owns removal of the shared real-home entry.
+    // Finish this lane before taking the managed/system queue to avoid lock inversion.
+    await removeRealHomeCodexHook()
     return runExclusivelyForRuntimeAndSystemTrustConfig(getOrcaManagedCodexHomePath(), () =>
       this.removeExclusively()
     )

@@ -39,6 +39,7 @@ vi.mock('./codex-hook-trust-grant', () => ({
 
 import {
   ensureRealHomeCodexHookState,
+  removeRealHomeCodexHook,
   getRealHomeCodexHookLane,
   _internals
 } from './codex-real-home-hook-install'
@@ -100,6 +101,48 @@ afterEach(() => {
 })
 
 describe('ensureRealHomeCodexHookState (install)', () => {
+  it.each(['pending', 'installed', 'unavailable', 'removed'] as const)(
+    'hooks disabled leaves both files untouched and reports the %s lane without resolving HOME',
+    async (initialLane) => {
+      grantSucceeds()
+      await ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+      writeFileSync(getRealConfigTomlPath(), '# user trust\n')
+      const hooks = readFileSync(getRealHooksJsonPath(), 'utf8')
+      const toml = readFileSync(getRealConfigTomlPath(), 'utf8')
+      _internals.setLaneForTesting(initialLane)
+      homedirMock.mockImplementation(() => {
+        throw new Error('hooks-off launch must not resolve or open the real home')
+      })
+      homedirMock.mockClear()
+
+      expect(
+        await ensureRealHomeCodexHookState({ hooksEnabled: false, userDataPath: userDataDir })
+      ).toBe(initialLane === 'pending' ? 'removed' : initialLane)
+      expect(homedirMock).not.toHaveBeenCalled()
+      expect(getRealHomeCodexHookLane()).toBe(initialLane)
+      expect(readFileSync(getRealHooksJsonPath(), 'utf8')).toBe(hooks)
+      expect(readFileSync(getRealConfigTomlPath(), 'utf8')).toBe(toml)
+    }
+  )
+
+  it('leaves an edit made during a failed grant as found', async () => {
+    const saved = '{"hooks":{"Stop":[{"command":"user-saved-hook"}]}}\n'
+    grantMock.mockImplementation(() => {
+      writeFileSync(getRealHooksJsonPath(), saved)
+      return { lane: 'fallback', reason: 'unsupported' }
+    })
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    expect(
+      await ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+    ).toBe('unavailable')
+    expect(readFileSync(getRealHooksJsonPath(), 'utf8')).toBe(saved)
+    expect(warning).toHaveBeenCalledWith(
+      '[codex-real-home-hooks] hooks.json changed during the trust session; leaving it as found',
+      { path: getRealHooksJsonPath() }
+    )
+  })
+
   // Why (#16441): the ensure chain is process-wide; a rejection that escapes it
   // would return the same rejected promise to every later pane launch, with no
   // retry and no cooldown recovery.
@@ -112,9 +155,7 @@ describe('ensureRealHomeCodexHookState (install)', () => {
     await expect(
       ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
     ).resolves.toBe('unavailable')
-    await expect(
-      ensureRealHomeCodexHookState({ hooksEnabled: false, userDataPath: userDataDir })
-    ).resolves.toBe('removed')
+    await expect(removeRealHomeCodexHook()).resolves.toBe('removed')
   })
 
   it('creates hooks.json with the Orca entry in every managed event for a fresh home', async () => {
@@ -409,21 +450,17 @@ describe('ensureRealHomeCodexHookState (install)', () => {
   })
 })
 
-describe('ensureRealHomeCodexHookState (opt-out sweep)', () => {
+describe('removeRealHomeCodexHook (explicit opt-out sweep)', () => {
   it('keeps the managed lane when hooks.json cannot be read', async () => {
     mkdirSync(getRealHooksJsonPath())
 
-    expect(
-      await ensureRealHomeCodexHookState({ hooksEnabled: false, userDataPath: userDataDir })
-    ).toBe('unavailable')
+    expect(await removeRealHomeCodexHook()).toBe('unavailable')
   })
 
   it('keeps the managed lane when hooks.json is malformed', async () => {
     writeFileSync(getRealHooksJsonPath(), '{ not json', 'utf-8')
 
-    expect(
-      await ensureRealHomeCodexHookState({ hooksEnabled: false, userDataPath: userDataDir })
-    ).toBe('unavailable')
+    expect(await removeRealHomeCodexHook()).toBe('unavailable')
     expect(readFileSync(getRealHooksJsonPath(), 'utf-8')).toBe('{ not json')
   })
 
@@ -458,9 +495,7 @@ describe('ensureRealHomeCodexHookState (opt-out sweep)', () => {
       return { outcome: 'repaired', repaired: 1 }
     })
 
-    expect(
-      await ensureRealHomeCodexHookState({ hooksEnabled: false, userDataPath: userDataDir })
-    ).toBe('removed')
+    expect(await removeRealHomeCodexHook()).toBe('removed')
     expect(operations).toEqual(['inspect-user-hook-trust', 'repair-user-hook-trust'])
     expect(readRealHooksJson().hooks?.Stop).toEqual([{ hooks: [before] }, { hooks: [after] }])
   })
@@ -496,9 +531,7 @@ describe('ensureRealHomeCodexHookState (opt-out sweep)', () => {
       }
     })
 
-    expect(
-      await ensureRealHomeCodexHookState({ hooksEnabled: false, userDataPath: userDataDir })
-    ).toBe('unavailable')
+    expect(await removeRealHomeCodexHook()).toBe('unavailable')
 
     expect(operations).toEqual(['inspect-user-hook-trust'])
     expect(readFileSync(getRealHooksJsonPath(), 'utf-8')).toBe(concurrentSave)
@@ -519,10 +552,7 @@ describe('ensureRealHomeCodexHookState (opt-out sweep)', () => {
     await ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
     expect(readRealHooksJson().hooks?.Stop).toHaveLength(2)
 
-    const lane = await ensureRealHomeCodexHookState({
-      hooksEnabled: false,
-      userDataPath: userDataDir
-    })
+    const lane = await removeRealHomeCodexHook()
 
     expect(lane).toBe('removed')
     const config = readRealHooksJson()
@@ -537,10 +567,7 @@ describe('ensureRealHomeCodexHookState (opt-out sweep)', () => {
   })
 
   it('no-ops the sweep when the real home has no hooks.json', async () => {
-    const lane = await ensureRealHomeCodexHookState({
-      hooksEnabled: false,
-      userDataPath: userDataDir
-    })
+    const lane = await removeRealHomeCodexHook()
 
     expect(lane).toBe('removed')
     expect(existsSync(getRealHooksJsonPath())).toBe(false)
@@ -588,9 +615,7 @@ describe('ensureRealHomeCodexHookState (opt-out sweep)', () => {
     ]
     writeFileSync(getRealConfigTomlPath(), upsertHookTrustEntriesInContent('', entries), 'utf-8')
 
-    expect(
-      await ensureRealHomeCodexHookState({ hooksEnabled: false, userDataPath: userDataDir })
-    ).toBe('removed')
+    expect(await removeRealHomeCodexHook()).toBe('removed')
 
     expect(readRealHooksJson().hooks?.Stop).toEqual([
       { hooks: [{ type: 'command', command: userCommand }] }

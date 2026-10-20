@@ -11,6 +11,7 @@ import { createCodexHookTrustEntry } from './codex-hook-identity'
 import { resolveCodexTrustGrantHost } from './codex-trust-grant-host'
 import {
   captureCodexTrustConfig,
+  recordCodexTrustConfigGeneration,
   restoreCodexTrustConfig,
   type CodexTrustConfigSnapshot
 } from './codex-trust-config-rollback'
@@ -202,6 +203,7 @@ async function rebaseMovedUserTrust(
     if (repaired.outcome !== 'repaired') {
       throw new Error('Unexpected Codex user hook trust repair result')
     }
+    recordCodexTrustConfigGeneration(args.tomlPath, snapshot)
     return snapshot
   } catch (error) {
     rememberRebaseSessionFailure(hostKey, error)

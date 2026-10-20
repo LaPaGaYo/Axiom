@@ -13,10 +13,31 @@ import {
 import { randomUUID } from 'node:crypto'
 import { dirname, resolve } from 'node:path'
 import { renameFileWithWindowsRetry } from '../codex-accounts/fs-utils'
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 
-export type CodexTrustConfigSnapshot =
+export type CodexTrustConfigSnapshot = (
   | { existed: false; restorePath?: string }
   | { existed: true; contents: Buffer; mode: number; restorePath: string }
+) & { generation?: Buffer | null }
+
+function readGeneration(restorePath: string): Buffer | null {
+  try {
+    return readFileSync(restorePath)
+  } catch (error) {
+    if (isDefinitiveAbsence(error)) {
+      return null
+    }
+    throw error
+  }
+}
+
+/** Pin the successful rebase before a later managed-grant session can edit it. */
+export function recordCodexTrustConfigGeneration(
+  tomlPath: string,
+  snapshot: CodexTrustConfigSnapshot
+): void {
+  snapshot.generation = readGeneration(snapshot.restorePath ?? tomlPath)
+}
 
 function resolveConfigRestorePath(tomlPath: string): string {
   try {
@@ -70,6 +91,19 @@ export function restoreCodexTrustConfig(
   tomlPath: string,
   snapshot: CodexTrustConfigSnapshot
 ): void {
+  const restorePath = snapshot.restorePath ?? tomlPath
+  // Why: Codex's failed RPC may have written bytes Orca never observed.
+  // Without a known rebase generation, compare against its settled file.
+  const generation =
+    snapshot.generation === undefined ? readGeneration(restorePath) : snapshot.generation
+  const current = readGeneration(restorePath)
+  if (generation === null ? current !== null : current === null || !current.equals(generation)) {
+    console.warn(
+      '[codex-trust-config] config.toml changed during the trust session; leaving it as found',
+      { path: tomlPath }
+    )
+    return
+  }
   if (!snapshot.existed) {
     try {
       unlinkSync(snapshot.restorePath ?? tomlPath)
@@ -80,18 +114,11 @@ export function restoreCodexTrustConfig(
     }
     return
   }
-  const { restorePath } = snapshot
-  try {
-    if (readFileSync(restorePath).equals(snapshot.contents)) {
-      // Why: the RPC may change permissions without changing bytes; rollback
-      // restores the complete captured file state, not only its contents.
-      chmodSync(restorePath, snapshot.mode)
-      return
-    }
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-      throw error
-    }
+  if (current?.equals(snapshot.contents)) {
+    // Why: the RPC may change permissions without changing bytes; rollback
+    // restores the complete captured file state, not only its contents.
+    chmodSync(restorePath, snapshot.mode)
+    return
   }
   // Why: rollback protects config integrity too; direct truncating writes can
   // leave Codex unusable if Orca exits midway through recovery.
