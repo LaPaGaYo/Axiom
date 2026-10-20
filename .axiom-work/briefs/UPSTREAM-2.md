@@ -47,3 +47,10 @@ Three behaviours, each ported into the files Axiom has today, each with tests th
 ## Submission
 
 Leave the branch uncommitted; report as above.
+
+## Attempt 2 addendum (verifier, 2026-10-20)
+
+Attempt 1 (`e8962fbcd7` launcher commit on `axiom/attempt/UPSTREAM-2/1`; `verify-UPSTREAM-2-1-20261020-022102.log`): on the host the full target suite is 907 / 914 files green (the one failure is the known-environmental `pty-runtime-hidden-at-spawn-mark`), full lint, changed-code quality, `tc:node` / `tc:web` and every sidecar assertion pass — your sandbox's 56 failing files were all `listen EPERM` / process-inspection / FSEvents limitations, as you classified them. The only real red is the one you reported and correctly stopped at: `pnpm tc:cli` → `TS6307` because the CLI project uses an explicit file list (`config/tsconfig.cli.json`) and three modules are now reachable from CLI-bundled files: `codex-hook-retired-commands.ts` (new), `codex-real-home-hooks-json.ts` (imported by `codex-hook-legacy-cleanup.ts`) and `codex-real-home-hook-install.ts` (imported by `codex-hook-service-implementation.ts`). Upstream's own commit added exactly these to the list (`git show cfa43e7eab -- config/tsconfig.cli.json`), and all their transitive imports are already listed.
+
+1. `config/tsconfig.cli.json` is now in scope for this one change: add the three entries in alphabetical position inside the `src/main/codex` block; nothing else in that file. Then clean-cache `pnpm tc:cli` must pass. If it reports further `TS6307` entries, add those too (they are registration, not code) and list every added path in the report; if a required module is not plain-node safe (Electron import), stop and report instead.
+2. Re-run `pnpm tc:node`, `pnpm run check:code-quality:changed`, the focused nine-file suite and `pnpm lint`; write `.axiom-work/reports/UPSTREAM-2-2.md` (keep `UPSTREAM-2-1.md`). Everything else from attempt 1 stays as is.
