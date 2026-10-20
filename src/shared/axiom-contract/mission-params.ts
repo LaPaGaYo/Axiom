@@ -40,6 +40,17 @@ export const MissionSummarySchema = MissionSchema.pick({
 export type MissionSummary = z.infer<typeof MissionSummarySchema>
 
 export const MissionResponseSchema = z.object({ mission: MissionSummarySchema })
+export const AttemptReconcileEntrySchema = z.object({
+  attemptId: AxiomIdSchema.nullable(),
+  taskId: AxiomIdSchema,
+  seq: z.number().int().positive(),
+  liveness: z.enum(['live', 'exited', 'unverifiable']).nullable(),
+  action: z.string().min(1)
+})
+export type AttemptReconcileEntry = z.infer<typeof AttemptReconcileEntrySchema>
+export const MissionCancelResponseSchema = MissionResponseSchema.extend({
+  attempts: z.array(AttemptReconcileEntrySchema).optional()
+})
 export const MissionCreateResponseSchema = MissionResponseSchema.extend({
   goalRevision: GoalRevisionSchema,
   policy: PolicySchema

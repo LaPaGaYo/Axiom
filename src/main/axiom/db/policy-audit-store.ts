@@ -21,6 +21,15 @@ const ListSchema = z.object({
 
 export function policyAuditStore(db: OrchestrationDb) {
   return {
+    hasMessageAudit(missionId: string, messageId: string): boolean {
+      return (
+        db.db
+          .prepare(`SELECT 1 FROM audit_events WHERE mission_id = ?
+        AND object_kind = 'message' AND object_id = ?
+        AND event IN ('mailbox.message', 'message.received') LIMIT 1`)
+          .get(AxiomIdSchema.parse(missionId), AxiomIdSchema.parse(messageId)) !== undefined
+      )
+    },
     upsertPolicy(missionId: string, policy: Policy): void {
       const key = AxiomIdSchema.parse(missionId)
       const p = PolicySchema.parse(policy)

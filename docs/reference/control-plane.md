@@ -158,12 +158,41 @@ Mission 总 Attempts/wall-clock 耗尽通过既有 `blockMission(missionId, budg
 
 只有显式配置 `routing.models[provider]`（AgentSpec 的 `model !== 'policy-default'`）时，launcher 才同时传 `model` 和 `reasoning.effort`；`reasoning.effort` 仅在此时生效。`policy-default` 时两者都省略，使用 provider 自身配置的模型与推理设置，避免内核拒绝 `--effort` 未配 `--model` 的组合。
 
-`timeoutMs = resolveWorkerStartReadinessTimeoutMs(undefined)`（当前 60,000ms）只限制 readiness wait；Attempt runtime cap 由 M2-08 按 admission 的 `created_at` 和 bound spec 预算执行。`ready` 保持 RUNNING；`failed` 在尚有重试预算时转 NEEDS_FIX，否则 BLOCKED (`retry_budget_exhausted`)；`outcome_unknown` 保持 RUNNING，交 M2-08。dispatch 铸造前抛错时保留 NULL binding，记录经脱敏的失败 message，按同一重试规则转 stage。未绑定的读投影为 LAUNCH_PENDING；M2-08 负责该状态与 START_UNKNOWN 的恢复及 NEEDS_FIX → READY。
+`timeoutMs = resolveWorkerStartReadinessTimeoutMs(undefined)`（当前 60,000ms）只限制 readiness wait；Attempt runtime cap 由 M2-08 按 admission 的 `created_at` 和 Task spec / Mission policy 预算执行。`ready` 保持 RUNNING；`failed` 经 M2-08 的共享 settlement 走 RUNNING → NEEDS_FIX → READY；预算耗尽则 NEEDS_FIX → BLOCKED (`retry_budget_exhausted`)；`outcome_unknown` 保持 RUNNING，交 M2-08。dispatch 铸造前抛错时保留 NULL binding，记录经脱敏的失败 message，按同一重试规则转 stage。未绑定的读投影为 LAUNCH_PENDING；M2-08 已接入该状态与 START_UNKNOWN 的恢复及 NEEDS_FIX → READY。
 
 `axiom.attempt.show/list` 异步经 `inspectWorkerTerminal` 读取执行宿主的 liveness（`live/exited` 原样保留，其余状态 → `unverifiable`，可选 `livenessReason` 优先保留 reason、否则保留非 live/exited 的 status，无则 null），不用 fleet 的 agent-status 判定；state、workspace 与 worktreeId 继续取自 `projectFleetWorker`，NULL dispatch 的 liveness/livenessReason 仍为 null。
 
 
 M2-06b：pending question_threads 通过 attempt_bindings 关联 Task；`blockingQuestionOrApproval` 使该 Task 无法 admission 新 Attempt。回答后 pending 消失并重算 readiness；当前 Attempt 仍 RUNNING，问题不改变其执行状态。超时或取消等待不自动关闭问题；结算由内核 closeQuestionsForDispatch 关闭。
+
+### Recovery（M2-08）
+
+`RecoveryService.recover()` 保留同步 Mission report；独立的 `async reconcileAttempts({missionId?})` 处理 Attempt。每次重新读取 binding、Task stage、worker/dispatch 与执行宿主观测；仅保存进行中的 Promise，重叠调用等待前一轮后重读持久状态。扫描非终态 Task 的 bindings，加上仍活跃的 kernel worker 对应 binding；CANCELED Task 的已结算资源也重查，补齐 kernel commit 与 release/audit 之间的崩溃窗口。旧 seq 不得结算最新 RUNNING admission。
+
+启动时在 recover 后执行一次，每 60,000ms 执行一次（unref timer，stop 时清除）；消费者成功处理并 ack 含同 Mission bound dispatchId 的 kernel escalation 批次后再触发一轮。正常无变化的 tick 不写 audit。失败只记录身份到 console.warn，其他 Attempt 仍继续对账，报告 action=reconcile_failed，不能当作成功结算。
+
+| 规则 | 读取与 kernel 操作 | 审计 / Axiom stage |
+|---|---|---|
+| a | starting/stopping 的 runtime_epoch 不同于当前 runtime：先 markWorkerStartUnknown / markWorkerStopUnknown，再 inspectWorkerTerminal | 保持 Task；后续按实际宿主 liveness 处置 |
+| b | RUNNING、worker failed/stopped/abandoned、无 Submission | 共享 settlement；放弃已提交而 Axiom consequence 未提交时，从关联 evidence Artifact 补回 attempt.abandoned |
+| c | RUNNING、活跃 worker、宿主明确 exited：failDispatch(workerProcessExited=true, terminationReason=process_exited) | attempt.failed → RUNNING → NEEDS_FIX → READY/BLOCKED |
+| d | live：通常不动；now-createdAt 大于 Task spec.budget.maxRuntimeMinutes（无则 policy.budget.maxRuntimeMinutes，无 cap 不限）时 stopLocalWorker | stopped：attempt.stopped + settlement(runtime_budget_exceeded)；stop_unknown：attempt.stop_unknown，保持 RUNNING |
+| e | unverifiable：写 liveness facet 的变化；到 unverifiableToleranceMinutes 后先 put evidence，再 abandonWorkerDispatch | attempt.unverifiable；超时 attempt.abandoned（含 evidenceArtifactId、disposition）+ settlement(unverifiable_tolerance_exceeded) |
+| f | RUNNING、最新 binding.dispatchId=null，超过两倍默认 readiness timeout（当前 120,000ms） | attempt.launch_pending_orphan + settlement；较新 pending 不动 |
+| g | SUBMITTED 且 terminal resource.release_state=not_requested：retainWorkerTerminalResource | attempt.terminal_retained / attempt.terminal_retain_failed，沿用 M2-07 的 taskId/submissionId/candidateId/retainDisposition；不改变 stage |
+| h | Task CANCELED 或 Mission 终态：活跃且 live/exact 用 stopLocalWorker，否则 abandonWorkerDispatch；结算后 releaseLocalWorker | attempt.stopped / attempt.abandoned，reason=mission_canceled，after.release 保留 requested completion / retained / already_released 真实收据；stage 不再变；已提交 Candidate 不提前释放 |
+
+Liveness 与 `axiom.attempt.show/list` 共用 `foldAttemptLiveness`：live/exited 原样，unattached/missing/identity_changed/unverifiable → unverifiable，不读 Agent activity 推断死亡。starting/stopping 的新 runtime 归一化不代替宿主 liveness。SQLite UTC 时间戳经内核 exposeUtcTimestamp 解析，避免本地时区改变 runtime/orphan deadline。
+
+`attempt_observation_facts` 最新 liveness facet 的 homeReceivedAt 是持久的 unverifiable-since：进入 unverifiable 只写一条；连续 tick 不写；恢复 live 写一条 live，下一次失联重新计时。证据 JSON 含 taskId/attemptId/seq/branch/worktreeId、workerState/dispatchStatus、liveness/reason、since/abandonedAt/toleranceMinutes 与该 Attempt 的 observationFacts；Artifact kind=evidence、related=[Task,dispatch]。无宿主退出证据时不冷启动同一 Attempt/worktree。
+
+`settleAttemptWithoutSubmission` 在一个 store transaction 中只处理最新且无 Submission 的 RUNNING binding：RUNNING → NEEDS_FIX（原 reason），再按权威 attemptCount < retryPolicy.maxAttempts 转 READY（retry）或 BLOCKED（retry_budget_exhausted，previousStage=NEEDS_FIX）。不增加 attemptCount。launcher 的 launch_failed 与 Scheduler 的未绑定 launch_rejected 共用该入口；Orca Task failed/blocked 时，launcher 传最新 dispatch 为 retryOf，包含 abandoned/circuit_broken 后的新 Attempt。READY 触发既有 stage_change 调度，暂停 Mission 不 admission。
+
+所有拥有 BEGIN IMMEDIATE 的 kernel 操作均在 Axiom transaction 外完成，再写 Axiom consequence；failDispatch 已用可嵌套 savepoint，可与 audit/两次 stage change 同事务。保留/释放遵守内核 disposition，不能强制清理 possibly-live 或 identity_unproven 资源。
+
+`axiom.mission.cancel` 先同步持久化 CANCELED/Task CANCELED，再 await reconciliation；返回 `{mission, attempts?}`，entries 为 `{attemptId,taskId,seq,liveness,action}`。CLI 每 Attempt 输出 action；旧响应省略 attempts 仍兼容。pause 只停止 admission；RUNNING Attempt 继续，cancel/restart 的剩余清理由同一恢复路径处理。
+
+**当前内核边界（M2-08-1 scope gap）**：stop_unknown 且宿主再次 live/exact 时，现有 beginWorkerStop 拒绝重试，且内核 worker lifecycle 不允许 stop_unknown → stopping；旧 runtime stranded stopping 先归一化为 stop_unknown 后也受此限制。当前保留 Task/Attempt 真实状态并报告 reconcile_failed，不绕过 kernel；回归测试保留红色，详见 `.axiom-work/reports/M2-08-1.md`。非 exact/unverifiable 的 stop_unknown 可以正常 abandon；RUNNING 的该情况等待 tolerance 后留证据放弃。同 runtime 正在 stopping 的调用仍拥有结果，恢复不抢占。
 
 ## 5. 合成 session party 与 Run 绑定（D14）
 
@@ -283,6 +312,8 @@ M2-06a 的 `admission-worker-control.test.ts` 与 `admission-rpc.test.ts` 覆盖
 
 ## 8. Mailbox 与恢复
 
+M2-08 新审计：attempt.unverifiable（taskId/seq/reason/since）、attempt.abandoned（reason/disposition/evidenceArtifactId?）、attempt.failed、attempt.stopped、attempt.stop_unknown、attempt.launch_pending_orphan；取消的停止/放弃事件还含 release 收据。attempt 对象 id 为 dispatchId，未绑定 launch 用 taskId/seq；无变化不追加相同结果。mailbox.retry_exhausted 为 Mission 对象事件，含 runId/consumerGeneration/reason；message 去重和 Attempt 结果审计使用 idx_audit_events_object，索引为 CREATE INDEX IF NOT EXISTS，无 schema version 变化。
+
 M2-07 提交审计：`attempt.submitted` 的 objectKind=attempt、objectId=dispatchId，after 含 stage=SUBMITTED、taskId、submissionId、candidateId、verificationRunId。`candidate.superseded` 的 objectKind=candidate、objectId=旧 Candidate id，after 含 SUPERSEDED 与 supersededBy；二者与结算同事务。提交后的独立 `attempt_retain` 事务记录 `attempt.terminal_retained` 或 `attempt.terminal_retain_failed`（同一 Attempt，after 含 taskId/submissionId/candidateId）；成功另带 retainDisposition（retained/already_released/no_owned_resource/release_committed），失败不持久化原始内核错误内容。消费者已有 `message.received` 路径覆盖 SUBMISSION，只记收件审计，不二次结算或验证。
 
 M2-05 启动审计：`attempt.started` / `attempt.launch_failed` / `attempt.start_unknown` 的 objectKind 为 attempt，绑定后 objectId = dispatchId，after 含 taskId/seq/branch/worktreeId/provider；绑定前失败的 objectId = taskId/seq，after 含脱敏 message。`integration.base_created` / `integration.base_reused` 的 objectKind 为 mission，after 含 sha。这些事件不代表 Submission、验证或完成。
@@ -291,7 +322,7 @@ M2-04：MissionController 在 startExecution 提交后触发 mission_start；res
 
 `RunMailboxConsumer` 先注册 exclusive waiter 再 drain backlog，避免读空到订阅之间丢唤醒；waiter 的独占仅限进程。`getOrCreateRunDelivery` 与 `acknowledgeRunDelivery` 用启动时捕获的 generation 栅栏，不能重读并采用别人的新 generation。
 
-一批消息在 store 事务内按 message id 查 `audit_events` 去重：普通载荷写 `mailbox.message`，合法同 Mission 的 `payload.axiom` 改写 `message.received`；两种事件共同作为去重依据。重算 readiness，成功后才 ack。语义是 at-least-once delivery + 幂等效果，不能先 ack 再处理。处理失败留下批次以供重放；仍采用固定退避 250ms、扫描 Mission audit 去重，消息量增长后需评估索引与有界 retry/escalation。`consumer_fenced` 写 `mailbox.consumer_fenced`，将 Mission BLOCKED 并停止消费者。
+一批消息在 store 事务内按 message id 查 `audit_events` 去重：普通载荷写 `mailbox.message`，合法同 Mission 的 `payload.axiom` 改写 `message.received`；两种事件共同作为去重依据。重算 readiness，成功后才 ack。语义是 at-least-once delivery + 幂等效果，不能先 ack 再处理。处理失败留下批次以供重放；M2-08 使用 250ms × 2^(n−1)、上限 30s 的 waitForMessage(typeFilter=[]) 退避，通知不能绕过等待；成功 drain 后清零，连续 8 次失败则 blockMission(consumer_retry_exhausted)、写 mailbox.retry_exhausted 并停止。hasMessageAudit 使用 mission_id/object_kind/message object_id 与两种去重事件的 SELECT 1 LIMIT 1；idx_audit_events_object(mission_id, object_kind, object_id) 在每次打开 DB 时幂等创建，不再逐批扫描 Mission audit。`consumer_fenced` 写 `mailbox.consumer_fenced`，将 Mission BLOCKED 并停止消费者。
 
 M2-06a `MessageRouter` 在 `store.transaction('message_route', …)` 内写 Control Plane 副本、下游副本与 `message.sent`（含 type/taskId/attemptId/recipients），并保存 mutation receipt；提交后向每个收件地址 `notifyMessageArrived`。Control Plane 地址必须为 `run:<runId>`：M1-08 的 `getOrCreateRunDelivery` 不消费 coordinator 的 `session:<id>` 直邮。INFORM/HANDOFF 默认只投 sender Task 的直接下游最新且 dispatched 的 Attempt；非空 `related.taskIds` 替换默认受众。REQUEST/BLOCKED/REQUEST_SUBTASK 只投 Control Plane；所有副本以 Control Plane 消息 id 为 threadId，从不使用群组地址。
 
@@ -301,7 +332,7 @@ M2-06a `MessageRouter` 在 `store.transaction('message_route', …)` 内写 Cont
 
 恢复逐个检查非终态 Mission：Run 必须存在，合成 session id 必须有效且 `runBoundToCoordinator` 成立；否则 BLOCKED，记录一次 `recovery.run_binding_lost`，不悄悄重建 Run。正常恢复重算 readiness，**不会写 recovery 成功事件**；若 readiness 实际移动，仍按正常 Task 转换审计。
 
-`reconcileAttempts()` 明确返回 `no_attempts_in_m1`。Architecture §16.1 的 Attempt liveness、队列重驱、Approval 过期与周期 reconciliation 是后续全量目标；M1 没有宣称这些已完成。`docs/plans/M1.md` 的早期 M1-01 笔记写过先 drain 后注册，实际 M1-08 实现与测试为先注册再 drain，以实现为本节事实来源。
+`reconcileAttempts()` 的 Attempt 子集由 M2-08 接入启动、周期与退出消息触发（§4 Recovery）。Architecture §16.1 的 Verification/Integration 队列重驱与 Approval 过期仍由后续里程碑接入。`docs/plans/M1.md` 的早期 M1-01 笔记写过先 drain 后注册，实际 M1-08 实现与测试为先注册再 drain，以实现为本节事实来源。
 
 M2-06b 审计：question.created / question.answered 的 objectKind=message、objectId=question message id；前者带 Task/Attempt，后者带 answerMessageId 与 status，不复制回答正文。消费者按 question_threads 识别无 Axiom payload 的 QUESTION，写 message.received。REQUEST_SUBTASK 的 subtask.requested、checks_failed、resolved 与 Task 创建在同批事务内；重放不重复创建。task.created 带 origin/provenance/messageId?；plan.minor_adjustment 带 classification=MINOR_ADJUSTMENT、origin=user|request_subtask、Task 与边。人工接受失败在返回 invalid_argument 前保留 checks_failed 审计，仍可修复后重试或拒绝。
 

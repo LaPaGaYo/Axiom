@@ -1,3 +1,4 @@
+import { MissionCancelResponseSchema } from '../../../shared/axiom-contract/mission-params'
 import { AXIOM_POLICY_HANDLERS } from './policy'
 import { AXIOM_ARTIFACT_HANDLERS } from './artifact'
 import type { CommandHandler } from '../../dispatch'
@@ -68,7 +69,16 @@ export const AXIOM_MISSION_HANDLERS: Record<string, CommandHandler> = {
       ctx,
       'axiom.mission.cancel',
       { missionId: required(ctx.flags, 'mission'), reason: required(ctx.flags, 'reason') },
-      formatMission
+      (value) => {
+        const result = MissionCancelResponseSchema.parse(value)
+        return [
+          formatMission(result),
+          ...(result.attempts ?? []).map(
+            (attempt) =>
+              `Attempt ${attempt.attemptId ?? `${attempt.taskId}/${attempt.seq}`}: ${attempt.action}`
+          )
+        ].join('\n')
+      }
     )
   },
   'mission goal propose': async (ctx) => {

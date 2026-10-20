@@ -452,12 +452,12 @@ Mission-first。主视图：
 
 ### 16.1 Reconciliation（G5）
 RecoveryService 在启动与周期性运行：
-1. 对所有非终态 Attempt（Orca `starting / ready / stopping / start_unknown / stop_unknown`）经 `workerShow`/`inspectWorkerTerminal` 取 liveness：`live` → 保持；`exited` → 按 Orca 结算为 FAILED/STOPPED → Task `NEEDS_FIX`/`BLOCKED`；`unverifiable` → 保持 RUNNING、启动 policy 计时器；
+1. M2-08 已实现 Attempt 恢复子集（停止重试的内核边界见 control-plane.md §4 Recovery）：对所有非终态 Attempt（Orca `starting / ready / stopping / start_unknown / stop_unknown`）经 `workerShow`/`inspectWorkerTerminal` 取 liveness：`live` → 保持；`exited` → 按 Orca 结算为 FAILED/STOPPED → Task `NEEDS_FIX`/`BLOCKED`；`unverifiable` → 保持 RUNNING、启动 policy 计时器；
 2. 重驱队列：`verification_runs` 为 RUNNING 者重新 QUEUED（验证进程随应用死亡）；`integration_batches` 为 APPLYING/TESTING 者丢弃临时分支后重新 QUEUED；过期 Approval 置 EXPIRED；
 3. 以 `runs.consumer_generation` 续接 `run:<runId>` mailbox 消费；
 4. Scheduler 完全从 `task_stages` 重算 readiness；不存在需要恢复的内存态。
 
-M1（`src/main/axiom/recovery/recovery-service.ts` 与 `control-plane-boot.ts`）实现步骤 2–4 的 Mission 恢复子集：加载 Mission、校验 Run 绑定、按持久化 generation 续接 mailbox 并重算 readiness（步骤 2 的验证/集成队列与 Approval 尚无 M1 写入者，后续里程碑接入）；步骤 1 的 Attempt reconciliation 留给 M2，当前显式返回 `no_attempts_in_m1`。
+M1（`src/main/axiom/recovery/recovery-service.ts` 与 `control-plane-boot.ts`）实现步骤 2–4 的 Mission 恢复子集：加载 Mission、校验 Run 绑定、按持久化 generation 续接 mailbox 并重算 readiness（步骤 2 的验证/集成队列与 Approval 尚无 M1 写入者，后续里程碑接入）。
 
 ### 16.2 预算（G3）
 | 层级 | 维度 | 执行 |

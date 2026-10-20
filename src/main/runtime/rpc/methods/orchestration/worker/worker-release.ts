@@ -1,14 +1,11 @@
+import { releaseLocalWorker } from './local-worker-release'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { assertNotMissionManaged } from '../../../../../axiom/admission/mission-managed-run-guard'
 import { defineMethod } from '../../../core'
 import { releaseFederatedWorker } from '../federation/federated-worker-release'
 import { ORCHESTRATION_WORKER_LIST_METHOD } from './worker-list-method'
 import { resolvePinnedFederatedServer } from './worker-observation'
-import {
-  archiveSummary,
-  completeWorkerTerminalRelease,
-  type WorkerReleaseReceipt
-} from './worker-release-completion'
+import { archiveSummary, type WorkerReleaseReceipt } from './worker-release-completion'
 import { WorkerDispatchParams, WorkerRetainParams } from './worker-release-schemas'
 import { OrchestrationWorkerTerminalUserInputParams } from '../../../../../../shared/rpc-contract/orchestration-worker-release-params'
 
@@ -18,7 +15,10 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
     params: WorkerDispatchParams,
     handler: async (params, { runtime, orchestrationMutation }): Promise<WorkerReleaseReceipt> => {
       const db = runtime.getOrchestrationDb()
-      assertNotMissionManaged(runtime, { dispatchId: params.dispatch, verb: 'orchestration.workerRelease' })
+      assertNotMissionManaged(runtime, {
+        dispatchId: params.dispatch,
+        verb: 'orchestration.workerRelease'
+      })
       const federated = db.getFederatedDispatch(params.dispatch)
       if (federated) {
         if (!orchestrationMutation) {
@@ -35,54 +35,7 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
           requestId: orchestrationMutation.requestId
         })
       }
-      const requested = db.requestWorkerTerminalRelease(params.dispatch)
-      if (requested.disposition === 'already_released') {
-        return {
-          dispatchId: params.dispatch,
-          state: 'already_released',
-          processAction: 'none',
-          archive: archiveSummary(requested.resource)
-        }
-      }
-      if (requested.disposition === 'retained') {
-        const resource = requested.resource
-        const processIncarnation = resource?.process_incarnation
-        if (
-          processIncarnation &&
-          (await runtime.inspectTerminalProcessIncarnationLiveness(
-            processIncarnation,
-            resource.host_scope
-          )) === 'exited'
-        ) {
-          const reconciled = db.settleDeadWorkerTerminalRelease({
-            requestingDispatchId: params.dispatch,
-            resourceId: resource.id,
-            processIncarnation
-          })
-          if (reconciled.disposition === 'released') {
-            runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
-            return {
-              dispatchId: params.dispatch,
-              state: 'released',
-              processAction: 'none',
-              archive: archiveSummary(reconciled.resource)
-            }
-          }
-        }
-        return {
-          dispatchId: params.dispatch,
-          state: 'retained',
-          reason: requested.reason,
-          processAction: 'none',
-          archive: archiveSummary(resource)
-        }
-      }
-      return completeWorkerTerminalRelease({
-        runtime,
-        db,
-        dispatchId: params.dispatch,
-        resource: requested.resource
-      })
+      return releaseLocalWorker(runtime, params.dispatch)
     }
   }),
   defineMethod({
@@ -90,7 +43,10 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
     params: WorkerRetainParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
-      assertNotMissionManaged(runtime, { dispatchId: params.dispatch, verb: 'orchestration.workerRetain' })
+      assertNotMissionManaged(runtime, {
+        dispatchId: params.dispatch,
+        verb: 'orchestration.workerRetain'
+      })
       const retained = db.retainWorkerTerminalResource(params.dispatch)
       if (retained.disposition === 'already_released') {
         return {

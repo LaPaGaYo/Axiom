@@ -12,13 +12,13 @@ import { goal, policy } from '../../shared/axiom-contract/contract-fixtures.test
 
 export const createParams = { repo: 'fixture', targetBranch: 'main', goal, policy }
 
-export function rpcFixture() {
+export function rpcFixture(dbPath = ':memory:') {
   vi.spyOn(integrationBase, 'ensureIntegrationBase').mockResolvedValue({
     sha: 'fixture-head',
     created: true
   })
   vi.spyOn(detection, 'detectInstalledAgentsWithShellPathHydration').mockResolvedValue([])
-  const db = new OrchestrationDb(':memory:')
+  const db = new OrchestrationDb(dbPath)
   const runtime = new OrcaRuntimeService()
   runtime.setOrchestrationDb(db)
   vi.spyOn(runtime, 'showRepo').mockResolvedValue({

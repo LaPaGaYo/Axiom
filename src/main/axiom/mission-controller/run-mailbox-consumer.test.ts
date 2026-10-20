@@ -117,6 +117,60 @@ describe('Mission Run mailbox consumer', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
+  it('backs off 250/500/1000 ms and resets consecutive failures after a successful drain', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const runId = f.controller.getMission(f.missionId).runId
+    insertMail(f.db, runId)
+    const handle = vi.spyOn(consumer, 'handle')
+    for (let i = 0; i < 3; i++) {
+      handle.mockImplementationOnce(() => {
+        throw new Error('failure')
+      })
+    }
+    const running = consumer.start()
+    await vi.advanceTimersByTimeAsync(0)
+    for (const delay of [250, 500, 1000]) {
+      expect(runtime.waitForMessage.mock.lastCall?.[1]).toMatchObject({
+        typeFilter: [],
+        timeoutMs: delay
+      })
+      await vi.advanceTimersByTimeAsync(delay)
+    }
+    expect(audits()).toHaveLength(1)
+    handle.mockImplementationOnce(() => {
+      throw new Error('new failure')
+    })
+    insertMail(f.db, runId)
+    runtime.notifyMessageArrived(`run:${runId}`, 'status')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(runtime.waitForMessage.mock.lastCall?.[1]?.timeoutMs).toBe(250)
+    consumer.stop()
+    await running
+  })
+
+  it('durably blocks after eight consecutive failures and leaves the batch unacknowledged', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const runId = f.controller.getMission(f.missionId).runId
+    insertMail(f.db, runId)
+    const handle = vi.spyOn(consumer, 'handle').mockImplementation(() => {
+      throw new Error('failure')
+    })
+    const running = consumer.start()
+    await vi.advanceTimersByTimeAsync(61_750)
+    expect(handle).toHaveBeenCalledTimes(8)
+    expect(f.controller.getMission(f.missionId).status).toBe('BLOCKED')
+    expect(f.store.listAuditEvents({ missionId: f.missionId })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: 'mailbox.retry_exhausted',
+          after: expect.objectContaining({ reason: 'consumer_retry_exhausted' })
+        })
+      ])
+    )
+    expect(f.db.hasOutstandingRunDelivery(runId)).toBe(true)
+    await running
+  })
+
   it('rejects a second exclusive consumer before it drains even with backlog', async () => {
     const running = consumer.start()
     await vi.advanceTimersByTimeAsync(0)
@@ -128,5 +182,23 @@ describe('Mission Run mailbox consumer', () => {
     expect(audits()).toEqual([])
     consumer.stop()
     await running
+  })
+  it('dedupes a replay through the indexed message lookup without scanning Mission audit', () => {
+    const message = insertMail(f.db, f.controller.getMission(f.missionId).runId)
+    const scan = vi.spyOn(f.store, 'listAuditEvents').mockImplementation(() => {
+      throw new Error('unexpected full audit scan')
+    })
+    consumer.handle([message, message])
+    consumer.handle([message])
+    expect(f.store.hasMessageAudit(f.missionId, message.id)).toBe(true)
+    expect(scan).not.toHaveBeenCalled()
+    scan.mockRestore()
+    expect(audits()).toHaveLength(1)
+    const plan = f.db.db
+      .prepare(
+        "EXPLAIN QUERY PLAN SELECT 1 FROM audit_events WHERE mission_id = ? AND object_kind = 'message' AND object_id = ? AND event IN ('mailbox.message','message.received') LIMIT 1"
+      )
+      .all(f.missionId, message.id)
+    expect(JSON.stringify(plan)).toContain('idx_audit_events_object')
   })
 })

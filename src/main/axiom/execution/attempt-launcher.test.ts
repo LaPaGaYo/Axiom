@@ -13,6 +13,7 @@ import { RulesEngine } from '../decision-engine/rules-engine'
 import { PROVIDER_SELECTION_RULES } from '../agent-factory/provider-selection'
 import { Scheduler, type AdmittedAttempt } from '../scheduler/scheduler'
 import { createAttemptLauncher, type AttemptWorkerStartArgs } from './attempt-launcher'
+import { settleAttemptWithoutSubmission } from './attempt-settlement'
 
 let f: ReturnType<typeof planned>
 let root: string
@@ -184,7 +185,7 @@ it('explicit routing model passes both model and reasoning effort', async () => 
 })
 it.each([
   ['ready', 1, 'RUNNING', 'attempt.started'],
-  ['failed', 1, 'NEEDS_FIX', 'attempt.launch_failed'],
+  ['failed', 1, 'READY', 'attempt.launch_failed'],
   ['failed', 2, 'BLOCKED', 'attempt.launch_failed'],
   ['outcome_unknown', 1, 'RUNNING', 'attempt.start_unknown']
 ] as const)('settles %s with count %i to %s', async (state, count, expected, event) => {
@@ -202,7 +203,7 @@ it.each([1, 2])(
     createManagedWorktree.mockRejectedValueOnce(new Error('worktree failed'))
     await expect(launcher()(attempt)).resolves.toBeUndefined()
     expect(binding()?.dispatchId).toBeNull()
-    expect(stage()).toBe(count === 1 ? 'NEEDS_FIX' : 'BLOCKED')
+    expect(stage()).toBe(count === 1 ? 'READY' : 'BLOCKED')
     expect(events('attempt.launch_failed')[0].after).toMatchObject({ message: 'worktree failed' })
     expect(startWorker).not.toHaveBeenCalled()
   }
@@ -232,5 +233,51 @@ it('settles a thrown kernel validation error before dispatch', async () => {
   startWorker.mockRejectedValueOnce(new Error('invalid caller'))
   await expect(launcher()(attempt)).resolves.toBeUndefined()
   expect(binding()?.dispatchId).toBeNull()
-  expect(stage()).toBe('NEEDS_FIX')
+  expect(stage()).toBe('READY')
 })
+
+it.each(['abandoned', 'circuit_broken'] as const)(
+  'launches a retry after %s using the latest dispatch identity',
+  async (outcome) => {
+    await admit()
+    const previous = f.db.createStartingWorkerDispatch({
+      taskId: attempt.taskId,
+      creator: { kind: 'system' },
+      maxDepth: 1,
+      startOptions: {}
+    }).dispatch
+    f.store.bindAttemptDispatch(attempt.taskId, attempt.seq, previous.id)
+    if (outcome === 'abandoned') {
+      f.db.abandonWorkerDispatch(previous.id)
+    } else {
+      f.db.db
+        .prepare('UPDATE dispatch_contexts SET failure_count = 2 WHERE id = ?')
+        .run(previous.id)
+      f.db.failDispatch(previous.id, 'process exited', {
+        workerProcessExited: true,
+        terminationReason: 'process_exited'
+      })
+    }
+    settleAttemptWithoutSubmission(
+      { store: f.store, missions: f.controller },
+      { ...attempt, dispatchId: previous.id, reason: 'attempt_failed', actor: 'RecoveryService' }
+    )
+    await admit()
+    expect(attempt.seq).toBe(2)
+    startWorker.mockImplementationOnce(async (args) => {
+      expect(args.params.retryOf).toBe(previous.id)
+      const next = f.db.createStartingWorkerDispatch({
+        taskId: attempt.taskId,
+        creator: { kind: 'system' },
+        maxDepth: 1,
+        startOptions: {},
+        retryOf: args.params.retryOf
+      }).dispatch
+      expect(next.retry_of_dispatch_id).toBe(previous.id)
+      return { taskId: attempt.taskId, dispatchId: next.id, state: 'ready' }
+    })
+    await launcher()(attempt)
+    expect(stage()).toBe('RUNNING')
+    expect(binding()?.dispatchId).not.toBeNull()
+  }
+)

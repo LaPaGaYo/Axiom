@@ -95,10 +95,11 @@ export const AXIOM_MISSION_METHODS = [
   defineMethod({
     name: 'axiom.mission.cancel',
     params: MissionCancelParams,
-    handler: (p, { runtime }) => ({
-      mission: missionSummary(
-        getAxiomControlPlane(runtime).missions.cancelMission(p.missionId, p.reason)
-      )
-    })
+    handler: async (p, { runtime }) => {
+      const plane = getAxiomControlPlane(runtime)
+      const mission = plane.missions.cancelMission(p.missionId, p.reason)
+      const { attempts } = await plane.recovery.reconcileAttempts({ missionId: p.missionId })
+      return { mission: missionSummary(mission), attempts }
+    }
   })
 ]
