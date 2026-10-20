@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
-import { wrapPosixHookCommand } from '../agent-hooks/installer-utils'
 import { upsertHookTrustEntriesInContent } from './config-toml-trust'
 import {
   hookTrustHeader,
@@ -46,11 +45,11 @@ const LEGACY_ORCA_PROFILE_LINES = [
 function legacyManagedHookCommand(): string {
   const legacyScriptPath = join(
     homes.tmpHome,
-    '.orca',
+    'retired-user-data',
     'agent-hooks',
     process.platform === 'win32' ? 'codex-hook.cmd' : 'codex-hook.sh'
   )
-  return process.platform === 'win32' ? legacyScriptPath : wrapPosixHookCommand(legacyScriptPath)
+  return process.platform === 'win32' ? legacyScriptPath : `/bin/sh "${legacyScriptPath}"`
 }
 
 describe('CodexHookService', () => {

@@ -193,7 +193,7 @@ describe('CodexHookService app-server trust grant lane', () => {
     expect(readFileSync(join(managedHome, 'config.toml'))).toEqual(firstToml)
   })
 
-  it('retries ledger-proven real-home trust cleanup after the hook is already gone', async () => {
+  it('keeps orphaned real-home grants on install and cleans them only on explicit opt-out', async () => {
     prepareSystemHome()
     const systemHome = join(tmpHome, '.codex')
     const hooksPath = join(systemHome, 'hooks.json')
@@ -225,13 +225,16 @@ describe('CodexHookService app-server trust grant lane', () => {
 
     expect((await new CodexHookService().install()).state).toBe('installed')
 
+    expect(readHookTrustEntries(configPath).has(trustKey)).toBe(true)
+    expect(readCodexTrustGrantLedgerHome(systemHome)).not.toBeNull()
+    expect((await new CodexHookService().remove()).state).toBe('not_installed')
     expect(readHookTrustEntries(configPath).has(trustKey)).toBe(false)
     expect(readCodexTrustGrantLedgerHome(systemHome)).toBeNull()
   })
 
   // Why: ordinary Windows CI tokens cannot create file symlinks without Developer Mode.
   it.skipIf(process.platform === 'win32')(
-    'keeps a real-home symlink and rebases later user trust during flag-off cleanup',
+    'keeps a real-home symlink and rebases later user trust during explicit opt-out',
     async () => {
       prepareSystemHome()
       const systemHome = join(tmpHome, '.codex')
@@ -273,7 +276,7 @@ describe('CodexHookService app-server trust grant lane', () => {
       })
       installCodexLikeGrantRunner()
 
-      expect((await new CodexHookService().install()).state).toBe('installed')
+      expect((await new CodexHookService().remove()).state).toBe('not_installed')
 
       expect(lstatSync(hooksPath).isSymbolicLink()).toBe(true)
       expect(JSON.parse(readFileSync(targetPath, 'utf-8')).hooks.Stop).toEqual([
@@ -284,7 +287,7 @@ describe('CodexHookService app-server trust grant lane', () => {
   )
 
   it.skipIf(process.platform === 'win32')(
-    'preserves restrictive real-home hooks permissions during flag-off cleanup',
+    'preserves restrictive shared real-home hooks permissions during install',
     async () => {
       prepareSystemHome()
       const hooksPath = join(tmpHome, '.codex', 'hooks.json')

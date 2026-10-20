@@ -59,8 +59,17 @@ export function backupRealHomeHooksJsonOnce(
 export function restoreRealHomeHooksJson(
   hooksJsonPath: string,
   previousRaw: string | null,
-  previousMode?: number
+  previousMode: number | undefined,
+  generation: string
 ): void {
+  const currentRaw = existsSync(hooksJsonPath) ? readFileSync(hooksJsonPath, 'utf-8') : null
+  if (currentRaw !== generation) {
+    console.warn(
+      '[codex-real-home-hooks] hooks.json changed during the trust session; leaving it as found',
+      { path: hooksJsonPath }
+    )
+    return
+  }
   if (previousRaw === null) {
     if (existsSync(hooksJsonPath)) {
       unlinkSync(hooksJsonPath)

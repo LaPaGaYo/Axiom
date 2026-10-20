@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HookCommandConfig, HookDefinition } from '../agent-hooks/installer-utils'
 import type { CodexUserHookTrustRebaseRequest } from './codex-user-hook-trust-rebase-client'
+import { restoreCodexTrustConfig } from './codex-trust-config-rollback'
 
 const resolveCodexCommandMock = vi.hoisted(() => vi.fn(() => process.execPath))
 vi.mock('../codex-cli/command', () => ({ resolveCodexCommand: resolveCodexCommandMock }))
@@ -27,6 +28,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.restoreAllMocks()
   _internals.setSessionRunner(null)
   _internals.resetRetryState()
   codexAppServerCapabilityCache.clear()
@@ -120,10 +122,11 @@ describe('real-home user hook trust rebasing', () => {
           }))
         }
       }
+      writeFileSync(configPath, '# rebased trust\n')
       return { outcome: 'repaired', repaired: 1 }
     })
 
-    await mutateRealHomeHooksPreservingUserTrust({
+    const snapshot = await mutateRealHomeHooksPreservingUserTrust({
       sourcePath: hooksPath,
       runtimeHomePath: root,
       tomlPath: configPath,
@@ -135,6 +138,15 @@ describe('real-home user hook trust rebasing', () => {
       }
     })
 
+    expect(snapshot?.generation).toEqual(Buffer.from('# rebased trust\n'))
+    writeFileSync(configPath, '# saved during a later grant\n')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    if (!snapshot) {
+      throw new Error('Expected rebase snapshot')
+    }
+    restoreCodexTrustConfig(configPath, snapshot)
+    expect(readFileSync(configPath, 'utf8')).toBe('# saved during a later grant\n')
+    expect(warn).toHaveBeenCalledTimes(1)
     expect(requests).toHaveLength(2)
     expect(requests[0]?.invocation.envToDelete).toContain('CODEX_HOME')
     const repair = requests[1]
