@@ -548,3 +548,22 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **理由**：自治系统只应把真实工作交给验证过能遵守协议的组合；允许清单比退休名单安全（上游每周都在新增 provider，denylist 永远追不上）；三分让"同一身体换大脑""同一大脑换接入方式"都成为显式、可审计的选择，也为 D55 的自有 harness 留好接口。
 **后果**：`ProviderFilterReason` 改为 `not_installed | not_certified | disallowed | tier_too_low`（术语表 §4.13 随 M2-06c 更新）；`selection.filtered` 只需列出已安装未登记的 harness 与登记未安装的组合，顺带解决 M2-11 记录的 `not_installed` 膨胀；D56 上游初筛的"provider 适配"范围收窄为矩阵内的 harness。
 **取代规则**：矩阵条目的增删以本条下的修订行记录；DEF-8 复审时的 Decision 决定非订阅接入方式与本机认证。
+**修订（验证者 2026-10-20）**：`codex` 组合的宿主认证 smoke（`.axiom-work/verifications/M2-09-smoke-codex.md`）未能产出 Planner 提案：Codex 0.163.0 在 TUI 通道对每个 linked worktree 弹 Folder access 同意屏，预信任写入不生效；认证证据等 D58 决定通道后再补，矩阵条目与 `certified-providers.ts` 不变。
+
+## D58 · Codex / Claude Attempt 的执行通道与 AgentSpec 权限映射（harness 登录、目录信任、沙盒 / 审批标志）— PROPOSED（验证者 2026-10-20，等待 Henry）
+
+**背景**：M2-09 合入后，验证者在宿主 e2e 骨架里用真实 Codex CLI 0.163.0 跑 Planner smoke（`.axiom-work/verifications/M2-09-smoke-codex.md`，11 次运行）。结论：当前 Attempt 走的是 Orca 的 **TUI 通道**（`startLocalWorker` → PTY 里启动 `codex`，就绪后粘贴 preamble），而 Codex 0.163.0 对每个 Axiom linked worktree 都弹出 **Folder access** 同意屏（"You're in a subdirectory of a Git project. Trusting will apply to the repository root: <主 checkout>"），Orca 的预信任写入（UPSTREAM-2 移植的 `[projects."<worktree realpath>"] trust_level = "trusted"`）在此版本不生效，给仓库根写 `trusted`（两种路径形式、真实 home 与托管镜像 home 都写）也不生效，`--dangerously-bypass-approvals-and-sandbox` 同样不跳过；Worker 启动在 `agent_readiness` 60 s 超时 → `launch_failed`。Orca 的 **structured（app-server）通道**（实验性设置）在本树里会话立即结束（`start_unknown` → `process_exited`，空 transcript），原因未查明。另外两件事一起浮出：Orca 对所有 harness 的默认启动参数是 yolo（`codex: --dangerously-bypass-approvals-and-sandbox`，`claude: --dangerously-skip-permissions`），而 Axiom 没有把 AgentSpec 的 `permissions`（Planner 是 `write = []`）映射到任何 harness 标志或 app-server 线程策略——"权限确定性执行"目前只靠事后门禁（干净工作树检查、M3 验证）；`axiom.mission.plan` 未登记为 long-poll 导致 CLI 30 s 断连（已作为 M2-09 attempt 4 修复，不在本条范围）。流水线本身一直用的 `codex exec -s workspace-write`（非交互）从不弹同意屏——这是第三条可选通道。
+
+**待决定（任选其一或组合）**：
+- **A · `codex exec` 通道**：每个 Attempt 一个非交互进程（`codex exec --json -s <按 AgentSpec> -a never`，preamble 作为 prompt；后续消息用 `codex exec resume <thread>`），Claude 对应 `claude -p --output-format stream-json --permission-mode <按 AgentSpec>`。没有 onboarding，沙盒 / 审批由 Axiom 按 AgentSpec 逐 Attempt 决定；代价：不复用 Orca 的 PTY worker 通道（状态 hook、终端 ask/answer、worker-read 终端源），需要 Axiom 自己的结构化执行适配器（与 D55 的"借用组件放在接口后"方向一致），`axiom attempt ask/answer` 改为通过 resume 投递。
+- **B · Orca structured（app-server / Claude session）通道**：每线程 approval / sandbox 可编程、精确 transcript、不经 TUI；需先查明 F3（会话立即退出）并确认 app-server 层对目录信任的表现；该通道在 Orca 仍标注 experimental。
+- **C · 保留 TUI 通道**：必须找到 Codex 0.163 的 consent 真正读取的位置（候选：内嵌 app-server 读到的配置、linked worktree 的键归一化、`config.toml` 之外的 consent 状态），并在启动前用 Codex 自己的机制（与 UPSTREAM-2 hook trust grant 同一个 app-server `ConfigBatchWrite` 通道）写入；同时把 AgentSpec.permissions 映射为 `-s / -a`（而不是 Orca 的 yolo 默认）。风险：Codex 每次改 onboarding 都可能再坏一次；信任仓库根会启用仓库内 `.codex/` 的项目配置、hooks、exec policy（prompt-injection 面）。
+- **权限映射（任何通道都要）**：AgentSpec.permissions → harness 的沙盒 / 审批设置是确定性策略（Planner：只读 + 无审批；Worker：workspace-write + 无审批；网络按 policy），Orca 的 `agentDefaultArgs` 不再决定 Axiom Attempt 的权限。
+
+**验证者建议**：目标 B（或 A 作为 B 的后备），先用一个小 Task 查明 F3；无论选哪条，权限映射单独成规则。M2-10（UI）不依赖本条；M2-11 的出口 smoke（真实 Codex 跑 1 个 Task）与 D57 的 `codex` / `claude` 认证证据都依赖本条。
+
+**理由**：自治系统不能依赖人在终端里点"Trust"；harness 的交互式 onboarding 不受 Axiom 控制，而权限必须由 Control Plane 按 AgentSpec 确定（章程不变量 7）。
+
+**后果**：D57 的 `codex` 组合继续 `provisional`；`certified-providers.ts` 不动。接受后新增 M2 内或 M3 前的 Task（通道实现 + 权限映射 + e2e），UPSTREAM-2 的 Codex 预信任移植保留但不再作为依赖。
+
+**取代规则**：由接受本条的修订行指定通道与映射；D57 认证证据的形式随之更新。

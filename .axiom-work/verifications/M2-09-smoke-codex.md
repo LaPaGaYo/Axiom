@@ -1,0 +1,38 @@
+# M2-09 · real-Codex planner smoke (verifier step after the M2-09 record; D57 evidence attempt for the `codex` combo)
+
+- Date: 2026-10-20 04:45–05:45 MDT. Main at `7e9fd61622` (M2-09 merged, verify-main recorded and pushed).
+- Harness: the e2e restart session (`tests/e2e/helpers/orca-restart.ts`, isolated HOME + temp userData, `ORCA_BACKGROUND_LAUNCH=1`, electron-headless) driven by a git-excluded verifier spec `tests/e2e/mission-plan-real-codex.smoke.spec.ts` (same flow as `mission-plan.spec.ts`, but no `agentCmdOverrides`: the real `codex` on PATH, `/opt/homebrew/bin/codex`, codex-cli 0.163.0). Only `auth.json` and `config.toml` are copied from the developer's `~/.codex` into the isolated home; nothing is written back to the real home. Launcher: `launchers/smoke-plan-codex.command`; evidence dirs `.axiom-work/smoke/plan-codex-<ts>/` (git-excluded; `summary.json`, `audits.json`, `worker-show-latest.json`, `worker-read-{latest,terminal}.json`, main-process stdout/stderr, config/lane diagnostics).
+- Result: **no planner proposal was obtained**; the `codex` combo stays `provisional`. Eleven runs, each stopped by one of the findings below. No Codex tokens were consumed by a planning turn (the harness never got past onboarding).
+
+## Runs
+
+| # | Time (MDT) | Variation | Outcome |
+|---|---|---|---|
+| 1 | 04:45 | spec default args (`-a never -s workspace-write -c sandbox_workspace_write.network_access=true`) | `axiom mission plan` → `runtime_unavailable` after ~30 s (F1); spec aborted |
+| 2 | 04:50 | + main-process log capture | same; logs show trust grant + PTY spawn, then silence |
+| 3 | 04:52 | spec tolerates the RPC loss and follows the binding | planner worktree + PTY created; worker `failed` at stage `agent_readiness` (`lastFailure: timeout`, 61 s); terminal shows Codex's **Folder access** consent for the linked worktree, trust target = the clone root (F2) |
+| 4 | 04:57 | + config/lane diagnostics | isolated `~/.codex/config.toml` holds Orca's per-worktree `[projects."<worktree>"] trust_level = "trusted"`; mirror home has only that entry; still prompted |
+| 5 | 05:03 | + pre-trust the clone root (realpath) in the isolated config | still prompted, naming that very root |
+| 6 | 05:08 | + the same root entry in the managed mirror config | still prompted; lane diagnostics show the **real-home lane** (isolated `~/.codex` has `hooks.json` with the Orca hook, Codex state DBs) |
+| 7 | 05:27 | **structured lane** (`experimentalNativeChat` + `openAgentTabsInChatByDefault` + `experimentalStructuredNativeChat`) | `planner.start_unknown`, structured session closed at once (`process_exited`, empty transcript) → `planner.attempt_failed` `no_proposal` (F3) |
+| 8 | 05:31 | TUI lane again with a **short `TMPDIR`** (`/tmp/axsm`, F4) | still prompted (rules out the daemon-socket path length) |
+| 9 | 05:34 | structured lane with the short `TMPDIR` | same as run 7 |
+| 10 | 05:37 | TUI lane with Orca's default yolo args `--dangerously-bypass-approvals-and-sandbox` | still prompted (cancel option reads "Back to Agent Command Center") |
+| 11 | 05:41 | TUI lane, root trusted under both path forms (`/private/tmp/…` and `/tmp/…`) plus the worktree entry | still prompted |
+
+Direct probes of the Codex TUI outside Orca (`launchers/codex-trust-probe.command`, `expect`/`script` ptys) did not render past "loading" (terminal capability queries unanswered) and are not evidence either way.
+
+## Findings
+
+- **F1 (product bug, fixed by M2-09 attempt 4)** — `axiom.mission.plan` awaits `startLocalWorker` (agent readiness + preamble, up to ~110 s with a real harness) but is not in `classifyRuntimeLongPoll` (`src/main/runtime/runtime-rpc/runtime-rpc-long-poll.ts`), so the Unix-socket transport never arms its keepalive and `RUNTIME_RPC_SOCKET_IDLE_TIMEOUT_MS` (30 s) destroys the socket: the CLI reports `runtime_unavailable` while the launch continues server-side. `orchestration.workerStart` is the precedent. The test provider hid it (ready in < 30 s).
+- **F2 (blocker for the Codex TUI lane; needs a Decision)** — Codex 0.163.0 shows its **Folder access** consent for every Axiom linked worktree ("You're in a subdirectory of a Git project. Trusting will apply to the repository root: <main checkout>"). Orca's pre-trust (`markCodexProjectTrusted`, UPSTREAM-2's port of upstream `9f4311598f`: a `[projects."<worktree realpath>"]` entry) does not suppress it on this Codex version; neither does a `trusted` entry for the repository root (canonical and raw path forms), in the real home or the managed mirror, with sandboxed or bypass flags. The worker start then times out at `agent_readiness` (60 s) → `planner.launch_failed`. Codex 0.163.0's decision code (`codex-rs/tui/src/config_update.rs::read_remote_project_trust`, tag `rust-v0.163.0`) reads the effective config through the app-server `ConfigRead`, resolves the trust target through saved project keys → disabled project layers → git root, and skips the prompt only for an explicit `trusted` entry on that target (or a projectless cwd); why the written entries are not seen is **not yet explained** (candidates: the config the embedded app-server reads, key normalization for linked worktrees, consent state outside `config.toml`). Upstream Orca verified the cwd-first lookup on 0.158–0.159.1 (`stablyai/orca#23937`); 0.163.0 behaves differently here.
+- **F3 (needs investigation)** — Orca's structured (app-server) lane for `codex` ends the session immediately in this tree (`start_unknown`, `process_exited`, empty transcript, "The structured session was already closed, so its journal could not be preserved"); no main-process error is logged. It is the lane that would sidestep the TUI onboarding and give per-thread approval/sandbox policy, so its failure needs a root cause before it can be Axiom's default.
+- **F4 (test infra)** — the harness's isolated HOME under `os.tmpdir()` (`/var/folders/…`) makes the Codex ≥ 0.157 daemon socket path (`<HOME>/.codex/app-server-control/app-server-control.sock`) exceed `sun_path` (104 bytes). A short `TMPDIR` (the launcher uses `/tmp/axsm`) keeps real-Codex runs faithful to a real `~/.codex`. Not the cause of F2 (run 8).
+- **F5 (product gap; same Decision as F2)** — Orca's default `agentDefaultArgs` are yolo (`codex: --dangerously-bypass-approvals-and-sandbox`, `claude: --dangerously-skip-permissions`), and nothing maps an AgentSpec's `permissions` (the planner's `write = []`) onto harness flags or app-server thread policy. Axiom's invariant that permissions are enforced deterministically currently rests on post-hoc gates (clean-worktree check, M3 verification), not on the harness sandbox.
+- **F6 (confirmed working)** — inside Orca-managed dev PTYs `axiom` resolves to the dev launcher (`<userData>/cli/bin/axiom`, prepended by `prependOrcaCliDirToChildPath`), so the preamble recipes' bare `axiom` command needs no global symlink; the e2e app registers the launcher on startup through `cli.getInstallStatus()`. On macOS the system-default Codex selection routes to the real `~/.codex` (real-home lane), so Codex authenticates with the user's own login; the managed mirror lane (Windows / custom `CODEX_HOME`) copies `auth.json` itself.
+
+## Consequences
+
+- D57: the `codex` combo cannot be certified from the TUI lane until F2 is resolved; `certified-providers.ts` is unchanged (`provisional`). The `claude` combo will meet the analogous Claude Code folder-trust prompt (UPSTREAM-2 triage, upstream `21d4ae9448`).
+- Proposed Decision D58 (PROPOSED, awaiting Henry): the execution lane and permission mapping for Codex Attempts — see `docs/decisions/DECISION_LOG.md`.
+- M2-11's exit smoke ("真实 Codex 跑 1 个 Task") depends on the same Decision.
