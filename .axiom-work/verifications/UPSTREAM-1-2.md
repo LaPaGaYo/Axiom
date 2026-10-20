@@ -30,3 +30,6 @@ PASS — merge `--no-ff` into `main`; verify-main (union through M2-06b + UPSTRE
 - UPSTREAM-2 (before M2-09's real-Codex Planner smoke): trust / Codex real-home subsystem — `21d4ae9448` → `9f4311598f` → `cfa43e7eab` chain (needs a subsystem-level sync decision: 42 upstream commits touch `src/main/codex` before the fix, 163 since the fork), then part (a) of `5b3366f78e`.
 - UPSTREAM-3: OpenCode readiness pair (`88e9517eb1`, `990b0ed5cd`) before OpenCode certification (D57); agent-launch 7-step series assessment.
 - Electron 43.7.0 → 43.7.8: verifier-run on the host (dependency change), separate commit + verify-main.
+
+## Merged-tree check (verify-main, union M1-01 … M2-06b + UPSTREAM-1)
+- `verify-merged-92e97431fd-20261019-183212.log` (main `92e97431fd`): unit tests 2,390 files passed / 4 failed / 9 skipped — the four failures are exactly the known-environmental files (`skill-recipe-shell`, `pty-runtime-hidden-at-spawn-mark`, `orchestration-cli-subprocess`, `mobile-web-app-session-terminal-init`); the new real-agent-home write guard ran as the first vitest setup file across the whole union with no violation; `tc:node` / `tc:cli` / `tc:web` PASS; changed-code quality PASS; all 262 sidecar extras PASS (the UPSTREAM-1 provenance pins hold on main); full lint PASS (81 s). Raw `OVERALL=FAIL` is the known set only → **merged tree accepted**.
