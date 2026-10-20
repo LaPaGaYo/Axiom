@@ -114,7 +114,7 @@ describe('ContextBuilder', () => {
     const first = await builder.build({ missionId, taskId })
     expect(upstream).toHaveLength(2)
     expect(first.packageId).toBe(
-      'ctx_77c9cd4a4ead235e04edb4ca750f470221a37430d921786cdb7edf57c57d6e53'
+      'ctx_3333b2dd2787f4a916aff40c8bdb80b484c6b68cddce0bce40cbc101e7367e05'
     )
     expect(first.manifest.mandatory.map((entry) => entry.section)).toEqual(sections)
     expect(first.packageId).toBe(`ctx_${sha256(canonicalContextManifest(first.manifest))}`)

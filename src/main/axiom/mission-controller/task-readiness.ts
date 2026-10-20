@@ -74,6 +74,14 @@ export function transitionTaskStage(ctx: ControllerContext, input: TransitionTas
   const task = requireTask(ctx, input.taskId)
   const from = task.stage
   const to = input.to
+  if (from === 'RUNNING' && to === 'SUBMITTED' && input.actor !== 'AttemptSettlement') {
+    throw new MissionControllerError('illegal_transition', {
+      taskId: task.taskId,
+      from,
+      to,
+      reason: 'submission_required'
+    })
+  }
   if (to === 'RUNNING' && (input.actor !== 'Scheduler' || input.attemptCountDelta !== 1)) {
     throw new MissionControllerError('illegal_transition', {
       taskId: task.taskId,

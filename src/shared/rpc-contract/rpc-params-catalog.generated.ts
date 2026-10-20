@@ -18,7 +18,8 @@ import {
   AttemptCheckParams,
   AttemptListParams,
   AttemptRequestSubtaskParams,
-  AttemptShowParams
+  AttemptShowParams,
+  AttemptSubmitParams
 } from '../axiom-contract/attempt-params'
 import { GoalActivateParams, GoalProposeParams } from '../axiom-contract/goal-params'
 import {
@@ -667,6 +668,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'axiom.attempt.request': AttemptBlockedParams,
   'axiom.attempt.request-subtask': AttemptRequestSubtaskParams,
   'axiom.attempt.show': AttemptShowParams,
+  'axiom.attempt.submit': AttemptSubmitParams,
   'axiom.goal.activate': GoalActivateParams,
   'axiom.goal.propose': GoalProposeParams,
   'axiom.goal.show': GoalActivateParams,

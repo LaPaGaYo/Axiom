@@ -9,6 +9,9 @@ import { artifactsStore } from './artifacts-store'
 import { agentSpecsStore } from './agent-specs-store'
 import { policyAuditStore } from './policy-audit-store'
 import { messagesStore } from './messages-store'
+import { candidatesStore } from './candidates-store'
+import { submissionsStore } from './submissions-store'
+import { verificationRunsStore } from './verification-runs-store'
 
 type AttemptBindings = ReturnType<typeof attemptBindingsStore>
 
@@ -18,9 +21,22 @@ type TaskGraph = ReturnType<typeof taskGraphStore>
 type AgentSpecs = ReturnType<typeof agentSpecsStore>
 type Artifacts = ReturnType<typeof artifactsStore>
 type PolicyAudit = ReturnType<typeof policyAuditStore>
+type Candidates = ReturnType<typeof candidatesStore>
+type Submissions = ReturnType<typeof submissionsStore>
+type VerificationRuns = ReturnType<typeof verificationRunsStore>
 
 // One injected store; table modules keep SQL and validation within the file-size gate.
 export class AxiomStore {
+  readonly insertCandidate: Candidates['insertCandidate']
+  readonly getCandidate: Candidates['getCandidate']
+  readonly listCandidates: Candidates['listCandidates']
+  readonly supersedeActiveCandidates: Candidates['supersedeActiveCandidates']
+  readonly insertSubmission: Submissions['insertSubmission']
+  readonly getSubmissionByDispatch: Submissions['getSubmissionByDispatch']
+  readonly listSubmissions: Submissions['listSubmissions']
+  readonly insertVerificationRun: VerificationRuns['insertVerificationRun']
+  readonly getVerificationRun: VerificationRuns['getVerificationRun']
+  readonly listVerificationRuns: VerificationRuns['listVerificationRuns']
   readonly listMessages: ReturnType<typeof messagesStore>['listMessages']
   readonly insertAttemptBinding: AttemptBindings['insertAttemptBinding']
   readonly bindAttemptDispatch: AttemptBindings['bindAttemptDispatch']
@@ -75,6 +91,19 @@ export class AxiomStore {
   readonly getContextTokenBudget: Artifacts['getContextTokenBudget']
 
   constructor(private readonly db: OrchestrationDb) {
+    const candidates = candidatesStore(db)
+    this.insertCandidate = candidates.insertCandidate
+    this.getCandidate = candidates.getCandidate
+    this.listCandidates = candidates.listCandidates
+    this.supersedeActiveCandidates = candidates.supersedeActiveCandidates
+    const submissions = submissionsStore(db)
+    this.insertSubmission = submissions.insertSubmission
+    this.getSubmissionByDispatch = submissions.getSubmissionByDispatch
+    this.listSubmissions = submissions.listSubmissions
+    const verification = verificationRunsStore(db)
+    this.insertVerificationRun = verification.insertVerificationRun
+    this.getVerificationRun = verification.getVerificationRun
+    this.listVerificationRuns = verification.listVerificationRuns
     this.listMessages = messagesStore(db).listMessages
     const bindings = attemptBindingsStore(db)
     this.insertAttemptBinding = bindings.insertAttemptBinding

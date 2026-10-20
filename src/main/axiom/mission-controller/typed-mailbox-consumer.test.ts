@@ -30,6 +30,26 @@ it('drains typed Worker mail, records pending/blocked reports once across replay
       )
     ).toMatchObject({ ok: true })
   }
+  // SUBMISSION is audit-only here: settlement has already occurred before this row is inserted.
+  f.db.insertMessage({
+    from: f.t01.from,
+    to: `run:${f.mission.runId}`,
+    subject: 'Submission',
+    type: 'worker_done',
+    runId: f.mission.runId,
+    payload: JSON.stringify({
+      axiom: {
+        version: 1,
+        type: 'SUBMISSION',
+        missionId: f.mission.id,
+        taskId: f.t01.taskId,
+        attemptId: f.t01.attemptId,
+        summary: 'Submission',
+        artifactIds: [],
+        related: {}
+      }
+    })
+  })
   const before = f.store.listTaskStages({ missionId: f.mission.id })
   const consumer = new RunMailboxConsumer(f.runtime, f.store, f.missions, {
     missionId: f.mission.id,
@@ -45,7 +65,7 @@ it('drains typed Worker mail, records pending/blocked reports once across replay
   consumer.drain()
   const events = f.store.listAuditEvents({ missionId: f.mission.id })
   expect(events.filter((e) => e.event === 'message.received')).toMatchObject(
-    workerTypes.map((type) => ({ after: { type } }))
+    [...workerTypes, 'SUBMISSION'].map((type) => ({ after: { type } }))
   )
   expect(events.filter((e) => e.event === 'mailbox.message')).toEqual([])
   expect(events.filter((e) => e.event === 'subtask.requested')).toMatchObject([

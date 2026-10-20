@@ -181,6 +181,54 @@ describe('Worker channel CLI routing', () => {
       await rm(dir, { recursive: true, force: true })
     }
   })
+  it('loads a submit report relative to cwd and carries Worker identity and retry receipt', async () => {
+    const f = setup()
+    const dir = await mkdtemp(path.join(tmpdir(), 'axiom-submit-cli-'))
+    const report = {
+      summary: 'Done',
+      filesChanged: [],
+      checksRun: [],
+      artifacts: ['art-1'],
+      limitations: [],
+      risks: [],
+      questions: [],
+      followUps: []
+    }
+    const flags = [
+      'submit',
+      '--attempt',
+      'a',
+      '--dispatch-capability',
+      'dcap_fixture',
+      '--report',
+      'report.json',
+      '--retry-request',
+      '55cbf3b9-90ab-4ac0-a4e3-660c26727a1f'
+    ]
+    try {
+      await writeFile(path.join(dir, 'report.json'), JSON.stringify(report))
+      await f.run(flags, dir)
+      expect(f.call).toHaveBeenCalledExactlyOnceWith(
+        'axiom.attempt.submit',
+        {
+          attemptId: 'a',
+          from: 'term_worker',
+          senderPaneKey: 'pane_worker',
+          report
+        },
+        {
+          orchestrationCapability: 'dcap_fixture',
+          orchestrationRequestId: '55cbf3b9-90ab-4ac0-a4e3-660c26727a1f'
+        }
+      )
+      f.call.mockClear()
+      await writeFile(path.join(dir, 'report.json'), '{invalid')
+      await expect(f.run(flags, dir)).rejects.toMatchObject({ code: 'invalid_argument' })
+      expect(f.call).not.toHaveBeenCalled()
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
 })
 
 it.each([
