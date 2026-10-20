@@ -1,6 +1,6 @@
 # Axiom ↔ Orca 映射参考（orca-mapping）V1
 
-更新日期：2026-10-17（M1 实装回填）· 审计快照：`stablyai/orca@646e9a5`（v1.4.197）· **冻结基线：`3eb1adec2`（tag `axiom-base`，D19）**——快照到基线之间唯一改变编排模型的提交是 #22555（party 解析，见 §4a 与 §9 第 14 条）· 仓库落位：`docs/reference/orca-mapping.md`
+更新日期：2026-10-20（M2 出口，含 M2-12 / D59）· 审计快照：`stablyai/orca@646e9a5`（v1.4.197）· **冻结基线：`3eb1adec2`（tag `axiom-base`，D19）**——快照到基线之间唯一改变编排模型的提交是 #22555（party 解析，见 §4a 与 §9 第 14 条）· 仓库落位：`docs/reference/orca-mapping.md`
 术语与枚举以 `docs/GLOSSARY.md` 为准；决策编号引用 `docs/decisions/DECISION_LOG.md`（D6a、D7a、D9–D16 已于 2026-10-17 拍板）。
 
 ## 1. 用途与阅读方式
@@ -20,7 +20,7 @@
 | Milestone | 无 | 存于 `plan_revisions.milestones`（JSON） | V1 无状态机（A7） |
 | Task | `tasks`（`TaskRow`，`db/schema/create-graph-tables-sql.ts`）；`db.createTask`（`db/tasks/task-store.ts`） | `reuse` tasks（`deps=[]`，D10）+ `new side table` `task_stages`（D2） | 项目级权威 = `task_stages.stage`；`tasks.status` 只是 Attempt 执行投影（§3a） |
 | TaskEdge | 无（不用 `tasks.deps`，避免 `promoteReadyTasks` 抢先解锁） | `new side table` `mission_task_edges` | readiness 由 MissionController 按 stage 阈值计算 |
-| Attempt | `dispatch_contexts`（`DispatchContextRow`）× `worker_dispatches`（`WorkerDispatchRow`）× liveness；`types.ts:290` 注释 "Dispatch ID is the Attempt identity" | `reuse` | **`attemptId ≡ dispatch_contexts.id`**；重试 = 新 dispatch，`retry_of_dispatch_id` 指向前一 Attempt；不新建 Attempt 表 |
+| Attempt | `dispatch_contexts`（`DispatchContextRow`）× `worker_dispatches`（`WorkerDispatchRow`）× liveness；`types.ts:290` 注释 "Dispatch ID is the Attempt identity" | `reuse` | **`attemptId ≡ dispatch_contexts.id`**；重试 = 新 dispatch，Axiom 以 `attempt_bindings` seq + failed/started 审计关联。`dispatch_contexts.retry_of_dispatch_id` 仅在 Orca Task failed/blocked（circuit-break / abandon）时指回前次；首次 failDispatch 后 Task 为 ready，该列为 null；不新建 Attempt 表 |
 | AgentSpec | `WorkerStartParams`（`src/shared/rpc-contract/orchestration-worker-start-params.ts`：`agent/model/effort/timeoutMs/worktree/setup`）与 `worker_dispatches.start_options` 为投影 | `new side table` `agent_specs`（内容寻址） | `agent_specs.id = sha256(spec)`；启动时投影为 `WorkerStartInput` |
 | ContextPackage | 无 | `new side table` `context_packages` + Artifact 存储 | 取代 `buildDispatchPreamble`（§5） |
 | Submission | `worker_done` 结算：`settleWorkerReport`（`db/dispatch-context/worker-report-settlement.ts`）；`tasks.result`（JSON） | `new side table` `submissions` + `extend-additive`（D11） | Axiom 先写 Submission 再调用 Orca 结算（§5 编号步骤） |
@@ -130,7 +130,7 @@ M2-06a 的严格载荷契约在 `src/shared/axiom-contract/message-params.ts`（
 
 ### 4a. Axiom 内部调用的 Orca 方法（经 service/DB 边界，不经 CLI）
 
-以下状态按 M2-10 合入后的实现回填；表中的 Orca RPC 名只定位原语，Control Plane 实际走 service/DB 边界。子系统现状见 [control-plane.md](control-plane.md)。
+以下状态按 M2-12 / D59 合入后的实现回填；表中的 Orca RPC 名只定位原语，Control Plane 实际走 service/DB 边界。子系统现状见 [control-plane.md](control-plane.md)。
 
 | Orca 方法（文件） | Axiom 用途 | 备注 | M2 最终状态 |
 |---|---|---|---|

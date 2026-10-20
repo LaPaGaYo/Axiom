@@ -1,6 +1,6 @@
 # Control Plane 子系统参考（M2 出口）
 
-更新：2026-10-20 · 适用：截至 M2-10 已合入 main 的行为；M2-11 测试与证据索引见 [M2-exit-e2e.md](../review-evidence/axiom-m2/M2-exit-e2e.md)，宿主结果待 verifier 填写。M1 历史证据见 [M1-exit-e2e.md](../review-evidence/axiom-m1/M1-exit-e2e.md)。
+更新：2026-10-20 · 适用：截至 M2-12 / D59 已合入 main 的行为；M2-11 attempt 2 测试与证据索引见 [M2-exit-e2e.md](../review-evidence/axiom-m2/M2-exit-e2e.md)，本候选宿主结果待 verifier 填写。M1 历史证据见 [M1-exit-e2e.md](../review-evidence/axiom-m1/M1-exit-e2e.md)。
 规范权威仍是 [Constitution](../PROJECT_CONSTITUTION.md) §1、ACCEPTED Decisions、[Glossary](../GLOSSARY.md) §4 与 [Architecture](../ARCHITECTURE.md)；本文定位实现，不新增权威或状态。
 
 ## 1. 用途与边界
@@ -85,7 +85,7 @@ M2 之后：M3 将失败验证证据纳入重试 ContextPackage；DEF-4/5 的 sk
 
 AgentFactory.build 接受 worker 的 missionId/taskId/contextPackageId，或 planner 的 missionId/goalRevisionId；引用必须存在且归属匹配。ContextPackage 是输入，不由 Factory 创建。主机安装集合由注入的 listInstalledProviders 提供，Control Plane 注入 detectInstalledAgentsWithShellPathHydration；此处不新增认证探测或网络调用。
 
-执行身份由 provider（harness）、model 与 endpointProfile 组成。D57 的允许清单在 `src/main/axiom/agent-factory/certified-providers.ts` 的 `CERTIFIED_PROVIDER_COMBOS`；V1 只有下列四个组合，`endpointProfile` 均为 `subscription`（用户在 harness 中已有的登录或自行配置），不存储凭据。当前状态均为 `provisional`：D57 的 2026-10-20 修订记录真实 Codex smoke 未产出提案（目录信任阻塞），真实 provider 认证依赖仍为 PROPOSED 的 D58。D49 测试通过不认证真实组合；后续逐组合补宿主 evidence，证明收到 preamble → `axiom attempt inform` → 产出候选 → 合法 `axiom attempt submit`，再改为 `certified`；V1 出口前所有用到的组合必须完成认证。
+执行身份由 provider（harness）、model 与 endpointProfile 组成。D57 的允许清单在 `src/main/axiom/agent-factory/certified-providers.ts` 的 `CERTIFIED_PROVIDER_COMBOS`；V1 只有下列四个组合，`endpointProfile` 均为 `subscription`（用户在 harness 中已有的登录或自行配置），不存储凭据。当前状态均为 `provisional`：D57 的 2026-10-20 修订记录真实 Codex smoke 未产出提案（目录信任阻塞）；D58 已 ACCEPTED（B structured/app-server 首选、A exec 后备），真实 provider 认证仍待通道实施与权限映射。D49 测试通过不认证真实组合；后续逐组合补宿主 evidence，证明收到 preamble → `axiom attempt inform` → 产出候选 → 合法 `axiom attempt submit`，再改为 `certified`；V1 出口前所有用到的组合必须完成认证。
 
 | Provider | 模型选择方式 | Tier | 角色 | 最高风险 |
 |---|---|---|---|---|
@@ -102,7 +102,7 @@ AgentSpec 的预算只含本次 Attempt 的 maxRuntimeMinutes（Task → Mission
 
 axiom.policy.show/update 及 CLI `axiom mission policy show --mission <id> --json` / `update --mission <id> [--routing-file <json>] [--concurrency <n>] --json` 已注册。M2 patch 仅应用 routing（整体替换，省略字段使用默认值）与 concurrencyLimit；budget 键在 handler 的写入前检查中一律返回 approval_required（M4），其他未知键返回 invalid_argument。更新经现有 mutation fence/receipts，policy 与 policy.updated（before/after）同一事务持久化。
 
-M2 之后：D58 决定执行通道与权限映射后补真实组合认证；M3 使用独立验证证据，不把 provisional 等同已认证。
+M2 之后：落实 D58 的执行通道与权限映射后补真实组合认证；M3 使用独立验证证据，不把 provisional 等同已认证。
 
 ## 4. 状态机与 readiness
 
@@ -232,7 +232,7 @@ agent 退出后到下一次成功 reconcile（≤ 一个 60 s 间隔），`attem
 
 `attempt_observation_facts` 最新 liveness facet 的 homeReceivedAt 是持久的 unverifiable-since：进入 unverifiable 只写一条；连续 tick 不写；恢复 live 写一条 live，下一次失联重新计时。stop_unknown 的停止结果仍未确认，即使宿主再次 live，也不写 live fact 重置该时钟；runtime-budget stop 的下一 tick 开始按 e 计时。reconcile report 的 liveness 仍保留实际宿主折叠值，stop_unknown 的计时事实与证据明确记录 reason=stop_unknown。证据 JSON 含 taskId/attemptId/seq/branch/worktreeId、workerState/dispatchStatus、liveness/reason、since/abandonedAt/toleranceMinutes 与该 Attempt 的 observationFacts；Artifact kind=evidence、related=[Task,dispatch]。无宿主退出证据时不冷启动同一 Attempt/worktree。
 
-`settleAttemptWithoutSubmission` 在一个 store transaction 中只处理最新且无 Submission 的 RUNNING binding：RUNNING → NEEDS_FIX（原 reason），再按权威 attemptCount < retryPolicy.maxAttempts 转 READY（retry）或 BLOCKED（retry_budget_exhausted，previousStage=NEEDS_FIX）。不增加 attemptCount。launcher 的 launch_failed 与 Scheduler 的未绑定 launch_rejected 共用该入口；Orca Task failed/blocked 时，launcher 传最新 dispatch 为 retryOf，包含 abandoned/circuit_broken 后的新 Attempt。READY 触发既有 stage_change 调度，暂停 Mission 不 admission。
+`settleAttemptWithoutSubmission` 在一个 store transaction 中只处理最新且无 Submission 的 RUNNING binding：RUNNING → NEEDS_FIX（原 reason），再按权威 attemptCount < retryPolicy.maxAttempts 转 READY（retry）或 BLOCKED（retry_budget_exhausted，previousStage=NEEDS_FIX）。不增加 attemptCount。launcher 的 launch_failed 与 Scheduler 的未绑定 launch_rejected 共用该入口；Orca Task failed/blocked 时，launcher 传最新 dispatch 为 retryOf，包含 abandoned/circuit_broken 后的新 Attempt。首次 failDispatch 将 Orca Task 置 ready，kernel 不接受 retryOf，故该重试的 `dispatch_contexts.retry_of_dispatch_id` 为 null；Axiom 重试关系由 `attempt_bindings` 的 seq 顺序及 `attempt.failed → attempt.started{seq:2}` 审计证明。READY 触发既有 stage_change 调度，暂停 Mission 不 admission。
 
 所有拥有 BEGIN IMMEDIATE 的 kernel 操作均在 Axiom transaction 外完成，再写 Axiom consequence；failDispatch 已用可嵌套 savepoint，可与 audit/两次 stage change 同事务。保留/释放遵守内核 disposition，不能强制清理 possibly-live 或 identity_unproven 资源。
 
@@ -431,12 +431,12 @@ M2-10：Mission Home 的 Attempt 计数仅包含 `role=worker` 的 RUNNING / SUB
 | `replan_not_supported` | M2 仍不能批准替代计划；Goal 在 EXECUTING 激活虽可进入 REPLANNING，完整替代闭环留给 M5 |
 | `orchestration_migration_required` / `request_mismatch` | 契约 envelope 缺失/不兼容，或同幂等 id 换了载荷；升级兼容客户端或为新意图使用新 id |
 
-M2 出口证据以 [M2-exit-e2e.md](../review-evidence/axiom-m2/M2-exit-e2e.md) 的六条矩阵与 verifier 的宿主记录为准。新 exit spec 要求在同一 profile 完成 Planner → approve → start → 三根并行 → 一根 crash/retry → 三个 SUBMITTED，并比较四类提交前后持久行及 refs；目前 kernel-first 退出的审计回归已 FAIL（见 Recovery 节），宿主链尚未实跑。`mission-attempt-launch.spec.ts` 保留重启身份/无重复启动的独立证据；M2-10 的五个既有宿主 spec 仍须回归。不得把未运行、skip、QUEUED 或 Worker 自报检查解释为独立验证 PASS。
+M2 出口证据以 [M2-exit-e2e.md](../review-evidence/axiom-m2/M2-exit-e2e.md) 的六条矩阵与 verifier 的宿主记录为准。新 exit spec 要求在同一 profile 完成 Planner → approve → start → 三根并行 → 一根 crash/retry → 三个 SUBMITTED，并比较四类提交前后持久行及 refs。shell 存活时的退出证明、kernel-first 失败审计与 boot resume 已由 M2-12 / D59 修复，历史诊断分支的宿主结果见 [M2-12 验证](../../.axiom-work/verifications/M2-12-1.md)；本候选仍须复验。`mission-attempt-launch.spec.ts` 保留重启身份/无重复启动的独立证据；M2-10 的五个既有宿主 spec 仍须回归。不得把未运行、skip、QUEUED 或 Worker 自报检查解释为独立验证 PASS。
 
 | 后续责任 | M2 出口边界 |
 |---|---|
-| M2 出口补正 | terminalReason 分支补齐幂等 attempt.failed 审计，并使保留的失败回归与组合出口通过；需独立产品 Task，本次不改实现 |
-| D58（仍 PROPOSED）/ D57 | 选择 Codex/Claude 执行通道、映射 AgentSpec 权限、补真实 provider smoke 与认证。当前仅 D49 确定性 provider 已有提交实证；不能宣布“三 provider”完成 |
+| M2 出口复验 | M2-12 已合入；verifier 运行本候选的出口与五个既有宿主 spec，填写证据并决定验收；不再保留已修复的审计/boot 缺口为待办 |
+| D58（ACCEPTED）/ D57 | 按 B 首选、A 后备实施 Codex/Claude 执行通道与 AgentSpec 权限映射，补真实 provider smoke 与认证。当前仅 D49 确定性 provider 已有提交实证；不能宣布“三 provider”完成 |
 | M3 | 独立 VerificationService、Candidate worktree、deterministic verdict、Reviewer advisory、失败证据与 NEEDS_FIX 重试；复审 DEF-4/5/6/9/10 对应项 |
 | M4 | 串行 Integration、Approval、Delivery、完成门与全对象恢复；集成基线在此之前不前进 |
 | M5 / M6 | 替代 PlanRevision、完整 replanning / 决策模型；远端扩展与 mixed-version 验证 |

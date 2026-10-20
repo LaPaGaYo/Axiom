@@ -83,9 +83,11 @@ test('M2 exit: Planner, parallel Workers, crash retry and immutable submission f
         state: 'SUBMITTED',
         branch: `axiom/attempt/${crashTask.task_id}/2`
       })
+      // failDispatch returns the Orca Task to ready after its first failure; kernel retryOf
+      // requires failed/blocked (circuit-break/abandon). Axiom lineage is bindings + audits.
       expect(
         settled.workers.find((w) => w.dispatch_id === retry.attemptId)?.retry_of_dispatch_id
-      ).toBe(first.dispatch_id)
+      ).toBeNull()
       expect(settled.tasks.find((t) => t.task_id === crashTask.task_id)?.attempt_count).toBe(2)
       expect(settled.candidates.filter((c) => c.taskId === crashTask.task_id)).toHaveLength(1)
       expect(settled.candidates.some((c) => c.attemptId === first.dispatch_id)).toBe(false)
@@ -96,6 +98,10 @@ test('M2 exit: Planner, parallel Workers, crash retry and immutable submission f
         (a) => a.event === 'attempt.started' && a.object_id === retry.attemptId
       )!
       expect(failed).toBeDefined()
+      expect(JSON.parse(failed.after!)).toMatchObject({
+        reason: 'process_exited',
+        evidence: 'shell_foreground'
+      })
       expect(restarted).toBeDefined()
       expect(failed.sequence).toBeLessThan(restarted.sequence)
       expect(JSON.parse(restarted.after!)).toMatchObject({ seq: 2 })

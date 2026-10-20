@@ -39,7 +39,7 @@ export function inspectFixtureMission(userData: string, missionId: string) {
         .all(missionId),
       workers: db
         .prepare(
-          'SELECT w.* FROM worker_dispatches w JOIN attempt_bindings b ON b.dispatch_id = w.dispatch_id WHERE b.mission_id = ? ORDER BY w.dispatch_id'
+          'SELECT w.*, d.retry_of_dispatch_id FROM worker_dispatches w JOIN attempt_bindings b ON b.dispatch_id = w.dispatch_id JOIN dispatch_contexts d ON d.id = w.dispatch_id WHERE b.mission_id = ? ORDER BY w.dispatch_id'
         )
         .all(missionId)
     }
