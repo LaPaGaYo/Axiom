@@ -13,7 +13,7 @@
 
 用户描述想要构建或修改的软件、技术约束和验收要求。平台理解目标和现有仓库，将目标转化为版本化计划与 Task DAG，动态组织适合每项任务的 AI Agent，在隔离的 Git worktree 中执行工作，并对结果进行独立验证和受控集成。
 
-平台支持 Claude Code、Codex、Gemini、OpenCode 等可替换执行者。Agent 可以崩溃、重试或更换模型，但 Mission、Task、Decision、Artifact、VerificationRun 和 Approval 等权威状态持续存在。
+平台支持 Claude Code、Codex、Antigravity（原 Gemini CLI）、OpenCode 等可替换执行者。Agent 可以崩溃、重试或更换模型，但 Mission、Task、Decision、Artifact、VerificationRun 和 Approval 等权威状态持续存在。
 
 平台以 Orca 衍生的 Execution Kernel 承载终端、PTY、Git、worktree、Agent 会话、SSH/WSL 和远端运行；我们的核心产品价值位于 Control Plane：规划、调度、上下文管理、验证、集成、重规划和人工治理。
 
@@ -166,7 +166,7 @@ Goal
 1. 为一个本地 Git repository 创建 Mission 与 GoalRevision；
 2. 生成可审阅、可版本化并经人工或 policy 自动接受的 PlanRevision；
 3. 建立带 TaskEdge 依赖和 acceptance criteria 的 Task DAG；
-4. Claude Code、Codex、Gemini、OpenCode 中至少三种 provider 各至少完成一次 Attempt（不要求同时）；
+4. Claude Code、Codex、Antigravity（原 Gemini CLI）、OpenCode 中至少三种 provider 各至少完成一次 Attempt（不要求同时）；
 5. 根据 Task 动态生成 AgentSpec 与 ContextPackage；
 6. 在隔离 worktree 中同时并行执行至少三个 Task（不要求来自不同 provider）；
 7. 支持八种 typed messages（含 `QUESTION`、`BLOCKED`、`HANDOFF`、`SUBMISSION`）；
@@ -334,7 +334,7 @@ Non-goal 的意义是保持 V1 聚焦：先证明 Mission 控制闭环可靠，�
 
 ### Initial Product Assumption
 
-V1 首先服务单个本地用户，而不是多人组织。产品可以使用用户已有的 Claude、Codex、Gemini 或 OpenCode 配置，并在本地 repository 上执行。
+V1 首先服务单个本地用户，而不是多人组织。产品可以使用用户已有的 Claude、Codex、Antigravity（原 Gemini CLI） 或 OpenCode 配置，并在本地 repository 上执行。
 
 ## 14. Product Promise
 

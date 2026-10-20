@@ -13,7 +13,7 @@ Axiom 是一个**目标驱动的自主软件工程控制平面**。用户为一�
 2. 生成并维护版本化计划（PlanRevision）；
 3. 把计划转化为带依赖的 Task DAG；
 4. 为每个 Task 动态生成 AgentSpec 与 ContextPackage；
-5. 调度 Claude Code、Codex、Gemini、OpenCode 等执行者；
+5. 调度 Claude Code、Codex、Antigravity（原 Gemini CLI）、OpenCode 等执行者；
 6. 管理隔离的 worktree、终端、会话与上下文；
 7. 独立验证每一次提交；
 8. 串行集成通过验证的候选；
@@ -83,7 +83,7 @@ flowchart TD
   DEC["DecisionEngine\nRulesEngine · optional Jev · LLM fallback"]
   CTRL["Control Plane\nMissionController · Scheduler · AgentFactory · ContextBuilder\nMessageRouter · VerificationService · IntegrationController\nApprovalGateway · RecoveryService · AuditLog"]
   EXEC["Orca-derived Execution Kernel\nRPC · worktree · PTY · Git · remote"]
-  WORKERS["Workers\nClaude Code · Codex · Gemini · OpenCode"]
+  WORKERS["Workers\nClaude Code · Codex · Antigravity（原 Gemini CLI） · OpenCode"]
 
   UX -->|axiom.* RPC| CTRL
   CTRL -->|schema-bound prompts| INTEL
@@ -132,7 +132,7 @@ Execution Kernel 只回答「在哪里、以什么进程和工作区执行」，
 **长期方向（D55）**：内核按子系统逐步换成 Axiom 自有实现（预期顺序见 D55，路线图与上游同步截止点见 DEF-7）；每次替换一条 Decision，原位替换、任何时刻只有一个权威实现；被替换前本节的复用清单照常有效。
 
 ### 4.6 Worker Plane
-Claude Code、Codex、Gemini、OpenCode 等是可替换的临时执行者。Worker 接收 ContextPackage，在授权 worktree 内执行，通过 `axiom attempt <verb>` 发出类型化消息与 SUBMISSION；heartbeat 由执行内核维持，不是产品消息。
+Claude Code、Codex、Antigravity（原 Gemini CLI）、OpenCode 等是可替换的临时执行者。Worker 接收 ContextPackage，在授权 worktree 内执行，通过 `axiom attempt <verb>` 发出类型化消息与 SUBMISSION；heartbeat 由执行内核维持，不是产品消息。
 
 ## 5. 核心领域对象
 
@@ -481,7 +481,7 @@ M1（`src/main/axiom/recovery/recovery-service.ts` 与 `control-plane-boot.ts`�
 | 等级 | Provider | 观测能力 | 影响 |
 |---|---|---|---|
 | A · 结构化会话 | Claude Code、Codex | 结构化 turn 事件、transcript、更可靠的 liveness 与 token 统计 | 可承担高风险 Task；Mission Intelligence 优先使用 |
-| B · PTY 注入 | Gemini、OpenCode 等 | agent status hooks/plugins、终端回读 | 可承担一般 Task；policy 可限制高风险 Task 只用 A 级 |
+| B · PTY 注入 | Antigravity（原 Gemini CLI）、OpenCode 等 | agent status hooks/plugins、终端回读 | 可承担一般 Task；policy 可限制高风险 Task 只用 A 级 |
 
 Worker 通过 `axiom` CLI 汇报的协议对所有 provider 一致。
 

@@ -1,10 +1,15 @@
 import { z } from 'zod'
 import { TUI_AGENT_CONFIG, isTuiAgent } from '../../../shared/tui-agent-config'
 import { AttachParams } from '../../../shared/rpc-contract/structured-agent-session-params'
-import type { AgentSpec } from '../../../shared/axiom-contract/agent-spec'
+import {
+  ProviderFilterReasonSchema,
+  type AgentSpec
+} from '../../../shared/axiom-contract/agent-spec'
+import { RISK_LEVELS, type RiskLevel } from '../../../shared/axiom-contract/lifecycle'
 import type { Policy } from '../../../shared/axiom-contract/mission-objects'
 import type { DecisionEngine } from '../decision-engine/decision-engine'
 import type { DecisionRule } from '../decision-engine/rules-engine'
+import { certifiedCombo } from './certified-providers'
 
 // Why: Agent Teams is an Orca launch mode wrapping Claude, not an independent provider.
 const EXCLUDED_LAUNCH_MODE = 'claude-agent-teams'
@@ -47,24 +52,38 @@ export function selectProvider(
   available: string[],
   routing: Policy['routing'],
   role: AgentSpec['role'],
-  highRisk: boolean,
+  risk: RiskLevel,
   engine: DecisionEngine
 ): AgentSpec['selection'] {
   const installed = DEFAULT_ORDER.filter((id) => available.includes(id))
   const filtered: AgentSpec['selection']['filtered'] = []
   const candidates = DEFAULT_ORDER.filter((provider) => {
+    const combo = certifiedCombo(provider)
+    if (!combo && !installed.includes(provider)) {
+      return false
+    }
     const reason = !installed.includes(provider)
       ? 'not_installed'
-      : routing.disallowedProviders.includes(provider)
-        ? 'disallowed'
-        : ((highRisk && routing.highRiskTier === 'A') || role === 'planner') && !isTierA(provider)
-          ? 'tier_too_low'
-          : undefined
+      : !combo
+        ? 'not_certified'
+        : routing.disallowedProviders.includes(provider)
+          ? 'disallowed'
+          : !combo.roles.includes(role) ||
+              RISK_LEVELS.indexOf(risk) > RISK_LEVELS.indexOf(combo.maxRisk) ||
+              (risk === 'high' && routing.highRiskTier === 'A' && !isTierA(provider))
+            ? 'tier_too_low'
+            : undefined
     if (reason) {
       filtered.push({ provider, reason })
     }
     return !reason
   })
+  // Why: D57 audit order follows filter precedence, retaining config order within each reason.
+  filtered.sort(
+    (a, b) =>
+      ProviderFilterReasonSchema.options.indexOf(a.reason) -
+      ProviderFilterReasonSchema.options.indexOf(b.reason)
+  )
   if (!candidates.length) {
     throw new AgentFactoryError('no_eligible_provider', { installed, filtered })
   }

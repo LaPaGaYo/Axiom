@@ -54,13 +54,20 @@ export class AgentFactory {
         }
       }
       const highRisk = task?.spec.risk === 'high'
-      const selection = selectProvider(installed, policy.routing, p.role, highRisk, this.engine)
+      const selection = selectProvider(
+        installed,
+        policy.routing,
+        p.role,
+        task?.spec.risk ?? 'high',
+        this.engine
+      )
       const maxTokens = task?.spec.budget?.maxTokens ?? policy.budget.maxTokens
       const spec = AgentSpecSchema.parse({
         version: 1,
         missionId: p.missionId,
         provider: selection.chosen,
         model: policy.routing.models[selection.chosen] ?? 'policy-default',
+        endpointProfile: 'subscription',
         reasoning: { effort: highRisk ? 'high' : 'medium' },
         permissions: {
           write: task?.spec.scope.allowedPaths ?? [],

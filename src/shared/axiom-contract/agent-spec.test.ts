@@ -6,6 +6,7 @@ const common = {
   missionId: 'mission-1',
   provider: 'claude',
   model: 'policy-default',
+  endpointProfile: 'subscription',
   reasoning: { effort: 'medium' },
   permissions: { write: ['src/storage/'], network: 'restricted', tools: ['shell', 'git-readonly'] },
   budget: { maxRuntimeMinutes: 45 },
@@ -62,5 +63,12 @@ describe('AgentSpec execution contract', () => {
         .success
     ).toBe(false)
     expect(AgentSpecSchema.safeParse({ ...worker, provider: 'unknown' }).success).toBe(false)
+  })
+  it('requires the subscription endpoint profile in canonical contracts', () => {
+    expect(canonicalAgentSpec(worker)).toContain('"endpointProfile":"subscription"')
+    expect(AgentSpecSchema.safeParse({ ...worker, endpointProfile: undefined }).success).toBe(false)
+    expect(
+      AgentSpecSchema.safeParse({ ...worker, endpointProfile: 'api-key:example' }).success
+    ).toBe(false)
   })
 })

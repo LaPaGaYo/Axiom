@@ -1,7 +1,12 @@
 import { z } from 'zod'
 import { AxiomIdSchema, TuiAgentIdSchema } from './mission-objects'
 
-export const ProviderFilterReasonSchema = z.enum(['not_installed', 'disallowed', 'tier_too_low'])
+export const ProviderFilterReasonSchema = z.enum([
+  'not_installed',
+  'not_certified',
+  'disallowed',
+  'tier_too_low'
+])
 const permissions = {
   write: z.array(z.string().min(1)),
   network: z.literal('restricted'),
@@ -12,6 +17,7 @@ const common = {
   missionId: AxiomIdSchema,
   provider: TuiAgentIdSchema,
   model: z.string(),
+  endpointProfile: z.enum(['subscription']),
   reasoning: z.strictObject({ effort: z.enum(['medium', 'high']) }),
   permissions: z.strictObject(permissions),
   budget: z.strictObject({
