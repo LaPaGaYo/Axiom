@@ -41,6 +41,7 @@ it('lists pending bindings without launches and returns attempt_not_found for un
   expect(AttemptListResponseSchema.parse(result.result).attempts).toMatchObject([
     {
       attemptId: null,
+      role: 'worker',
       state: 'LAUNCH_PENDING',
       liveness: null,
       livenessReason: null,

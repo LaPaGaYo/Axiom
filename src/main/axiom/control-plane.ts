@@ -180,10 +180,25 @@ function createControlPlane(runtime: OrcaRuntimeService, db: OrchestrationDb) {
 }
 
 export function missionSummary(
-  mission: ReturnType<MissionController['getMission']>
+  mission: ReturnType<MissionController['getMission']>,
+  store: AxiomStore
 ): MissionSummary {
+  const statusAudit = store
+    .listAuditEvents({ missionId: mission.id })
+    .findLast(
+      (event) =>
+        event.event === 'mission.status' &&
+        event.after !== null &&
+        typeof event.after === 'object' &&
+        'status' in event.after &&
+        event.after.status === mission.status
+    )
+  const after = statusAudit?.after
+  const reason = after && typeof after === 'object' && 'reason' in after ? after.reason : undefined
   return {
     id: mission.id,
+    runId: mission.runId,
+    reason: typeof reason === 'string' ? reason : undefined,
     repoId: mission.repoId,
     repoPath: mission.repoPath,
     targetBranch: mission.targetBranch,

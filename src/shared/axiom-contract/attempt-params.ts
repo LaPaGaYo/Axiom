@@ -93,6 +93,7 @@ export const AttemptSummarySchema = z.object({
   branch: z.string().min(1),
   agentSpecId: AxiomIdSchema,
   contextPackageId: AxiomIdSchema,
+  role: z.enum(['planner', 'worker']),
   provider: z.string().nullable(),
   state: AttemptStateSchema,
   liveness: z.enum(['live', 'unverifiable', 'exited']).nullable(),
@@ -100,7 +101,18 @@ export const AttemptSummarySchema = z.object({
   workspace: z.enum(['retained', 'released', 'pending']).nullable(),
   worktreeId: z.string().nullable(),
   createdAt: z.string(),
-  updatedAt: z.string()
+  updatedAt: z.string(),
+  submission: SubmissionSchema.pick({ id: true, candidateId: true, createdAt: true })
+    .extend({
+      commitSha: CandidateSchema.shape.commitSha,
+      treeSha: CandidateSchema.shape.treeSha,
+      filesChanged: SubmissionReportSchema.shape.filesChanged,
+      checksRun: SubmissionReportSchema.shape.checksRun,
+      limitations: SubmissionReportSchema.shape.limitations,
+      risks: SubmissionReportSchema.shape.risks,
+      followUps: SubmissionReportSchema.shape.followUps
+    })
+    .optional()
 })
 export type AttemptSummary = z.infer<typeof AttemptSummarySchema>
 export const AttemptResponseSchema = z.object({ attempt: AttemptSummarySchema })

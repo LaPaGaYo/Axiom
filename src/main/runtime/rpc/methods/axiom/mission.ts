@@ -23,7 +23,8 @@ export const AXIOM_MISSION_METHODS = [
     params: MissionCreateParams,
     handler: async (p, { runtime }) => {
       const repo = await runtime.showRepo(p.repo)
-      const result = getAxiomControlPlane(runtime).missions.createMission({
+      const { missions, store } = getAxiomControlPlane(runtime)
+      const result = missions.createMission({
         repoId: repo.id,
         repoPath: repo.path,
         targetBranch: p.targetBranch,
@@ -31,29 +32,31 @@ export const AXIOM_MISSION_METHODS = [
         policy: p.policy,
         provenance: p.goal.provenance
       })
-      return { ...result, mission: missionSummary(result.mission) }
+      return { ...result, mission: missionSummary(result.mission, store) }
     }
   }),
   defineMethod({
     name: 'axiom.mission.show',
     params: MissionShowParams,
-    handler: (p, { runtime }) => ({
-      mission: missionSummary(getAxiomControlPlane(runtime).missions.getMission(p.missionId))
-    })
+    handler: (p, { runtime }) => {
+      const { missions, store } = getAxiomControlPlane(runtime)
+      return { mission: missionSummary(missions.getMission(p.missionId), store) }
+    }
   }),
   defineMethod({
     name: 'axiom.mission.list',
     params: MissionListParams,
     handler: async (p, { runtime }) => {
       const repo = p.repo === undefined ? undefined : await runtime.showRepo(p.repo)
+      const { missions, store } = getAxiomControlPlane(runtime)
       return {
-        missions: getAxiomControlPlane(runtime)
-          .missions.listMissions({
+        missions: missions
+          .listMissions({
             repoId: repo?.id,
             status: p.status,
             cursor: p.cursor
           })
-          .map(missionSummary)
+          .map((mission) => missionSummary(mission, store))
       }
     }
   }),
@@ -77,26 +80,24 @@ export const AXIOM_MISSION_METHODS = [
         before: null,
         after: { sha: base.sha }
       })
-      return { mission: missionSummary(missions.startExecution(p.missionId)) }
+      return { mission: missionSummary(missions.startExecution(p.missionId), store) }
     }
   }),
   defineMethod({
     name: 'axiom.mission.pause',
     params: MissionPauseParams,
-    handler: (p, { runtime }) => ({
-      mission: missionSummary(
-        getAxiomControlPlane(runtime).missions.pauseMission(p.missionId, p.reason)
-      )
-    })
+    handler: (p, { runtime }) => {
+      const { missions, store } = getAxiomControlPlane(runtime)
+      return { mission: missionSummary(missions.pauseMission(p.missionId, p.reason), store) }
+    }
   }),
   defineMethod({
     name: 'axiom.mission.resume',
     params: MissionResumeParams,
-    handler: (p, { runtime }) => ({
-      mission: missionSummary(
-        getAxiomControlPlane(runtime).missions.resumeMission(p.missionId, p.reason)
-      )
-    })
+    handler: (p, { runtime }) => {
+      const { missions, store } = getAxiomControlPlane(runtime)
+      return { mission: missionSummary(missions.resumeMission(p.missionId, p.reason), store) }
+    }
   }),
   defineMethod({
     name: 'axiom.mission.cancel',
@@ -105,7 +106,7 @@ export const AXIOM_MISSION_METHODS = [
       const plane = getAxiomControlPlane(runtime)
       const mission = plane.missions.cancelMission(p.missionId, p.reason)
       const { attempts } = await plane.recovery.reconcileAttempts({ missionId: p.missionId })
-      return { mission: missionSummary(mission), attempts }
+      return { mission: missionSummary(mission, plane.store), attempts }
     }
   })
 ]

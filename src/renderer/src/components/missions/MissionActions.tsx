@@ -6,18 +6,31 @@ import {
   type MissionStatus
 } from '../../../../shared/axiom-contract/lifecycle'
 
-export type MissionAction = 'start' | 'pause' | 'resume' | 'cancel'
+export type MissionAction = 'plan' | 'start' | 'pause' | 'resume' | 'cancel'
 
 export function MissionActions({
   status,
   busy,
+  plannerInProgress,
+  proposedPlans,
   onAction
 }: {
   status: MissionStatus
   busy: boolean
+  plannerInProgress: boolean
+  proposedPlans: number
   onAction: (action: MissionAction) => void
 }) {
   const actions = [
+    {
+      action: 'plan',
+      label: translate('missions.startPlanner', 'Start Planner'),
+      allowed: status === 'ANALYZING' && !plannerInProgress && proposedPlans === 0,
+      reason: translate(
+        'missions.plannerDisabled',
+        'Planning requires an Analyzing Mission with no Planner in progress or proposed plan.'
+      )
+    },
     {
       action: 'start',
       label: translate('missions.start', 'Start Mission'),
@@ -60,7 +73,7 @@ export function MissionActions({
                 variant={
                   disabled
                     ? 'ghost'
-                    : action === 'start'
+                    : action === 'start' || action === 'plan'
                       ? 'default'
                       : action === 'cancel'
                         ? 'destructive'

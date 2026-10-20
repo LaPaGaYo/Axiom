@@ -24,11 +24,34 @@ export async function projectAttempt(
   const observation = binding.dispatchId === null ? null : await inspectTerminal(binding.dispatchId)
   const liveness = observation ? foldAttemptLiveness(observation) : null
   const release = worker?.resource.state === 'absent' ? null : worker?.resource.releaseState
+  const spec = store.getAgentSpec(binding.agentSpecId)?.spec
+  const submission = binding.dispatchId
+    ? store.getSubmissionByDispatch(binding.dispatchId)
+    : undefined
+  const candidate = submission ? store.getCandidate(submission.candidateId) : undefined
+  if (submission && !candidate) {
+    throw new Error('Submission Candidate is missing')
+  }
   return AttemptSummarySchema.parse({
     ...binding,
     attemptId: binding.dispatchId,
-    provider:
-      store.getAgentSpec(binding.agentSpecId)?.spec.provider ?? worker?.provider?.id ?? null,
+    role: spec?.role ?? 'worker',
+    provider: spec?.provider ?? worker?.provider?.id ?? null,
+    submission:
+      submission && candidate
+        ? {
+            id: submission.id,
+            candidateId: candidate.id,
+            commitSha: candidate.commitSha,
+            treeSha: candidate.treeSha,
+            filesChanged: submission.report.filesChanged,
+            checksRun: submission.report.checksRun,
+            limitations: submission.report.limitations,
+            risks: submission.report.risks,
+            followUps: submission.report.followUps,
+            createdAt: submission.createdAt
+          }
+        : undefined,
     state:
       binding.dispatchId === null
         ? 'LAUNCH_PENDING'

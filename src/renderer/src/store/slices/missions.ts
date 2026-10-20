@@ -6,11 +6,13 @@ type MissionRequest = { id: string; pending: boolean }
 
 export type MissionsSlice = {
   selectedMissionId: string | null
+  selectedTaskId: string | null
   missionCreateOpen: boolean
   missionRequests: Record<string, MissionRequest>
   missionError: string | null
   openMissionsPage: () => void
   selectMission: (id: string | null) => void
+  selectMissionTask: (id: string | null) => void
   setMissionCreateOpen: (open: boolean) => void
   setMissionError: (error: string | null) => void
   beginMissionRequest: (key: string) => string | null
@@ -24,11 +26,18 @@ export const createMissionsSlice: StateCreator<
   MissionsSlice
 > = (set, get) => ({
   selectedMissionId: null,
+  selectedTaskId: null,
   missionCreateOpen: false,
   missionRequests: {},
   missionError: null,
   openMissionsPage: () => set({ activeView: 'missions' }),
-  selectMission: (id) => set({ selectedMissionId: id, missionError: null }),
+  selectMission: (id) =>
+    set((state) => ({
+      selectedMissionId: id,
+      selectedTaskId: state.selectedMissionId === id ? state.selectedTaskId : null,
+      missionError: null
+    })),
+  selectMissionTask: (id) => set({ selectedTaskId: id, missionError: null }),
   setMissionCreateOpen: (open) => set({ missionCreateOpen: open }),
   setMissionError: (error) => set({ missionError: error }),
   beginMissionRequest: (key) => {

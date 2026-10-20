@@ -1,9 +1,11 @@
-import type { z } from 'zod'
+import { z } from 'zod'
 import { createNonSecureContextUuid } from '../../../shared/non-secure-context-uuid'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
 import { RuntimeRpcEnvelopeSchema } from '../../../shared/runtime-rpc-envelope'
 import * as mission from '../../../shared/axiom-contract/mission-params'
 import * as plan from '../../../shared/axiom-contract/plan-params'
+import * as attempt from '../../../shared/axiom-contract/attempt-params'
+import * as message from '../../../shared/axiom-contract/message-params'
 import { TaskListParams, TaskListResponseSchema } from '../../../shared/axiom-contract/task-params'
 import { GoalShowParams, GoalResponseSchema } from '../../../shared/axiom-contract/goal-params'
 
@@ -63,6 +65,64 @@ async function call<P, R>(
 }
 
 export const axiomClient = {
+  listAttempts: (params: z.infer<typeof attempt.AttemptListParams>) =>
+    call(
+      'axiom.attempt.list',
+      params,
+      attempt.AttemptListParams,
+      attempt.AttemptListResponseSchema
+    ),
+  showAttempt: (params: z.infer<typeof attempt.AttemptShowParams>) =>
+    call('axiom.attempt.show', params, attempt.AttemptShowParams, attempt.AttemptResponseSchema),
+  listMessages: (params: z.infer<typeof message.MessageListParams>) =>
+    call(
+      'axiom.message.list',
+      params,
+      message.MessageListParams,
+      message.MessageListResponseSchema
+    ),
+  answerMessage: (
+    params: z.infer<typeof message.MessageAnswerParams>,
+    requestId: string = createNonSecureContextUuid()
+  ) =>
+    call(
+      'axiom.message.answer',
+      params,
+      message.MessageAnswerParams,
+      z.object({
+        question: z.object({ message_id: z.string(), status: z.literal('answered') }),
+        message: z.object({ id: z.string() }),
+        duplicate: z.boolean()
+      }),
+      requestId
+    ),
+  resolveMessage: (
+    params: z.infer<typeof message.MessageResolveParams>,
+    requestId: string = createNonSecureContextUuid()
+  ) =>
+    call(
+      'axiom.message.resolve',
+      params,
+      message.MessageResolveParams,
+      z.object({
+        resolved: z.literal(true),
+        decision: z.enum(['accept', 'reject']),
+        reason: z.string(),
+        taskId: z.string().optional()
+      }),
+      requestId
+    ),
+  planMission: (
+    params: z.infer<typeof mission.MissionPlanParams>,
+    requestId: string = createNonSecureContextUuid()
+  ) =>
+    call(
+      'axiom.mission.plan',
+      params,
+      mission.MissionPlanParams,
+      mission.MissionPlanResponseSchema,
+      requestId
+    ),
   listMissions: (params: z.infer<typeof mission.MissionListParams> = {}) =>
     call(
       'axiom.mission.list',

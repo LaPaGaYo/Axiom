@@ -2,7 +2,15 @@ import { translate } from '@/i18n/i18n'
 import type { TaskListItem } from '../../../../shared/axiom-contract/task-params'
 import { TaskStageBadge } from './TaskStageBadge'
 
-export function TaskStageTable({ tasks }: { tasks: readonly TaskListItem[] }) {
+export function TaskStageTable({
+  tasks,
+  selectedTaskId,
+  onSelect
+}: {
+  tasks: readonly TaskListItem[]
+  selectedTaskId?: string | null
+  onSelect?: (taskId: string) => void
+}) {
   return (
     <section className="space-y-3" aria-labelledby="mission-tasks-heading">
       <h2 id="mission-tasks-heading" className="text-sm font-semibold">
@@ -26,7 +34,20 @@ export function TaskStageTable({ tasks }: { tasks: readonly TaskListItem[] }) {
             </thead>
             <tbody>
               {tasks.map((task) => (
-                <tr key={task.id} className="border-b border-border" data-task-id={task.id}>
+                <tr
+                  key={task.id}
+                  className="cursor-pointer border-b border-border hover:bg-accent aria-selected:bg-accent"
+                  data-task-id={task.id}
+                  aria-selected={task.id === selectedTaskId}
+                  tabIndex={0}
+                  onClick={() => onSelect?.(task.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      onSelect?.(task.id)
+                    }
+                  }}
+                >
                   <td className="px-3 py-3 align-top">
                     {task.title}
                     <div className="text-xs text-muted-foreground">{task.id}</div>
