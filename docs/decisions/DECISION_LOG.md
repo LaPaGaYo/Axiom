@@ -550,7 +550,7 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **取代规则**：矩阵条目的增删以本条下的修订行记录；DEF-8 复审时的 Decision 决定非订阅接入方式与本机认证。
 **修订（验证者 2026-10-20）**：`codex` 组合的宿主认证 smoke（`.axiom-work/verifications/M2-09-smoke-codex.md`）未能产出 Planner 提案：Codex 0.163.0 在 TUI 通道对每个 linked worktree 弹 Folder access 同意屏，预信任写入不生效；认证证据等 D58 决定通道后再补，矩阵条目与 `certified-providers.ts` 不变。
 
-## D58 · Codex / Claude Attempt 的执行通道与 AgentSpec 权限映射（harness 登录、目录信任、沙盒 / 审批标志）— PROPOSED（验证者 2026-10-20，等待 Henry）
+## D58 · Codex / Claude Attempt 的执行通道与 AgentSpec 权限映射（harness 登录、目录信任、沙盒 / 审批标志）— ACCEPTED（Henry 2026-10-20：B 首选，A 后备）
 
 **背景**：M2-09 合入后，验证者在宿主 e2e 骨架里用真实 Codex CLI 0.163.0 跑 Planner smoke（`.axiom-work/verifications/M2-09-smoke-codex.md`，11 次运行）。结论：当前 Attempt 走的是 Orca 的 **TUI 通道**（`startLocalWorker` → PTY 里启动 `codex`，就绪后粘贴 preamble），而 Codex 0.163.0 对每个 Axiom linked worktree 都弹出 **Folder access** 同意屏（"You're in a subdirectory of a Git project. Trusting will apply to the repository root: <主 checkout>"），Orca 的预信任写入（UPSTREAM-2 移植的 `[projects."<worktree realpath>"] trust_level = "trusted"`）在此版本不生效，给仓库根写 `trusted`（两种路径形式、真实 home 与托管镜像 home 都写）也不生效，`--dangerously-bypass-approvals-and-sandbox` 同样不跳过；Worker 启动在 `agent_readiness` 60 s 超时 → `launch_failed`。Orca 的 **structured（app-server）通道**（实验性设置）在本树里会话立即结束（`start_unknown` → `process_exited`，空 transcript），原因未查明。另外两件事一起浮出：Orca 对所有 harness 的默认启动参数是 yolo（`codex: --dangerously-bypass-approvals-and-sandbox`，`claude: --dangerously-skip-permissions`），而 Axiom 没有把 AgentSpec 的 `permissions`（Planner 是 `write = []`）映射到任何 harness 标志或 app-server 线程策略——"权限确定性执行"目前只靠事后门禁（干净工作树检查、M3 验证）；`axiom.mission.plan` 未登记为 long-poll 导致 CLI 30 s 断连（已作为 M2-09 attempt 4 修复，不在本条范围）。流水线本身一直用的 `codex exec -s workspace-write`（非交互）从不弹同意屏——这是第三条可选通道。
 
@@ -567,6 +567,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **后果**：D57 的 `codex` 组合继续 `provisional`；`certified-providers.ts` 不动。接受后新增 M2 内或 M3 前的 Task（通道实现 + 权限映射 + e2e），UPSTREAM-2 的 Codex 预信任移植保留但不再作为依赖。
 
 **取代规则**：由接受本条的修订行指定通道与映射；D57 认证证据的形式随之更新。
+
+**接受（Henry 2026-10-20）**：选 **B（Orca structured / app-server 通道）为首选，A（`codex exec` 非交互通道）为后备**；C 不采用。理由（验证者按 M2-11 / M2-12 的发现重排）：TUI 通道的每个事实都靠推断（就绪靠标题、退出靠前台进程名证明、权限靠 Orca 的 yolo 默认参数、目录信任靠随版本变化的同意屏），B 与 A 都是协议化的——线程 / 进程启动即带 `cwd`、沙盒、审批策略，没有 onboarding，AgentSpec.permissions 可一一映射，transcript 是事件流（也是 D60 Supervisor 的有界输入）；B 已接在 Orca 的 dispatch / worker_dispatches 生命周期上（liveness、transcript、ask/answer 走 journal），不造第二套 worker lifecycle；A 的可靠性由流水线自身几十次 `codex exec -s workspace-write` 证明，作为 B 查不通时的保底（需要 `startLocalWorker` 的 exec 模式 seam + Axiom 的事件解析）。**后续**：M3 之前排一个时间盒 1 天的 Task 查明 F3（真实 codex 在 e2e 骨架里走 structured 通道，抓 app-server stderr / journal）；查通 → 实现 B，查不通 → 实现 A；两条路共用同一规则：**AgentSpec.permissions → harness 沙盒 / 审批标志由 Control Plane 决定（Planner 只读 + 无审批；Worker workspace-write + 无审批；网络按 policy），Orca 的 `agentDefaultArgs` 不再决定 Axiom Attempt 的权限**；D57 的 `codex` / `claude` 认证证据改为在所选通道上采集。UPSTREAM-2 的 Codex 预信任移植保留但不再作为依赖。
 
 ## D59 · TUI 通道 Attempt 的 agent 退出证据：由执行宿主的进程表证明"spawned shell 独占 PTY 前台"，Recovery 据此折叠为 `exited` — ACCEPTED（验证者 2026-10-20，M2-11 出口 e2e 的发现；在已批准架构内的 MINOR_ADJUSTMENT，Henry 可否决）
 
@@ -585,3 +587,23 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **后果**：M2-12（本条实现 + 单元测试 + 文档）；M2-11 attempt 2 在其上重跑出口 e2e；检测延迟 = reconcile 间隔（60 s），记为已知限制；`control-plane.md` §4 规则表加 c′、规则 b 审计、§8 审计词汇与启动段落；`orca-mapping.md` 加访问器行。
 
 **取代规则**：若 D58 选 A（`codex exec` 非交互通道），进程退出即 PTY/子进程退出，规则 c′ 对该通道自然不触发但保留；"立即触发"若实现，以本条修订行记录。
+
+**修订（验证者 2026-10-20，M2-12 attempt 2）**：证明来源更正——daemon 托管 PTY 上 controller 的 `confirmShellForeground` 回答的是恢复屏障（dead-TUI 恢复）里已结算的 owner，只在 alternate-screen 命令的 OSC 133;D 之后才为 `shell`，不是新鲜的进程表证明（宿主上对已退出 agent 的回答为 `false`，1–2 ms）。规则 c′ 的证明改为：执行宿主的**新鲜前台进程名**（controller `confirmForegroundProcess`，缺失时 `getForegroundProcess`；daemon 侧为 tracker 的新鲜进程表解析，node-pty 前台名兜底）经 `isShellProcess` 判定为 shell（`-zsh` 等登录壳名归一化）。宿主证据：`.axiom-work/verifications/M2-12-1.md`（出口 e2e 1 passed）。另记：访问器位于 `@ts-nocheck` 的 runtime 链文件（与 `inspectTerminalProcessIncarnationLiveness` 同处），是 D12 的有界例外——仅一个完全标注类型的进程内转发方法，恢复决策仍在强类型 Control Plane 模块内。
+
+## D60 · Attempt Supervisor：Worker 输出的有界分类由 DecisionEngine（Jev 优先）给出，V1 只授权"建议 + 升级给人" — ACCEPTED（Henry 2026-10-20）
+
+**背景**：Axiom 没有 Orca 那种读终端、决定下一步的 coordinator LLM，这是章程的选择（LLM 只提议，Control Plane 校验 / 授权 / 持久化；禁止拥有持久状态的单体 Master Agent）。M2-11 / M2-12 证明"Worker 生死"这类事实可以用执行宿主的确定性证据判断（PTY liveness、shell 前台证明、`agentWait`、运行时预算），Replanner / Reviewer 等生成式判断走 Planner 同款"模型提议 → schema 校验 → policy → 持久化"通道。剩下只有模型能做的，是**读一段 Worker 输出后做有边界的分类**：在推进 / 空转循环 / 在等人回答 / 做完没提交 / 已崩溃——这是 Orca coordinator 最有价值的那部分，也是 DecisionEngine 的典型用法（事件路由、风险分类）。Henry 2026-10-20 问"是否需要 coordinator LLM、Jev 能否胜任"，结论见本条。
+
+**决定**：
+1. 新增 **Attempt Supervisor** 角色（Control Plane 的周期性步骤，非 Agent、非会话）：对每个 RUNNING Attempt 周期性读取**有界** state（Worker 输出尾部、内核 worker 状态、最近输出时间、`agentWait`、ledger / 消息事实），经 `DecisionEngine` 得到一个 Choice（`progressing | looping | waiting_for_human | done_unsubmitted | crashed | unknown`）与若干 Noul（"输出中有向人提问""有破坏性操作迹象"）及置信度；state、问题集与答案原样存为证据（Artifact kind=evidence，related=[Task, Attempt]）。
+2. **Jev 是首选实现**（类型化答案 + 概率，不生成文字，快、便宜、可校准）；规则基线永远存在（如"N 分钟无输出且 shell 空闲 → stuck"）；置信度低或 Jev 不可用时按既有 DecisionEngine 接口回退到规则或 frontier 模型；Jev 不得成为核心状态机的必需依赖（章程）。
+3. **V1 授权范围**：Supervisor 的输出只是建议——写审计 `attempt.supervised{classification, confidence, evidence}`，`waiting_for_human` / 低置信度 / `looping` 升级为人可见的待决项（M2-10 的待处理项面板）；**不**授权自动停止、自动 NEEDS_FIX、自动重规划。扩大授权（例如高置信 `crashed` 直接走规则 c 的结算）需要在 Axiom 自己的 Worker 输出上完成校准评估后以修订行记录。
+4. 不碰的边界：依赖 readiness、权限 / 文件范围、必需测试、Approval、Integration 顺序、破坏性操作策略——任何置信度都不能越过。
+
+**备选**：(a) 引入一个 coordinator LLM 会话读终端并直接指挥——违反不变量 1 / 6，不可重启、不可审计；(b) 全部用 frontier 模型做分类——贵、慢、无概率校准，且仍需同一套策略边界；(c) 不做 Supervisor，只靠确定性事实——"空转循环 / 在等人"这类情形没有宿主事实可用。
+
+**理由**：按输出形态分工——确定性 Control Plane 负责执行与状态，Jev 负责判断，frontier 模型负责提议；三者接口分明，比一个 coordinator 会话更稳、更便宜、可重启。
+
+**后果**：M3 计划新增 Task（Supervisor 周期 + DecisionEngine 问题集 + 规则基线 + 审计 / 待决项 + 校准评估脚手架）；M2-10 的待处理项面板增加 Supervisor 升级项；D58 选定的通道（B / A）提供事件流作为 Supervisor 的输入。
+
+**取代规则**：授权范围的任何扩大以本条修订行记录，并附校准评估结果。
