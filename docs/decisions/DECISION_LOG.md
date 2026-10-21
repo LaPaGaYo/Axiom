@@ -644,6 +644,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **后果**：`docs/plans/M3.md` 是 M3 的 PlanRevision 等价物；brief / 验证记录位置同 M2；D63 在 M3-00 之后单独提出；分解的拆分 / 合并 / 新增以本条修订行记录。粗估 5–7 个工作日。
 **取代规则**：M3 出口 Decision 记录实际完成情况并关闭本条。
 
+**修订（2026-10-21，验证者，记忆 / RSI 讨论后）**：不新增 Task，三处 brief 加零成本钩子——M3-02：每条 deterministic check 的 stdout / stderr 全文进 Artifact、`verdictDetail` 只放按失败标记切出的有界摘录，并采集 provider 的 token 用量（通道 B：`thread/tokenUsage/updated`）；M3-04：失败证据以 L0 / L1（一句话 + 摘录）+ `axiom artifact read` 配方注入修复 Attempt 的 ContextPackage，并实现只读 `axiom attempt recap --attempt <id>`（压缩后的最小定向块：Task spec、验收标准、范围、最近类型化消息、待答问题、提交配方），preamble 要求压缩后先跑它；M3-05：Reviewer 顺手产出 `lesson` Artifact（L0 / L1 / L2 + provenance + 范围键）。来源 DEF-17 / DEF-18。
+
 **修订（2026-10-20，Henry 同意登记）**：按外部项目评估更新计划——M3-00 加入 F3 首个假设与 A′（ACP）备选；M3-07 以 Ekko Studio 的 JEV 纪律清单为参考；M3-10 hygiene 加 import 边界门禁；新增 DEF-12（投递事实 + 注入中和 + 合并）、DEF-13（harness 原生入口探测与 `axiom doctor`）、DEF-14（可视化回放 + 任务卡 / 手机审批）。
 
 ## D64 · 修复 Attempt 的分支基线与验证 worktree 生命周期 — ACCEPTED（Henry 2026-10-20："先把手上需要开发的做完"，验证者 2026-10-20 提议）
