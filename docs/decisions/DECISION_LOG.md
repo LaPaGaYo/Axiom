@@ -32,6 +32,8 @@
 - 合并成功但集成树回归失败（跨任务语义冲突）→ 新建 `FIX_TASK`，相关 Task 保持 `INTEGRATION_READY` 并对 FIX_TASK 加依赖；
 - 两种情况下原候选一律标记 `SUPERSEDED`，不得再次入队。
 **理由**：文本冲突只涉及单个候选，重做最省；语义冲突涉及多个已验证候选，作废它们会浪费验证证据，用新 Task 修复更可审计。
+**修订提议（2026-10-21，端到端流程复审 L4，Henry："都记下来"；M4 集成 brief 定稿前批准）**：FIX_TASK 的执行合同补全——现文"相关 Task 保持 INTEGRATION_READY"与"原候选一律 SUPERSEDED"合在一起意味着该 Task 没有 ACTIVE 候选可集成，归宿要写明：① FIX_TASK 的 Attempt 基线 = 失败批次的合并树（保留的 `axiom/integrating/<batchId>` 临时分支 HEAD），不是集成基线，否则失败无法复现；② FIX_TASK 的 `allowedPaths` = 相关 Task scope 的并集 ∪ 回归失败证据指出的文件（Control Plane 从失败测试与堆栈推导，Replanner 可扩，随 MINOR_ADJUSTMENT 审计）；③ FIX_TASK 的候选 PROMOTED 时，其合并树已包含的那些被 SUPERSEDED 候选所属的 Task 一并 → `INTEGRATED`（批次记录 `includedCandidates[]`，Task 的 INTEGRATED 审计指向该批次），不再各自入队；④ FIX_TASK 重试耗尽 → 相关 Task 回 `NEEDS_FIX`（从各自上一候选继续，D64）并 replan 分级。
+
 
 ## D4 · 候选 commit 由 Control Plane 在提交时生成快照 — ACCEPTED
 
@@ -657,6 +659,9 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 
 **修订（2026-10-20，验证者，M3-01 brief 定稿时）**：② 的验证 worktree 路径不再指定为 `<userData>/axiom/verification/<runId>`——路径由 Orca worktree service（`createManagedWorktree`）决定，另建目录就是第二套 worktree manager；`verification_runs.worktree_id` 记录 Orca worktree id。分支 `axiom/verify/<runId>/<claimCount>` 建自该 Attempt 的分支，创建后 `checkout --detach <Candidate commit>` 并把该分支 `branch -f` 到同一 commit（HEAD 与分支都等于 Candidate；任何偏离即 `candidate_mismatch`）；不开终端、`setupDecision: 'skip'`（依赖安装由 M3-02 的检查运行器决定并记录）；"不进 renderer 的 worktree 列表"推迟到 M3-09（M3-01 以 `lineage.orchestrationContext` 标记，供过滤）。应用重启：所有 `RUNNING` 的 run 视为过期（runtime epoch 不同）→ 回收 worktree → `QUEUED` 重排队（claimCount 递增，旧审计与 Artifact 保留）。
 
+**修订提议（2026-10-21，端到端流程复审 L2，Henry："都记下来"；M3-03 brief 定稿前批准）**：③ 的比较基线改为**三点 diff**——scope 与危险模式检查只看候选一侧引入的改动：`git diff $(git merge-base <集成基线 HEAD> <候选>) <候选>`；修复 Attempt 为解决冲突合入了新的集成基线时 merge-base 自动前进，其他 Task 已集成的文件不再出现在 diff 里（否则冲突修复必然 `FAIL(scope_violation)`）。"上一 Candidate"仍用于证据展示（本次修复改了什么），不用于 scope 判定；verdictDetail 记录 merge-base 与集成基线 HEAD。D69 的叠加基线沿用同一规则。
+
+
 ## D65 · V1 验证策略语义（`Policy.verificationRules` 的受支持键）— ACCEPTED（Henry 2026-10-20："先把手上需要开发的做完"，验证者 2026-10-20 提议）
 
 **决定**：`verificationRules` 只接受：`repositoryGates`（`{ low | medium | high: string[] }`，按 Task `risk` 追加在 `requiredEvidence` 之后运行的仓库门禁命令；fixture 默认空）、`timeBudgetMinutes`（单次 VerificationRun 上限，默认 30）、`inconclusiveRouting`（`specialist | human`，默认 `specialist`：先 Reviewer 再人）、`nonCodeTasks`（`artifact_only | human_confirm`，默认 `human_confirm`）、`dangerousPathPatterns`（默认 `.github/workflows/**`、lockfile、`package.json`、`.axiom-work/**`；命中且不在 Task scope → `INCONCLUSIVE(dangerous_change)`）；未知键被 `axiom.mission.policy.update` 拒绝（schema）。verdict 规则：任一 deterministic check `fail` → `FAIL`；全部 `pass` → `PASS`；无 `fail` 但有 `inconclusive` → `INCONCLUSIVE`；`skipped` 必须带策略依据。
@@ -721,3 +726,27 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **理由**：把环境噪声从候选质量里分离，重试预算与 replan 分级才有意义；流水线的 known-environmental 经验证明这类失败频繁且与候选无关。
 **后果**：M3-02（check 结果枚举、verdict 规则、`retryOnce` / `knownFlaky` 键 → D65 修订）、M3-06（分类输入）、M2-08 reconcile 的结算路径（`interrupted` 与退避）、术语表 §4.6 / §4.8 新枚举、记分卡指标加 `interrupted` 与 flaky 率；DEF-20 ①（等人停表）以本条的 `interrupted` 为可选形态之一。
 **取代规则**：批准后以修订行记录；若内核枚举需要改动，另起内核 Decision（D56 流程）。
+
+## D69 · 依赖阈值 `VERIFIED` 的下游基线与失效规则 — PROPOSED（验证者 2026-10-21，端到端流程复审 L1；Henry："都记下来"，M3-04 brief 定稿前批准过渡规则、M4 批准完整规则）
+
+**背景**：`mission_task_edges.readiness_threshold` 允许 `VERIFIED`（上游验证通过即放行下游），但 attempt-launcher 一律从集成基线建分支（D51 / §12.1）——下游 Worker 的树里没有上游的改动，等于在旧代码上干活；上游候选之后集成 CONFLICT 被 SUPERSEDED 时，下游没有任何失效机制。
+**决定（提议）**：
+1. **语义**：下游 Attempt 的基线 = 集成基线 + 按拓扑序合入每个"已 VERIFIED 未 INTEGRATED"的直接上游 Candidate（Control Plane 在 Attempt 分支上 `merge --no-ff`；冲突 → 该下游 Task `BLOCKED(base_conflict)` 等上游先集成，不启动 Worker）；`attempt_bindings` 记 `baseCandidates[]`，AgentSpec / ContextPackage 注明"基于候选 X"。
+2. **失效**：基线里的任一 Candidate 被 SUPERSEDED（上游 NEEDS_FIX / 冲突 / 取消）→ 下游 RUNNING 的 Attempt 停止并结算 `NEEDS_FIX(base_superseded)`（不计 `maxAttempts`，证据 = 被取代的候选与原因）；下游已提交的候选 SUPERSEDED、VerificationRun CANCELED；重新就绪后从新基线重来（D64 的 FAILED 路径）。
+3. **scope**：下游候选的 scope diff 用 D64 修订提议的三点 diff，merge-base 自动越过合入的上游候选。
+4. **过渡规则（M4 实现 1–2 之前）**：提案校验对 `VERIFIED` 边给 `threshold_not_supported` 警告；Scheduler 对 `VERIFIED` 边按 `INTEGRATED` 判就绪并审计 `readiness.threshold_downgraded`——宁可慢，不让下游在缺上游改动的树上干活。
+**理由**：放宽阈值的目的是并行，但并行的前提是下游真的拿到上游的产物；没有失效规则的叠加会把被取代的改动带进集成树。
+**后果**：M3-04 实现过渡规则 4 与 D64 三点 diff；M4 集成基线实现 1–3；术语表 §4.3 / §4.6 补 `base_conflict` / `base_superseded`；DEF-20 ② 的 scope 重叠校验对叠加基线同样生效。
+**取代规则**：M4 批准完整规则时以修订行撤销过渡规则。
+
+## D70 · Mission 状态机补全：收尾回退、交付拒绝与 PAUSED 语义 — PROPOSED（验证者 2026-10-21，端到端流程复审 L3 / L12；Henry："都记下来"，M4 brief 定稿前批准）
+
+**背景**：§6.1 只有 `FINALIZING → READY_FOR_APPROVAL → COMPLETED` 的前进转换；§12.3 的漂移冲突与最终回归失败要生成 FIX_TASK，但 Scheduler 只在 `EXECUTING` 做 admission；交付 Approval 被 DENIED、FINALIZING 之后目标分支再次移动（TOCTOU）都没有定义；`PAUSED` 只说"可恢复到前一状态"。
+**决定（提议）**：
+1. `FINALIZING → EXECUTING`：漂移合并 CONFLICT 或最终回归 FAILED 产生 FIX_TASK / NEEDS_FIX 时回到 EXECUTING（审计 `mission.finalizing_reopened{reason}`）；required Task 再次全部 INTEGRATED 后重新进入 FINALIZING，漂移与回归重做。
+2. `READY_FOR_APPROVAL → FINALIZING`：交付动作执行前校验目标分支 HEAD == FINALIZING 时合入的 HEAD（记在 CompletionReport 草稿），不等则回 FINALIZING 重做；交付 Approval 的 `inputs_hash` 含该 HEAD，目标分支一动 Approval 自动失效。
+3. 交付 Approval DENIED → `BLOCKED(delivery_denied)`，待处理项要求人选择：修改后重交（回 EXECUTING，走 Goal / plan 调整）或 CANCELED；EXPIRED → 重新请求，不自动交付。
+4. `PAUSED` 语义：停止新 admission 与新 VerificationRun 领取；运行中的 Attempt 按 policy `pauseMode: drain | stop`（默认 `drain`：让它们跑完并提交，提交后的验证排队不领取；`stop`：停止 Attempt 并按 D68 `interrupted` 结算）；集成不启动新批次，进行中的批次跑完；暂停期间 Mission / Task 的 wall-clock 预算与 Approval 过期停表（与 DEF-20 ① 同一机制），记录 `pausedAt / resumedAt`；恢复回到 `previous_status` 并重算就绪。
+**理由**：没有回头路的收尾状态在真实仓库上必然撞到（用户在 Mission 期间会继续提交）；PAUSED 不定义就会出现"暂停了还在动"。
+**后果**：§6.1 表补四行；M4 实现 1–3，4 与 DEF-20 ① 同做；术语表 §4.1 加 `delivery_denied`、`pauseMode`。
+**取代规则**：以修订行记录。
