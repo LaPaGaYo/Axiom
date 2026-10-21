@@ -610,7 +610,7 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 
 **取代规则**：授权范围的任何扩大以本条修订行记录，并附校准评估结果。
 
-## D61 · M2 出口：Planning 与 Agent Factory 里程碑按六条出口准则关闭，D52 关闭 — PROPOSED（验证者 2026-10-20，待 Henry 确认）
+## D61 · M2 出口：Planning 与 Agent Factory 里程碑按六条出口准则关闭，D52 关闭 — ACCEPTED（Henry 2026-10-20："先把手上需要开发的做完"，验证者 2026-10-20 提议）
 
 **背景**：D52 把 M2 分解为 11 个 Task；实际执行 13 个 Task + 2 个上游同步（`docs/plans/M2.md`）：M2-00 … M2-05、M2-06a / 06b / 06c（D57）、M2-07、M2-08、UPSTREAM-1 / UPSTREAM-2（D56）、M2-09（+ 3 个 fix-up attempt）、M2-10、**M2-12（D59，由 M2-11 出口 e2e 发现）**、M2-11（2 个 attempt）。merge 清单：`0b4a67ced3`（M2-00）→ `669dd990f4`（M2-01）→ `a61072502a`（M2-02）→ `9c493465cb`（M2-03）→ `ab9d8e62fd`（M2-04）→ `f0ca598f4c`（M2-05）→ `e306ee73a5`（M2-06a）→ `ece8a4e1e6`（M2-06b）→ `8fb8d6d24f`（UPSTREAM-1）→ `30eaed93c7`（M2-06c）→ `b3d0c6edd9`（M2-07）→ `e0f92f3276`（M2-08）→ `5e1df6f29d`（UPSTREAM-2）→ `1c67a2c1e9` / `d50795c06e` / `1d8029764a`（M2-09）→ `d29f0aa316`（M2-10）→ `bc177584cd` / `814ddc8d9b`（M2-12）→ `06a502151c`（M2-11）。验证记录在 `.axiom-work/verifications/M2-*.md`、`UPSTREAM-*.md`；证据文档 `docs/review-evidence/axiom-m2/M2-exit-e2e.md`。
 
@@ -632,33 +632,35 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 
 **取代规则**：无；M3 出口 Decision 记录 M3 的完成。
 
-## D62 · M3（Independent Verification）任务分解与顺序 — PROPOSED（验证者 2026-10-20，待 Henry 批准）
+**修订（2026-10-20，Henry）**：批准语为"先把手上需要开发的做完，然后我们再来走之后的 V2、V3"——同一指示同时批准 D62 / D64 / D65 / D66；V2 / V3 路线草案不排期，登记为 DEFERRED DEF-15。D52 自此关闭。
+
+## D62 · M3（Independent Verification）任务分解与顺序 — ACCEPTED（Henry 2026-10-20："先把手上需要开发的做完"，验证者 2026-10-20 提议）
 
 **背景**：M2 按 D61 关闭（待确认）；架构 §20 的 M3 行与 §11 给出范围与两条出口标准（"故意注入的测试失败被 FAIL 拒绝并自动生成修复 Attempt"、"FAIL 不能被 review 推翻"）；D61 记录了 M3 前置项（D58 通道落地与 D57 证据、D60 Supervisor、DEF-4 / 5 / 6 ③ / 9 / 11 复审）。
-**决定（提议）**：M3 按 `docs/plans/M3.md` 的 11 个 Task 执行：M3-00 F3 诊断（时间盒 1 天 → D63）→ M3-01 VerificationService 骨架 + 验证 worktree → M3-02 deterministic checks + verdict + NEEDS_FIX 结算 → M3-03 diff scope / Artifact 检查（G2）→ M3-04 acceptance 逐条评估 + 失败证据注入 + 修复 Attempt → M3-05 Reviewer advisory + 升级 + 人工处置 → M3-06 Attempt Supervisor V1（规则基线）→ M3-07 Jev 适配器 → M3-08 D58 通道落地 + 权限映射 + D57 证据 → M3-09 UI 验证面板 → M3-10 出口 e2e + 文档 + hygiene；十条出口标准见计划。
+**决定**：M3 按 `docs/plans/M3.md` 的 11 个 Task 执行：M3-00 F3 诊断（时间盒 1 天 → D63）→ M3-01 VerificationService 骨架 + 验证 worktree → M3-02 deterministic checks + verdict + NEEDS_FIX 结算 → M3-03 diff scope / Artifact 检查（G2）→ M3-04 acceptance 逐条评估 + 失败证据注入 + 修复 Attempt → M3-05 Reviewer advisory + 升级 + 人工处置 → M3-06 Attempt Supervisor V1（规则基线）→ M3-07 Jev 适配器 → M3-08 D58 通道落地 + 权限映射 + D57 证据 → M3-09 UI 验证面板 → M3-10 出口 e2e + 文档 + hygiene；十条出口标准见计划。
 **理由**：验证链按"领取 → 运行 → 判定 → 注入 → 审查 → 展示"的依赖顺序推进；Supervisor / Jev 与通道落地与验证链解耦，可并行；宿主才能证伪的改动（M3-04、M3-08）先在诊断分支跑 e2e 再合入（M2-12 的教训）。
 **后果**：`docs/plans/M3.md` 是 M3 的 PlanRevision 等价物；brief / 验证记录位置同 M2；D63 在 M3-00 之后单独提出；分解的拆分 / 合并 / 新增以本条修订行记录。粗估 5–7 个工作日。
 **取代规则**：M3 出口 Decision 记录实际完成情况并关闭本条。
 
 **修订（2026-10-20，Henry 同意登记）**：按外部项目评估更新计划——M3-00 加入 F3 首个假设与 A′（ACP）备选；M3-07 以 Ekko Studio 的 JEV 纪律清单为参考；M3-10 hygiene 加 import 边界门禁；新增 DEF-12（投递事实 + 注入中和 + 合并）、DEF-13（harness 原生入口探测与 `axiom doctor`）、DEF-14（可视化回放 + 任务卡 / 手机审批）。
 
-## D64 · 修复 Attempt 的分支基线与验证 worktree 生命周期 — PROPOSED（验证者 2026-10-20，待 Henry 批准）
+## D64 · 修复 Attempt 的分支基线与验证 worktree 生命周期 — ACCEPTED（Henry 2026-10-20："先把手上需要开发的做完"，验证者 2026-10-20 提议）
 
-**决定（提议）**：① NEEDS_FIX 之后的 seq N+1（`kind: fix` 或验证失败后的重试）从**上一 Candidate commit** 建分支 `axiom/attempt/<taskId>/<N+1>`，preamble 明示"继续上一候选树"（fixture S4 的语义）；FAILED / ABANDONED / launch 失败的重试仍从集成基线重来（既有行为）。② 验证 worktree 由 Control Plane 经 Orca worktree service 创建，detached 检出 Candidate commit，路径 `<userData>/axiom/verification/<runId>`，带 Axiom 标记不进 renderer 的 worktree 列表，验证结束（任何 verdict）即回收；重启时孤立的验证 worktree 按 runId 回收。③ Candidate diff 的比较基线 = 该 Attempt 的分支基线（集成基线或上一 Candidate），记录在 verdictDetail。
+**决定**：① NEEDS_FIX 之后的 seq N+1（`kind: fix` 或验证失败后的重试）从**上一 Candidate commit** 建分支 `axiom/attempt/<taskId>/<N+1>`，preamble 明示"继续上一候选树"（fixture S4 的语义）；FAILED / ABANDONED / launch 失败的重试仍从集成基线重来（既有行为）。② 验证 worktree 由 Control Plane 经 Orca worktree service 创建，detached 检出 Candidate commit，路径 `<userData>/axiom/verification/<runId>`，带 Axiom 标记不进 renderer 的 worktree 列表，验证结束（任何 verdict）即回收；重启时孤立的验证 worktree 按 runId 回收。③ Candidate diff 的比较基线 = 该 Attempt 的分支基线（集成基线或上一 Candidate），记录在 verdictDetail。
 **理由**：增量修复保留 Worker 已有的正确改动，避免每次从零重做；独立 worktree 是 §11.1 的要求；不建第二套 worktree manager（AGENTS.md）。
 **后果**：attempt-launcher 的基线选择按 Task stage 历史决定（M3-04）；D6 / D6a 的分支模型不变，只补充 fix 的起点。
 **取代规则**：以修订行记录。
 
-## D65 · V1 验证策略语义（`Policy.verificationRules` 的受支持键）— PROPOSED（验证者 2026-10-20，待 Henry 批准）
+## D65 · V1 验证策略语义（`Policy.verificationRules` 的受支持键）— ACCEPTED（Henry 2026-10-20："先把手上需要开发的做完"，验证者 2026-10-20 提议）
 
-**决定（提议）**：`verificationRules` 只接受：`repositoryGates`（`{ low | medium | high: string[] }`，按 Task `risk` 追加在 `requiredEvidence` 之后运行的仓库门禁命令；fixture 默认空）、`timeBudgetMinutes`（单次 VerificationRun 上限，默认 30）、`inconclusiveRouting`（`specialist | human`，默认 `specialist`：先 Reviewer 再人）、`nonCodeTasks`（`artifact_only | human_confirm`，默认 `human_confirm`）、`dangerousPathPatterns`（默认 `.github/workflows/**`、lockfile、`package.json`、`.axiom-work/**`；命中且不在 Task scope → `INCONCLUSIVE(dangerous_change)`）；未知键被 `axiom.mission.policy.update` 拒绝（schema）。verdict 规则：任一 deterministic check `fail` → `FAIL`；全部 `pass` → `PASS`；无 `fail` 但有 `inconclusive` → `INCONCLUSIVE`；`skipped` 必须带策略依据。
+**决定**：`verificationRules` 只接受：`repositoryGates`（`{ low | medium | high: string[] }`，按 Task `risk` 追加在 `requiredEvidence` 之后运行的仓库门禁命令；fixture 默认空）、`timeBudgetMinutes`（单次 VerificationRun 上限，默认 30）、`inconclusiveRouting`（`specialist | human`，默认 `specialist`：先 Reviewer 再人）、`nonCodeTasks`（`artifact_only | human_confirm`，默认 `human_confirm`）、`dangerousPathPatterns`（默认 `.github/workflows/**`、lockfile、`package.json`、`.axiom-work/**`；命中且不在 Task scope → `INCONCLUSIVE(dangerous_change)`）；未知键被 `axiom.mission.policy.update` 拒绝（schema）。verdict 规则：任一 deterministic check `fail` → `FAIL`；全部 `pass` → `PASS`；无 `fail` 但有 `inconclusive` → `INCONCLUSIVE`；`skipped` 必须带策略依据。
 **理由**：§6 把这些载荷留为 JSON；V1 需要可测试的最小语义，且 FAIL 的定义必须机械。
 **后果**：术语表 §4.8 与 control-plane.md 的 Verification 节记录键与默认值；M3-02 / M3-03 实现。
 **取代规则**：以修订行记录新增键。
 
-## D66 · Reviewer 角色契约（只读 AgentSpec + `ReviewProposal` + 只作用于 INCONCLUSIVE）— PROPOSED（验证者 2026-10-20，待 Henry 批准）
+## D66 · Reviewer 角色契约（只读 AgentSpec + `ReviewProposal` + 只作用于 INCONCLUSIVE）— ACCEPTED（Henry 2026-10-20："先把手上需要开发的做完"，验证者 2026-10-20 提议）
 
-**决定（提议）**：Reviewer 是 Mission Intelligence 的第三个角色（Planner、Reviewer、Replanner），与 Planner 同一启动方式（attempt-launcher，`permissions.write = []`，只读 worktree 检出 Candidate commit）；输入 = Task + acceptance + diff 摘要 + VerificationRun 结果 + 仓库规则；输出 `ReviewProposal`（schema 进 `axiom-contract`：逐条 acceptance 的 `pass | fail | inconclusive` + 理由 + 证据引用，整体建议 `PASS | FAIL | HUMAN_REVIEW`，风险列表），经 `axiom verification review --run <id> --file <path>`（envelope capability）提交；Control Plane 只在 run 为 `INCONCLUSIVE` 时接受提案并据此收敛，**对 deterministic FAIL 的提案一律拒绝**（拒绝码复用 Orca 词汇 + 审计）；Reviewer 的 skills（DEF-4）在 M3-05 brief 定稿前复审。
+**决定**：Reviewer 是 Mission Intelligence 的第三个角色（Planner、Reviewer、Replanner），与 Planner 同一启动方式（attempt-launcher，`permissions.write = []`，只读 worktree 检出 Candidate commit）；输入 = Task + acceptance + diff 摘要 + VerificationRun 结果 + 仓库规则；输出 `ReviewProposal`（schema 进 `axiom-contract`：逐条 acceptance 的 `pass | fail | inconclusive` + 理由 + 证据引用，整体建议 `PASS | FAIL | HUMAN_REVIEW`，风险列表），经 `axiom verification review --run <id> --file <path>`（envelope capability）提交；Control Plane 只在 run 为 `INCONCLUSIVE` 时接受提案并据此收敛，**对 deterministic FAIL 的提案一律拒绝**（拒绝码复用 Orca 词汇 + 审计）；Reviewer 的 skills（DEF-4）在 M3-05 brief 定稿前复审。
 **理由**：§11.2 第 5 层"Reviewer（LLM，advisory）只能对 INCONCLUSIVE 给出收敛建议"；复用 Planner 的通道避免第二套角色启动路径。
 **后果**：D48 的 Planner 契约扩展为"只读角色"的通用形态；M3-05 实现；D60 的 Supervisor 与 Reviewer 的边界：Supervisor 看运行中的 Attempt，Reviewer 看已提交的 Candidate。
 **取代规则**：以修订行记录。
