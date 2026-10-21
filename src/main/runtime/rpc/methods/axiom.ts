@@ -7,6 +7,7 @@ import { AXIOM_MISSION_METHODS } from './axiom/mission'
 import { AXIOM_GOAL_METHODS } from './axiom/goal'
 import { AXIOM_PLAN_METHODS } from './axiom/plan'
 import { AXIOM_TASK_METHODS } from './axiom/task'
+import { AXIOM_VERIFICATION_METHODS } from './axiom/verification'
 
 export const AXIOM_METHODS = [
   namespaceMethod,
@@ -16,6 +17,7 @@ export const AXIOM_METHODS = [
   ...AXIOM_GOAL_METHODS,
   ...AXIOM_PLAN_METHODS,
   ...AXIOM_TASK_METHODS,
+  ...AXIOM_VERIFICATION_METHODS,
   ...AXIOM_ARTIFACT_METHODS,
   ...AXIOM_POLICY_METHODS
 ]

@@ -1,4 +1,5 @@
 import { vi } from 'vitest'
+import { getAxiomControlPlane } from '../control-plane'
 import { z } from 'zod'
 import * as snapshots from './candidate-snapshot'
 import { channelFixture } from './attempt-channel-fixture.test-support'
@@ -16,6 +17,13 @@ export const report: SubmissionReport = {
 }
 export function submissionFixture() {
   const f = channelFixture()
+  const kick = vi
+    .spyOn(getAxiomControlPlane(f.runtime).verification, 'kick')
+    .mockImplementation(async () => {
+      if (f.db.db.isTransaction) {
+        throw new Error('Verification triggered inside submission transaction')
+      }
+    })
   f.db.getOrCreateLocalMutationCallerFingerprint()
   const snapshotGit = vi.spyOn(snapshots, 'snapshotCandidate').mockResolvedValue({
     commitSha: 'a'.repeat(40),
@@ -42,5 +50,5 @@ export function submissionFixture() {
       name,
       rows: f.db.db.prepare(`SELECT * FROM "${name}"`).all()
     }))
-  return { ...f, snapshotGit, retain, params, submit, snapshot }
+  return { ...f, kick, snapshotGit, retain, params, submit, snapshot }
 }

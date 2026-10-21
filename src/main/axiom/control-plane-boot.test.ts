@@ -30,7 +30,59 @@ describe('M1 Control Plane boot', () => {
     vi.restoreAllMocks()
   })
 
-  it('requests one resume round for persisted EXECUTING Missions with READY Tasks and no bindings', () => {
+  it('awaits verification recovery before the first kick and includes verification in the existing timer', async () => {
+    const cp = getAxiomControlPlane(runtime)
+    const order: string[] = []
+    vi.spyOn(cp.recovery, 'recover').mockImplementation(() => {
+      order.push('missions')
+      return { missions: [], blocked: [] }
+    })
+    let release!: () => void
+    vi.spyOn(cp.verification, 'recoverAtBoot').mockImplementation(async () => {
+      order.push('verification-recovery')
+      await new Promise<void>((resolve) => {
+        release = resolve
+      })
+    })
+    const kick = vi.spyOn(cp.verification, 'kick').mockImplementation(async () => {
+      order.push('kick')
+    })
+    const boot = startAxiomControlPlane(runtime)
+    expect(order).toEqual(['missions', 'verification-recovery'])
+    expect(kick).not.toHaveBeenCalled()
+    release()
+    await boot
+    expect(order).toEqual(['missions', 'verification-recovery', 'kick'])
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(kick).toHaveBeenCalledTimes(2)
+    stopAxiomControlPlane(runtime)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(kick).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not install an obsolete boot timer after a stop and restart during recovery', async () => {
+    const cp = getAxiomControlPlane(runtime)
+    vi.spyOn(cp.recovery, 'recover').mockReturnValue({ missions: [], blocked: [] })
+    let release!: () => void
+    const recovery = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    vi.spyOn(cp.verification, 'recoverAtBoot').mockReturnValue(recovery)
+    const kick = vi.spyOn(cp.verification, 'kick').mockResolvedValue(undefined)
+    const first = startAxiomControlPlane(runtime)
+    stopAxiomControlPlane(runtime)
+    const second = startAxiomControlPlane(runtime)
+    release()
+    await Promise.all([first, second])
+    expect(kick).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(kick).toHaveBeenCalledTimes(2)
+    stopAxiomControlPlane(runtime)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(kick).toHaveBeenCalledTimes(2)
+  })
+
+  it('requests one resume round for persisted EXECUTING Missions with READY Tasks and no bindings', async () => {
     vi.spyOn(launcher, 'createAttemptLauncher').mockReturnValue(vi.fn(async () => {}))
     const cp = getAxiomControlPlane(runtime)
     // Persist the interrupted state without the running plane's scheduling hooks.
@@ -45,17 +97,17 @@ describe('M1 Control Plane boot', () => {
       .spyOn(cp.scheduler, 'scheduleRound')
       .mockResolvedValue({ admitted: [], skipped: [] })
 
-    expect(startAxiomControlPlane(runtime)).toEqual({
+    expect(await startAxiomControlPlane(runtime)).toEqual({
       missions: [{ id: mission.id, status: 'EXECUTING', moved: [] }],
       blocked: []
     })
-    startAxiomControlPlane(runtime)
+    await startAxiomControlPlane(runtime)
     expect(schedule).toHaveBeenCalledExactlyOnceWith(mission.id, 'resume')
   })
 
   it.each(['PAUSED', 'BLOCKED', 'CANCELED', 'COMPLETED', 'ANALYZING', 'PLANNED'] as const)(
     'does not request a boot round for a %s Mission',
-    (status) => {
+    async (status) => {
       const cp = getAxiomControlPlane(runtime)
       const { mission } = cp.missions.createMission(createInput)
       cp.store.updateMissionStatus({
@@ -65,12 +117,12 @@ describe('M1 Control Plane boot', () => {
         previousStatus: null
       })
       const schedule = vi.spyOn(cp.scheduler, 'scheduleRound')
-      startAxiomControlPlane(runtime)
+      await startAxiomControlPlane(runtime)
       expect(schedule).not.toHaveBeenCalled()
     }
   )
 
-  it('does not schedule an EXECUTING Mission whose Run binding was lost', () => {
+  it('does not schedule an EXECUTING Mission whose Run binding was lost', async () => {
     const cp = getAxiomControlPlane(runtime)
     const { mission } = cp.missions.createMission(createInput)
     cp.store.updateMissionStatus({
@@ -81,7 +133,7 @@ describe('M1 Control Plane boot', () => {
     })
     replaceRunBinding(db, mission.coordinatorOrcaSessionId)
     const schedule = vi.spyOn(cp.scheduler, 'scheduleRound')
-    expect(startAxiomControlPlane(runtime)?.blocked).toEqual([
+    expect((await startAxiomControlPlane(runtime))?.blocked).toEqual([
       { id: mission.id, reason: 'run_binding_lost' }
     ])
     expect(schedule).not.toHaveBeenCalled()
@@ -98,14 +150,14 @@ describe('M1 Control Plane boot', () => {
     })
     const before = cp.store.listAuditEvents({ missionId: mission.id })
     const schedule = vi.spyOn(cp.scheduler, 'scheduleRound')
-    startAxiomControlPlane(runtime)
+    await startAxiomControlPlane(runtime)
     await vi.advanceTimersByTimeAsync(0)
     expect(schedule).toHaveBeenCalledExactlyOnceWith(mission.id, 'resume')
     expect(cp.store.listAuditEvents({ missionId: mission.id })).toEqual(before)
   })
 
   it('reopens all Mission objects and stages, resumes the persisted generation, drains and acknowledges once', async () => {
-    startAxiomControlPlane(runtime)
+    await startAxiomControlPlane(runtime)
     const cp = getAxiomControlPlane(runtime)
     const { mission, goalRevision } = cp.missions.createMission(createInput)
     const plan = propose(cp.missions, mission.id, goalRevision.id)
@@ -124,7 +176,7 @@ describe('M1 Control Plane boot', () => {
     runtime = mailboxRuntime(db)
     const reboot = getAxiomControlPlane(runtime)
     expect(reboot).not.toBe(cp)
-    expect(startAxiomControlPlane(runtime)).toEqual({
+    expect(await startAxiomControlPlane(runtime)).toEqual({
       missions: [{ id: mission.id, status: 'EXECUTING', moved: [] }],
       blocked: []
     })
@@ -170,7 +222,7 @@ describe('M1 Control Plane boot', () => {
     db = new OrchestrationDb(join(directory, 'orchestration.db'))
     runtime = mailboxRuntime(db)
     const deliveries = vi.spyOn(db, 'getOrCreateRunDelivery')
-    startAxiomControlPlane(runtime)
+    await startAxiomControlPlane(runtime)
     await vi.advanceTimersByTimeAsync(0)
     expect(deliveries.mock.results[0]?.value).toMatchObject({ replayed: true, messages: [message] })
     expect(
@@ -184,8 +236,8 @@ describe('M1 Control Plane boot', () => {
   it('boots idempotently and starts/stops consumers with create, resume, unblock, pause and cancel', async () => {
     const cp = getAxiomControlPlane(runtime)
     const recover = vi.spyOn(cp.recovery, 'recover')
-    startAxiomControlPlane(runtime)
-    startAxiomControlPlane(runtime)
+    await startAxiomControlPlane(runtime)
+    await startAxiomControlPlane(runtime)
     expect(recover).toHaveBeenCalledTimes(1)
     const { mission } = cp.missions.createMission(createInput)
     await vi.advanceTimersByTimeAsync(0)
@@ -204,7 +256,7 @@ describe('M1 Control Plane boot', () => {
     await vi.advanceTimersByTimeAsync(30_000)
     expect(db.getUnreadRunMailbox(mission.runId)).toHaveLength(1)
     stopAxiomControlPlane(runtime)
-    startAxiomControlPlane(runtime)
+    await startAxiomControlPlane(runtime)
     await vi.advanceTimersByTimeAsync(0)
     expect(vi.getTimerCount()).toBe(1)
     cp.missions.resumeMission(mission.id)
@@ -220,13 +272,13 @@ describe('M1 Control Plane boot', () => {
     expect(vi.getTimerCount()).toBe(1)
     insertMail(db, mission.runId)
     stopAxiomControlPlane(runtime)
-    startAxiomControlPlane(runtime)
+    await startAxiomControlPlane(runtime)
     await vi.advanceTimersByTimeAsync(0)
     expect(db.getUnreadRunMailbox(mission.runId)).toHaveLength(1)
   })
 
   it('does not consume a Mission whose Run binding was lost while paused', async () => {
-    startAxiomControlPlane(runtime)
+    await startAxiomControlPlane(runtime)
     const cp = getAxiomControlPlane(runtime)
     const { mission } = cp.missions.createMission(createInput)
     cp.missions.pauseMission(mission.id)

@@ -132,9 +132,11 @@ BLOCKED           → 阻塞解除后回到进入前的 stage（READY / VERIFYIN
 QUEUED → RUNNING → PASS | FAIL | INCONCLUSIVE
 INCONCLUSIVE → SPECIALIST_REVIEW | HUMAN_REVIEW → PASS | FAIL
 任一非终态 → CANCELED（候选被 SUPERSEDED）
-RUNNING → QUEUED（应用重启时由 RecoveryService 重排队）
+RUNNING → QUEUED（应用启动时由 VerificationService 重排队，D64 修订）
 ```
 Review 只能收敛 `INCONCLUSIVE`，**不能**推翻 deterministic `FAIL`。
+
+M3-01 的 `verdictDetail.phase`：`claimed`（事务领取）、`prepared`（独立 worktree 已 detached 检出并核验 Candidate commit/tree）、`prepare_failed`（准备失败，INCONCLUSIVE）、`requeued`（重启回收后重排队）、`canceled`（Candidate SUPERSEDED 或 Task stage 已改变）。`prepared` 仍是 RUNNING，不代表验证通过；M3-02 才执行检查并产生 verdict。重启重排队的 run 可续接已 `VERIFYING` 的 Task，不回退 stage；普通 QUEUED 仍要求 SUBMITTED。每次领取递增 `claimCount`，记录 `runtimeEpoch / worktreeId / startedAt / finishedAt`；VerificationService 在启动时先回收旧 worktree 再重排队，保留旧审计与 Artifact。
 
 ### 4.9 IntegrationBatch
 ```text

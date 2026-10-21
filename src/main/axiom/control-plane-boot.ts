@@ -2,16 +2,34 @@ import { getAxiomControlPlane } from './control-plane'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { ATTEMPT_RECONCILE_INTERVAL_MS, type RecoveryReport } from './recovery/recovery-service'
 
-export function startAxiomControlPlane(runtime: OrcaRuntimeService): RecoveryReport | undefined {
+export async function startAxiomControlPlane(
+  runtime: OrcaRuntimeService
+): Promise<RecoveryReport | undefined> {
   const plane = getAxiomControlPlane(runtime)
   if (plane.started) {
     return
   }
   const report = plane.recovery.recover()
   plane.started = true
+  const generation = ++plane.bootGeneration
+  try {
+    await plane.verification.recoverAtBoot()
+  } catch {
+    if (generation === plane.bootGeneration) {
+      plane.started = false
+    }
+    console.warn('[axiom] Verification recovery failed; Control Plane startup stopped')
+    return
+  }
+  if (!plane.started || generation !== plane.bootGeneration) {
+    return
+  }
   const reconcile = () => {
     void plane.recovery.reconcileAttempts().catch(() => {
       console.warn('[axiom] Attempt reconciliation failed')
+    })
+    void plane.verification.kick().catch(() => {
+      console.warn('[axiom] Verification preparation failed')
     })
   }
   reconcile()
@@ -33,6 +51,7 @@ export function startAxiomControlPlane(runtime: OrcaRuntimeService): RecoveryRep
 export function stopAxiomControlPlane(runtime: OrcaRuntimeService): void {
   const plane = getAxiomControlPlane(runtime)
   plane.started = false
+  plane.bootGeneration += 1
   clearInterval(plane.attemptReconcileTimer)
   plane.attemptReconcileTimer = undefined
   for (const consumer of plane.consumers.values()) {

@@ -6,6 +6,8 @@ import {
   SubmissionReportSchema
 } from '../../../shared/axiom-contract/submission-params'
 import { VerificationRunStatusSchema } from '../../../shared/axiom-contract/lifecycle'
+import { VerificationRunSchema } from '../../../shared/axiom-contract/verification-params'
+export { VerificationRunSchema } from '../../../shared/axiom-contract/verification-params'
 import { readJson } from './row-codec'
 
 const identity = {
@@ -78,19 +80,6 @@ export const SubmissionRowCodec = SubmissionRowSchema.transform((r) =>
     )
   })
 )
-export const VerificationRunSchema = z.object({
-  id: AxiomIdSchema,
-  missionId: AxiomIdSchema,
-  candidateId: AxiomIdSchema,
-  taskId: AxiomIdSchema,
-  status: VerificationRunStatusSchema,
-  verdictDetail: z.record(z.string(), z.unknown()),
-  commands: z.array(z.string()),
-  toolVersions: z.record(z.string(), z.string()),
-  verifier: z.string().min(1),
-  createdAt: z.string().min(1),
-  updatedAt: z.string().min(1)
-})
 export const VerificationRunRowSchema = z.object({
   ...identity,
   candidate_id: AxiomIdSchema,
@@ -99,6 +88,11 @@ export const VerificationRunRowSchema = z.object({
   commands: z.string(),
   tool_versions: z.string(),
   verifier: z.string().min(1),
+  runtime_epoch: VerificationRunSchema.shape.runtimeEpoch,
+  claim_count: VerificationRunSchema.shape.claimCount,
+  worktree_id: VerificationRunSchema.shape.worktreeId,
+  started_at: VerificationRunSchema.shape.startedAt,
+  finished_at: VerificationRunSchema.shape.finishedAt,
   updated_at: z.string().min(1)
 })
 export const VerificationRunRowCodec = VerificationRunRowSchema.transform((r) =>
@@ -109,6 +103,11 @@ export const VerificationRunRowCodec = VerificationRunRowSchema.transform((r) =>
     candidateId: r.candidate_id,
     status: r.status,
     verifier: r.verifier,
+    runtimeEpoch: r.runtime_epoch,
+    claimCount: r.claim_count,
+    worktreeId: r.worktree_id,
+    startedAt: r.started_at,
+    finishedAt: r.finished_at,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     verdictDetail: readJson(

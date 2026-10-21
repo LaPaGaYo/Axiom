@@ -35,6 +35,7 @@ export const CandidateSchema = z.object({
   createdAt: Text,
   updatedAt: Text
 })
+export type Candidate = z.infer<typeof CandidateSchema>
 export const SubmissionSchema = z.object({
   id: AxiomIdSchema,
   missionId: AxiomIdSchema,

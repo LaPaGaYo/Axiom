@@ -3,6 +3,7 @@ import { AXIOM_ATTEMPT_COMMAND_SPECS } from './axiom-attempt'
 import { AXIOM_MISSION_COMMAND_SPECS } from './axiom-mission'
 import { AXIOM_PLAN_COMMAND_SPECS } from './axiom-plan'
 import { AXIOM_TASK_COMMAND_SPECS } from './axiom-task'
+import { AXIOM_VERIFICATION_COMMAND_SPECS } from './axiom-verification'
 import type { CommandSpec } from '../args'
 import { ACCOUNT_COMMAND_SPECS } from './account'
 import { BROWSER_ADVANCED_COMMAND_SPECS } from './browser-advanced'
@@ -29,6 +30,7 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...AXIOM_MISSION_COMMAND_SPECS,
   ...AXIOM_PLAN_COMMAND_SPECS,
   ...AXIOM_TASK_COMMAND_SPECS,
+  ...AXIOM_VERIFICATION_COMMAND_SPECS,
   ...AXIOM_MESSAGE_COMMAND_SPECS,
   ...AXIOM_ATTEMPT_COMMAND_SPECS,
   ...CORE_COMMAND_SPECS,

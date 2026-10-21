@@ -67,6 +67,7 @@ export function inspectFixtureMission(userData: string, missionId: string) {
         .parse(rows.tasks),
       candidates: z.array(CandidateRowCodec).parse(rows.candidates),
       submissions: z.array(SubmissionRowCodec).parse(rows.submissions),
+      // v45 codec exposes runtimeEpoch, claimCount, worktreeId and start/finish timestamps.
       verification: z.array(VerificationRunRowCodec).parse(rows.verification),
       dispatches: z
         .array(

@@ -165,7 +165,12 @@ CREATE TABLE IF NOT EXISTS verification_runs (
   tool_versions TEXT NOT NULL DEFAULT '{}',
   verifier TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  runtime_epoch TEXT,
+  claim_count INTEGER NOT NULL DEFAULT 0,
+  worktree_id TEXT,
+  started_at TEXT,
+  finished_at TEXT
 );
 CREATE TABLE IF NOT EXISTS integration_batches (
   id TEXT PRIMARY KEY,

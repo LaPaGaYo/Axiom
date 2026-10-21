@@ -58,7 +58,7 @@ test('M2 exit: Planner, parallel Workers, crash retry and immutable submission f
       releaseWorkers()
 
       await expect
-        .poll(() => inspect().tasks.filter((t) => t.stage === 'SUBMITTED').length, {
+        .poll(() => inspect().tasks.filter((t) => t.stage === 'VERIFYING').length, {
           timeout: 120_000
         })
         .toBe(3)
@@ -73,6 +73,15 @@ test('M2 exit: Planner, parallel Workers, crash retry and immutable submission f
           timeout: 120_000
         })
         .toBe(true)
+      await expect
+        .poll(
+          () =>
+            inspect().verification.filter(
+              (run) => run.status === 'RUNNING' && run.verdictDetail.phase === 'prepared'
+            ).length,
+          { timeout: 60_000 }
+        )
+        .toBe(3)
       const settled = inspect()
       const attempts = list()
       const retry = attempts.find((a) => a.taskId === crashTask.task_id && a.seq === 2)!
@@ -108,7 +117,15 @@ test('M2 exit: Planner, parallel Workers, crash retry and immutable submission f
       const stages = settled.audits
         .filter((a) => a.event === 'task.stage' && a.object_id === crashTask.task_id)
         .map((a) => z.object({ stage: z.string() }).parse(JSON.parse(a.after!)).stage)
-      expect(stages).toEqual(['READY', 'RUNNING', 'NEEDS_FIX', 'READY', 'RUNNING', 'SUBMITTED'])
+      expect(stages).toEqual([
+        'READY',
+        'RUNNING',
+        'NEEDS_FIX',
+        'READY',
+        'RUNNING',
+        'SUBMITTED',
+        'VERIFYING'
+      ])
       const ledger = fixtureLedger(ledgerPath)
       expect(ledger.filter((entry) => entry.kind === 'crash')).toEqual([
         { kind: 'crash', attemptId: first.dispatch_id, taskId: crashTask.task_id }
@@ -153,7 +170,7 @@ test('M2 exit: Planner, parallel Workers, crash retry and immutable submission f
         expect(settled.verification.filter((v) => v.candidateId === candidate.id)).toHaveLength(1)
         expect(settled.verification.find((v) => v.candidateId === candidate.id)).toMatchObject({
           taskId: binding.task_id,
-          status: 'QUEUED',
+          status: 'RUNNING',
           verifier: 'VerificationService'
         })
       }
@@ -239,7 +256,7 @@ test('M2 exit: Planner, parallel Workers, crash retry and immutable submission f
         parallelRunning: 3,
         submitted: 3,
         candidates: 3,
-        queuedVerificationRuns: 3,
+        runningVerificationRuns: 3,
         codes,
         crashAttempt: first.dispatch_id,
         retryAttempt: retry.attemptId,
