@@ -11,8 +11,7 @@ tests/e2e/cross-version-wire/cross-version-session-tabs-retirement-proof.unit.te
 tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts
 tests/e2e/cross-version-wire/cross-version-worktree-identity-downgrade.unit.test.ts
 tests/e2e/cross-version-wire/release-checkout.unit.test.ts
-# Timing-sensitive (pass focused; fail under full-suite load)
-src/main/ipc/pty-runtime-hidden-at-spawn-mark.test.ts
+# Timing-sensitive (pass focused; fail under full-suite load). pty-runtime-hidden-at-spawn-mark.test.ts removed 2026-10-21 after two clean verify-main rounds following the M2-11 deferred-signal fix.
 config/scripts/build-native-for-platform.test.mjs
 src/main/ssh/ssh-remote-commands.test.ts
 # Timing-sensitive under load (observed once on 2026-10-16 after Playwright chromium + webkit were installed; green on the immediate re-run)

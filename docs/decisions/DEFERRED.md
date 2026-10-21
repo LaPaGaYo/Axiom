@@ -18,6 +18,7 @@
 | DEF-13 | harness 原生入口的探测与利用（open-cross-session / Ekko Studio 启发，§5.3 #2 #6 #7、§6.3 #6）：① Claude Code 每会话收件箱（`~/.claude/sessions/<pid>.json` → UDS，`type:"user"` 帧，`crossSessionInbound: accept | hold`，`peer_message_status` 回执；会话 json 的 `status: busy | idle` / `statusUpdatedAt`）作为 Claude Worker 的结构化投递与活动信号；② Codex rollout 文件（`$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl`，`session_meta.payload.cwd`，生命周期事件 `task_started`）与 managed-daemon 控制 socket 的 `turn/steer`（`threadId + expectedTurnId`）作为 Codex Worker 的活动信号与忙碌时投递；③ `axiom doctor`：启动 Attempt 前的只读宿主体检（harness 版本、登录、`crossSessionInbound`、目录信任、daemon socket 路径长度、egress、平台先决条件），输出作为 AgentFactory 过滤输入与 smoke 前置检查，不改用户真实 home | **M3-08（D58 通道落地）brief 定稿前**；复审时带上当时 Claude Code / Codex 版本对这些私有接口的实际行为（全部放在 D55 接口后，带能力探测与回退，不得成为状态机必需依赖） | D55 / D57 / D58 / D60；`claude/external-projects-review-v1.md` §5 §6 | OPEN（2026-10-20 登记，Henry 同意） |
 | DEF-14 | 可视化回放与任务卡（Ekko Studio 启发，§6.3 #4 #5）：① Task DAG 画布上的证据回放——按 Attempt / VerificationRun / IntegrationBatch 回放，点边看它为什么变 READY，点节点看 verdict 与证据，CompletionReport 的"为什么完成"的可视化形态（只读投影，数据全部来自既有审计与对象）；② 待处理项（QUESTION / REQUEST_SUBTASK / HUMAN_REVIEW / Approval）的任务卡化与手机端审批 / 澄清推送（Orca 的 mobile pairing 在 M0 置 flag 关闭，评估是否重开） | ① **M3-09 UI brief 定稿前**（回放的最小形态）；② **M4 ApprovalGateway 设计时** | `claude/external-projects-review-v1.md` §6 | OPEN（2026-10-20 登记，Henry 同意） |
 | DEF-15 | V2 / V3 产品路线草案（2026-10-20 会话口头提出，未成文）：V1 = 在真实 harness 上把"目标 → 计划 → 执行 → 验证 → 集成 → 完成证据"闭环（M3–M5 出口）；V2 = Axiom 构建 Axiom（dogfooding）+ 信任与规模（多 harness、Jev 决策引擎校准、chaos harness、远程 / 配对执行）；V3 = 自治与治理（长周期目标、replanning 成熟、组织级策略与审批）。细节待正式起草 | **M5（V1）出口 Decision 时**正式起草 V2 计划并提交 Decision；在此之前不排期、不建 Task | 会话讨论（Henry："先挖个坑之后再来埋坑"） | OPEN（2026-10-20 登记） |
+| DEF-16 | A′ = ACP（Agent Client Protocol）作为厂商中立的 Attempt 执行通道：v1 为 stdio JSON-RPC（`initialize` / `session/new` / `session/prompt` / `session/cancel` / 可选 `session/load`、`session/set_mode`；客户端侧 `session/request_permission`、`fs/*`、`terminal/*`）；原生支持的 harness 见协议目录（OpenCode、Copilot CLI、Gemini CLI、Qoder、Qwen Code、Kimi CLI），Codex / Claude 经 `agentclientprotocol/codex-acp`（仍依赖 app-server）与 `claude-agent-acp` 适配器；权限是协议交互而非沙盒，需逐 adapter 认证权限 / 恢复 / 提交映射（M3-00 报告 §A′） | **V2 多 harness 评估时**（M5 出口之后），或某个 harness 只提供 ACP 入口时提前触发 | D58 / D63；`.axiom-work/reports/M3-00-1.md` | OPEN（2026-10-21 登记） |
 
 ## M2 出口核对（2026-10-20，D61）
 
@@ -30,3 +31,7 @@
 ## 2026-10-20 V2 / V3 路线入坑（Henry）
 
 Henry 决定先完成手上的开发（M3 起），V2 / V3 路线草案登记为 DEF-15，触发点为 M5（V1）出口；同一指示批准了 D61 / D62 / D64 / D65 / D66（见 `DECISION_LOG.md` D61 修订行）。
+
+## 2026-10-21 M3-00 F3 诊断登记
+
+DEF-16（A′ = ACP）按 D63 登记；D58 的通道 B 落地项（结算等待、权限映射 V1、结构化句柄）进 `docs/plans/M3.md` M3-08；上游 `sendAgentTurn` 重写登记为 D56 候选（`docs/decisions/UPSTREAM_SYNC.md` UPSTREAM-3 待写）。

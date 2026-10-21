@@ -548,6 +548,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **理由**：自治系统只应把真实工作交给验证过能遵守协议的组合；允许清单比退休名单安全（上游每周都在新增 provider，denylist 永远追不上）；三分让"同一身体换大脑""同一大脑换接入方式"都成为显式、可审计的选择，也为 D55 的自有 harness 留好接口。
 **后果**：`ProviderFilterReason` 改为 `not_installed | not_certified | disallowed | tier_too_low`（术语表 §4.13 随 M2-06c 更新）；`selection.filtered` 只需列出已安装未登记的 harness 与登记未安装的组合，顺带解决 M2-11 记录的 `not_installed` 膨胀；D56 上游初筛的"provider 适配"范围收窄为矩阵内的 harness。
 **取代规则**：矩阵条目的增删以本条下的修订行记录；DEF-8 复审时的 Decision 决定非订阅接入方式与本机认证。
+
+**修订（2026-10-21，验证者，M3-00 宿主证据）**：`codex`（`gpt-6-astra`，`subscription`）组合在 D58 的通道 B 上取得 Planner 角色的真实认证证据——`.axiom-work/verifications/M3-00-f3.md` 第 4 节（`PLAN_REVIEW`，`planrev_916dfdd2a12d`，13.5 min）；状态 provisional → certified（Planner，通道 B）；Worker 角色随 M3-08 的 smoke 补证。
 **修订（验证者 2026-10-20）**：`codex` 组合的宿主认证 smoke（`.axiom-work/verifications/M2-09-smoke-codex.md`）未能产出 Planner 提案：Codex 0.163.0 在 TUI 通道对每个 linked worktree 弹 Folder access 同意屏，预信任写入不生效；认证证据等 D58 决定通道后再补，矩阵条目与 `certified-providers.ts` 不变。
 
 ## D58 · Codex / Claude Attempt 的执行通道与 AgentSpec 权限映射（harness 登录、目录信任、沙盒 / 审批标志）— ACCEPTED（Henry 2026-10-20：B 首选，A 后备）
@@ -666,3 +668,26 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **理由**：§11.2 第 5 层"Reviewer（LLM，advisory）只能对 INCONCLUSIVE 给出收敛建议"；复用 Planner 的通道避免第二套角色启动路径。
 **后果**：D48 的 Planner 契约扩展为"只读角色"的通用形态；M3-05 实现；D60 的 Supervisor 与 Reviewer 的边界：Supervisor 看运行中的 Attempt，Reviewer 看已提交的 Candidate。
 **取代规则**：以修订行记录。
+
+
+## D63 · F3 诊断结论与 D58 通道落地方式：B（Orca 结构化 / app-server 通道）可行，三项有界修复进 M3-08；A 继续作后备；A′（ACP）入坑 — PROPOSED（验证者 2026-10-21，待 Henry 讨论后批准）
+
+**背景**：D58 把 B 定为首选、A 为后备，并要求先做时间盒的 F3 诊断（M3-00）。M3-00 attempt 1（`098c5798c5`，合入 `e8cdd3da29`）交付了因果链、按可能性排序的候选原因与确定性测试、扩展后的验证者本地 smoke（捕获 app-server 子进程的 stdin / stdout / 退出码、会话存储与 journal 快照）和手工探针 `codex-app-server-probe.command`；验证者在宿主上跑了探针（两次）与三次结构化 smoke（记录 `.axiom-work/verifications/M3-00-f3.md`）。
+
+**事实（宿主，Codex CLI 0.163.0，隔离 HOME）**：
+1. **传输假设被证伪**：裸 stdio `codex app-server`、显式 `--listen stdio://`、managed-daemon 的 Unix socket + WebSocket 三种方式都能用 Orca 原样的 `initialize` 帧完成 `thread/start` + 一个真实 `turn/start`（`PROBE_OK`，4.7 s）；不需要新参数、不需要换协议。
+2. **F3 的真实起因是 Orca 自己的首轮投递判定**：结构化宿主对首条 preamble 回 `pending`（由 provider 回显 `item/started userMessage` 在几百毫秒后结算），而 `sendStructuredWorkerPreamble` 只认 `accepted`，把 `pending` 当 `operation_unknown` → 失败启动拆除（关 stdin、会话被 Orca 自己停掉，子进程退出码 0）→ `start_unknown` → 60 s 后 recovery 记 `Planner process exited`。线上证据：`turn/start` 42.493 得到 `inProgress`，Orca 在 42.540 关闭 stdin；`worker_dispatches.last_error` = "The dispatch preamble was submitted but not acknowledged (pending)"。上游 Orca 在 fork 之后已重写该路径（`sendAgentTurn`，`'accepted' | 'pending'`，#22821 … #27925），属于 163 个 Codex / 结构化提交漂移的一部分。
+3. **18 行修复在诊断分支上验证通过**（`axiom/verify-diag/M3-00` `b239f8b196`，不合并）：`pending` 时等待 `host.waitForSendSettlement` 再判定。之后真实 Planner 工作了 9 分钟、写出提案、调用 `axiom plan propose` → 被 Manual 姿态（`on-request` + `workspace-write`）的沙盒挡住 Axiom socket（`runtime_access_denied` EPERM），Codex 升级权限请求 → `waitingOnApproval`，无人应答。
+4. **换成 Orca 出厂的 Yolo 姿态**（`--dangerously-bypass-approvals-and-sandbox` → `never` + `danger-full-access`，TUI 通道一直如此）：**真实 Codex Planner 在 B 通道端到端完成**——13.5 min，`PLAN_REVIEW`，`planrev_916dfdd2a12d`（12 Task / 15 边 / 3 根 / 4 里程碑，provenance `planner / codex`），`planner.started → proposed → stopped`。这是 M2 出口准则 3 缺的 D57 `codex` 认证证据（通道 B，`subscription` 接入）。其间 `plan propose` 第一次因 `no_active_sender_terminal` 失败（结构化通道的 shell 没有 `ORCA_TERMINAL_HANDLE`），agent 自己用 `attempt show` 查到 `structworker_…` 句柄、加 `--from` 后成功。
+
+**决定（提议）**：
+1. **B 成立**，按 D58 落地到 M3-08，三项有界修复：① `sendStructuredWorkerPreamble` 的结算等待进产品代码（以 worker readiness 预算为上限；仍 `pending` 才算 `operation_unknown`；单测覆盖 accepted / rejected / 超时三种），上游的 `sendAgentTurn` 重写登记为 D56 候选（UPSTREAM-3），不作为前置；② D58 权限映射规则 V1：每个 Axiom Attempt 都用 `approvalPolicy: never` + `sandbox: danger-full-access`（与 TUI 通道一致），隔离靠每 Attempt 的 worktree，范围靠验证时的 diff scope 检查（M3-03），映射结果写进 AgentSpec provenance；Manual 姿态留给 M4 的 ApprovalGateway 桥接（否则无头 Worker 会停在 `waitingOnApproval`）；③ 结构化通道的发件身份：preamble 配方带 `--from <assigneeHandle>`（或向 app-server 子进程环境导出等价变量），不让 agent 自己去猜。
+2. **A（`codex exec`）保持后备**，不实现；触发条件：M3-08 的三项修复在宿主 smoke 上失败，或 Codex 后续版本让 app-server 通道不可用。
+3. **A′（ACP）入坑**：DEFERRED DEF-16，V2 多 harness 时按"每个 adapter 单独认证（权限、恢复、提交）"评估；不是 F3 的修复，也不引入依赖。
+4. D57 `codex` 组合的状态从 provisional 改为 **certified（通道 B，Planner 角色）**；Worker 角色的认证在 M3-08 的 smoke 里补（`attempt submit` 走同一通道、同一句柄规则）。
+
+**理由**：三次宿主运行把原因定位到两层（Orca 的 pending 判定 + 沙盒姿态），每层都有最小修复并已在宿主上证明；B 保留了 Orca 的会话 / journal / 恢复基础设施，A 只在 B 不可用时才值得再建一条通道。
+
+**后果**：`docs/plans/M3.md` M3-08 行改写为上述三项 + Worker smoke；`known-environmental` 无变化；smoke 默认参数改为 bypass（`.axiom-work/smoke/codex-args.env`）；诊断分支 `axiom/verify-diag/M3-00` 保留为证据。
+
+**取代规则**：D58 的"B 首选 / A 后备"不变；本条的修复清单以修订行记录；若 M3-08 转向 A，另起 Decision。
