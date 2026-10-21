@@ -82,20 +82,20 @@ AXIOM_FIXTURE_REPO=$HOME/Documents/flowtask-fixture ORCA_BACKGROUND_LAUNCH=1 pnp
 
 ## 宿主实跑结果（由 verifier 填写）
 
-下表留空，不表示 PASS。宿主 `[M2-exit]` JSON 与同名 Playwright 附件包含 counts、精确 codes、retry 身份、审计 sequence、Candidate commits；不输出 capability。
+下表由 verifier 于 2026-10-20 填写（宿主 chain 于 main `06a502151c`）。宿主 `[M2-exit]` JSON 与同名 Playwright 附件包含 counts、精确 codes、retry 身份、审计 sequence、Candidate commits；不输出 capability。
 
 | 项目 | 预期 | 实测 |
 |---|---|---|
-| Candidate / 宿主版本 / 日志 / VerificationRun | verifier 记录 | 待填写 |
-| fixture HEAD/tag | a6a8413ecdcbbdb1d34f36950ba7e1aaa5a1a642 | 待填写 |
-| Planner provenance / Tasks / edges / 并行 RUNNING | planner/codex / 12 / 20 / 3 | 待填写 |
-| SUBMITTED / ACTIVE Candidates / Submissions / QUEUED | 3 / 3 / 3 / 3 | 待填写 |
-| forged / duplicate / stale / mismatched | dispatch_capability_invalid / duplicate:true / inactive_dispatch / dispatch_capability_invalid | 待填写 |
-| 四次持久快照与 refs 比较 | 均逐字节相同 | 待填写 |
-| crash / retry / kernel retryOf / 审计顺序 | 1 FAILED（process_exited + shell_foreground）/ seq 2 SUBMITTED / null（Axiom bindings + audits 关联）/ failed < started | 待填写 |
-| 五个既有 fixture/UI specs | 各自 PASS，未 skip | 待填写 |
-| 新 exit spec | PASS，未 skip，headless | 待填写 |
-| 真实 provider | blocked on D58 通道实施与 D57 认证证据 | 待填写 |
+| Candidate / 宿主版本 / 日志 / VerificationRun | verifier 记录 | 候选 `dbd01a9ec5`（M2-11/2）→ main `06a502151c`；宿主 macOS / Node v24.21.0 / pnpm 12.0.0 / Codex 0.163.0；`.axiom-work/logs/chain-20261020-181715.log`（出口 spec + 五个 spec）、`verify-merged-06a502151c-20261020-182109.log`；记录 `.axiom-work/verifications/M2-11-2.md`、`M2-12-1.md` |
+| fixture HEAD/tag | a6a8413ecdcbbdb1d34f36950ba7e1aaa5a1a642 | `fixtureCommit: a6a8413ecdcbbdb1d34f36950ba7e1aaa5a1a642`（集成基线与 `refs/heads/main` 未变） |
+| Planner provenance / Tasks / edges / 并行 RUNNING | planner/codex / 12 / 20 / 3 | planner/codex（helper 断言）/ 12 / 20 / `parallelRunning: 3` |
+| SUBMITTED / ACTIVE Candidates / Submissions / QUEUED | 3 / 3 / 3 / 3 | 3 / 3 / 3 / 3（`candidateCommits` 三个互异） |
+| forged / duplicate / stale / mismatched | dispatch_capability_invalid / duplicate:true / inactive_dispatch / dispatch_capability_invalid | `dispatch_capability_invalid` / `duplicate:true` / `inactive_dispatch` / `dispatch_capability_invalid` |
+| 四次持久快照与 refs 比较 | 均逐字节相同 | `snapshotsIdentical: true` |
+| crash / retry / kernel retryOf / 审计顺序 | 1 FAILED（process_exited + shell_foreground）/ seq 2 SUBMITTED / null（Axiom bindings + audits 关联）/ failed < started | crash `ctx_bc82f5ac8bc6` FAILED（`attempt.failed{process_exited, evidence: shell_foreground}` sequence 54）/ retry `ctx_fafa0de68c7c` SUBMITTED（`attempt.started{seq: 2}` sequence 60）/ `retry_of_dispatch_id` null / 54 < 60；stage 序列 READY → RUNNING → NEEDS_FIX → READY → RUNNING → SUBMITTED |
+| 五个既有 fixture/UI specs | 各自 PASS，未 skip | 5 passed（30.7 s，5 workers）：home-task-list 6.8 s、plan 13.2 s、attempt-submit 17.6 s、task-detail 19.4 s、attempt-launch 19.4 s（`restartLiveness: live ×3`） |
+| 新 exit spec | PASS，未 skip，headless | 1 passed（1.1 min，wall 82 s），electron-headless，`ORCA_BACKGROUND_LAUNCH=1` |
+| 真实 provider | blocked on D58 通道实施与 D57 认证证据 | 未取得（D58 已由 Henry 接受：B 首选 / A 后备；证据在所选通道采集，M3 前置项） |
 
 ## Worker 检查与遗留
 
