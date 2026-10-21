@@ -57,6 +57,41 @@ export function verificationFixture(root: string, dbPath = ':memory:') {
   return { ...f, task, binding, candidate, run, artifacts }
 }
 
+export function queueAnotherVerification(f: ReturnType<typeof verificationFixture>) {
+  const task = f.store.listTaskStages({ missionId: f.missionId, stage: 'READY' })[0]
+  f.controller.transitionTaskStage({
+    taskId: task.taskId,
+    to: 'RUNNING',
+    actor: 'Scheduler',
+    attemptCountDelta: 1,
+    reason: 'admission'
+  })
+  f.controller.transitionTaskStage({
+    taskId: task.taskId,
+    to: 'SUBMITTED',
+    actor: 'AttemptSettlement',
+    reason: 'submission'
+  })
+  f.store.insertAttemptBinding({
+    ...f.binding,
+    taskId: task.taskId,
+    dispatchId: 'dispatch-2',
+    branch: `axiom/attempt/${task.taskId}/1`
+  })
+  const candidate = f.store.insertCandidate({
+    ...f.candidate,
+    id: 'candidate-2',
+    taskId: task.taskId,
+    attemptId: 'dispatch-2'
+  })
+  return f.store.insertVerificationRun({
+    ...f.run,
+    id: 'vrun-2',
+    taskId: task.taskId,
+    candidateId: candidate.id
+  })
+}
+
 export function verificationRuntime() {
   const worktrees: RuntimeWorktreeRecord[] = []
   const createManagedWorktree = vi.fn(

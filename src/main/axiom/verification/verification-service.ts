@@ -21,6 +21,8 @@ export class VerificationService {
   private flight?: Promise<void>
   private recovery?: Promise<void>
   private pending = false
+  // Only audit suppression is process-local; pending cleanup and ownership remain durable.
+  private readonly reportedRecoveryFailures = new Set<string>()
 
   constructor(private readonly deps: VerificationDependencies) {}
 
@@ -39,6 +41,7 @@ export class VerificationService {
         await this.recovery
         do {
           this.pending = false
+          await this.recover(false)
           for (let run = this.claimNext(); run; run = this.claimNext()) {
             await prepareVerification(this.deps, run)
           }
@@ -55,9 +58,20 @@ export class VerificationService {
     if (this.recovery) {
       return this.recovery
     }
-    this.recovery = recoverVerifications(this.deps).finally(() => {
+    this.reportedRecoveryFailures.clear()
+    this.recovery = this.recover(true).finally(() => {
       this.recovery = undefined
     })
     return this.recovery
+  }
+
+  private async recover(sweepOrphans: boolean): Promise<void> {
+    const report = await recoverVerifications(this.deps, {
+      sweepOrphans,
+      reportedFailures: this.reportedRecoveryFailures
+    })
+    if (report.failed) {
+      console.warn('[axiom] Verification recovery incomplete', report)
+    }
   }
 }

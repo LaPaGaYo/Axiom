@@ -85,6 +85,39 @@ it.each(['candidate_superseded', 'task_stage_changed'] as const)(
   }
 )
 
+it('cancels a missing Candidate and drains the next queued run', async () => {
+  const missing = f.store.insertVerificationRun({
+    ...f.run,
+    id: 'vrun-0',
+    candidateId: 'candidate-missing'
+  })
+  f.db.db
+    .prepare('UPDATE verification_runs SET created_at = ? WHERE id = ?')
+    .run('2000-01-01 00:00:00', missing.id)
+  expect(f.store.listVerificationRunsByStatus('QUEUED')[0].id).toBe(missing.id)
+  await service.kick()
+  expect(f.store.getVerificationRun(missing.id)).toMatchObject({
+    status: 'CANCELED',
+    claimCount: 0,
+    finishedAt: expect.any(String),
+    verdictDetail: { phase: 'canceled', reason: 'candidate_missing' }
+  })
+  expect(f.store.getVerificationRun(f.run.id)).toMatchObject({
+    status: 'RUNNING',
+    claimCount: 1,
+    verdictDetail: { phase: 'prepared' }
+  })
+  expect(events()).toMatchObject([
+    {
+      objectId: missing.id,
+      event: 'verification.canceled',
+      after: { status: 'CANCELED', reason: 'candidate_missing' }
+    },
+    { objectId: f.run.id, event: 'verification.claimed' },
+    { objectId: f.run.id, event: 'verification.prepared' }
+  ])
+})
+
 it('coalesces kicks, prepares only once outside the claim transaction and records evidence', async () => {
   const create = runtime.createManagedWorktree.getMockImplementation()!
   runtime.createManagedWorktree.mockImplementationOnce(async (args) => {

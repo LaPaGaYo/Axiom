@@ -1,6 +1,5 @@
 import type { AuditEvent } from '../../../shared/axiom-contract/mission-objects'
 import type { VerificationRun } from '../../../shared/axiom-contract/verification-params'
-import { OrchestrationError } from '../../runtime/orchestration/orchestration-error'
 import type { VerificationDependencies } from './verification-service'
 
 export function auditVerification(
@@ -30,9 +29,6 @@ export function claimVerification(
       : store.listVerificationRunsByStatus('QUEUED')
     for (const run of queued) {
       const candidate = store.getCandidate(run.candidateId)
-      if (!candidate) {
-        throw new OrchestrationError('not_found', 'Verification Candidate is missing.')
-      }
       const task = store.getTaskStage(run.taskId)
       // A restart does not move a Task backwards. Only that durable requeue may resume VERIFYING.
       const resuming =
@@ -40,8 +36,9 @@ export function claimVerification(
         run.verdictDetail.phase === 'requeued' &&
         run.verdictDetail.reason === 'restart' &&
         run.claimCount > 0
-      const reason =
-        candidate.status === 'SUPERSEDED'
+      const reason = !candidate
+        ? 'candidate_missing'
+        : candidate.status === 'SUPERSEDED'
           ? 'candidate_superseded'
           : task?.stage !== 'SUBMITTED' && !resuming
             ? 'task_stage_changed'

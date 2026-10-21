@@ -52,6 +52,7 @@ const INDEX_COLUMNS: Record<string, string[]> = {
   idx_audit_events_mission_sequence: ['mission_id', 'sequence'],
   idx_candidates_task_status: ['task_id', 'status'],
   idx_verification_runs_candidate: ['candidate_id'],
+  idx_verification_runs_status: ['status', 'created_at', 'id'],
   idx_integration_batches_mission_status: ['mission_id', 'status'],
   idx_approvals_mission_status: ['mission_id', 'status']
 }
@@ -287,6 +288,7 @@ describe('Axiom v43 side tables', () => {
     const path = filePath()
     const first = open(path)
     seedMission(first.db, 'verification')
+    first.db.exec('DROP INDEX idx_verification_runs_status')
     for (const column of [
       'runtime_epoch',
       'claim_count',
@@ -311,6 +313,17 @@ describe('Axiom v43 side tables', () => {
     }
     expect(upgraded.db.pragma('user_version', { simple: true })).toBe(45)
     expect(upgraded.db.prepare('SELECT * FROM verification_runs').get()).toEqual(expected)
+    expect(
+      upgraded.db
+        .prepare(
+          'EXPLAIN QUERY PLAN SELECT * FROM verification_runs WHERE status = ? ORDER BY created_at, id'
+        )
+        .all('RUNNING')
+    ).toEqual([
+      expect.objectContaining({
+        detail: expect.stringContaining('USING INDEX idx_verification_runs_status')
+      })
+    ])
     expect(resolveOrchestrationMigrationStartVersion(upgraded.db, 45, 44)).toBe(45)
     const schema = axiomSchema(upgraded.db)
     close(upgraded)

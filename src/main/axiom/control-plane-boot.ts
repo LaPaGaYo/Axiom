@@ -15,11 +15,7 @@ export async function startAxiomControlPlane(
   try {
     await plane.verification.recoverAtBoot()
   } catch {
-    if (generation === plane.bootGeneration) {
-      plane.started = false
-    }
-    console.warn('[axiom] Verification recovery failed; Control Plane startup stopped')
-    return
+    console.warn('[axiom] Verification recovery failed; continuing Control Plane startup')
   }
   if (!plane.started || generation !== plane.bootGeneration) {
     return

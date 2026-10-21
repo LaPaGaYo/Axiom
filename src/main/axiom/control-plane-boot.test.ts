@@ -82,6 +82,55 @@ describe('M1 Control Plane boot', () => {
     expect(kick).toHaveBeenCalledTimes(2)
   })
 
+  it('continues boot after verification recovery rejects, including consumers, timer and resume', async () => {
+    const cp = getAxiomControlPlane(runtime)
+    const missions = new MissionController(db, cp.store)
+    const { mission, goalRevision } = missions.createMission(createInput)
+    const plan = propose(missions, mission.id, goalRevision.id)
+    missions.approvePlan({ planRevisionId: plan.id, resolver: 'tester', provenance })
+    missions.startExecution(mission.id)
+    vi.spyOn(cp.verification, 'recoverAtBoot').mockRejectedValue(new Error('removal failed'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const sync = vi.spyOn(cp, 'syncConsumer')
+    const kick = vi.spyOn(cp.verification, 'kick').mockResolvedValue(undefined)
+    const schedule = vi
+      .spyOn(cp.scheduler, 'scheduleRound')
+      .mockResolvedValue({ admitted: [], skipped: [] })
+
+    expect(await startAxiomControlPlane(runtime)).toMatchObject({
+      missions: [{ id: mission.id, status: 'EXECUTING' }],
+      blocked: []
+    })
+    expect(cp.started).toBe(true)
+    expect(cp.attemptReconcileTimer).toBeDefined()
+    expect(sync).toHaveBeenCalledExactlyOnceWith(mission.id)
+    expect(cp.consumers.has(mission.id)).toBe(true)
+    expect(schedule).toHaveBeenCalledExactlyOnceWith(mission.id, 'resume')
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('Verification recovery failed'))
+    expect(kick).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(kick).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not resume a stopped boot when pending verification recovery rejects', async () => {
+    const cp = getAxiomControlPlane(runtime)
+    let reject!: (error: Error) => void
+    vi.spyOn(cp.verification, 'recoverAtBoot').mockReturnValue(
+      new Promise<void>((_resolve, rejectRecovery) => {
+        reject = rejectRecovery
+      })
+    )
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const kick = vi.spyOn(cp.verification, 'kick')
+    const boot = startAxiomControlPlane(runtime)
+    stopAxiomControlPlane(runtime)
+    reject(new Error('removal failed'))
+    await boot
+    expect(cp.started).toBe(false)
+    expect(cp.attemptReconcileTimer).toBeUndefined()
+    expect(kick).not.toHaveBeenCalled()
+  })
+
   it('requests one resume round for persisted EXECUTING Missions with READY Tasks and no bindings', async () => {
     vi.spyOn(launcher, 'createAttemptLauncher').mockReturnValue(vi.fn(async () => {}))
     const cp = getAxiomControlPlane(runtime)
