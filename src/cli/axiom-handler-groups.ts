@@ -4,6 +4,11 @@ import type { HandlerGroup } from './handler-group-manifest'
 // keeps handler-group-manifest.ts within its line limit.
 export const AXIOM_HANDLER_GROUPS: readonly HandlerGroup[] = [
   {
+    name: 'axiom-verification',
+    keys: ['verification show', 'verification list'],
+    load: async () => (await import('./handlers/axiom/verification.js')).AXIOM_VERIFICATION_HANDLERS
+  },
+  {
     name: 'axiom-message',
     keys: ['message list', 'message answer', 'message resolve'],
     load: async () => (await import('./handlers/axiom/message.js')).AXIOM_MESSAGE_HANDLERS

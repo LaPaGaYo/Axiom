@@ -82,8 +82,9 @@ export async function withFixtureMission(
     ledgerPath: string
     temp: string
     releaseWorkers: () => void
+    restart?: () => Promise<Page>
   }) => Promise<void>,
-  options: { planner?: boolean; holdWorkers?: boolean } = {}
+  options: { planner?: boolean; holdWorkers?: boolean; restart?: boolean } = {}
 ) {
   const temp = mkdtempSync(path.join(os.tmpdir(), 'axiom-fixture-mission-'))
   const executable = path.join(temp, process.platform === 'win32' ? 'codex.cmd' : 'codex')
@@ -221,6 +222,33 @@ process.exit(result.status ?? 1)
       userData,
       ledgerPath,
       temp,
+      ...(options.restart
+        ? {
+            restart: async () => {
+              if (!app) {
+                throw new Error('Fixture app is not running')
+              }
+              await session.close(app)
+              app = undefined
+              const next = await session.launch()
+              app = next.app
+              await waitForSessionReady(next.page)
+              await next.page.evaluate(
+                async ({ command, shell }) => {
+                  await window.__store?.getState().updateSettings({
+                    agentCmdOverrides: { codex: command },
+                    terminalWindowsShell: shell
+                  })
+                },
+                {
+                  command: buildFakeAgentCommandOverride(executable),
+                  shell: FAKE_AGENT_WINDOWS_SHELL
+                }
+              )
+              return next.page
+            }
+          }
+        : {}),
       releaseWorkers: () => rmSync(holdPath, { force: true })
     })
   } finally {

@@ -28,7 +28,7 @@ export function submitAttempt(p: z.infer<typeof AttemptSubmitParams>, ctx: RpcCo
 async function settleSubmission(input: z.infer<typeof AttemptSubmitParams>, ctx: RpcContext) {
   const { runtime, recordMutationReceipt } = ctx
   const db = runtime.getOrchestrationDb()
-  const { store, missions } = getAxiomControlPlane(runtime)
+  const { store, missions, verification: verificationService } = getAxiomControlPlane(runtime)
   const authorityInput = {
     runtime,
     db,
@@ -239,6 +239,9 @@ async function settleSubmission(input: z.infer<typeof AttemptSubmitParams>, ctx:
       }
     })
     return { submission, candidate, duplicate: false }
+  })
+  void verificationService.kick(mission.id).catch(() => {
+    console.warn('[axiom] Verification preparation failed', { missionId: mission.id })
   })
   // The kernel owns the retention transaction. A crash or failure here leaves a settled
   // Submission and a not_requested resource for RecoveryService (M2-08) to retain later.

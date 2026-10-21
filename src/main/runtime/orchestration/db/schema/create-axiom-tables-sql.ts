@@ -165,7 +165,12 @@ CREATE TABLE IF NOT EXISTS verification_runs (
   tool_versions TEXT NOT NULL DEFAULT '{}',
   verifier TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  runtime_epoch TEXT,
+  claim_count INTEGER NOT NULL DEFAULT 0,
+  worktree_id TEXT,
+  started_at TEXT,
+  finished_at TEXT
 );
 CREATE TABLE IF NOT EXISTS integration_batches (
   id TEXT PRIMARY KEY,
@@ -234,6 +239,7 @@ CREATE INDEX IF NOT EXISTS idx_plan_revisions_mission_status ON plan_revisions(m
 CREATE INDEX IF NOT EXISTS idx_audit_events_mission_sequence ON audit_events(mission_id, sequence);
 CREATE INDEX IF NOT EXISTS idx_candidates_task_status ON candidates(task_id, status);
 CREATE INDEX IF NOT EXISTS idx_verification_runs_candidate ON verification_runs(candidate_id);
+CREATE INDEX IF NOT EXISTS idx_verification_runs_status ON verification_runs(status, created_at, id);
 CREATE INDEX IF NOT EXISTS idx_integration_batches_mission_status ON integration_batches(mission_id, status);
 CREATE INDEX IF NOT EXISTS idx_approvals_mission_status ON approvals(mission_id, status);
 

@@ -34,6 +34,9 @@ export class AxiomStore {
   readonly insertSubmission: Submissions['insertSubmission']
   readonly getSubmissionByDispatch: Submissions['getSubmissionByDispatch']
   readonly listSubmissions: Submissions['listSubmissions']
+  readonly claimVerificationRun: VerificationRuns['claimVerificationRun']
+  readonly updateVerificationRun: VerificationRuns['updateVerificationRun']
+  readonly listVerificationRunsByStatus: VerificationRuns['listVerificationRunsByStatus']
   readonly insertVerificationRun: VerificationRuns['insertVerificationRun']
   readonly getVerificationRun: VerificationRuns['getVerificationRun']
   readonly listVerificationRuns: VerificationRuns['listVerificationRuns']
@@ -103,6 +106,9 @@ export class AxiomStore {
     this.getSubmissionByDispatch = submissions.getSubmissionByDispatch
     this.listSubmissions = submissions.listSubmissions
     const verification = verificationRunsStore(db)
+    this.claimVerificationRun = verification.claimVerificationRun
+    this.updateVerificationRun = verification.updateVerificationRun
+    this.listVerificationRunsByStatus = verification.listVerificationRunsByStatus
     this.insertVerificationRun = verification.insertVerificationRun
     this.getVerificationRun = verification.getVerificationRun
     this.listVerificationRuns = verification.listVerificationRuns

@@ -180,9 +180,9 @@ M0 通过 `src/main/axiom/namespace-rpc.ts` 的 `axiom.namespace.get` 注册命�
 
 M1 参数契约位于 `src/shared/axiom-contract/mission-params.ts`、`goal-params.ts`、`plan-params.ts`、`task-params.ts`，M1-06 已经由 `src/main/runtime/rpc/methods/axiom/{mission,goal,plan,task}.ts` 注册到 `methods/axiom.ts` / `methods/index.ts`，并接入 envelope 栅栏。CLI 实装为 `src/cli/specs/axiom-mission.ts`、`axiom-plan.ts`、`axiom-task.ts` 与 `src/cli/handlers/axiom/`（Goal 命令挂 `mission goal`）；生成 catalog、`cli-command-names.ts` 与 parity 测试已对齐。
 
-下表明确区分 M2 出口已注册/已实现的方法与后续契约占位；“未注册”不得作为当前可调用 API。`axiom.namespace.get`（M0-11，只读）继续注册。
+下表明确区分已注册/已实现的方法（含 M3-01 Verification 读取）与后续契约占位；“未注册”不得作为当前可调用 API。`axiom.namespace.get`（M0-11，只读）继续注册。
 
-| 方法 | 参数要点 | 副作用 | M | M2 最终状态 |
+| 方法 | 参数要点 | 副作用 | M | 当前状态 |
 |---|---|---|---|---|
 | `axiom.mission.create`（M1 已注册） | repo selector、targetBranch、goal、policy | `missions` + `db.createRun`（合成 coordinator）+ `goal_revisions`(ACTIVE) + `mission_policies` + `audit_events` | M | 已注册 / 已实现 |
 | `axiom.mission.show` / `list`（M1 已注册） | missionId / 过滤、cursor | M2-10 MissionSummary 含 runId；reason 为最新同状态 mission.status 审计的 after.reason（无则省略） | — | 已注册 / 已实现 |
@@ -204,7 +204,7 @@ M1 参数契约位于 `src/shared/axiom-contract/mission-params.ts`、`goal-para
 | `axiom.attempt.check`（M2-06a 已注册） | attemptId、from、wait?、timeoutMs?、type? | 同一 authority check → 内核 checkWorkerMailbox；保留 generation fence / 长轮询，不开放 ack | — | 已注册 / 已实现 |
 | `axiom.attempt.show` / `list`（M2-05 已注册） | attemptId / missionId、taskId? | M2-05 已注册：§3b fleet 状态/资源 + 执行宿主 liveness；M2-10 增加 role 与可选 submission（commit/tree/报告）；CLI `axiom attempt show/list` | — | 已注册 / 已实现 |
 | `axiom.attempt.stop` / `abandon` | attemptId、reason | 委托 `workerStop`/`workerAbandon` service | M | 未注册；不早于 M3（后续 Task 定义） |
-| `axiom.verification.list` / `show` | candidateId / verificationRunId | 无 | — | 未注册；M3 |
+| `axiom.verification.show` / `list`（M3-01） | runId / missionId、taskId?、candidateId?、status? | 只读 VerificationRunView：全部 run 字段 + Candidate commit/tree + phase；缺失 run/Candidate → not_found；CLI verification show/list | — | 已注册 / 已实现 |
 | `axiom.verification.resolveReview` | verificationRunId、verdict(PASS/FAIL)、reviewer、evidence | 仅 `INCONCLUSIVE` 可收敛 | M | 未注册；M3 |
 | `axiom.verification.rerun` | candidateId、reason | 新 `verification_runs`(QUEUED) | M | 未注册；M3 |
 | `axiom.integration.queue` / `show` | missionId / batchId | 无 | — | 未注册；M4 |
@@ -226,6 +226,8 @@ Envelope 字段（`RpcRequest`，`rpc/core.ts:44`）：`orchestrationContractVer
 M1 响应契约见 `src/shared/axiom-contract/{mission,goal,plan,task}-params.ts`：单对象使用 `mission` / `goalRevision` / `planRevision` / `task`，列表使用 `missions` / `planRevisions` / `tasks`；mutation 另有内核 `mutation` 收据。Mission 返回 `MissionSummary`，Task 返回 `TaskListItem`（stage 是权威，orcaStatus 仅是执行投影）。`src/main/axiom/control-plane.ts` 按 `OrchestrationDb` WeakMap 惰性缓存 store/controller/recovery，M1-08 加入消费者生命周期；`control-plane-boot.ts` 在桌面 `src/main/startup/main-process-runtime-service.ts` 与 daemon `src/main/orcad/orcad-entry.ts` 启动/停止，不改变 runtime 类。Goal 激活仅允许 ANALYZING 或 EXECUTING，后者进入 REPLANNING 并记录 MAJOR_REPLAN；替换计划的批准仍是 M5。M2 已接启动与 cancellation stop/abandon/release；`MissionSummary.runId` 来自 missions.run_id，reason 来自最新匹配当前状态的 mission.status 审计（M2-10）。
 
 M2-03 已注册 `axiom.policy.show`（read）/ `axiom.policy.update`（mutation）：params 在 `axiom-contract/policy-params.ts`，method 在 `rpc/methods/axiom/policy.ts`，聚合 AXIOM_METHODS、mutation fence/receipts 与 generated catalog 同步。CLI `mission policy show/update` 同时注册在 specs、handlers 与 handler-group-manifest 的 axiom-mission 分组，无新顶层名。budget 请求返回 approval_required；无可选 provider 返回 no_eligible_provider，两者透传 runtime error code。
+
+M3-01 的 verification-params.ts 在 shared 定义 run/view/params/response；methods/axiom/verification.ts 聚合进 AXIOM_METHODS，catalog 同步生成；show/list 加入 exhaustive reads，不进 mutation fence。CLI specs/handler、axiom-verification group、formatter 与 startup/parity 名称同步。
 
 ### 4d. 现有命名冲突清单（`rg` 于 `src/main/runtime/rpc/methods/` 与 `src/main/startup/cli-command-names.ts` 核实）
 
@@ -276,7 +278,7 @@ M2-11 组合出口固定错误优先级：forged → dispatch_capability_invalid
 
 **为什么不改现有 CHECK 枚举**：`createTables`（`db/schema/create-tables.ts`）在每次打开时执行 `CREATE TABLE IF NOT EXISTS`，`IF NOT EXISTS` 不会放宽已有表的 CHECK（`migrate-v39.ts` 注释）；放宽 CHECK 只能重建表并复制（v39 对 `worker_terminal_archives` 的做法）。而 `resolveOrchestrationMigrationStartVersion`（`orchestration/orchestration-schema-version-skew.ts:184`）在 `storedVersion > schemaVersion` 时原样打开数据库——旧二进制会读到新枚举值，`LEGAL_TRANSITIONS[entity][state]` 查不到即崩溃，`TaskStatus` 等联合类型也失真。上游先例是 side table：`attempt_observation_facts` 的 DDL 注释 "Attempt evidence stays additive so old Task/Dispatch/worker CHECK enums remain wire-compatible"；`hasCompletePostV6Schema` 只探测列/索引/`messages` 的 `'question'`，不探测新表，因此新表对降级探针透明。
 
-**实现文件**：`src/main/runtime/orchestration/db/schema/create-axiom-tables-sql.ts` 的 `createAxiomTablesSql()` 定义以下 17 张表、9 个查询索引和 3 个删除触发器；`db/schema/create-tables.ts` 在 core / graph DDL 之后、迁移之前执行它。`db/schema/migrate-v43.ts` 的 `migrateV43(this, current)` 在 `current >= 43` 时早退，否则复用同一索引 / 触发器 SQL；`db/schema/migrate.ts` 在 v42 之后调用它，`db/contract-constants.ts` 的 `SCHEMA_VERSION = 44`。fresh DB 与旧 v42 文件都由每次打开时的 `CREATE TABLE IF NOT EXISTS` 建表；M2-03 的 migrate-v44.ts 在 v43 后运行，对 agent_specs.spec 与 mission_policies.routing 使用 hasColumn 守卫、仅 ALTER TABLE ADD COLUMN TEXT NOT NULL DEFAULT '{}'；fresh DDL 同步包含两列。版本探针从 v44 起检查这两列，不改变 v43 或 future-version 降级路径。
+**实现文件**：`src/main/runtime/orchestration/db/schema/create-axiom-tables-sql.ts` 的 `createAxiomTablesSql()` 定义以下 17 张表、9 个查询索引和 3 个删除触发器；`db/schema/create-tables.ts` 在 core / graph DDL 之后、迁移之前执行它。`db/schema/migrate-v43.ts` 的 `migrateV43(this, current)` 在 `current >= 43` 时早退，否则复用同一索引 / 触发器 SQL；`db/schema/migrate.ts` 在 v42 之后调用它，`db/contract-constants.ts` 的 `SCHEMA_VERSION = 45`。fresh DB 与旧 v42 文件都由每次打开时的 `CREATE TABLE IF NOT EXISTS` 建表；M2-03 的 migrate-v44.ts 在 v43 后运行，对 agent_specs.spec 与 mission_policies.routing 使用 hasColumn 守卫、仅 ALTER TABLE ADD COLUMN TEXT NOT NULL DEFAULT '{}'；fresh DDL 同步包含两列。版本探针从 v44 起检查这两列。M3-01 的 migrate-v45.ts 同样以 hasColumn 守卫追加 verification_runs 的 runtime_epoch TEXT、claim_count INTEGER NOT NULL DEFAULT 0、worktree_id TEXT、started_at TEXT、finished_at TEXT；fresh DDL 与五条 v45 版本探针同步。旧行保留；重开幂等；不改变 v43/v44 或 future-version 降级路径。
 
 Axiom 的 status / stage / kind 等可扩展枚举均为 `TEXT NOT NULL`，不加 CHECK，由 `axiom-contract` 在写入边界校验；唯一例外是 D11 永久固定的 `nested_worker_max_depth = 1`；可空的 `missions.previous_status` / `task_stages.previous_stage` 分别保存 PAUSED / BLOCKED 的返回状态。所有列名用 snake_case，时间戳用 `TEXT NOT NULL DEFAULT (datetime('now'))`，JSON 用 `TEXT`（集合 / 对象默认 `[]` / `{}`）；有生命周期变化的行带 `updated_at`，不可变证据只带 `created_at`。
 
@@ -298,7 +300,7 @@ M1-04～M1-08 的业务写入使用七张表：`missions`、`goal_revisions`、`
 | `candidates` | `id PK`, `dispatch_id`, `task_id`, `commit_sha`, `tree_sha`, `status`(`ACTIVE` 或 `SUPERSEDED`), `superseded_by`, `created_at` | `UNIQUE(task_id, commit_sha)` |
 | `artifacts` | `id PK`, `mission_id`, `kind`, `sha256`, `size_bytes`, `media_type`, `related`(JSON ids), `created_by` | M2-02 写/读；内容在 `<userData>/axiom/artifacts/<sha256>` |
 | `decisions` | `id PK`, `mission_id`, `status`, `title`, `options`(JSON), `resolution`, `authority`, `provenance`(JSON) | M2-02 按 Mission/status 读取；`supersedes_id` 列已建；Decision 写入者后续接入 |
-| `verification_runs` | `id PK`, `candidate_id`, `task_id`, `status`, `verdict_detail`(JSON), `commands`(JSON), `tool_versions`(JSON), `verifier` | M2-07 只入 QUEUED，M3 消费；证据引用走 artifacts |
+| `verification_runs` | `id PK`, `candidate_id`, `task_id`, `status`, `verdict_detail`(JSON), `commands`(JSON), `tool_versions`(JSON), `verifier`, `runtime_epoch TEXT`, `claim_count INTEGER NOT NULL DEFAULT 0`, `worktree_id TEXT`, `started_at TEXT`, `finished_at TEXT`（后五列 v45，除 claim_count 外可空） | M2-07 入 QUEUED；M3-01 CAS 领取、独立 worktree 准备、启动重排队；`idx_verification_runs_status(status,created_at,id)` 支持领取与周期恢复；phase / cleanupPending / evidenceArtifactIds 在 verdict_detail；证据内容走 artifacts |
 | `integration_batches` | `id PK`, `mission_id`, `base_commit`, `candidate_ids`(JSON，V1 长度 1), `status`, `merge_commit`, `conflicts`(JSON), `approval_id` | 单一集成权威串行写 |
 | `approvals` | `id PK`, `mission_id`, `action_kind`, `inputs_hash`, `risk`, `status`, `expires_at`, `resolver` | 已建 `requested_by`, `resolution`, `outcome`(JSON，执行结果), `executed_at` |
 | `mission_policies` | `mission_id PK`, `concurrency_limit`, `budget`(JSON), `readiness_threshold`, `approval_rules`(JSON), `verification_rules`(JSON), `nested_worker_max_depth`(=1), `unverifiable_tolerance_minutes INTEGER NOT NULL DEFAULT 30`, `updated_at`, `routing TEXT NOT NULL DEFAULT '{}'`（v44） | M2-03 provider 偏好/禁用/高风险 tier/model；policy RPC 仅更新 routing/concurrency，budget 修改拒绝至 M4 |

@@ -26,6 +26,8 @@ describe('Axiom RPC namespace', () => {
       'axiom.plan.show',
       'axiom.task.list',
       'axiom.task.show',
+      'axiom.verification.show',
+      'axiom.verification.list',
       'axiom.artifact.read',
       'axiom.artifact.list',
       'axiom.policy.show'

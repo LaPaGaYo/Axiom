@@ -29,6 +29,7 @@ describe('Attempt submission settlement', () => {
     })
     const { candidate, submission, duplicate } = await accepted()
     expect(duplicate).toBe(false)
+    expect(f.kick).toHaveBeenCalledExactlyOnceWith(f.mission.id)
     expect(candidate).toMatchObject({
       status: 'ACTIVE',
       commitSha: 'a'.repeat(40),
@@ -88,6 +89,7 @@ describe('Attempt submission settlement', () => {
     expect(await accepted()).toEqual({ ...first, duplicate: true })
     expect(f.store.listCandidates(f.mission.id)).toEqual(before)
     expect(f.store.listSubmissions(f.mission.id)).toHaveLength(1)
+    expect(f.kick).toHaveBeenCalledTimes(1)
     expect(f.snapshotGit).toHaveBeenCalledTimes(1)
     expect(f.retain).toHaveBeenCalledTimes(1)
     expect(f.db.getUnreadRunMailbox(f.mission.runId)).toHaveLength(1)
@@ -139,6 +141,7 @@ describe('Attempt submission settlement', () => {
     })
     expect(await f.submit()).toMatchObject({ ok: false, error: { code: 'inactive_dispatch' } })
     expect(f.snapshot()).toEqual(before!)
+    expect(f.kick).not.toHaveBeenCalled()
     expect(f.retain).not.toHaveBeenCalled()
     expect(f.store.listCandidates(f.mission.id)).toEqual([])
     expect(f.store.listSubmissions(f.mission.id)).toEqual([])

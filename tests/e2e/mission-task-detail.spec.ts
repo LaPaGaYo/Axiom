@@ -48,7 +48,7 @@ test('M2-10: Mission Home and Task detail project three submitted fixture Attemp
     // Task ids are kernel-generated; select the first submitted row, not a random DEFINED Task.
     const row = tasks
       .locator('tbody tr')
-      .filter({ has: page.locator('[data-task-stage="SUBMITTED"]') })
+      .filter({ has: page.locator('[data-task-stage="SUBMITTED"], [data-task-stage="VERIFYING"]') })
       .first()
     const taskId = await row.getAttribute('data-task-id')
     await row.click()

@@ -1,5 +1,13 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import { spawnSync } from 'node:child_process'
+import { splitWorktreeIdForFilesystem } from '../../src/shared/worktree/id'
+import {
+  VerificationListResponseSchema,
+  VerificationResponseSchema
+} from '../../src/shared/axiom-contract/verification-params'
+import { TaskListResponseSchema } from '../../src/shared/axiom-contract/task-params'
+import { inspectFixtureMission } from './helpers/axiom-fixture-inspection'
 import { performance } from 'node:perf_hooks'
 import { z } from 'zod'
 import { test, expect } from './helpers/orca-app'
@@ -22,7 +30,8 @@ const Binding = z.object({
   task_id: z.string(),
   dispatch_id: z.string(),
   seq: z.number(),
-  branch: z.string()
+  branch: z.string(),
+  worktree_id: z.string()
 })
 function inspect(userData: string, missionId: string) {
   const db = new Database(path.join(userData, 'orchestration.db'), {
@@ -36,7 +45,7 @@ function inspect(userData: string, missionId: string) {
         .parse(
           db
             .prepare(
-              'SELECT task_id, dispatch_id, seq, branch FROM attempt_bindings WHERE mission_id = ? AND dispatch_id IS NOT NULL ORDER BY task_id, seq'
+              'SELECT b.task_id, b.dispatch_id, b.seq, b.branch, w.worktree_id FROM attempt_bindings b JOIN worker_dispatches w ON w.dispatch_id = b.dispatch_id WHERE b.mission_id = ? AND b.dispatch_id IS NOT NULL ORDER BY b.task_id, b.seq'
             )
             .all(missionId)
         ),
@@ -105,18 +114,41 @@ test('M2-07: three fixture Workers submit immutable Candidates and reject a forg
   await withFixtureMission(
     testInfo,
     source,
-    async ({ clone, userData, ledgerPath, temp, mission }) => {
+    async ({ clone, userData, ledgerPath, temp, mission, restart }) => {
       const baseRef = `refs/heads/axiom/integration/${mission.id}`
       const base = git(['-C', clone, 'rev-parse', baseRef])
       const baseTree = git(['-C', clone, 'rev-parse', `${baseRef}^{tree}`])
       expect(base).toBe(FIXTURE_COMMIT)
       await expect
+        .poll(() => inspect(userData, mission.id).submissions.length, { timeout: 120_000 })
+        .toBe(3)
+      await expect
         .poll(
-          () => inspect(userData, mission.id).tasks.filter((t) => t.stage === 'SUBMITTED').length,
-          { timeout: 120_000 }
+          () =>
+            inspect(userData, mission.id).verification.filter(
+              (run) => run.status === 'RUNNING' && run.verdictDetail.phase === 'prepared'
+            ).length,
+          { timeout: 60_000 }
         )
         .toBe(3)
       const settled = inspect(userData, mission.id)
+      const assertWorktree = (run: (typeof settled.verification)[number], claim: number) => {
+        const candidate = settled.candidates.find((c) => c.id === run.candidateId)!
+        expect(run.worktreeId).toBeTruthy()
+        const worktreePath = splitWorktreeIdForFilesystem(run.worktreeId!)!.worktreePath
+        expect(git(['-C', worktreePath, 'rev-parse', 'HEAD'])).toBe(candidate.commitSha)
+        expect(git(['-C', worktreePath, 'rev-parse', 'HEAD^{tree}'])).toBe(candidate.treeSha)
+        const symbolic = spawnSync('git', ['-C', worktreePath, 'symbolic-ref', '-q', 'HEAD'], {
+          encoding: 'utf8',
+          timeout: 30_000
+        })
+        expect(symbolic.error).toBeUndefined()
+        expect(symbolic.status).toBe(1)
+        expect(git(['-C', clone, 'rev-parse', `refs/heads/axiom/verify/${run.id}/${claim}`])).toBe(
+          candidate.commitSha
+        )
+        return worktreePath
+      }
       expect(settled.bindings).toHaveLength(3)
       expect(settled.candidates).toHaveLength(3)
       expect(settled.submissions).toHaveLength(3)
@@ -139,10 +171,34 @@ test('M2-07: three fixture Workers submit immutable Candidates and reject a forg
         expect(submission.report.artifacts).toHaveLength(1)
         expect(settled.verification.find((v) => v.candidateId === candidate.id)).toMatchObject({
           taskId: binding.task_id,
-          status: 'QUEUED',
-          verifier: 'VerificationService'
+          status: 'RUNNING',
+          verifier: 'VerificationService',
+          claimCount: 1,
+          verdictDetail: expect.objectContaining({ phase: 'prepared' })
         })
       }
+      const firstPaths = settled.verification.map((run) => {
+        expect(run.worktreeId).not.toBe(
+          settled.bindings.find((b) => b.task_id === run.taskId)!.worktree_id
+        )
+        return assertWorktree(run, 1)
+      })
+      const verifying = TaskListResponseSchema.parse(
+        cli(userData, ['task', 'list', '--mission', mission.id, '--stage', 'VERIFYING'])
+      ).tasks
+      expect(verifying.map((t) => t.id).sort()).toEqual(
+        settled.verification.map((r) => r.taskId).sort()
+      )
+      const views = VerificationListResponseSchema.parse(
+        cli(userData, ['verification', 'list', '--mission', mission.id])
+      ).runs
+      expect(views.map((r) => r.id).sort()).toEqual(settled.verification.map((r) => r.id).sort())
+      expect(views.every((r) => r.status === 'RUNNING' && r.phase === 'prepared')).toBe(true)
+      expect(
+        VerificationResponseSchema.parse(
+          cli(userData, ['verification', 'show', '--run', views[0]!.id])
+        ).run
+      ).toEqual(views[0])
       const attempts = AttemptListResponseSchema.parse(
         cli(userData, ['attempt', 'list', '--mission', mission.id])
       ).attempts
@@ -177,9 +233,46 @@ test('M2-07: three fixture Workers submit immutable Candidates and reject a forg
       expect(inspect(userData, mission.id)).toEqual(settled)
       expect(git(['-C', clone, 'rev-parse', baseRef])).toBe(base)
       expect(git(['-C', clone, 'rev-parse', 'refs/heads/main'])).toBe(base)
+      if (!restart) {
+        throw new Error('Restart was not enabled for verification fixture')
+      }
+      await restart()
+      await expect
+        .poll(
+          () =>
+            inspect(userData, mission.id).verification.filter(
+              (run) =>
+                run.status === 'RUNNING' &&
+                run.verdictDetail.phase === 'prepared' &&
+                run.claimCount === 2
+            ).length,
+          { timeout: 60_000 }
+        )
+        .toBe(3)
+      const recovered = inspect(userData, mission.id)
+      const audits = inspectFixtureMission(userData, mission.id).audits
+      for (const run of recovered.verification) {
+        const before = settled.verification.find((old) => old.id === run.id)!
+        expect(run.runtimeEpoch).not.toBe(before.runtimeEpoch)
+        expect(run.worktreeId).not.toBe(before.worktreeId)
+        assertWorktree(run, 2)
+        expect(audits.filter((a) => a.object_id === run.id).map((a) => a.event)).toEqual([
+          'verification.claimed',
+          'verification.prepared',
+          'verification.requeued',
+          'verification.claimed',
+          'verification.prepared'
+        ])
+      }
+      for (const worktreePath of firstPaths) {
+        expect(existsSync(worktreePath)).toBe(false)
+      }
+      expect(recovered.candidates).toEqual(settled.candidates)
+      expect(recovered.submissions).toEqual(settled.submissions)
       console.log(
-        `[M2-07] ${JSON.stringify({ missionId: mission.id, submitted: 3, activeCandidates: 3, submissions: 3, queuedVerificationRuns: 3, completedDispatches: 3, candidateCommits: settled.candidates.map((c) => c.commitSha), integrationBaseUnchanged: base, forgedSubmit: 'dispatch_capability_invalid', totalMs: performance.now() - started })}`
+        `[M2-07] ${JSON.stringify({ missionId: mission.id, submitted: 3, activeCandidates: 3, submissions: 3, runningVerificationRuns: 3, requeuedAfterRestart: 3, completedDispatches: 3, candidateCommits: settled.candidates.map((c) => c.commitSha), integrationBaseUnchanged: base, forgedSubmit: 'dispatch_capability_invalid', totalMs: performance.now() - started })}`
       )
-    }
+    },
+    { restart: true }
   )
 })

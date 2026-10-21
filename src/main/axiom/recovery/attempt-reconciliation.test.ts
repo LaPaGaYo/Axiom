@@ -156,7 +156,7 @@ describe('Attempt recovery', () => {
     })
     await recovery.reconcileAttempts()
     expect(worker()?.state).toBe('succeeded')
-    expect(stage()?.stage).toBe('SUBMITTED')
+    expect(stage()?.stage).toBe('VERIFYING')
     expect(audits().filter((e) => e.event === 'attempt.failed')).toEqual([])
   })
   it('persists one unverifiable clock across ticks and never admits a duplicate', async () => {
@@ -452,7 +452,7 @@ describe('Attempt recovery', () => {
       expect(audits()).toEqual(after)
     }
   )
-  it('retains a SUBMITTED terminal left not_requested by a crash after settlement', async () => {
+  it('retains a submitted terminal after verification claims, following a crash after settlement', async () => {
     vi.spyOn(snapshots, 'snapshotCandidate').mockResolvedValue({
       commitSha: 'a'.repeat(40),
       treeSha: 'b'.repeat(40),
@@ -471,6 +471,7 @@ describe('Attempt recovery', () => {
     expect(f.db.getWorkerTerminalResourceByOwner(f.t01.attemptId)?.release_state).toBe(
       'not_requested'
     )
+    expect(stage()?.stage).toBe('VERIFYING')
     await recovery.reconcileAttempts()
     expect(f.db.getWorkerTerminalResourceByOwner(f.t01.attemptId)?.release_state).toBe('retained')
     expect(audits().filter((e) => e.event === 'attempt.terminal_retained')).toMatchObject([

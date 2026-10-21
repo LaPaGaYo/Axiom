@@ -21,4 +21,5 @@ export const CURRENT_CONTRACT_VERSION = ORCHESTRATION_CONTRACT_VERSION
 // v42: structured-session Orca session id columns.
 // v43: Axiom Control Plane side tables (missions … audit_events).
 // v44: canonical AgentSpec and Mission routing policy JSON.
-export const SCHEMA_VERSION = 44
+// v45: durable VerificationService claims and isolated worktree ownership.
+export const SCHEMA_VERSION = 45

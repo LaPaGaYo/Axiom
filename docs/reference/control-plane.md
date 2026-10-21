@@ -7,7 +7,7 @@
 
 Control Plane 决定并持久化 Mission、版本化 Goal/Plan、Task stage 与依赖 readiness；模型只提出建议，renderer 只展示投影。顶层对象与 RPC 使用 Mission / `axiom.*`（D1）。用户代码所在对象称 repository；Orca `Project` 仍是仓库/provider 身份类型。
 
-M2 已提供 Planner 提案、人工审批、Scheduler admission、Worker 通道、Candidate/Submission 结算、Attempt 恢复与 UI 投影；终点为 Task `SUBMITTED` / VerificationRun `QUEUED`。`mission start` 创建集成基线并经 Scheduler admission 启动 Worker；M1 出口测试通过禁止全部 provider 保留 Attempt-free 语义。它不是 LLM coordinator、第二个终端/worktree 管理器，也不复活退役的 `coordinator.ts`。
+M2 已提供 Planner 提案、人工审批、Scheduler admission、Worker 通道、Candidate/Submission 结算、Attempt 恢复与 UI 投影；M3-01 接入 VerificationService，Submission 后 Task 推进到 `VERIFYING`，VerificationRun 为 `RUNNING / prepared`（尚无 verdict）。`mission start` 创建集成基线并经 Scheduler admission 启动 Worker；M1 出口测试通过禁止全部 provider 保留 Attempt-free 语义。它不是 LLM coordinator、第二个终端/worktree 管理器，也不复活退役的 `coordinator.ts`。
 
 Execution Kernel 继续拥有 Run、Orca Task、dispatch、PTY、进程、worktree、消息投递和收据。Axiom 经 `OrchestrationDb` 与现有 service/RPC 边界复用这些原语。权威 Mission 状态在 `missions.status`；权威 Task stage 在 `task_stages.stage`（D2）；`tasks.status` 只是执行投影。Mission 的 DAG 在 `mission_task_edges`，Orca `tasks.deps=[]`（D10）。
 
@@ -57,7 +57,7 @@ Execution Kernel 继续拥有 Run、Orca Task、dispatch、PTY、进程、worktr
 | `candidates` | M2-07 store 已接入：Control Plane 固定 commit/tree；ACTIVE → SUPERSEDED + superseded_by；Task/commit 唯一 |
 | `artifacts` | M2-02 已写/读：Mission、kind、sha256、size、media type、related ids、createdBy；内容只存 `<userData>/axiom/artifacts/<sha256>` |
 | `decisions` | M2-02 `listDecisions({ missionId, status })` 只读；ContextBuilder 包含 ACCEPTED 的 title/resolution；Decision service/RPC 写入者仍待后续 |
-| `verification_runs` | M2-07 只入 QUEUED（verifier=VerificationService）；M3 才消费队列 |
+| `verification_runs` | M2-07 入 QUEUED；M3-01 事务领取、独立 worktree 准备与重启重排队；v45 保存 runtime_epoch、claim_count、worktree_id、started_at、finished_at |
 | `integration_batches` | 表已建；M4 串行集成使用 |
 | `approvals` | 表已建；M4 ApprovalGateway 使用，不复用 decision gate |
 
@@ -223,7 +223,7 @@ M2 之后：D58 解决真实 Planner 通道/目录信任与权限映射；M3 复
 | d | live、未命中 c′ 且非 stop_unknown：通常不动；now-createdAt 大于 Task spec.budget.maxRuntimeMinutes（无则 policy.budget.maxRuntimeMinutes，无 cap 不限）时 stopLocalWorker | stopped：attempt.stopped + settlement(runtime_budget_exceeded)；stop_unknown：只在首次停止结果写 attempt.stop_unknown，保持 RUNNING；下一 tick 无论宿主观测如何均走 e |
 | e | unverifiable 或 worker stop_unknown：写 liveness facet 的变化；stop_unknown 固定记 `{status: unverifiable, reason: stop_unknown}`；到 unverifiableToleranceMinutes 后先 put evidence，再 abandonWorkerDispatch | attempt.unverifiable；超时 attempt.abandoned（含 evidenceArtifactId、disposition）+ settlement(unverifiable_tolerance_exceeded)；等待期间不重复 stop、不启动新 Attempt |
 | f | RUNNING、最新 binding.dispatchId=null，超过两倍默认 readiness timeout（当前 120,000ms） | attempt.launch_pending_orphan + settlement；较新 pending 不动 |
-| g | SUBMITTED 且 terminal resource.release_state=not_requested：retainWorkerTerminalResource | attempt.terminal_retained / attempt.terminal_retain_failed，沿用 M2-07 的 taskId/submissionId/candidateId/retainDisposition；不改变 stage |
+| g | 有持久 Submission 且 terminal resource.release_state=not_requested：retainWorkerTerminalResource；M3-01 领取后 Task 已 VERIFYING 仍补 retain | attempt.terminal_retained / attempt.terminal_retain_failed，沿用 M2-07 的 taskId/submissionId/candidateId/retainDisposition；不改变 stage |
 | h | Task CANCELED 或 Mission 终态：stop_unknown 无论宿主观测如何均 abandonWorkerDispatch；其他活跃且 live/exact 用 stopLocalWorker（start_unknown 仍可 stop），否则 abandonWorkerDispatch；结算后 releaseLocalWorker | attempt.stopped / attempt.abandoned，reason=mission_canceled；从 stop_unknown 放弃时另记 priorStop=stop_unknown 与放弃时折叠的 liveness；after.release 保留 requested completion / retained / already_released 真实收据；stage 不再变；已提交 Candidate 不提前释放 |
 
 基础 liveness 与 `axiom.attempt.show/list` 共用 `foldAttemptLiveness`：live/exited 原样，unattached/missing/identity_changed/unverifiable → unverifiable。c′ 只在 Recovery 折叠额外的执行宿主证明；不改 `inspectWorkerTerminal`、`foldAttemptLiveness`、show/list 或 fleet 投影，不以 title、hook、Agent activity 推断死亡。`starting / start_unknown / stopping / stop_unknown` 与终态 worker 不满足 c′ 的 ready 条件。访问器仅在主进程内读取 controller `confirmForegroundProcess`：daemon 请求经 `Session.confirmForegroundProcess()` 到 `foreground-process-tracker.confirmForegroundProcess`，用 `resolveAgentForegroundProcessWithAvailability(fresh)` 新鲜解析进程表，node-pty 的前台进程名作 fallback；controller 没有该方法时才用 `getForegroundProcess`。结果必须为非空字符串，去除首尾空白与 login-shell 名的前导 `-` 后由 `isShellProcess` 判为 shell；null、非 shell、无 live PTY、无 controller、异常或超过 `PTY_CONTROLLER_LIST_TIMEOUT_MS` 均返回 false，不用旧结果补证明。daemon 的 `confirmShellForeground` 回答 recovery barrier 的 settled owner（alternate-screen dead-TUI recovery），不是进程退出证明；M2-12 attempt 2 明确不再调用它。两次宿主 IO await 结束后重新读取 Task、Mission、worker 的持久权威，Submission / cancel / 新 Attempt 的栅栏仍优先。
@@ -240,7 +240,7 @@ agent 退出后到下一次成功 reconcile（≤ 一个 60 s 间隔），`attem
 
 **stop_unknown 的内核边界（M2-08 Attempt 2）**：beginWorkerStop 拒绝第二次 stop，受支持的退出路径是 abandon；这与 verifier 核对的上游 Orca `ce2d60834c` 一致，不需要改内核或增加生命周期边。取消时下一 tick 直接 abandon（无 evidence Artifact），记录 priorStop、放弃时的宿主 liveness 与 release 收据；RUNNING 时无论宿主观测如何，按 e 等待 tolerance 后带 evidence abandon。abandon 只结束执行权威，不宣称进程退出；possibly-live 资源仍由内核保留，通常 release 为 retained / identity_unproven。旧 runtime stranded stopping 归一化后遵守同一规则；同 runtime 正在 stopping 的调用仍拥有结果，恢复不抢占。后续 tick 不重复 attempt.stop_unknown，取消审计重放保留最初的 priorStop/liveness，不因宿主观测变化重复记录。`.axiom-work/reports/M2-08-1.md` 保留为历史证据，其 scope-gap 判断由本规则取代；修复与验证记录见 `.axiom-work/reports/M2-08-2.md`。
 
-M2 之后：M3 接 Verification 队列重驱与失败证据；M4 扩展 Integration/Approval 恢复，D58 的新通道必须保持相同 liveness 语义。
+M3-01 的 VerificationService 在 Mission recovery 后、首次 kick 前尝试验证队列重驱，逐项失败不阻止启动（见 Verification 节）；既有 60 s reconcile 同时触发 verification.kick，重试未完成的清理。M3-02/04 接检查与失败证据；M4 扩展 Integration/Approval 恢复。D58 的新通道必须保持相同 liveness 语义。
 
 ## 5. 合成 session party 与 Run 绑定（D14）
 
@@ -314,7 +314,27 @@ Submission 的 summary 仍完整保存（≤4,000）；SUBMISSION 邮件沿用 M
 
 M2-07 宿主 spec 为 `tests/e2e/mission-attempt-submit.spec.ts`（需要 AXIOM_FIXTURE_REPO），D49 provider 解析既有 Artifact 配方取得 Mission/Task id；先记录 preamble ledger，再跑冻结 retry/attempt-1/succeed stub；在 REPORT.md 副本尾部追加 Mission/Task/Attempt 归属后上传、submit。冻结 stub 的报告内容原本完全相同，归属附记防止内容去重命中另一 Task 的 related 元数据；不改变 fixture patch 或场景。设置 ORCA_E2E_CLI_ENTRY 的 fixture helper 启用该后半段；旧 launch spec 不设置它，仍测试 RUNNING 与重启，原有断言不放宽。M2-11 仅对新 exit flow 设置一次性 crash marker；已有两条 spec 的宿主通过记录见 `.axiom-work/verifications/M2-10-1.md`，本次仍需回归。
 
-M2 之后：M3 在独立 verification worktree 消费 QUEUED、记录 verdict；M4 才集成/释放 Candidate。D49 提交不构成真实 provider 认证。
+M3-01 在结算事务返回后触发 verification.kick(missionId)，拒绝/重复提交不触发；M3-02 才执行检查、记录 verdict；M4 才集成/释放 Candidate。D49 提交不构成真实 provider 认证。
+
+### Verification（M3-01）
+
+`verification/verification-service.ts` 是确定性的独立消费者；不启动模型、不采信 Worker 的 checksRun。`kick(missionId?)` 在整个 Control Plane 内合并为一个串行 drain；Mission 参数是触发提示，队列从 DB 读取，直到没有可领取的 run。三个入口：Submission 的 `axiom_submit` 事务返回后（拒绝/重复不触发）、启动恢复完成后、既有 60 s Attempt reconcile closure。没有新的 timer 或队列表。
+
+`store.transaction('verification_claim', …)` 按 created_at/id 读取最老 QUEUED：Candidate ACTIVE 且 Task SUBMITTED 时，CAS `UPDATE … WHERE id=? AND status='QUEUED'` 的 changes 必须为 1，然后写 runtimeEpoch、claimCount+1、startedAt、`{phase:'claimed',claim}`；同事务由 MissionController 推 `SUBMITTED → VERIFYING`，写 `verification.claimed`。CAS 失败不写 stage/audit。SUPERSEDED Candidate、Candidate 行缺失或 stage 不符的 QUEUED run 变 CANCELED（reason=candidate_superseded/candidate_missing/task_stage_changed）并写 `verification.canceled`，继续领取后续 run；缺失 Candidate 不抛异常堵住队列。重启续跑例外：只有 phase=requeued/reason=restart、claimCount>0 的 run 可以继续其已 VERIFYING 的 Task，不回退或重复推进 Task stage。
+
+准备在事务外执行：从 Candidate 的 Attempt binding.branch 创建 `axiom/verify/<runId>/<claimCount>`，name=`verify-<taskId>-<claimCount>`。只调用 runtime.createManagedWorktree，路径由 runtime 决定；runHooks=false、setupDecision=skip、awaitTerminalProvisioning=false、observeSetupCompletion=false、activate=false，lineage.noParent=true，orchestrationContext 记录 Mission 的 Orca runId 与 taskId（D64 2026-10-20 修订）。返回后立即持久化 worktree_id，再以 gitOptionsForWorktree/splitWorktreeIdForFilesystem 在该 worktree checkout --detach Candidate.commitSha、branch -f 同一验证分支到该 commit；校验 HEAD、HEAD^{tree}、分支 ref 与 detached 状态。checkout 禁用仓库 hooks。绝不修改 Attempt worktree，不 reset/clean。
+
+成功保持 RUNNING，verdictDetail 为 `{phase:'prepared',claim,worktreeId,candidateCommitSha,candidateTreeSha,baseline:{branch},evidenceArtifactIds}`；内容寻址 Artifact kind=evidence、mediaType=application/json、createdBy=VerificationService、related=[runId,taskId,candidateId] 保存准备事实、runtimeEpoch 和时间戳，再事务写 `verification.prepared`。baseline.branch 是 Attempt 分支名，不能当作 M3-03 diff 的基线 commit。准备失败先回收已创建的 worktree，再 INCONCLUSIVE/finishedAt，`phase=prepare_failed`、reason=candidate_missing/candidate_mismatch/worktree_unavailable、脱敏 detail 与 `verification.inconclusive`；Task 仍 VERIFYING。回收失败保留 worktree_id/cleanupPending，后续 kick 与下一启动重试，不能把删除失败伪装成已回收。
+
+每个 plane 的 runtimeEpoch=`epoch_<UUID>`。`startAxiomControlPlane` 在同步 Mission recovery 后 await `verification.recoverAtBoot()`，之后才 kick；即使 recovery 拒绝也仅 console.warn，继续安装 reconcile timer、同步消费者并调度 resume，保留 bootGeneration 的停止/重启栅栏。旧 epoch 的 RUNNING run（新进程中的所有 RUNNING）先 removeManagedWorktree(`id:<recordedId>`,{force:true})，只容忍明确的 already-gone，再 CAS 为 QUEUED，清空 worktree_id/runtime_epoch，写 `{phase:'requeued',reason:'restart',previousClaim}` 与 `verification.requeued`；历史 Artifact/audit 保留。
+
+恢复逐项隔离失败：worktree 删除失败的 run 保持 RUNNING、旧 runtimeEpoch 与 worktree_id，保留原 phase 数据并设 cleanupPending=true；同一 boot generation 每个 run 只写一次 `verification.recovery_failed {worktreeId,reason:'worktree_removal_failed'}`，不记录原始 Git/runtime 输出。只有审计去重集合在进程内，重试资格与 worktree 归属均由 DB 决定。每次 kick 在 drain QUEUED 前经两次带 status 索引的查询重试旧 epoch RUNNING 与 cleanupPending 的 INCONCLUSIVE；后者成功只清空 worktree_id/cleanupPending，不重排队或改变 verdict。既有 60 s tick 因而可修复临时删除失败，无需重启。`recoverVerifications` 返回 `{requeued,cleaned,failed}`（重排队 run 数、清理的 INCONCLUSIVE/orphan worktree 数、失败项数），有失败时记录计数警告，其他项继续。
+
+仅启动时通过 runtime.listManagedWorktrees 回收 `axiom/verify/` 分支孤立条目（不用文件系统扫描，不强制删除未记录的 orphan）。创建到记录 id 之间的崩溃由该扫描覆盖；detached 之前已记录 id。单个 orphan 删除失败只警告并继续；关联已知 run 时写同一 recovery_failed 审计，不将旧 claim 的 orphan 标记为当前 worktree 的 cleanupPending。已在本轮按持久 id 处理的 worktree 不重复扫；本 epoch 正在运行的 worktree 不被回收。成功恢复后再次执行不写新审计。
+
+读入口 `axiom.verification.show {runId}` / `list {missionId,taskId?,candidateId?,status?}` 返回全部 VerificationRun 字段加 Candidate commit/tree 与 `phase=verdictDetail.phase??null`，缺失 run 或 Candidate 返回 not_found，不伪造 hash。CLI 对应 `axiom verification show --run` / `list --mission [--task] [--candidate] [--status]`，均支持 --json。
+
+phase 词汇为 `claimed | prepared | prepare_failed | requeued | canceled`，不是新的状态机。M3-02 消费 RUNNING/prepared 并运行/记录 deterministic checks 与 verdict、结束时回收 worktree；M3-05 接 INCONCLUSIVE 升级；M3-09 根据 lineage 过滤 renderer worktree 列表（本阶段仍可见）。
 
 ### Questions 与 D50 待决项处置（M2-06b）
 
@@ -392,11 +412,11 @@ M2-06a `MessageRouter` 在 `store.transaction('message_route', …)` 内写 Cont
 
 恢复逐个检查非终态 Mission：Run 必须存在，合成 session id 必须有效且 `runBoundToCoordinator` 成立；否则 BLOCKED，记录一次 `recovery.run_binding_lost`，不悄悄重建 Run。正常恢复重算 readiness，**不会写 recovery 成功事件**；若 readiness 实际移动，仍按正常 Task 转换审计。
 
-`reconcileAttempts()` 的 Attempt 子集由 M2-08 接入启动、周期与退出消息触发（§4 Recovery）。Architecture §16.1 的 Verification/Integration 队列重驱与 Approval 过期仍由后续里程碑接入。`docs/plans/M1.md` 的早期 M1-01 笔记写过先 drain 后注册，实际 M1-08 实现与测试为先注册再 drain，以实现为本节事实来源。
+`reconcileAttempts()` 的 Attempt 子集由 M2-08 接入启动、周期与退出消息触发（§4 Recovery）。M3-01 的 VerificationService 负责 Verification 队列重驱；Integration 队列重驱与 Approval 过期由 M4 接入。`docs/plans/M1.md` 的早期 M1-01 笔记写过先 drain 后注册，实际 M1-08 实现与测试为先注册再 drain，以实现为本节事实来源。
 
 M2-06b 审计：question.created / question.answered 的 objectKind=message、objectId=question message id；前者带 Task/Attempt，后者带 answerMessageId 与 status，不复制回答正文。消费者按 question_threads 识别无 Axiom payload 的 QUESTION，写 message.received。REQUEST_SUBTASK 的 subtask.requested、checks_failed、resolved 与 Task 创建在同批事务内；重放不重复创建。task.created 带 origin/provenance/messageId?；plan.minor_adjustment 带 classification=MINOR_ADJUSTMENT、origin=user|request_subtask、Task 与边。人工接受失败在返回 invalid_argument 前保留 checks_failed 审计，仍可修复后重试或拒绝。
 
-M2 之后：M3 为 Verification 持久队列补重驱；M4 接 Integration 与 Approval 过期恢复，不以收件/ACK 代替完成证据。
+M3-01 已由 VerificationService 在启动时回收过期 RUNNING worktree 并重新 QUEUED，保留审计与 Artifact；M4 接 Integration 与 Approval 过期恢复，不以收件/ACK 代替完成证据。
 
 ## 9. M2 出口操作与后续里程碑
 

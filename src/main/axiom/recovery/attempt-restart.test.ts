@@ -62,7 +62,7 @@ it('reopens a RUNNING file-DB Attempt without duplicate start, then retries only
     previousStatus: null
   })
   plane.store.upsertPolicy(missionId, { ...plane.store.getPolicy(missionId)!, concurrencyLimit: 1 })
-  startAxiomControlPlane(runtime)
+  await startAxiomControlPlane(runtime)
   await vi.advanceTimersByTimeAsync(0)
   expect(plane.store.getTaskStage(taskId)?.stage).toBe('RUNNING')
   stopAxiomControlPlane(runtime)
@@ -73,6 +73,11 @@ it('reopens a RUNNING file-DB Attempt without duplicate start, then retries only
   db = new OrchestrationDb(dbPath)
   runtime = new OrcaRuntimeService()
   runtime.setOrchestrationDb(db)
+  vi.spyOn(runtime, 'listManagedWorktrees').mockResolvedValue({
+    worktrees: [],
+    totalCount: 0,
+    truncated: false
+  })
   vi.spyOn(runtime, 'showTerminal').mockRejectedValue(new Error('terminal missing after restart'))
   plane = getAxiomControlPlane(runtime)
   const schedule = vi
@@ -81,7 +86,7 @@ it('reopens a RUNNING file-DB Attempt without duplicate start, then retries only
   const artifacts = new ArtifactStore(plane.store, join(directory, 'artifacts'))
   vi.spyOn(plane.artifacts, 'put').mockImplementation(artifacts.put.bind(artifacts))
   const insert = vi.spyOn(plane.store, 'insertAttemptBinding')
-  startAxiomControlPlane(runtime)
+  await startAxiomControlPlane(runtime)
   await vi.advanceTimersByTimeAsync(0)
   expect(plane.store.listAttemptBindings({ missionId, taskId })).toEqual([created])
   expect(

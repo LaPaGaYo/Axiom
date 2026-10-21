@@ -13,7 +13,7 @@ afterEach(() => {
 it('starts consumers through the existing mission RPC path and stops them on cancellation', async () => {
   vi.useFakeTimers()
   f = rpcFixture()
-  startAxiomControlPlane(f.runtime)
+  await startAxiomControlPlane(f.runtime)
   expect(await f.call('axiom.mission.create', createParams)).toMatchObject({ ok: true })
   const mission = f.store.listMissions({})[0]!
   const message = insertMail(f.db, mission.runId)

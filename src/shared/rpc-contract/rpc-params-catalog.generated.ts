@@ -48,6 +48,10 @@ import {
   TaskShowParams
 } from '../axiom-contract/task-params'
 import {
+  VerificationListParams,
+  VerificationShowParams
+} from '../axiom-contract/verification-params'
+import {
   BrowserClientFileChannelAbortParams,
   BrowserClientFileChannelReadParams,
   BrowserClientFileChannelWriteParams
@@ -695,6 +699,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'axiom.task.create': TaskCreateParams,
   'axiom.task.list': TaskListParams,
   'axiom.task.show': TaskShowParams,
+  'axiom.verification.list': VerificationListParams,
+  'axiom.verification.show': VerificationShowParams,
   'browser.back': BrowserTarget,
   'browser.capture.start': BrowserTarget,
   'browser.capture.stop': BrowserTarget,

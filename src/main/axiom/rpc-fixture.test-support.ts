@@ -21,6 +21,11 @@ export function rpcFixture(dbPath = ':memory:') {
   const db = new OrchestrationDb(dbPath)
   const runtime = new OrcaRuntimeService()
   runtime.setOrchestrationDb(db)
+  vi.spyOn(runtime, 'listManagedWorktrees').mockResolvedValue({
+    worktrees: [],
+    totalCount: 0,
+    truncated: false
+  })
   vi.spyOn(runtime, 'showRepo').mockResolvedValue({
     id: 'repo-fixture',
     path: '/fixture',

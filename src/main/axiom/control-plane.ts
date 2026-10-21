@@ -1,4 +1,6 @@
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
+import { VerificationService } from './verification/verification-service'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { createAttemptLauncher } from './execution/attempt-launcher'
 import { createPlannerLauncher } from './execution/planner-launcher'
@@ -54,6 +56,14 @@ function createControlPlane(runtime: OrcaRuntimeService, db: OrchestrationDb) {
     launch: createAttemptLauncher({ runtime, db, store, missions, artifacts })
   })
   const recovery = new RecoveryService(db, store, missions, { runtime, artifacts })
+  const runtimeEpoch = `epoch_${randomUUID()}`
+  const verification = new VerificationService({
+    store,
+    missions,
+    artifacts,
+    runtime,
+    runtimeEpoch
+  })
   const planner = createPlannerLauncher({
     runtime,
     db,
@@ -66,8 +76,13 @@ function createControlPlane(runtime: OrcaRuntimeService, db: OrchestrationDb) {
   // Only process-local cancellation handles are retained; statuses, stages,
   // binding and generation are loaded from the database at each new start.
   const consumers = new Map<string, RunMailboxConsumer>()
-  const lifecycle: { started: boolean; attemptReconcileTimer?: ReturnType<typeof setInterval> } = {
-    started: false
+  const lifecycle: {
+    started: boolean
+    bootGeneration: number
+    attemptReconcileTimer?: ReturnType<typeof setInterval>
+  } = {
+    started: false,
+    bootGeneration: 0
   }
   const plane = {
     store,
@@ -79,6 +94,8 @@ function createControlPlane(runtime: OrcaRuntimeService, db: OrchestrationDb) {
     scheduler,
     planner,
     recovery,
+    runtimeEpoch,
+    verification,
     consumers,
     ...lifecycle,
     syncConsumer

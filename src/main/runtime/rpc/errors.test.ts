@@ -24,6 +24,18 @@ class LineageError extends Error {
 }
 
 describe('mapRuntimeError', () => {
+  it('preserves a missing VerificationRun or Candidate read error', () => {
+    expect(
+      mapRuntimeError(
+        'req_verification',
+        { runtimeId: 'runtime-1' },
+        new OrchestrationError('not_found', 'VerificationRun was not found.')
+      )
+    ).toMatchObject({
+      ok: false,
+      error: { code: 'not_found', message: 'VerificationRun was not found.' }
+    })
+  })
   it.each([
     ['planner_worktree_dirty', { files: [' M src/file.ts', '?? proposal.json'] }],
     ['planner_worktree_missing', undefined],

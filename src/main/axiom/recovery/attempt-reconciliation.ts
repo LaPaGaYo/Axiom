@@ -119,7 +119,8 @@ export async function reconcileAttempt(
   if (!task) {
     return entry
   }
-  if (task.stage === 'SUBMITTED') {
+  // Verification can claim before retention recovers; Submission, not Task stage, owns this resource.
+  if (store.getSubmissionByDispatch(dispatchId)) {
     entry.action = retainSubmission(ctx, binding) ?? 'unchanged'
     return entry
   }

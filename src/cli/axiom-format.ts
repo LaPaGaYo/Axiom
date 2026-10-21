@@ -2,6 +2,10 @@ import type { MissionResponse, MissionListResponse } from '../shared/axiom-contr
 import type { GoalResponse } from '../shared/axiom-contract/goal-params'
 import type { PlanResponse, PlanListResponse } from '../shared/axiom-contract/plan-params'
 import type { TaskResponse, TaskListResponse } from '../shared/axiom-contract/task-params'
+import type {
+  VerificationResponse,
+  VerificationListResponse
+} from '../shared/axiom-contract/verification-params'
 
 function table(rows: { id: string; status: string; title: string }[], status = 'STATUS') {
   return [
@@ -43,4 +47,25 @@ export function formatTaskList({ tasks }: TaskListResponse): string {
 }
 export function formatTask({ task }: TaskResponse): string {
   return formatTaskList({ tasks: [task] })
+}
+
+export function formatVerificationRunList({ runs }: VerificationListResponse): string {
+  return [
+    'ID\tTASK\tCANDIDATE\tSTATUS\tPHASE\tCLAIM\tSTARTED\tWORKTREE',
+    ...runs.map((run) =>
+      [
+        run.id,
+        run.taskId,
+        run.candidateCommitSha.slice(0, 8),
+        run.status,
+        run.phase ?? '-',
+        run.claimCount,
+        run.startedAt ?? '-',
+        run.worktreeId ?? '-'
+      ].join('\t')
+    )
+  ].join('\n')
+}
+export function formatVerificationRun({ run }: VerificationResponse): string {
+  return formatVerificationRunList({ runs: [run] })
 }

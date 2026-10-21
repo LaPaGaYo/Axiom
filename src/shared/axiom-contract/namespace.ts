@@ -15,4 +15,11 @@ export const AXIOM_RPC_METHOD_PREFIXES = [
   'axiom.policy.'
 ] as const
 
-export const AXIOM_CLI_COMMAND_NAMES = ['mission', 'plan', 'task', 'approval', 'attempt'] as const
+export const AXIOM_CLI_COMMAND_NAMES = [
+  'mission',
+  'plan',
+  'task',
+  'approval',
+  'attempt',
+  'verification'
+] as const

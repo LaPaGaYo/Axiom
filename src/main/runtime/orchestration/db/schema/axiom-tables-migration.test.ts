@@ -34,7 +34,7 @@ const TABLE_COLUMNS: Record<string, string> = {
   decisions:
     'id mission_id status title options resolution authority provenance supersedes_id created_at updated_at',
   verification_runs:
-    'id mission_id candidate_id task_id status verdict_detail commands tool_versions verifier created_at updated_at',
+    'id mission_id candidate_id task_id status verdict_detail commands tool_versions verifier created_at updated_at runtime_epoch claim_count worktree_id started_at finished_at',
   integration_batches:
     'id mission_id base_commit candidate_ids status merge_commit conflicts approval_id created_at updated_at',
   approvals:
@@ -52,6 +52,7 @@ const INDEX_COLUMNS: Record<string, string[]> = {
   idx_audit_events_mission_sequence: ['mission_id', 'sequence'],
   idx_candidates_task_status: ['task_id', 'status'],
   idx_verification_runs_candidate: ['candidate_id'],
+  idx_verification_runs_status: ['status', 'created_at', 'id'],
   idx_integration_batches_mission_status: ['mission_id', 'status'],
   idx_approvals_mission_status: ['mission_id', 'status']
 }
@@ -197,8 +198,8 @@ describe('Axiom v43 side tables', () => {
 
   it('creates all 17 tables, specified columns, indexes and three triggers on a fresh database', () => {
     const { db } = open()
-    expect(SCHEMA_VERSION).toBe(44)
-    expect(db.pragma('user_version', { simple: true })).toBe(44)
+    expect(SCHEMA_VERSION).toBe(45)
+    expect(db.pragma('user_version', { simple: true })).toBe(45)
     expect(Object.keys(TABLE_COLUMNS)).toHaveLength(17)
     for (const [table, columns] of Object.entries(TABLE_COLUMNS)) {
       expect(
@@ -249,7 +250,7 @@ describe('Axiom v43 side tables', () => {
       previous.close()
     }
     const migrated = open(path)
-    expect(migrated.db.pragma('user_version', { simple: true })).toBe(44)
+    expect(migrated.db.pragma('user_version', { simple: true })).toBe(45)
     expect(axiomSchema(migrated.db)).toBe(axiomSchema(open().db))
     expect(migrated.db.prepare('SELECT * FROM runs WHERE id = ?').get('run-kept')).toEqual(run)
     expect(migrated.db.prepare('SELECT * FROM tasks WHERE id = ?').get('kept')).toEqual(task)
@@ -266,7 +267,7 @@ describe('Axiom v43 side tables', () => {
     const policy = first.db.prepare('SELECT * FROM mission_policies').get()
     close(first)
     const upgraded = open(path)
-    expect(upgraded.db.pragma('user_version', { simple: true })).toBe(44)
+    expect(upgraded.db.pragma('user_version', { simple: true })).toBe(45)
     expect(upgraded.db.prepare('SELECT * FROM agent_specs').get()).toEqual({ ...spec, spec: '{}' })
     expect(upgraded.db.prepare('SELECT * FROM mission_policies').get()).toEqual({
       ...policy,
@@ -281,6 +282,54 @@ describe('Axiom v43 side tables', () => {
       ...policy,
       routing: '{}'
     })
+  })
+
+  it('upgrades v44 verification rows and reopens idempotently with transparent downgrade probes', () => {
+    const path = filePath()
+    const first = open(path)
+    seedMission(first.db, 'verification')
+    first.db.exec('DROP INDEX idx_verification_runs_status')
+    for (const column of [
+      'runtime_epoch',
+      'claim_count',
+      'worktree_id',
+      'started_at',
+      'finished_at'
+    ]) {
+      first.db.exec(`ALTER TABLE verification_runs DROP COLUMN ${column}`)
+    }
+    first.db.pragma('user_version = 44')
+    const before = first.db.prepare('SELECT * FROM verification_runs').get()
+    expect(resolveOrchestrationMigrationStartVersion(first.db, 44, 45)).toBe(44)
+    close(first)
+    const upgraded = open(path)
+    const expected = {
+      ...before,
+      runtime_epoch: null,
+      claim_count: 0,
+      worktree_id: null,
+      started_at: null,
+      finished_at: null
+    }
+    expect(upgraded.db.pragma('user_version', { simple: true })).toBe(45)
+    expect(upgraded.db.prepare('SELECT * FROM verification_runs').get()).toEqual(expected)
+    expect(
+      upgraded.db
+        .prepare(
+          'EXPLAIN QUERY PLAN SELECT * FROM verification_runs WHERE status = ? ORDER BY created_at, id'
+        )
+        .all('RUNNING')
+    ).toEqual([
+      expect.objectContaining({
+        detail: expect.stringContaining('USING INDEX idx_verification_runs_status')
+      })
+    ])
+    expect(resolveOrchestrationMigrationStartVersion(upgraded.db, 45, 44)).toBe(45)
+    const schema = axiomSchema(upgraded.db)
+    close(upgraded)
+    const reopened = open(path)
+    expect(axiomSchema(reopened.db)).toBe(schema)
+    expect(reopened.db.prepare('SELECT * FROM verification_runs').get()).toEqual(expected)
   })
 
   it('keeps the Axiom sqlite_master definitions byte-identical across reopen', () => {
@@ -320,11 +369,11 @@ describe('Axiom v43 side tables', () => {
     const first = open(path)
     seedMission(first.db, 'future')
     const before = axiomSchema(first.db)
-    first.db.pragma('user_version = 45')
+    first.db.pragma('user_version = 46')
     close(first)
     const { db } = open(path)
-    expect(db.pragma('user_version', { simple: true })).toBe(45)
-    expect(resolveOrchestrationMigrationStartVersion(db, 45, SCHEMA_VERSION)).toBe(45)
+    expect(db.pragma('user_version', { simple: true })).toBe(46)
+    expect(resolveOrchestrationMigrationStartVersion(db, 46, SCHEMA_VERSION)).toBe(46)
     expect(resolveOrchestrationMigrationStartVersion(db, 44, 43)).toBe(44)
     expect(axiomSchema(db)).toBe(before)
     expect(db.prepare('SELECT id FROM missions').all()).toEqual([{ id: 'future' }])

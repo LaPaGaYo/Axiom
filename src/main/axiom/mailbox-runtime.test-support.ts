@@ -18,6 +18,7 @@ export function mailboxRuntime(db: OrchestrationDb) {
   const notificationDeps = deps as unknown as Dependencies
   const notifications = new OrchestrationMailboxNotificationCoordinator(notificationDeps)
   const runtime = {
+    listManagedWorktrees: vi.fn(async () => ({ worktrees: [], totalCount: 0, truncated: false })),
     getOrchestrationDb: () => db,
     waitForMessage: vi.fn(waiters.wait.bind(waiters)),
     notifyMessageArrived: notifications.notifyMessageArrived.bind(notifications)
