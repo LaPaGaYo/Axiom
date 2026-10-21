@@ -570,6 +570,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 
 **接受（Henry 2026-10-20）**：选 **B（Orca structured / app-server 通道）为首选，A（`codex exec` 非交互通道）为后备**；C 不采用。理由（验证者按 M2-11 / M2-12 的发现重排）：TUI 通道的每个事实都靠推断（就绪靠标题、退出靠前台进程名证明、权限靠 Orca 的 yolo 默认参数、目录信任靠随版本变化的同意屏），B 与 A 都是协议化的——线程 / 进程启动即带 `cwd`、沙盒、审批策略，没有 onboarding，AgentSpec.permissions 可一一映射，transcript 是事件流（也是 D60 Supervisor 的有界输入）；B 已接在 Orca 的 dispatch / worker_dispatches 生命周期上（liveness、transcript、ask/answer 走 journal），不造第二套 worker lifecycle；A 的可靠性由流水线自身几十次 `codex exec -s workspace-write` 证明，作为 B 查不通时的保底（需要 `startLocalWorker` 的 exec 模式 seam + Axiom 的事件解析）。**后续**：M3 之前排一个时间盒 1 天的 Task 查明 F3（真实 codex 在 e2e 骨架里走 structured 通道，抓 app-server stderr / journal）；查通 → 实现 B，查不通 → 实现 A；两条路共用同一规则：**AgentSpec.permissions → harness 沙盒 / 审批标志由 Control Plane 决定（Planner 只读 + 无审批；Worker workspace-write + 无审批；网络按 policy），Orca 的 `agentDefaultArgs` 不再决定 Axiom Attempt 的权限**；D57 的 `codex` / `claude` 认证证据改为在所选通道上采集。UPSTREAM-2 的 Codex 预信任移植保留但不再作为依赖。
 
+**修订（2026-10-20，Henry 同意登记）**：D63 评估时把 **A′ = ACP（Agent Client Protocol，stdio JSON-RPC）** 列为与 B / A 并列的备选（Ekko Studio 已用它统一 Qwen / Kimi / CodeBuddy / Qoder / Copilot；Claude Code / Codex 经 Zed 维护的适配器）；F3 的首个假设为 Codex ≥0.157 的 managed-daemon 托管与 Orca stdio 拉起方式不匹配（open-cross-session 实测）。来源：`claude/external-projects-review-v1.md` §5 §6。
+
 ## D59 · TUI 通道 Attempt 的 agent 退出证据：由执行宿主的进程表证明"spawned shell 独占 PTY 前台"，Recovery 据此折叠为 `exited` — ACCEPTED（验证者 2026-10-20，M2-11 出口 e2e 的发现；在已批准架构内的 MINOR_ADJUSTMENT，Henry 可否决）
 
 **背景**：M2-11 的出口 e2e（`tests/e2e/mission-exit-m2.spec.ts`，`axiom/attempt/M2-11/1` + 验证者诊断分支 `axiom/verify-diag/M2-11`，日志 `.axiom-work/logs/chain-20261020-075835.log`）让 D49 provider 的一个 Worker 在 `ACK` 后以 137 退出。120 s 后 Task 仍 `RUNNING`、Attempt `liveness = live`、内核 worker `ready`：Orca 的 PTY 在交互式 shell 里启动 agent，agent 退出后 shell 回到提示符、PTY 仍 `connected`；内核只在 **PTY** 退出时 fail dispatch（`failActiveDispatchOnExit`），`inspectWorkerTerminal` 把 connected PTY 折叠为 `live`。在 Orca 里这由 coordinator LLM 读终端判断；Axiom 没有 coordinator LLM，Task 会一直 RUNNING 到 `maxRuntimeMinutes`（默认 45 分钟）才按运行时预算停止——crash → retry 这半个出口准则 4 实际并未成立。同一轮还发现：内核先 fail dispatch 时（`failActiveDispatchOnExit` 先于 reconcile），Recovery 规则 b 结算 Task 但不写 `attempt.failed`；启动时 `recover()` 只在 readiness 实际移动 Task 时触发调度，已经 READY 的 Task 可能等不到一轮。
@@ -637,6 +639,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **理由**：验证链按"领取 → 运行 → 判定 → 注入 → 审查 → 展示"的依赖顺序推进；Supervisor / Jev 与通道落地与验证链解耦，可并行；宿主才能证伪的改动（M3-04、M3-08）先在诊断分支跑 e2e 再合入（M2-12 的教训）。
 **后果**：`docs/plans/M3.md` 是 M3 的 PlanRevision 等价物；brief / 验证记录位置同 M2；D63 在 M3-00 之后单独提出；分解的拆分 / 合并 / 新增以本条修订行记录。粗估 5–7 个工作日。
 **取代规则**：M3 出口 Decision 记录实际完成情况并关闭本条。
+
+**修订（2026-10-20，Henry 同意登记）**：按外部项目评估更新计划——M3-00 加入 F3 首个假设与 A′（ACP）备选；M3-07 以 Ekko Studio 的 JEV 纪律清单为参考；M3-10 hygiene 加 import 边界门禁；新增 DEF-12（投递事实 + 注入中和 + 合并）、DEF-13（harness 原生入口探测与 `axiom doctor`）、DEF-14（可视化回放 + 任务卡 / 手机审批）。
 
 ## D64 · 修复 Attempt 的分支基线与验证 worktree 生命周期 — PROPOSED（验证者 2026-10-20，待 Henry 批准）
 
