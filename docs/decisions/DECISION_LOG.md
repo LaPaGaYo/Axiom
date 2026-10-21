@@ -664,6 +664,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **后果**：术语表 §4.8 与 control-plane.md 的 Verification 节记录键与默认值；M3-02 / M3-03 实现。
 **取代规则**：以修订行记录新增键。
 
+**修订（2026-10-21，端到端流程复审，Henry："都记下来"）**：① **内置 secret scan 为不可关闭的出厂门禁**——候选快照会把 Worker 工作区里 `.gitignore` 之外的新文件（`.env` 副本、日志、下载物）一并收进候选，而 `dangerousPathPatterns` 只看路径不看内容；M3-03 在 scope 检查之后对候选 diff 跑内置的 secret 模式扫描（复用 M2-02 ContextBuilder 的脱敏模式：PRIVATE KEY 块、provider token 前缀、AKIA 等；policy `secretPatterns` 只能追加、不能移除），命中 → `FAIL(secret_detected)`，证据只记路径与模式名、不记内容。② 新增键 `setupCommands: string[]`——验证 worktree 在 `requiredEvidence` 之前运行的环境准备命令（如 `pnpm install --frozen-lockfile`；fixture 默认 `[]`）；失败按 D68 记 `environmental` → `INCONCLUSIVE(environment)`，不是 FAIL。完整的仓库 environment profile（服务、env 文件物化、端口 / 数据库名分配）见 DEF-20 ③。
+
 ## D66 · Reviewer 角色契约（只读 AgentSpec + `ReviewProposal` + 只作用于 INCONCLUSIVE）— ACCEPTED（Henry 2026-10-20："先把手上需要开发的做完"，验证者 2026-10-20 提议）
 
 **决定**：Reviewer 是 Mission Intelligence 的第三个角色（Planner、Reviewer、Replanner），与 Planner 同一启动方式（attempt-launcher，`permissions.write = []`，只读 worktree 检出 Candidate commit）；输入 = Task + acceptance + diff 摘要 + VerificationRun 结果 + 仓库规则；输出 `ReviewProposal`（schema 进 `axiom-contract`：逐条 acceptance 的 `pass | fail | inconclusive` + 理由 + 证据引用，整体建议 `PASS | FAIL | HUMAN_REVIEW`，风险列表），经 `axiom verification review --run <id> --file <path>`（envelope capability）提交；Control Plane 只在 run 为 `INCONCLUSIVE` 时接受提案并据此收敛，**对 deterministic FAIL 的提案一律拒绝**（拒绝码复用 Orca 词汇 + 审计）；Reviewer 的 skills（DEF-4）在 M3-05 brief 定稿前复审。
@@ -693,3 +695,29 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **后果**：`docs/plans/M3.md` M3-08 行改写为上述三项 + Worker smoke；`known-environmental` 无变化；smoke 默认参数改为 bypass（`.axiom-work/smoke/codex-args.env`）；诊断分支 `axiom/verify-diag/M3-00` 保留为证据。
 
 **取代规则**：D58 的"B 首选 / A 后备"不变；本条的修复清单以修订行记录；若 M3-08 转向 A，另起 Decision。
+
+**补充（2026-10-21，端到端流程复审，Henry："都记下来"）**：决定 2 的权限映射 V1（`never` + `danger-full-access`）等于"信任仓库内容"——隔离只管写入（per-Attempt worktree + M3-03 diff scope），管不住 Worker 的读取与外联；第三方仓库里的 README / issue / 代码注释注入可以让 Worker 读用户 home 或外发数据。V1 的处理：① Mission 加 `repositoryTrust: own | third_party`（创建时由用户声明，默认 `own`，进 policy 与审计）；`third_party` 在 V1 只允许只读的 Planner / Reviewer Attempt（`permissions.write = []`），Worker Attempt 拒绝启动（`runtime_posture_untrusted`）；② 已知限制写进 `docs/ARCHITECTURE.md` §11.3 / §16.4 与 CompletionReport 风险栏（"V1 Worker 在用户真机上以 harness 的 bypass 姿态运行"）；③ Worker 侧网络出口策略与容器 / VM 执行（Orca 的 SSH / remote 运行时指向一台 VM）入坑 DEF-20 ④，V2 决定。落点：① M3-08（与姿态映射模块同处）、② M3-10 文档。
+
+## D67 · V1 平台范围：macOS 与 Linux；Windows 定为 V1.x — ACCEPTED（Henry 2026-10-21："windows 定为 1.x 版本，先做 macos 和 linux"）
+
+**背景**：AGENTS.md 与架构把 macOS / Linux / Windows 都列为目标平台，但流水线只有 macOS 宿主（Henry 的 Mac Studio）与托管 CI（Linux）；V1 出口前没有任何 Windows 证据（fixture e2e、打包冷启动、WSL 通道）。2026-10-21 端到端流程复审（`claude/flow-review-v1.md` 缺口 14）把它列出，Henry 决定推迟。
+**决定**：
+1. V1（M0–M5 出口）的验证证据范围 = macOS + Linux；章程 §11 "演示可复现"与 §8 第 16 条的自动化断言只要求这两个平台。
+2. Windows 支持定为 **V1.x**：V1 出口 Decision 时为它建 V1.x 计划——Windows 宿主上的 fixture e2e（各里程碑出口 spec）、打包产物冷启动与 egress 断言、WSL 通道的 Attempt 认证（D57 矩阵加 `platform` 维度），通过后才宣布支持；清单登记在 DEF-20 ⑩。
+3. 代码规则不变：AGENTS.md 的跨平台要求（不假设 POSIX 路径 / shell / 进程行为 / 快捷键；保留子进程启动、路径构造、Windows shell shim、WSL、bundled ripgrep、原生模块打包、SSH 路由、平台快捷键标签的既有抽象；平台相关行为放在显式运行时判断之后）继续作为 Worker brief 的固定规则与验证的审查项，V1.x 不应需要重写。
+4. 交付：V1 的安装说明与首次运行页只提供 macOS / Linux；Windows 构建不纳入 V1 交付物。
+**理由**：Windows 验证需要一台 Windows 宿主与一轮 harness 认证，V1 的价值在闭环本身；保留代码抽象让推迟不变成债务。
+**后果**：M3-10 / M4 / M5 的出口 e2e 只在 macOS 宿主 + Linux CI 上要求证据；`docs/PROJECT_CHARTER.md` §9 与 `docs/ARCHITECTURE.md` §20 在 V1 出口 Decision 时一并修订（本条先以 Decision 记录，不单独改章程）。
+**取代规则**：V1.x 计划的 Decision 取代第 2 条的触发点。
+
+## D68 · 环境性失败与工作性失败分离：Attempt 的 `interrupted` 结算类别、验证的 `environmental` 分类、flaky 重跑规则 — PROPOSED（验证者 2026-10-21，端到端流程复审缺口 1；Henry："都记下来"，待 M3-02 / M3-06 brief 定稿前批准）
+
+**背景**：现在 Attempt 没有 Submission 就退出一律 FAILED / STOPPED → NEEDS_FIX（消耗 `retryPolicy.maxAttempts`，耗尽 → BLOCKED + replan 分级）；验证里任何非零 exit 都是 `fail` → `FAIL` → NEEDS_FIX。真实世界里相当一部分失败与候选无关：订阅配额窗口耗尽（lane B 的 app-server 推送 `account/rateLimits/updated`）、登录过期、应用退出 / 机器休眠带走子进程、harness 在首轮之前崩溃、`axiom` CLI socket 不可达、验证工具缺失、flaky 测试。流水线自己用 `.axiom-work/jev/known-environmental.txt` 处理的就是这类问题，产品里没有对应物。
+**决定（提议）**：
+1. **Attempt 侧**：结算增加类别 `interrupted`（与 FAILED / STOPPED / ABANDONED 并列；投影到 Orca 既有 outcome，不改内核枚举，Axiom 侧在 `attempt_bindings` / 审计记 `settlement.kind`）。判定规则确定性，满足任一即是：内核 `exited` 且退出发生在首个 Worker 输出或首条 `axiom attempt` 动词之前；退出原因是应用自身退出或 runtime epoch 变化（重启恢复路径）；harness 的结构化事件给出配额 / 认证类错误（lane B：`account/rateLimits/updated` 的耗尽状态、认证失败通知；TUI 通道：RulesEngine 对尾部输出的有界匹配）。`interrupted` 不计入 `maxAttempts`，不触发 NEEDS_FIX / replan 分级；按退避重排（默认 1 / 5 / 15 分钟，配额类按 harness 给出的重置时间）；同一 Task 连续 `interrupted` ≥ N（默认 3）→ 待处理项 + Task `BLOCKED(environment)`（可人工恢复）。Supervisor（D60）的分类只是输入，仍只建议。
+2. **验证侧**：每项 check 的结果枚举增加 `environmental`（工具缺失、`setupCommands` 失败、超时、服务 / 容器不可达、配额）；verdict 规则：有 `environmental` 且无 `fail` → `INCONCLUSIVE(environment)`，直接路由到人（不进 Reviewer——Reviewer 无法判断环境），修好后同一 Candidate 重跑（新 VerificationRun，claimCount 递增，旧证据保留）。
+3. **flaky 规则**：`fail` 的 check 若命中 policy `verificationRules.retryOnce`（默认对测试类命令开启、对 lint / typecheck / build 关闭）→ 同一 worktree 确定性重跑一次；两次结果都写进 verdictDetail；二次 `pass` → 该 check 记 `inconclusive(flaky)`，整体按 D65 规则走 INCONCLUSIVE 而非 FAIL；仍 `fail` → `fail`。隔离名单由人经 policy 维护（`knownFlaky: string[]` 模式，命中即 `inconclusive(known_flaky)` 并审计），系统不自动加名单；flaky 事实进记分卡（DEF-9）与 Lesson 候选（DEF-17）。
+4. 不变的：deterministic `fail` 仍不可被任何 LLM 推翻；`environmental` / `interrupted` 的判定全部是规则或 harness 结构化事件，DecisionEngine 不参与定性。
+**理由**：把环境噪声从候选质量里分离，重试预算与 replan 分级才有意义；流水线的 known-environmental 经验证明这类失败频繁且与候选无关。
+**后果**：M3-02（check 结果枚举、verdict 规则、`retryOnce` / `knownFlaky` 键 → D65 修订）、M3-06（分类输入）、M2-08 reconcile 的结算路径（`interrupted` 与退避）、术语表 §4.6 / §4.8 新枚举、记分卡指标加 `interrupted` 与 flaky 率；DEF-20 ①（等人停表）以本条的 `interrupted` 为可选形态之一。
+**取代规则**：批准后以修订行记录；若内核枚举需要改动，另起内核 Decision（D56 流程）。
