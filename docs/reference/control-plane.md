@@ -1,13 +1,13 @@
-# Control Plane 子系统参考（M1 + M2-10 UI 投影）
+# Control Plane 子系统参考（M2 出口）
 
-更新：2026-10-17 · 适用：M1-01～M1-09 已合入的 Mission Facade；M1-10 出口证据另见 [M1-exit-e2e.md](../review-evidence/axiom-m1/M1-exit-e2e.md)。
+更新：2026-10-20 · 适用：截至 M2-12 / D59 已合入 main 的行为；M2-11 attempt 2 测试与证据索引见 [M2-exit-e2e.md](../review-evidence/axiom-m2/M2-exit-e2e.md)，本候选宿主结果待 verifier 填写。M1 历史证据见 [M1-exit-e2e.md](../review-evidence/axiom-m1/M1-exit-e2e.md)。
 规范权威仍是 [Constitution](../PROJECT_CONSTITUTION.md) §1、ACCEPTED Decisions、[Glossary](../GLOSSARY.md) §4 与 [Architecture](../ARCHITECTURE.md)；本文定位实现，不新增权威或状态。
 
 ## 1. 用途与边界
 
 Control Plane 决定并持久化 Mission、版本化 Goal/Plan、Task stage 与依赖 readiness；模型只提出建议，renderer 只展示投影。顶层对象与 RPC 使用 Mission / `axiom.*`（D1）。用户代码所在对象称 repository；Orca `Project` 仍是仓库/provider 身份类型。
 
-M1 提供人工输入计划、审批、启动、暂停/恢复/取消、阻止 Orca 旁路与重启恢复。M2-05 起 `mission start` 创建集成基线并经 Scheduler admission 启动 Worker；M1 出口测试通过禁止全部 provider 保留 Attempt-free 语义。它不是 LLM coordinator、第二个终端/worktree 管理器，也不复活退役的 `coordinator.ts`。
+M2 已提供 Planner 提案、人工审批、Scheduler admission、Worker 通道、Candidate/Submission 结算、Attempt 恢复与 UI 投影；终点为 Task `SUBMITTED` / VerificationRun `QUEUED`。`mission start` 创建集成基线并经 Scheduler admission 启动 Worker；M1 出口测试通过禁止全部 provider 保留 Attempt-free 语义。它不是 LLM coordinator、第二个终端/worktree 管理器，也不复活退役的 `coordinator.ts`。
 
 Execution Kernel 继续拥有 Run、Orca Task、dispatch、PTY、进程、worktree、消息投递和收据。Axiom 经 `OrchestrationDb` 与现有 service/RPC 边界复用这些原语。权威 Mission 状态在 `missions.status`；权威 Task stage 在 `task_stages.stage`（D2）；`tasks.status` 只是执行投影。Mission 的 DAG 在 `mission_task_edges`，Orca `tasks.deps=[]`（D10）。
 
@@ -25,14 +25,14 @@ Execution Kernel 继续拥有 Run、Orca Task、dispatch、PTY、进程、worktr
 | `src/main/axiom/agent-factory/` | M2-03：先过滤，再由 RulesEngine 排序；生成 worker/planner AgentSpec，在同一事务持久化合同与选择审计，不启动进程 |
 | `src/main/axiom/decision-engine/` | M2-03：闭集 choose/score/classify/rank 接口与确定性 RulesEngine；只能建议，不能修改 eligibility 或权威状态 |
 | `src/main/axiom/scheduler/` | `scheduler.ts` 逐轮从数据库排序/校验并事务性 admission；`critical-path.ts` 计算最长下游链；`admission-blockers.ts` 真查 Question/Approval；`admission-budget.ts` 校验 Mission 总 Attempts/wall-clock；typed launch seam 在 M2-05 注入 |
-| `src/main/axiom/admission/` | `mission-managed-run-guard.ts` 阻止 Orca RPC 修改 Mission 对象；四组测试固定 §4b 拦截 |
-| `src/main/axiom/recovery/` | `recovery-service.ts` 恢复非终态 Mission、检查绑定、重算 readiness；`attempt-reconciliation.ts` / `planner-reconciliation.ts` 对账 Attempt；`agent-exit-observation.ts` 读取 D59 的宿主 shell 前台证明 |
+| `src/main/axiom/admission/` | `mission-managed-run-guard.ts` 阻止 Orca RPC 修改 Mission 对象；五组测试固定 §4b 拦截 |
+| `src/main/axiom/recovery/` | `recovery-service.ts` 恢复非终态 Mission、检查绑定、重算 readiness；启动、60 秒周期与退出邮件触发 Attempt reconciliation（规则 a–h 见 §4）；`attempt-reconciliation.ts` / `planner-reconciliation.ts` 对账 Attempt；`agent-exit-observation.ts` 读取 D59 的宿主 shell 前台证明 |
 | `src/main/axiom/control-plane.ts` | 按 `OrchestrationDb` WeakMap 缓存 store/controller/recovery/artifacts/contextBuilder/agentFactory/decisionEngine，维护进程内消费者取消句柄并接入生命周期 |
 | `src/main/axiom/control-plane-boot.ts` | `startAxiomControlPlane` / `stopAxiomControlPlane`；启动恢复和退出停止 |
 | `src/main/axiom/kernel-contract/` | M1-01 的 session party、Run/mailbox、Task 与 dispatch 身份契约测试；D14 的可执行依据 |
 | `src/shared/axiom-contract/` | zod 对象/params/响应、`lifecycle.ts` 合法转换、`plan-proposal.ts` 与 `plan-task-graph.ts` 校验、`mutations.ts` 分类、`stage-labels.ts` 文案 |
-| `src/main/runtime/rpc/methods/axiom/` | `mission.ts` / `goal.ts` / `plan.ts` / `task.ts` / `artifact.ts` / `policy.ts`；`../axiom.ts` 聚合到 `ALL_RPC_METHODS` |
-| `src/cli/specs/axiom-*.ts` + `src/cli/handlers/axiom/` | `mission`、`mission goal`、`mission artifact`、`mission policy`、`plan`、`task` CLI；`input-files.ts` 解析 Goal / Plan，`rpc-command.ts` 调用与输出 |
+| `src/main/runtime/rpc/methods/axiom/` | Mission/Goal/Plan/Task/Artifact/Policy/Attempt/Message 方法；`../axiom.ts` 聚合到 `ALL_RPC_METHODS` |
+| `src/cli/specs/axiom-*.ts` + `src/cli/handlers/axiom/` | `mission`（含 plan/goal/artifact/policy）、`plan`、`task`、`attempt`、`message` CLI；`input-files.ts` 解析 Goal / Plan，`rpc-command.ts` 调用与输出 |
 | `src/renderer/src/components/missions/` + `src/renderer/src/lib/axiom-client.ts` | Mission list/Home、Plan 审批、Task 表与 Task Detail（Attempt、Submission、typed timeline）；共享 schema 校验与 mutation envelope；刷新后以服务端状态对账 |
 
 新增逻辑不能进入 `@ts-nocheck` 的 runtime 文件（D12）；D59 明确授权的例外仅为完全标注类型的进程内转发访问器 `confirmTerminalShellForeground`，恢复决策仍在强类型 Control Plane 模块内。扩展 RPC 仍遵循 [orca-mapping](orca-mapping.md) §4c 的五步注册与 catalog 检查。
@@ -41,7 +41,7 @@ Execution Kernel 继续拥有 Run、Orca Task、dispatch、PTY、进程、worktr
 
 权威数据库为 `<userData>/orchestration.db`。M1-03 的 `src/main/runtime/orchestration/db/schema/create-axiom-tables-sql.ts` / `migrate-v43.ts` 建全 17 张表；M1 的业务 store 使用下表前七张。已有表不改 CHECK 枚举，未来只做 additive migration。
 
-| 表 | 内容 / M1 使用情况 |
+| 表 | 内容 / M2 出口使用情况 |
 |---|---|
 | `missions` | 使用：repository、target branch、Run/session 绑定、status、active revisions、`previous_status` |
 | `goal_revisions` | 使用：版本化正文、约束、验收、provenance、ACTIVE/SUPERSEDED |
@@ -69,7 +69,7 @@ Milestone 存在 Plan JSON 内，没有独立表/状态机。Attempt 身份仍�
 
 ### ContextPackage（M2-02）
 
-`plane.artifacts` 与 `plane.contextBuilder` 供后续 Scheduler、launcher、submit 服务复用。Artifact id = `art_` + sha256(canonical `{missionId,kind,sha256}`)；相同 Mission/kind/bytes 返回既有元数据（首次 related/createdBy 不被重写），跨 kind/Mission 共用内容文件。先写 `.tmp-<random>` 再 rename；read 重新检查 hash/size，缺文件或不匹配返回 `artifact_corrupt`。put 上限 8 MiB；RPC 用 `contentBase64`，CLI `mission artifact put --mission … --kind … --file … --related …` 在本机读文件。read 的 `--json` 保留 base64，文本输出按 UTF-8；list 支持 kind 和单一 related id。
+`plane.artifacts` 与 `plane.contextBuilder` 已由 Scheduler、launcher、submit 服务复用。Artifact id = `art_` + sha256(canonical `{missionId,kind,sha256}`)；相同 Mission/kind/bytes 返回既有元数据（首次 related/createdBy 不被重写），跨 kind/Mission 共用内容文件。先写 `.tmp-<random>` 再 rename；read 重新检查 hash/size，缺文件或不匹配返回 `artifact_corrupt`。put 上限 8 MiB；RPC 用 `contentBase64`，CLI `mission artifact put --mission … --kind … --file … --related …` 在本机读文件。read 的 `--json` 保留 base64，文本输出按 UTF-8；list 支持 kind 和单一 related id。
 
 ContextBuilder 固定强制顺序：(1) Task spec；(2) PlanRevision revision/milestone/带邻居标题的入出边；(3) ACCEPTED Decisions；(4) 权限、Mission/Task 预算、并发、重试与 `axiom-submission-v1` 字段清单；(5) 目标分支的 AGENTS.md/CLAUDE.md，各最多 16 KiB（缺文件省略，读失败不静默忽略）；(6) policy 验证命令；(7) `none (first attempt)`，M3 补失败证据。只读这两个规则文件，不读工作区版本或 `.env*`。
 
@@ -77,13 +77,15 @@ ContextBuilder 固定强制顺序：(1) Task spec；(2) PlanRevision revision/mi
 
 规则与候选在纳入前脱敏：PRIVATE KEY 块、指定 provider token 前缀（兼容 hyphen/underscore）和 AKIA key 替换为 `[REDACTED]`；规则先脱敏再截断。候选的敏感部分在 omitted 中以 redacted 记录，安全替换文本仍可纳入；section header 标记 redacted。manifest ranked hash 绑定脱敏后的正文；强制 hash 绑定渲染节（第 4 节另含协议）。
 
-canonical manifest 无空白、对象键序固定，保留数组顺序，id = `ctx_` + sha256(canonical)。manifest 与完整 render template 均作为 Artifact 持久化，context row 只保留 JSON manifest/hash/引用。相同输入重复 build 不新增行或文件。模板最后的 `Axiom Worker protocol` 使用 D16 八个 `axiom attempt` verb；M2-05 必须在交付时替换所有 `{{attemptId}}` 和 `{{dispatchCapability}}`，不能把真实 capability 写回 template 或 package identity。
+canonical manifest 无空白、对象键序固定，保留数组顺序，id = `ctx_` + sha256(canonical)。manifest 与完整 render template 均作为 Artifact 持久化，context row 只保留 JSON manifest/hash/引用。相同输入重复 build 不新增行或文件。模板最后的 `Axiom Worker protocol` 使用 D16 八个 `axiom attempt` verb；launcher 在交付时替换所有 `{{attemptId}}` 和 `{{dispatchCapability}}`，不能把真实 capability 写回 template 或 package identity。
+
+M2 之后：M3 将失败验证证据纳入重试 ContextPackage；DEF-4/5 的 skills 与代码知识输入按登记触发点复审。
 
 ### Provider selection（M2-03）
 
 AgentFactory.build 接受 worker 的 missionId/taskId/contextPackageId，或 planner 的 missionId/goalRevisionId；引用必须存在且归属匹配。ContextPackage 是输入，不由 Factory 创建。主机安装集合由注入的 listInstalledProviders 提供，Control Plane 注入 detectInstalledAgentsWithShellPathHydration；此处不新增认证探测或网络调用。
 
-执行身份由 provider（harness）、model 与 endpointProfile 组成。D57 的允许清单在 `src/main/axiom/agent-factory/certified-providers.ts` 的 `CERTIFIED_PROVIDER_COMBOS`；V1 只有下列四个组合，`endpointProfile` 均为 `subscription`（用户在 harness 中已有的登录或自行配置），不存储凭据。当前状态均为 `provisional`：M2-07 的宿主协议一致性 e2e 后逐组合补 evidence，证明收到 preamble → `axiom attempt inform` → 产出候选 → 合法 `axiom attempt submit`，再改为 `certified`；V1 出口前所有用到的组合必须完成认证。
+执行身份由 provider（harness）、model 与 endpointProfile 组成。D57 的允许清单在 `src/main/axiom/agent-factory/certified-providers.ts` 的 `CERTIFIED_PROVIDER_COMBOS`；V1 只有下列四个组合，`endpointProfile` 均为 `subscription`（用户在 harness 中已有的登录或自行配置），不存储凭据。当前状态均为 `provisional`：D57 的 2026-10-20 修订记录真实 Codex smoke 未产出提案（目录信任阻塞）；D58 已 ACCEPTED（B structured/app-server 首选、A exec 后备），真实 provider 认证仍待通道实施与权限映射。D49 测试通过不认证真实组合；后续逐组合补宿主 evidence，证明收到 preamble → `axiom attempt inform` → 产出候选 → 合法 `axiom attempt submit`，再改为 `certified`；V1 出口前所有用到的组合必须完成认证。
 
 | Provider | 模型选择方式 | Tier | 角色 | 最高风险 |
 |---|---|---|---|---|
@@ -100,23 +102,26 @@ AgentSpec 的预算只含本次 Attempt 的 maxRuntimeMinutes（Task → Mission
 
 axiom.policy.show/update 及 CLI `axiom mission policy show --mission <id> --json` / `update --mission <id> [--routing-file <json>] [--concurrency <n>] --json` 已注册。M2 patch 仅应用 routing（整体替换，省略字段使用默认值）与 concurrencyLimit；budget 键在 handler 的写入前检查中一律返回 approval_required（M4），其他未知键返回 invalid_argument。更新经现有 mutation fence/receipts，policy 与 policy.updated（before/after）同一事务持久化。
 
+M2 之后：落实 D58 的执行通道与权限映射后补真实组合认证；M3 使用独立验证证据，不把 provisional 等同已认证。
+
 ## 4. 状态机与 readiness
 
-完整枚举/转换见 Glossary §4、Architecture §6；代码源为 `lifecycle.ts`。M1 可走：
+完整枚举/转换见 Glossary §4、Architecture §6；代码源为 `lifecycle.ts`。M2 已合入的路径：
 
 ```text
 Mission: create → ANALYZING → propose → PLAN_REVIEW → approve → PLANNED → start → EXECUTING
                           ← reject ←
 Goal: 用户输入创建即 ACTIVE；后续 PROPOSED → ACTIVE，旧 ACTIVE → SUPERSEDED
 Plan: PROPOSED → APPROVED 或 REJECTED
-Task: approve 物化 DEFINED；start 重算为 READY；可授权 CANCELED
+Task: approve → DEFINED；start → READY；admission → RUNNING；submit → SUBMITTED
+      无 Submission 的失败 → NEEDS_FIX → READY（重试）或 BLOCKED（耗尽）；可授权 CANCELED
 ```
 
-合法转换表包含未来阶段，但 M1 没有推进 RUNNING、SUBMITTED、VERIFIED、INTEGRATED 或 COMPLETED 的产品执行链。Orca `completed` 仅指当前 Attempt 已结算，不能显示为 Task 完成；UI 只有 INTEGRATED 计入进度。
+合法转换表包含未来阶段；M2 已推进 RUNNING / SUBMITTED，尚不执行独立验证、集成或 Mission 完成。Orca `completed` 仅指当前 Attempt 已结算，不能显示为 Task 完成；UI 只有 INTEGRATED 计入进度。
 
 暂停/阻塞前的 Mission 状态保存在 `missions.previous_status`；resume 只用于 PAUSED，内部 unblock 用于 BLOCKED，恢复目标必须等于该字段。嵌套 PAUSED/BLOCKED 经持久 `mission.status` 审计回放恢复更早返回点。Task 进入 BLOCKED 保存 `task_stages.previous_stage`，解除时只能返回该 stage（或取消），不能任意跳跃。条件更新不命中时抛 `stale_state`。
 
-M1 仅允许首个 Plan 批准。`plan-materialization.ts` 校验共享 schema、唯一 id、合法 milestone、端点、重复边、自环与 DAG 后，将提案 `T01` 等 id 映射为新 Orca Task id；Task 创建 `deps=[]`，Orca 投影即 `ready`，Axiom stage 为 DEFINED。批准后 Mission 为 PLANNED，此时不会 READY；必须 `mission start`。
+M2 仍仅允许首个 Plan 批准；替代计划批准属于 M5。`plan-materialization.ts` 校验共享 schema、唯一 id、合法 milestone、端点、重复边、自环与 DAG 后，将提案 `T01` 等 id 映射为新 Orca Task id；Task 创建 `deps=[]`，Orca 投影即 `ready`，Axiom stage 为 DEFINED。批准后 Mission 为 PLANNED，此时不会 READY；必须 `mission start`。
 
 `task-readiness.ts` 对 DEFINED 重算 READY，要求：
 
@@ -137,8 +142,8 @@ ContextBuilder/AgentFactory 的异步构建在 admission 事务之前完成。�
 
 | 配置 | 含义 | M2 enforcement |
 |---|---|---|
-| `policy.budget.maxAttempts` | Mission 总 Attempt 数 = 全部 Task `attempt_count` 之和 | readiness 与 admission 重查；有 READY 候选且耗尽时 Mission BLOCKED |
-| `policy.budget.maxRuntimeMinutes` | 默认每次 Attempt 运行时长上限，**不是** Mission 总时长 | AgentFactory 采用 Task → Mission → 45 分钟；M2-08 RecoveryService 按 `attempt_bindings.created_at` + 绑定 AgentSpec 的 `budget.maxRuntimeMinutes` enforce；不映射到 `workerStart.timeoutMs` |
+| `policy.budget.maxAttempts` | Mission 总 Attempt 数 = 全部 Task `attempt_count` 之和 + Planner bindings 数量 | readiness 与 admission 重查；有 READY 候选且耗尽时 Mission BLOCKED |
+| `policy.budget.maxRuntimeMinutes` | 默认每次 Attempt 运行时长上限，**不是** Mission 总时长 | AgentFactory 采用 Task → Mission → 45 分钟；M2-08 RecoveryService 按 `attempt_bindings.created_at` + Task spec / Mission policy 的 runtime cap enforce（两者均无 cap 时不限，不采用 Factory 的 45 分钟默认值）；不映射到 `workerStart.timeoutMs` |
 | `policy.budget.maxWallClockMinutes` | 可选正数；Mission 自第一次 `mission.status.after.status = EXECUTING` 审计起的总 wall-clock，含暂停/阻塞时间 | admission 按注入时钟重查；有 READY 候选且耗尽时 Mission BLOCKED |
 | `policy.concurrencyLimit` | Mission 的 RUNNING Task 总数 | admission 事务内重查；满额只跳过，不 BLOCKED |
 | `policy.routing.providerConcurrency` | provider → 正整数上限，默认 `{}` 表示未设 provider cap | RUNNING Tasks 的最新 seq binding JOIN AgentSpec.provider；事务内重查，满额只跳过 |
@@ -147,8 +152,10 @@ ContextBuilder/AgentFactory 的异步构建在 admission 事务之前完成。�
 
 Mission 总 Attempts/wall-clock 耗尽通过既有 `blockMission(missionId, budget_exhausted)` 保留 `previous_status = EXECUTING`，同事务追加 `budget.exhausted {dimension, limit, used}`；Approval 请求对象留给 M4。并发满额、无可选 provider 与 Question/Approval 不视为预算耗尽。
 
-每轮返回 admitted（有序身份）与 skipped（taskId/reason）；skip reason 为 concurrency、provider_concurrency、task_attempts、question、approval、no_eligible_provider 或 stale。只有本轮 admitted 非空或 Mission 被预算阻塞才写一条 `scheduler.round {trigger, admitted, skipped}`；空轮和全部跳过的轮不写此事件。构建合同可留下可复用的内容寻址行，这不等于 admission。M2-12 / D59 在 boot recover 与消费者同步后，对每个 EXECUTING 且未因 Run 绑定丢失而 blocked 的 Mission 显式请求一轮 resume，覆盖已持久化 READY、readiness 没有变化的情形；没有 READY 时仍不写 scheduler.round。
+每轮返回 admitted（有序身份）与 skipped（taskId/reason）；skip reason 为 concurrency、provider_concurrency、task_attempts、question、approval、no_eligible_provider 或 stale。只有本轮 admitted 非空或 Mission 被预算阻塞才写一条 `scheduler.round {trigger, admitted, skipped}`；空轮和全部跳过的轮不写此事件。构建合同可留下可复用的内容寻址行，这不等于 admission。M2-12 / D59 在 boot recover 与消费者同步后，对每个 EXECUTING 且未因 Run 绑定丢失而 blocked 的 Mission 显式请求一轮 resume，覆盖已持久化 READY、readiness 没有变化的情形；没有 READY 时仍不写 scheduler.round。未发出的 binding 由 M2-08 orphan 规则结算，不重复使用旧 seq。
 
+
+M2 之后：M3 的验证结算接入既有调度触发；M4 接预算 Approval，token/成本总预算仍未 enforce。
 
 ### Attempt launch（M2-05）
 
@@ -166,6 +173,8 @@ M2-10 的 `AttemptSummary.role` 为绑定 AgentSpec 的 `spec.role`（`planner |
 
 
 M2-06b：pending question_threads 通过 attempt_bindings 关联 Task；`blockingQuestionOrApproval` 使该 Task 无法 admission 新 Attempt。回答后 pending 消失并重算 readiness；当前 Attempt 仍 RUNNING，问题不改变其执行状态。超时或取消等待不自动关闭问题；结算由内核 closeQuestionsForDispatch 关闭。
+
+M2 之后：D58 补 AgentSpec 到 harness 权限的确定性映射与真实启动证据；M3 消费不可变 Candidate。
 
 ### Planner（M2-09）
 
@@ -197,6 +206,8 @@ Recovery 扫描所有 planner bindings：未提案的 terminal worker 或确定 
 
 `TaskSpec.role?: string` 仅为 DEF-4 的非空标签，提案/批准/Task spec 原样保留；Task JSON 投影附带 spec。没有 skills 物化、CodeGraph（DEF-5）或 DEF-10 ①②③。
 
+M2 之后：D58 解决真实 Planner 通道/目录信任与权限映射；M3 复审 DEF-4/5，Planner v2 与 replanning 留 M5。
+
 ### Recovery（M2-08）
 
 `RecoveryService.recover()` 保留同步 Mission report；独立的 `async reconcileAttempts({missionId?})` 处理 Attempt。每次重新读取 binding、Task stage、worker/dispatch 与执行宿主观测；仅保存进行中的 Promise，重叠调用等待前一轮后重读持久状态。扫描非终态 Task 的 bindings，加上仍活跃的 kernel worker 对应 binding；CANCELED Task 的已结算资源也重查，补齐 kernel commit 与 release/audit 之间的崩溃窗口。旧 seq 不得结算最新 RUNNING admission。
@@ -221,13 +232,15 @@ agent 退出后到下一次成功 reconcile（≤ 一个 60 s 间隔），`attem
 
 `attempt_observation_facts` 最新 liveness facet 的 homeReceivedAt 是持久的 unverifiable-since：进入 unverifiable 只写一条；连续 tick 不写；恢复 live 写一条 live，下一次失联重新计时。stop_unknown 的停止结果仍未确认，即使宿主再次 live，也不写 live fact 重置该时钟；runtime-budget stop 的下一 tick 开始按 e 计时。reconcile report 的 liveness 仍保留实际宿主折叠值，stop_unknown 的计时事实与证据明确记录 reason=stop_unknown。证据 JSON 含 taskId/attemptId/seq/branch/worktreeId、workerState/dispatchStatus、liveness/reason、since/abandonedAt/toleranceMinutes 与该 Attempt 的 observationFacts；Artifact kind=evidence、related=[Task,dispatch]。无宿主退出证据时不冷启动同一 Attempt/worktree。
 
-`settleAttemptWithoutSubmission` 在一个 store transaction 中只处理最新且无 Submission 的 RUNNING binding：RUNNING → NEEDS_FIX（原 reason），再按权威 attemptCount < retryPolicy.maxAttempts 转 READY（retry）或 BLOCKED（retry_budget_exhausted，previousStage=NEEDS_FIX）。不增加 attemptCount。launcher 的 launch_failed 与 Scheduler 的未绑定 launch_rejected 共用该入口；Orca Task failed/blocked 时，launcher 传最新 dispatch 为 retryOf，包含 abandoned/circuit_broken 后的新 Attempt。READY 触发既有 stage_change 调度，暂停 Mission 不 admission。
+`settleAttemptWithoutSubmission` 在一个 store transaction 中只处理最新且无 Submission 的 RUNNING binding：RUNNING → NEEDS_FIX（原 reason），再按权威 attemptCount < retryPolicy.maxAttempts 转 READY（retry）或 BLOCKED（retry_budget_exhausted，previousStage=NEEDS_FIX）。不增加 attemptCount。launcher 的 launch_failed 与 Scheduler 的未绑定 launch_rejected 共用该入口；Orca Task failed/blocked 时，launcher 传最新 dispatch 为 retryOf，包含 abandoned/circuit_broken 后的新 Attempt。首次 failDispatch 将 Orca Task 置 ready，kernel 不接受 retryOf，故该重试的 `dispatch_contexts.retry_of_dispatch_id` 为 null；Axiom 重试关系由 `attempt_bindings` 的 seq 顺序及 `attempt.failed → attempt.started{seq:2}` 审计证明。READY 触发既有 stage_change 调度，暂停 Mission 不 admission。
 
 所有拥有 BEGIN IMMEDIATE 的 kernel 操作均在 Axiom transaction 外完成，再写 Axiom consequence；failDispatch 已用可嵌套 savepoint，可与 audit/两次 stage change 同事务。保留/释放遵守内核 disposition，不能强制清理 possibly-live 或 identity_unproven 资源。
 
 `axiom.mission.cancel` 先同步持久化 CANCELED/Task CANCELED，再 await reconciliation；返回 `{mission, attempts?}`，entries 为 `{attemptId,taskId,seq,liveness,action}`。CLI 每 Attempt 输出 action；旧响应省略 attempts 仍兼容。pause 只停止 admission；RUNNING Attempt 继续，cancel/restart 的剩余清理由同一恢复路径处理。
 
 **stop_unknown 的内核边界（M2-08 Attempt 2）**：beginWorkerStop 拒绝第二次 stop，受支持的退出路径是 abandon；这与 verifier 核对的上游 Orca `ce2d60834c` 一致，不需要改内核或增加生命周期边。取消时下一 tick 直接 abandon（无 evidence Artifact），记录 priorStop、放弃时的宿主 liveness 与 release 收据；RUNNING 时无论宿主观测如何，按 e 等待 tolerance 后带 evidence abandon。abandon 只结束执行权威，不宣称进程退出；possibly-live 资源仍由内核保留，通常 release 为 retained / identity_unproven。旧 runtime stranded stopping 归一化后遵守同一规则；同 runtime 正在 stopping 的调用仍拥有结果，恢复不抢占。后续 tick 不重复 attempt.stop_unknown，取消审计重放保留最初的 priorStop/liveness，不因宿主观测变化重复记录。`.axiom-work/reports/M2-08-1.md` 保留为历史证据，其 scope-gap 判断由本规则取代；修复与验证记录见 `.axiom-work/reports/M2-08-2.md`。
+
+M2 之后：M3 接 Verification 队列重驱与失败证据；M4 扩展 Integration/Approval 恢复，D58 的新通道必须保持相同 liveness 语义。
 
 ## 5. 合成 session party 与 Run 绑定（D14）
 
@@ -241,7 +254,7 @@ M1-01 契约证据见 `kernel-contract/*.test.ts` 与 [D14 spike](../review-evid
 
 M2-09 增加 mutation `axiom.mission.plan {missionId}`，响应 `{attempt:{attemptId:string|null,seq,branch,worktreeId:string|null,provider}}`；CLI 成功文本为 `Planner started: attempt <id> on <branch>`。`axiom.plan.propose` 的两个互斥形式为 `{missionId,planRevision,provenance}`（既有人工作法）或 `{missionId,planRevision,attemptId,from?}`（Planner）。后者由 CLI 的 `--attempt` / `--dispatch-capability` 提供身份，from 复用 Worker terminal/session 解析，capability 放 envelope，仍使用既有契约版本与 mutation receipts。传入 attemptId 时不得自报 provenance。`plan_pending` / `illegal_transition` 继续由原 proposal settlement 返回。Planner 的 `planner_worktree_dirty` / `planner_worktree_missing` 与既有 `no_eligible_provider` 经共享 mapper 的 structured runtime passthrough 保留 code/data，不走 `invalid_argument` 的 computer-use recovery 分支。Attempt 1 的映射阻塞已在 Attempt 2 修复，验证见 `.axiom-work/reports/M2-09-2.md`；旧报告保留为历史记录。
 
-M1 已注册 `axiom.mission.create/show/list/start/pause/resume/cancel`、`axiom.goal.propose/activate/show`、`axiom.plan.propose/approve/reject/list/show`、`axiom.task.list/show/cancel`；M2-02 已注册 `axiom.artifact.put/read/list`（put 参与 mutation fence/收据）；M2-05 已注册只读 `axiom.attempt.show {attemptId}` / `list {missionId, taskId?}`；返回 `attempt` / `attempts`（Glossary §4.6），未知 dispatch 返回 `attempt_not_found`，CLI 为 `axiom attempt show/list`。M0 的 `axiom.namespace.get` 保留。其他命名空间/方法在映射 §4c 标为后续。
+M1 已注册 `axiom.mission.create/show/list/start/pause/resume/cancel`、`axiom.goal.propose/activate/show`、`axiom.plan.propose/approve/reject/list/show`、`axiom.task.list/show/cancel`；M2-02 已注册 `axiom.artifact.put/read/list`（put 参与 mutation fence/收据）；M2-05 已注册只读 `axiom.attempt.show {attemptId}` / `list {missionId, taskId?}`；返回 `attempt` / `attempts`（Glossary §4.6），未知 dispatch 返回 `attempt_not_found`，CLI 为 `axiom attempt show/list`。M0 的 `axiom.namespace.get` 保留。M2 的 policy、Worker verbs、message、task.create 与 mission.plan 已注册（详见本节对应段）；未注册方法在映射 §4c 明确标为后续。
 
 `AXIOM_MUTATION_METHODS` → `isOrchestrationMutation` 同时接入契约栅栏与 durable mutation 收据。mutation envelope 必须带 `orchestrationContractVersion:1`，缺失/不匹配会被 `orchestration_migration_required` 拒绝；不要把版本字段放进 params。调用方按约定必须带 `orchestrationRequestId`；内核收到该字段时，以 caller fingerprint + id 查 `mutation_receipts`：同 payload 回放，异 payload 拒绝 `request_mismatch`。当前内核无 request id 时直接执行，不提供去重，调用方不得依赖它自动补幂等。
 
@@ -268,6 +281,8 @@ CLI `axiom attempt <verb> --attempt <id> --dispatch-capability <token> --summary
 
 `axiom.message.list {missionId, type?, taskId?, attemptId?, pendingOnly?}` 是 read，按 messages.sequence 从旧到新返回 `{messages:[{id,type,taskId,attemptId,summary,artifactIds,related,subtask?,createdAt,pending}]}`。读取 Mission Run 的全部严格 Axiom 载荷（包括投递副本），跳过普通/非法载荷；`REQUEST_SUBTASK` 在没有同 Mission、`objectKind: message`、`objectId: messageId` 的 `subtask.resolved` 审计时为 pending。M2-06b 增加内核 question_threads 的 QUESTION 投影：即使无 payload.axiom，也按 question message id 与 dispatch 关联识别；附带 question、options、answer（answer_body）、status，pending 仅在 status=pending 时为 true。CLI：`axiom message list --mission <id> [--type <T>] [--pending] --json`。
 
+M2 之后：M3 复用 typed channel 投递验证证据；D58 的执行通道不能绕过 capability / generation 栅栏。
+
 ### Submission settlement（M2-07，D2 / D4 / D11 / D16）
 
 `axiom.attempt.submit` 已注册为 mutation，参数 `{attemptId, from, senderPaneKey?, report}`，Task/Mission 从 binding 解析，不能由 Worker 自报；响应 `{submission, candidate, duplicate}`。报告严格要求 summary（≤4,000）、filesChanged、checksRun（command/result=pass|fail|skipped、可选 durationMs/note）、artifacts、limitations、risks、questions、followUps；拒绝多余字段。每个 Artifact 必须属于同 Mission，且 related 包含 Task 或 Attempt；Artifact 内容先独立上传，本事务只保存引用，不复制内容。
@@ -293,13 +308,15 @@ axiom attempt submit --attempt <attemptId> --dispatch-capability <dcap> --report
 
 Candidate id 为 `cand_` + sha256(taskId + ':' + commit)。后续 Attempt 采用同一 Task 的相同 commit 返回 `invalid_argument: candidate_exists`，不得把旧 Candidate 改绑。唯一键是 commit，不是 tree；不同 commit 的同一 tree 不触发该唯一键。候选快照只允许在绑定的 `axiom/attempt/<taskId>/<seq>` 分支，不前进集成基线/目标分支。通用 stage API 对非 AttemptSettlement 的 RUNNING → SUBMITTED 返回 illegal_transition（reason=submission_required）。
 
-**Attempt 2 addendum（2026-10-19）**：retention 属于终端资源维护，移至结算提交后、SUBMISSION 消息之前；内核方法自行拥有事务，保持不变。成功以独立事务记录 `attempt.terminal_retained` 与 retainDisposition（含 already_released / no_owned_resource，均非错误）；异常只记录 `attempt.terminal_retain_failed`，不回滚 Submission/Candidate/stage/VerificationRun，也不阻止发信。若在 commit 与 retain 之间崩溃，已结算 dispatch 与 not_requested 资源保留，M2-08 RecoveryService 后续补 retain；重复 submit 不重跑 retention。
+**Attempt 2 addendum（2026-10-19）**：retention 属于终端资源维护，移至结算提交后、SUBMISSION 消息之前；内核方法自行拥有事务，保持不变。成功以独立事务记录 `attempt.terminal_retained` 与 retainDisposition（含 already_released / no_owned_resource，均非错误）；异常只记录 `attempt.terminal_retain_failed`，不回滚 Submission/Candidate/stage/VerificationRun，也不阻止发信。若在 commit 与 retain 之间崩溃，已结算 dispatch 与 not_requested 资源保留，M2-08 RecoveryService 已实现补 retain；重复 submit 不重跑 retention。
 
-Submission 的 summary 仍完整保存（≤4,000）；SUBMISSION 邮件沿用 MessageSummarySchema 的 2,000 字符上限，超长取前 1,999 字符加 `…`。共享 MessageRelatedSchema 增加可选 submissionId；publisher 在不可变 id 生成后写入 `related: {submissionId}`，Artifact ids 不混入 Submission id。消息丢失后的重复提交也使用原 Submission 的摘要、Artifact 和 id。Attempt 1 的例外请求与红测是历史证据；当前实现与回归结果见 `.axiom-work/reports/M2-07-2.md`，宿主验证仍独立进行。
+Submission 的 summary 仍完整保存（≤4,000）；SUBMISSION 邮件沿用 MessageSummarySchema 的 2,000 字符上限，超长取前 1,999 字符加 `…`。共享 MessageRelatedSchema 增加可选 submissionId；publisher 在不可变 id 生成后写入 `related: {submissionId}`，Artifact ids 不混入 Submission id。消息丢失后的重复提交也使用原 Submission 的摘要、Artifact 和 id。Attempt 1 的例外请求与红测是历史证据；当前实现与回归结果见 `.axiom-work/reports/M2-07-2.md`，已有宿主结果见 `.axiom-work/verifications/M2-07-2.md`。
 
-M2-07 宿主 spec 为 `tests/e2e/mission-attempt-submit.spec.ts`（需要 AXIOM_FIXTURE_REPO），D49 provider 解析既有 Artifact 配方取得 Mission/Task id；先记录 preamble ledger，再跑冻结 retry/attempt-1/succeed stub；在 REPORT.md 副本尾部追加 Mission/Task/Attempt 归属后上传、submit。冻结 stub 的报告内容原本完全相同，归属附记防止内容去重命中另一 Task 的 related 元数据；不改变 fixture patch 或场景。只有设置 ORCA_E2E_CLI_ENTRY 的 submit spec 启用该后半段；旧 launch spec 不设置它，仍测试 RUNNING 与重启，原有断言不放宽。Attempt 2 不改这两个宿主场景，由 verifier 重跑。
+M2-07 宿主 spec 为 `tests/e2e/mission-attempt-submit.spec.ts`（需要 AXIOM_FIXTURE_REPO），D49 provider 解析既有 Artifact 配方取得 Mission/Task id；先记录 preamble ledger，再跑冻结 retry/attempt-1/succeed stub；在 REPORT.md 副本尾部追加 Mission/Task/Attempt 归属后上传、submit。冻结 stub 的报告内容原本完全相同，归属附记防止内容去重命中另一 Task 的 related 元数据；不改变 fixture patch 或场景。设置 ORCA_E2E_CLI_ENTRY 的 fixture helper 启用该后半段；旧 launch spec 不设置它，仍测试 RUNNING 与重启，原有断言不放宽。M2-11 仅对新 exit flow 设置一次性 crash marker；已有两条 spec 的宿主通过记录见 `.axiom-work/verifications/M2-10-1.md`，本次仍需回归。
 
-### Questions 与 D50 待决项（M2-06b）
+M2 之后：M3 在独立 verification worktree 消费 QUEUED、记录 verdict；M4 才集成/释放 Candidate。D49 提交不构成真实 provider 认证。
+
+### Questions 与 D50 待决项处置（M2-06b）
 
 `axiom.attempt.ask {attemptId, from, senderPaneKey?, question?, options?, timeoutMs?, resume?}` 为 mutation；question 与 resume 至少一项。鉴权后调用内核 `createQuestion`，直接使用它创建并投递到 `run:<runId>` 的消息，不创建第二封 QUESTION。先持久化 acceptance receipt，再通知 Run、长轮询 `dispatch:<attemptId>`：answered 返回 answer / answerMessageId；deadline 返回 timedOut；断连 signal 返回 cancelled；内核结算将 pending thread 关闭，等待者返回 dispatch_inactive。timeout 使用内核 clamp（默认 600 秒、上限 1800 秒）。resume 只接受同一 dispatch 的 question id；`--retry-request` 回放收据，恢复等待使用新请求 + resume。CLI 支持可重复 `--option` 与 `--timeout-ms`，transport 比内层等待多 5 秒。
 
@@ -322,6 +339,8 @@ M2-07 宿主 spec 为 `tests/e2e/mission-attempt-submit.spec.ts`（需要 AXIOM_
 
 所有成功处置写 `subtask.resolved.after = {decision,reason,taskId?}`；再次 resolve 返回 invalid_argument。CLI `axiom message resolve --mission <id> --message <id> --accept|--reject --rationale <text>` 要求恰好一个决定。用户 task.create 无请求 Attempt，仅执行 duplicate / dependency / budget；来源请求的创建仍执行六项。answer、resolve、task.create 均进 AXIOM_MUTATION_METHODS，与 ask 一起使用既有 envelope 栅栏和收据。M4 接 Approval，M5 将请求量作为 replan 信号。
 
+M2 之后：M3 复用 Question/待决项投影；M4 接 Approval，M5 使用 REQUEST_SUBTASK 作为 replan 输入。
+
 ## 7. Admission 守卫（映射 §4b）
 
 `mission-managed-run-guard.ts` 按 Run、Task、dispatch 查 Mission 归属，在对象解析后、首次写入前拒绝。非 Mission Run 保持原行为；未知对象保持原错误。以下路径在 M1-07 / M2-06a 落地：
@@ -338,14 +357,16 @@ M2-07 宿主 spec 为 `tests/e2e/mission-attempt-submit.spec.ts`（需要 AXIOM_
 | run / runStop / coordinator-start | 保持退役；契约 fence / CLI dispatch-handlers 拒绝 |
 | workerStop / workerAbandon（M2-06a） | `assertNotMissionManaged`；`orchestration/worker/worker-stop.ts` / `worker-control.ts`，首次 stop/abandon 前 |
 | workerRelease / workerRetain / workerTerminalUserInput（M2-06a） | `orchestration/worker/worker-release.ts`；输入先解析 pane（含 session/handle），守卫查资源的 dispatch，覆盖已结算保留资源与 pane remint |
-| ask（M2-06a） | `orchestration/messaging/ask-methods.ts`；activeDispatch 解析后，createQuestion 前；Worker ask 由 M2-06b 提供 |
+| ask（M2-06a） | `orchestration/messaging/ask-methods.ts`；activeDispatch 解析后，createQuestion 前；Worker ask 已由 M2-06b 提供 |
 | reply（M2-06a） | `orchestration/messaging/message-methods.ts`；原消息 run_id 与发送者 Run 两侧检查，markAsRead / answerQuestion 前 |
 | send(group)，含 @all / @worktree（M2-06a） | `orchestration/messaging/send-methods.ts`；路由与发送者 Run 检查，sendGroupMessage 前 |
 | workerStart --on（M2-06a 测试） | 沿用 `worker/workers.ts` 的 M1-07 守卫；测试证明 federation 前拒绝，无新增内核代码 |
 
-M2-06a 的 `admission-worker-control.test.ts` 与 `admission-rpc.test.ts` 覆盖上述入口的 Mission/非 Mission 对照。Control Plane 后续 stop/abandon 调用走 service 边界；进程内 `caller: 'control_plane'` 不对 RPC params 开放。
+M2-06a 的 `admission-worker-control.test.ts` 与 `admission-rpc.test.ts` 覆盖上述入口的 Mission/非 Mission 对照。Control Plane 的 stop/abandon 调用已走 M2-08 service 边界；进程内 `caller: 'control_plane'` 不对 RPC params 开放。
 
-完整测试为 `src/main/axiom/admission/{mission-managed-run-guard,admission-rpc,admission-run,admission-message}.test.ts`。task-update / worker-start 有三层拒绝：CLI 无终端身份时，`src/cli/handlers/orchestration/terminal-identity.ts` 的 `resolveCoordinatorTerminalHandle` 先抛 `no_active_sender_terminal`，尚未发送 mutation RPC；进入 runtime 后，Run 绑定解析可返回 `run_required` / `consumer_fenced`；到达 Mission 守卫后返回 `mission_managed`，由 M1-07 绑定 coordinator 的 RPC 测试覆盖。不能为取得某个错误码而给终端接管合成 Run。
+完整测试为 `src/main/axiom/admission/{mission-managed-run-guard,admission-rpc,admission-run,admission-message,admission-worker-control}.test.ts`；逐入口证据见 [M2 出口矩阵](../review-evidence/axiom-m2/M2-exit-e2e.md)。task-update / worker-start 有三层拒绝：CLI 无终端身份时，`src/cli/handlers/orchestration/terminal-identity.ts` 的 `resolveCoordinatorTerminalHandle` 先抛 `no_active_sender_terminal`，尚未发送 mutation RPC；进入 runtime 后，Run 绑定解析可返回 `run_required` / `consumer_fenced`；到达 Mission 守卫后返回 `mission_managed`，由 M1-07 绑定 coordinator 的 RPC 测试覆盖。不能为取得某个错误码而给终端接管合成 Run。
+
+M2 之后：M3 新增验证入口继续走 Control Plane；D58 如新增执行通道，必须保留本表的旁路拦截。
 
 ## 8. Mailbox 与恢复
 
@@ -375,7 +396,9 @@ M2-06a `MessageRouter` 在 `store.transaction('message_route', …)` 内写 Cont
 
 M2-06b 审计：question.created / question.answered 的 objectKind=message、objectId=question message id；前者带 Task/Attempt，后者带 answerMessageId 与 status，不复制回答正文。消费者按 question_threads 识别无 Axiom payload 的 QUESTION，写 message.received。REQUEST_SUBTASK 的 subtask.requested、checks_failed、resolved 与 Task 创建在同批事务内；重放不重复创建。task.created 带 origin/provenance/messageId?；plan.minor_adjustment 带 classification=MINOR_ADJUSTMENT、origin=user|request_subtask、Task 与边。人工接受失败在返回 invalid_argument 前保留 checks_failed 审计，仍可修复后重试或拒绝。
 
-## 9. 操作与后续里程碑
+M2 之后：M3 为 Verification 持久队列补重驱；M4 接 Integration 与 Approval 过期恢复，不以收件/ACK 代替完成证据。
+
+## 9. M2 出口操作与后续里程碑
 
 操作只经 CLI/RPC；不要手改数据库。先 `axiom repo add --path <repo> --json` 注册，再以返回的 `repo.id` 使用 `--repo id:<id>`。检查示例：
 
@@ -391,7 +414,7 @@ axiom attempt list --mission <missionId> --json
 axiom attempt show --attempt <dispatchId> --json
 ```
 
-`mission create --goal-file` 支持 Markdown（全文 objective，空 acceptanceCriteria）或 GoalBody JSON；`plan propose --file` 需要 PlanProposal JSON，fixture decomposition 必须先转换。`plan approve --plan <id> --resolver <actor>` 后再 `mission start`。UI 从 Mission list 选择，Refresh 或 mutation 后重读；选择的 Mission id 不跨重启持久化。
+`mission create --goal-file` 支持 Markdown（全文 objective，空 acceptanceCriteria）或 GoalBody JSON。`axiom mission plan --mission <id>` 启动 Planner，等 `mission show` 为 PLAN_REVIEW 后查看 `plan list/show`，执行 `plan approve --plan <id> --resolver <actor>`，再 `mission start --mission <id>`。人工 `plan propose --file` 路径仍可用，需要 PlanProposal JSON，fixture decomposition 必须先转换。UI 从 Mission list 选择，Refresh 或 mutation 后重读；选择的 Mission id 不跨重启持久化。
 
 M2-10：Mission Home 的 Attempt 计数仅包含 `role=worker` 的 RUNNING / SUBMITTED；Planner 为 STARTING / RUNNING 时显示进行中。ANALYZING 可 Start Planner；进行中的 mutation、活跃 Planner 或 PROPOSED plan 禁用重复启动。Planner readiness 的长等待期间保留 busy。Pending items 用 `message.list({missionId,pendingOnly:true})` 列出 QUESTION / REQUEST_SUBTASK，点击跳到所属 Task Detail。Task Detail 读取 Task 范围的 Attempt / message 列表，展示最新提交的 Attempt 的 Candidate 证据与按时间升序的单列消息；pending QUESTION 可回答，pending REQUEST_SUBTASK 可附理由接受/拒绝。answer/resolve/plan 均走统一 request-id envelope，不确定重试复用同一载荷的 id；成功或失败都重读 RPC，不用 mutation 响应推断权威状态。Task 选择只在当前 Mission 会话内保留，切换 Mission 时清空。worktreeId 经既有 `activateWorktreeFromSidebar` 导航，不新增执行面板。
 
@@ -405,9 +428,19 @@ M2-10：Mission Home 的 Attempt 计数仅包含 `role=worker` 的 RUNNING / SUB
 | `plan_pending` | 已有 PROPOSED 计划；先查看并 approve/reject，不重发新计划 |
 | `stale_state` | 预期源状态与数据库不符；重读当前对象再决定动作；不盲目覆盖 |
 | `plan_invalid` / `illegal_transition` | 提案结构/DAG/Goal 关联无效，或转换不合法；看错误 data，修正输入 |
-| `replan_not_supported` | M1 不能批准替代计划；Goal 在 EXECUTING 激活虽可进入 REPLANNING，完整替代闭环留给 M5 |
+| `replan_not_supported` | M2 仍不能批准替代计划；Goal 在 EXECUTING 激活虽可进入 REPLANNING，完整替代闭环留给 M5 |
 | `orchestration_migration_required` / `request_mismatch` | 契约 envelope 缺失/不兼容，或同幂等 id 换了载荷；升级兼容客户端或为新意图使用新 id |
 
-后续边界按 Architecture §20 排序：M2-02/03/04 已提供 AgentSpec/ContextPackage、RulesEngine、Scheduler 与预算 admission；M2-05 已接 Attempt launcher/读接口；M2-06a/b 已接 Worker 通道，M2-07 已接 Submission/Candidate，Attempt 2 修复后的宿主验证由 verifier 执行；M2 后续增加 Planner 与恢复；M3 加独立验证与 NEEDS_FIX；M4 加串行集成、Approval、Delivery/完成门及全对象恢复；M5 加完整 replanning 与可替换决策模型；M6 才覆盖远端扩展。
+M2 出口证据以 [M2-exit-e2e.md](../review-evidence/axiom-m2/M2-exit-e2e.md) 的六条矩阵与 verifier 的宿主记录为准。新 exit spec 要求在同一 profile 完成 Planner → approve → start → 三根并行 → 一根 crash/retry → 三个 SUBMITTED，并比较四类提交前后持久行及 refs。shell 存活时的退出证明、kernel-first 失败审计与 boot resume 已由 M2-12 / D59 修复，历史诊断分支的宿主结果见 [M2-12 验证](../../.axiom-work/verifications/M2-12-1.md)；本候选仍须复验。`mission-attempt-launch.spec.ts` 保留重启身份/无重复启动的独立证据；M2-10 的五个既有宿主 spec 仍须回归。不得把未运行、skip、QUEUED 或 Worker 自报检查解释为独立验证 PASS。
 
-M2-06a 已补 §7 的 admission 入口；M2-06b 实现 ask/answer、D50 确定性检查、task.create 与 message.resolve；M2-07 submit 当前限制见 §6；M2-10 已将待决项接入 Mission Home 与 Task Detail。出口 e2e 仍需覆盖 Attempt、submission 与 bound-coordinator `mission_managed` 路径；单元/RPC 证据不替代宿主验证。
+| 后续责任 | M2 出口边界 |
+|---|---|
+| M2 出口复验 | M2-12 已合入；verifier 运行本候选的出口与五个既有宿主 spec，填写证据并决定验收；不再保留已修复的审计/boot 缺口为待办 |
+| D58（ACCEPTED）/ D57 | 按 B 首选、A 后备实施 Codex/Claude 执行通道与 AgentSpec 权限映射，补真实 provider smoke 与认证。当前仅 D49 确定性 provider 已有提交实证；不能宣布“三 provider”完成 |
+| M3 | 独立 VerificationService、Candidate worktree、deterministic verdict、Reviewer advisory、失败证据与 NEEDS_FIX 重试；复审 DEF-4/5/6/9/10 对应项 |
+| M4 | 串行 Integration、Approval、Delivery、完成门与全对象恢复；集成基线在此之前不前进 |
+| M5 / M6 | 替代 PlanRevision、完整 replanning / 决策模型；远端扩展与 mixed-version 验证 |
+
+选择 Mission/Task 仍只保留在会话内，未交付跨重启 UI 选择持久化；不是权威对象丢失。本 Task 不扩展这项产品范围。verifier 核验宿主结果与已知缺口；M2 退出决定由 Henry 在证据与 D58 处置齐备后记录。
+
+M2 之后：先处理 D58 的真实执行阻塞与 M3 验证责任；本参考文档的闭合不代表里程碑已获退出批准。

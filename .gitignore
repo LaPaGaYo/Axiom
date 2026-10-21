@@ -223,6 +223,8 @@ ci-shards/
 !docs/review-evidence/axiom-m0/**
 !docs/review-evidence/axiom-m1/
 !docs/review-evidence/axiom-m1/**
+!docs/review-evidence/axiom-m2/
+!docs/review-evidence/axiom-m2/**
 !docs/plans/
 !docs/plans/**
 !docs/archive/

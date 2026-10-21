@@ -15,9 +15,13 @@ import {
 } from './fake-agent-command-override'
 import {
   MissionResponseSchema,
+  MissionPlanResponseSchema,
   type MissionSummary
 } from '../../../src/shared/axiom-contract/mission-params'
-import { PlanResponseSchema } from '../../../src/shared/axiom-contract/plan-params'
+import {
+  PlanListResponseSchema,
+  PlanResponseSchema
+} from '../../../src/shared/axiom-contract/plan-params'
 
 export const FIXTURE_COMMIT = 'a6a8413ecdcbbdb1d34f36950ba7e1aaa5a1a642'
 export function git(args: string[]) {
@@ -32,7 +36,11 @@ export function git(args: string[]) {
   expect(result.status, result.stderr).toBe(0)
   return result.stdout.trim()
 }
-export function invoke(userData: string, args: string[]) {
+export function invoke(
+  userData: string,
+  args: string[],
+  options: { timeoutMs?: number; paneKey?: string } = {}
+) {
   return spawnSync(
     process.execPath,
     [path.join(process.cwd(), 'out', 'cli', 'index.js'), ...args, '--json'],
@@ -42,15 +50,19 @@ export function invoke(userData: string, args: string[]) {
         ORCA_USER_DATA_PATH: userData,
         ORCA_DEV_CLI_INVOCATION: '1',
         ORCA_BACKGROUND_LAUNCH: '1',
-        ORCA_PANE_KEY: 'e2e-forged-pane'
+        ORCA_PANE_KEY: options.paneKey ?? 'e2e-forged-pane'
       },
       encoding: 'utf8',
-      timeout: 30_000
+      timeout: options.timeoutMs ?? 30_000
     }
   )
 }
-export function cli(userData: string, args: string[]): unknown {
-  const result = invoke(userData, args)
+export function cli(
+  userData: string,
+  args: string[],
+  options: Parameters<typeof invoke>[2] = {}
+): unknown {
+  const result = invoke(userData, args, options)
   if (result.error) {
     throw result.error
   }
@@ -69,7 +81,9 @@ export async function withFixtureMission(
     userData: string
     ledgerPath: string
     temp: string
-  }) => Promise<void>
+    releaseWorkers: () => void
+  }) => Promise<void>,
+  options: { planner?: boolean; holdWorkers?: boolean } = {}
 ) {
   const temp = mkdtempSync(path.join(os.tmpdir(), 'axiom-fixture-mission-'))
   const executable = path.join(temp, process.platform === 'win32' ? 'codex.cmd' : 'codex')
@@ -81,11 +95,31 @@ export async function withFixtureMission(
     chmodSync(executable, 0o755)
   }
   const ledgerPath = path.join(temp, 'submissions.jsonl')
+  const holdPath = `${ledgerPath}.hold`
+  let cliEntry = path.join(process.cwd(), 'out', 'cli', 'index.js')
+  if (options.holdWorkers) {
+    // Gate the provider's existing binding poll, after preamble ACK but before any stub work.
+    // This lets the exit spec observe all three live Workers without a timing-based delay.
+    writeFileSync(holdPath, '')
+    const proxy = path.join(temp, 'fixture-cli.cjs')
+    writeFileSync(
+      proxy,
+      `const { existsSync } = require('node:fs')
+if (process.argv[2] === 'attempt' && process.argv[3] === 'show' && existsSync(${JSON.stringify(holdPath)})) {
+  process.stdout.write(JSON.stringify({ ok: false }))
+  process.exit(1)
+}
+const result = require('node:child_process').spawnSync(process.execPath, [${JSON.stringify(cliEntry)}, ...process.argv.slice(2)], { stdio: 'inherit', env: process.env })
+process.exit(result.status ?? 1)
+`
+    )
+    cliEntry = proxy
+  }
   const session = createRestartSession(testInfo, {
     ORCA_BACKGROUND_LAUNCH: '1',
     PATH: `${temp}${path.delimiter}${process.env.PATH ?? ''}`,
     AXIOM_E2E_LEDGER: ledgerPath,
-    ORCA_E2E_CLI_ENTRY: path.join(process.cwd(), 'out', 'cli', 'index.js')
+    ORCA_E2E_CLI_ENTRY: cliEntry
   })
   let app: ElectronApplication | undefined
   try {
@@ -138,14 +172,57 @@ export async function withFixtureMission(
       JSON.parse(readFileSync(path.join(clone, 'scenarios', 'goal', 'decomposition.json'), 'utf8')),
       mission.activeGoalRevisionId
     )
-    const planPath = path.join(temp, 'proposal.json')
-    writeFileSync(planPath, JSON.stringify(proposal))
-    const { planRevision } = PlanResponseSchema.parse(
-      cli(userData, ['plan', 'propose', '--mission', mission.id, '--file', planPath])
-    )
+    let planRevision
+    if (options.planner) {
+      const { attempt } = MissionPlanResponseSchema.parse(
+        cli(userData, ['mission', 'plan', '--mission', mission.id], { timeoutMs: 130_000 })
+      )
+      expect(attempt.provider).toBe('codex')
+      expect(attempt.branch).toBe(`axiom/planner/${mission.id}/1`)
+      await expect
+        .poll(
+          () =>
+            MissionResponseSchema.parse(cli(userData, ['mission', 'show', '--mission', mission.id]))
+              .mission.status,
+          { timeout: 120_000 }
+        )
+        .toBe('PLAN_REVIEW')
+      const { planRevisions } = PlanListResponseSchema.parse(
+        cli(userData, ['plan', 'list', '--mission', mission.id])
+      )
+      expect(planRevisions).toHaveLength(1)
+      planRevision = planRevisions[0]!
+      expect(planRevision.status).toBe('PROPOSED')
+      expect(planRevision.provenance).toMatchObject({ kind: 'planner', actor: 'codex' })
+      expect(planRevision.tasks).toEqual(proposal.tasks)
+      expect(planRevision.edges).toEqual(proposal.edges)
+      expect(planRevision.tasks).toHaveLength(12)
+      expect(planRevision.edges).toHaveLength(20)
+      const incoming = new Set(planRevision.edges.map((edge) => edge.toTaskId))
+      expect(
+        planRevision.tasks
+          .filter((task) => !incoming.has(task.id))
+          .map((task) => task.id)
+          .sort()
+      ).toEqual(['T01', 'T02', 'T03'])
+    } else {
+      const planPath = path.join(temp, 'proposal.json')
+      writeFileSync(planPath, JSON.stringify(proposal))
+      planRevision = PlanResponseSchema.parse(
+        cli(userData, ['plan', 'propose', '--mission', mission.id, '--file', planPath])
+      ).planRevision
+    }
     cli(userData, ['plan', 'approve', '--plan', planRevision.id, '--resolver', 'e2e'])
     cli(userData, ['mission', 'start', '--mission', mission.id])
-    await run({ page: first.page, mission, clone, userData, ledgerPath, temp })
+    await run({
+      page: first.page,
+      mission,
+      clone,
+      userData,
+      ledgerPath,
+      temp,
+      releaseWorkers: () => rmSync(holdPath, { force: true })
+    })
   } finally {
     try {
       if (app) {

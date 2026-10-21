@@ -103,16 +103,20 @@ describe('runtime-controller spawn: hidden until a renderer view mounts', () => 
     const runtime = createRuntimeMock()
     const daemon = installObservableDaemonTestProvider()
     const spawnGate = makeDeferred()
+    const spawnEntered = makeDeferred()
     let mintedSessionId: string | undefined
     daemon.spawn.mockImplementation(async (options: { sessionId?: string }) => {
       mintedSessionId = options.sessionId
+      spawnEntered.resolve()
       await spawnGate.promise
       return { id: options.sessionId ?? 'daemon-pty' }
     })
     const controller = installController(runtime)
 
     const spawnPromise = controller.spawn({ cols: 80, rows: 24, initiallyHidden: true })
-    await vi.waitFor(() => expect(mintedSessionId).toBeDefined())
+    // Synchronize with the mock boundary, not waitFor's 1 s load-dependent deadline.
+    await Promise.race([spawnEntered.promise, spawnPromise])
+    expect(mintedSessionId).toBeDefined()
     // Byte zero (Muse's startup queries) must already be main's to answer.
     expect(isHiddenRendererPty(mintedSessionId!)).toBe(true)
 
@@ -169,16 +173,19 @@ describe('runtime-controller spawn: hidden until a renderer view mounts', () => 
     const runtime = createRuntimeMock()
     const daemon = installObservableDaemonTestProvider()
     const spawnGate = makeDeferred()
+    const spawnEntered = makeDeferred()
     let mintedSessionId: string | undefined
     daemon.spawn.mockImplementation(async (options: { sessionId?: string }) => {
       mintedSessionId = options.sessionId
+      spawnEntered.resolve()
       await spawnGate.promise
       return { id: options.sessionId ?? 'daemon-pty' }
     })
     const controller = installController(runtime)
 
     const spawnPromise = controller.spawn({ cols: 80, rows: 24, initiallyHidden: true })
-    await vi.waitFor(() => expect(mintedSessionId).toBeDefined())
+    await Promise.race([spawnEntered.promise, spawnPromise])
+    expect(mintedSessionId).toBeDefined()
     // The visible mount reports visible and releases the pre-spawn mark.
     getPtySetRendererPtyVisibleListener()(null, { id: mintedSessionId!, visible: true })
     getPtySetHiddenRendererPtyListener()(null, { id: mintedSessionId!, hidden: false })
