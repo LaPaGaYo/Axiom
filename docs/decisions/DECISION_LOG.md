@@ -607,3 +607,25 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **后果**：M3 计划新增 Task（Supervisor 周期 + DecisionEngine 问题集 + 规则基线 + 审计 / 待决项 + 校准评估脚手架）；M2-10 的待处理项面板增加 Supervisor 升级项；D58 选定的通道（B / A）提供事件流作为 Supervisor 的输入。
 
 **取代规则**：授权范围的任何扩大以本条修订行记录，并附校准评估结果。
+
+## D61 · M2 出口：Planning 与 Agent Factory 里程碑按六条出口准则关闭，D52 关闭 — PROPOSED（验证者 2026-10-20，待 Henry 确认）
+
+**背景**：D52 把 M2 分解为 11 个 Task；实际执行 13 个 Task + 2 个上游同步（`docs/plans/M2.md`）：M2-00 … M2-05、M2-06a / 06b / 06c（D57）、M2-07、M2-08、UPSTREAM-1 / UPSTREAM-2（D56）、M2-09（+ 3 个 fix-up attempt）、M2-10、**M2-12（D59，由 M2-11 出口 e2e 发现）**、M2-11（2 个 attempt）。merge 清单：`0b4a67ced3`（M2-00）→ `669dd990f4`（M2-01）→ `a61072502a`（M2-02）→ `9c493465cb`（M2-03）→ `ab9d8e62fd`（M2-04）→ `f0ca598f4c`（M2-05）→ `e306ee73a5`（M2-06a）→ `ece8a4e1e6`（M2-06b）→ `8fb8d6d24f`（UPSTREAM-1）→ `30eaed93c7`（M2-06c）→ `b3d0c6edd9`（M2-07）→ `e0f92f3276`（M2-08）→ `5e1df6f29d`（UPSTREAM-2）→ `1c67a2c1e9` / `d50795c06e` / `1d8029764a`（M2-09）→ `d29f0aa316`（M2-10）→ `bc177584cd` / `814ddc8d9b`（M2-12）→ `06a502151c`（M2-11）。验证记录在 `.axiom-work/verifications/M2-*.md`、`UPSTREAM-*.md`；证据文档 `docs/review-evidence/axiom-m2/M2-exit-e2e.md`。
+
+**六条出口准则的证据**：
+1. **Planner → 3 个并行 Attempt → 3 个 SUBMITTED + Candidate + `verification_runs(QUEUED)`**：`tests/e2e/mission-exit-m2.spec.ts` 宿主 1 passed（`chain-20261020-181715.log`，`[M2-exit] tasks 12 / edges 20 / parallelRunning 3 / submitted 3 / candidates 3 / queuedVerificationRuns 3`）；`mission-plan.spec.ts`（Planner 提案 → PLAN_REVIEW → 释放）、`mission-attempt-launch.spec.ts`、`mission-attempt-submit.spec.ts` 同轮通过。
+2. **四类非法 Submission 拒绝、库快照逐字节不变**：forged `dispatch_capability_invalid`、duplicate `duplicate: true`（既有行回放，零新增）、stale `inactive_dispatch`（inactive 栅栏先于 `stale_dispatch`）、mismatched `dispatch_capability_invalid`（hash 校验先于 `task_dispatch_mismatch`）；`snapshotsIdentical: true`（`attempt_bindings / task_stages / candidates / submissions / verification_runs / dispatch_contexts / worker_dispatches` + fixture refs；仅 `audit_events` / `mutation_receipts` 可增长）。
+3. **三种 provider**：确定性 D49 provider ✓（上列 spec）；真实 provider 的认证证据**未取得**——Codex 0.163.0 TUI 通道的 Folder access 同意屏（`M2-09-smoke-codex.md`，11 次运行）→ D58 已由 Henry 接受（B structured / app-server 首选、A `codex exec` 后备），证据改在所选通道采集（M3 前置项：F3 诊断 Task）。本条**部分满足**，缺口已有 Decision 与 Task。
+4. **重启 / unverifiable / exited**：重启不重复启动、身份保持——`mission-attempt-launch.spec.ts`（`restartLiveness: live ×3`）；unverifiable 容忍 + 证据 Artifact + 内核 abandon——`attempt-reconciliation.test.ts` / `attempt-restart.test.ts`（M2-08）；**exited → FAILED → retry**——出口 e2e 的 crash 步（D59 规则 c′：宿主新鲜前台进程名为 shell → `attempt.failed{process_exited, evidence: shell_foreground}` → NEEDS_FIX → READY → seq 2 → SUBMITTED，`failedSequence 54 → retryStartedSequence 60`）；内核先 fail 的 `attempt.failed{kernel_failed}` 与启动 `resume` 轮次由 M2-12 单测固定。
+5. **§4b 拦截测试**：`src/main/axiom/admission/*.test.ts`（M1-07 四组 + M2-06a 拦截点：workerStop / Abandon / Release / Retain / TerminalUserInput、ask / reply、群发、federation）与 `src/main/axiom/rpc-attempt*.test.ts` / `attempt-authority.test.ts` 的每动词 capability 矩阵；清单见证据文档 §5。
+6. **DEFERRED 逐条核对**：DEF-1 已由 D41 / D45 处理；DEF-2（Settings / Integrations UI 排期）M2 内未触发；DEF-3 首个发布前；DEF-4 / DEF-5 / DEF-10 ①②③ 在 M2-09 前触发，Henry 明确延期到 M3（Reviewer 角色 / 验证范围设计时）；DEF-6 ② 已在 M2-10 前复审（记录在 DEFERRED），①③ 待 M5 / M3；DEF-7 未触发（D58 选通道不是子系统替换；若走 A 的 exec seam，复审时带上）；DEF-8 V1 之后；DEF-9 M3 VerificationService brief 前；DEF-10 ④ M4。
+
+**已知限制（随 M2 出口记录）**：agent 退出的检测延迟 = reconcile 间隔 60 s（"立即触发"订阅 command-finished 留 DEFERRED）；`attempt show` 在 agent 退出后 ≤ 1 个间隔内仍可报 `live`，且 Attempt FAILED 后 shell 存活时 liveness 仍为 PTY 语义；失败 Worker 的 shell PTY 按内核 retain 规则保留（不自动释放）；内核 `retry_of_dispatch_id` 只在 circuit-break / abandon 后链接，Axiom 的重试谱系在 `attempt_bindings` + 审计；真实 provider 认证证据待 D58 通道落地；known-environmental：`skill-recipe-shell`、`orchestration-cli-subprocess`、`mobile-web-app-session-terminal-init`、`terminal-output-frame-chunks-equivalence`（计时敏感），`pty-runtime-hidden-at-spawn-mark` 经 M2-11 修复后观察一轮 verify-main 再决定是否移出。
+
+**决定**：M2 关闭；D52 关闭（实际分解如上，拆分 / 新增均有修订行或本条记录）。M3（Verification + Integration）计划另起 Decision；M3 前置项按 `docs/plans/M2.md` "M3 前置项"：D58 的 F3 诊断 Task、D60 的 Attempt Supervisor Task、D57 认证证据在所选通道采集、DEF-4 / 5 / 6③ / 9 复审。
+
+**理由**：六条准则中五条有宿主或单测证据，第三条的缺口不是实现缺陷而是 harness 通道选择（D58 已决），且已有 Task 与验证方式；继续在 M2 内等待通道实现会把 Verification / Integration 的核心价值往后推。
+
+**后果**：`docs/plans/M2.md` 标记完成；运行日志与项目镜像更新；M3 计划以 D61 为起点。
+
+**取代规则**：无；M3 出口 Decision 记录 M3 的完成。
