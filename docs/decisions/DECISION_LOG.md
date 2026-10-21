@@ -651,6 +651,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **后果**：attempt-launcher 的基线选择按 Task stage 历史决定（M3-04）；D6 / D6a 的分支模型不变，只补充 fix 的起点。
 **取代规则**：以修订行记录。
 
+**修订（2026-10-20，验证者，M3-01 brief 定稿时）**：② 的验证 worktree 路径不再指定为 `<userData>/axiom/verification/<runId>`——路径由 Orca worktree service（`createManagedWorktree`）决定，另建目录就是第二套 worktree manager；`verification_runs.worktree_id` 记录 Orca worktree id。分支 `axiom/verify/<runId>/<claimCount>` 建自该 Attempt 的分支，创建后 `checkout --detach <Candidate commit>` 并把该分支 `branch -f` 到同一 commit（HEAD 与分支都等于 Candidate；任何偏离即 `candidate_mismatch`）；不开终端、`setupDecision: 'skip'`（依赖安装由 M3-02 的检查运行器决定并记录）；"不进 renderer 的 worktree 列表"推迟到 M3-09（M3-01 以 `lineage.orchestrationContext` 标记，供过滤）。应用重启：所有 `RUNNING` 的 run 视为过期（runtime epoch 不同）→ 回收 worktree → `QUEUED` 重排队（claimCount 递增，旧审计与 Artifact 保留）。
+
 ## D65 · V1 验证策略语义（`Policy.verificationRules` 的受支持键）— ACCEPTED（Henry 2026-10-20："先把手上需要开发的做完"，验证者 2026-10-20 提议）
 
 **决定**：`verificationRules` 只接受：`repositoryGates`（`{ low | medium | high: string[] }`，按 Task `risk` 追加在 `requiredEvidence` 之后运行的仓库门禁命令；fixture 默认空）、`timeBudgetMinutes`（单次 VerificationRun 上限，默认 30）、`inconclusiveRouting`（`specialist | human`，默认 `specialist`：先 Reviewer 再人）、`nonCodeTasks`（`artifact_only | human_confirm`，默认 `human_confirm`）、`dangerousPathPatterns`（默认 `.github/workflows/**`、lockfile、`package.json`、`.axiom-work/**`；命中且不在 Task scope → `INCONCLUSIVE(dangerous_change)`）；未知键被 `axiom.mission.policy.update` 拒绝（schema）。verdict 规则：任一 deterministic check `fail` → `FAIL`；全部 `pass` → `PASS`；无 `fail` 但有 `inconclusive` → `INCONCLUSIVE`；`skipped` 必须带策略依据。
