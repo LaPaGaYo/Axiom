@@ -13,10 +13,13 @@ concurrency:
   group: axiom-ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Why: ubuntu-latest moves to Ubuntu 26 from 2026-10-19; a pinned image keeps the second signal
+# stable until a deliberate migration. The dependency install runs at most twice because one
+# npm registry timeout in pnpm's own download failed every job of run #42 before any check ran.
 jobs:
   typecheck:
     name: Typecheck
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -24,7 +27,18 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: ./.github/actions/install-node-dependencies
+      - name: Install Node dependencies
+        id: deps
+        continue-on-error: true
+        uses: ./.github/actions/install-node-dependencies
+
+      - name: Wait before retrying the install
+        if: steps.deps.outcome == 'failure'
+        run: sleep 30
+
+      - name: Install Node dependencies (retry)
+        if: steps.deps.outcome == 'failure'
+        uses: ./.github/actions/install-node-dependencies
 
       - name: Typecheck Node
         run: pnpm tc:node
@@ -37,7 +51,7 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -45,14 +59,25 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: ./.github/actions/install-node-dependencies
+      - name: Install Node dependencies
+        id: deps
+        continue-on-error: true
+        uses: ./.github/actions/install-node-dependencies
+
+      - name: Wait before retrying the install
+        if: steps.deps.outcome == 'failure'
+        run: sleep 30
+
+      - name: Install Node dependencies (retry)
+        if: steps.deps.outcome == 'failure'
+        uses: ./.github/actions/install-node-dependencies
 
       - name: Full lint chain
         run: pnpm lint
 
   axiom-tests:
     name: Axiom tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -60,7 +85,20 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: ./.github/actions/install-node-dependencies
+      - name: Install Node dependencies
+        id: deps
+        continue-on-error: true
+        uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+
+      - name: Wait before retrying the install
+        if: steps.deps.outcome == 'failure'
+        run: sleep 30
+
+      - name: Install Node dependencies (retry)
+        if: steps.deps.outcome == 'failure'
+        uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
 

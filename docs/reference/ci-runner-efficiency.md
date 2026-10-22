@@ -15,6 +15,10 @@ resolves [DEF-1](../decisions/DEFERRED.md): hosted CI adds one Axiom workflow,
 `axiom-ci.yml`, on every push to `main` and manual dispatch. It runs typechecks,
 the full `pnpm lint` chain, and Axiom-scoped tests on Linux as a second signal;
 local launcher gates remain authoritative, and upstream workflows stay unchanged.
+The jobs pin `ubuntu-24.04` (not `ubuntu-latest`, which moves to Ubuntu 26 from
+2026-10-19) and run the shared dependency install at most twice, 30 s apart,
+because a single npm registry timeout in pnpm's own download once failed every
+job before any check ran (run #42, 2026-10-22).
 Henry must enable Actions in the fork settings; the verifier records the first
 hosted run as verification. The e2e specs (`tests/e2e/mission-*.spec.ts`) remain
 host-only in M1/M2.

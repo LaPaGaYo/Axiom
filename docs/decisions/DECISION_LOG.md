@@ -415,6 +415,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **决定**（Henry 2026-10-17）：**A + C-lite**。本地 launcher 门禁仍是权威；新增 `.github/workflows/axiom-ci.yml` 作为 Linux 上的第二信号，由 M2-00 hygiene Task 提交（brief 由 verifier 写，Worker 实现，launcher 验证）；上游工作流文件一律不动。`DEFERRED.md` 的 DEF-1 改为 `RESOLVED (D45)`。前提动作（Henry）：在 fork 的 Settings → Actions 启用 Actions。
 **取代规则**：CI 策略再变更以新 Decision 取代本条；D41 的 A 部分不受影响。
 - **首次托管运行记录（2026-10-17）**：run #1 `39055324479`（main `0b4a67ced`，M2-00 合入）：Lint 3 m 17 s 绿、Axiom tests 1 m 18 s 绿、Typecheck 54 s **红**（真实类型错误，见 D46 修订行 / M1-11 / D47）；run #2 `39057000785`（main `c305070cd`，M1-11 合入）：**全绿**，Typecheck 110 s、Lint 198 s、Axiom tests 68 s，总时长 3 m 21 s。第二信号已就位：每次推送 main 约 3.5 min，三个 job 并行。
+- **修订（2026-10-22，Henry："可以"）**：run #42 `39713647893`（main `22f8c66171`，纯文档提交）三个 job 都在依赖安装第一步失败——`pnpm/setup@v2` 从 registry.npmjs.org 下载 pnpm 12.0.0 / `@pnpm/exe.linux-x64` 30 s 超时，49 s 内结束、没有任何检查运行；四小时前的 #41 为绿，查不到对应的公开事故。改动：① 三个 job 的 `runs-on` 由 `ubuntu-latest` 钉为 `ubuntu-24.04`（GitHub 通知 `ubuntu-latest` 自 2026-10-19 起迁到 Ubuntu 26，镜像换代可能影响原生模块与 Electron 构建；迁移改为主动决定）；② 共享安装步骤（上游 composite action `install-node-dependencies`，不改动）在 `axiom-ci.yml` 里最多运行两次：第一次 `continue-on-error`，失败则等 30 s 重跑，重跑失败 job 失败；其后的检查步骤仍禁止 `if` / `continue-on-error`；`config/scripts/axiom-ci-workflow-contract.test.mjs` 同步改为固定这一形态，`docs/reference/ci-runner-efficiency.md` 记一句。D45 的"第二信号"定位不变。
+
 
 ## D46 · M1 出口检查清单 — ACCEPTED（Henry 2026-10-17：M1 关闭）
 
