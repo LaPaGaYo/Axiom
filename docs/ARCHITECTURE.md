@@ -437,7 +437,9 @@ Approval（D7）：
 
 M1 已提供 Mission Home 与内嵌 Task 列表，并提供最小 Plan review（提案 Tasks / edges、批准与拒绝）；其余完整视图留待后续里程碑。
 
-Mission-first。主视图：
+**V1 形态（D71）**：主视图是 **Mission 对话**。项目用 Orca 的 Add project 添加；Mission 从 Orca 新建工作区卡片的 Mission 模式发起（目标、完成条件、限制、资料，agent 默认自动分配）。对话由 native chat 组件渲染，只出现 Control Plane 的卡片（目标确认、澄清问题、计划、审批、验证结果、"你不在时"摘要、完成报告）和一个不持有状态的主助手；Worker 不在对话里发言，对话记录不是权威状态，人的权威动作只在卡片上。下面第 1 项的内容由对话顶部的状态行与右上角面板（等你处理、进度、产出、本次用到）承担，第 2–7 项是从侧边栏项目名旁 ⋯ 菜单进入的详情页。侧边栏、状态栏、通知、活动流与看板复用 Orca 现成件，在原组件上加模式，不复制。
+
+Mission-first。视图：
 1. **Mission Home**：Goal、总体状态、进度、风险、待处理项、下一步；
 2. **Plan & DAG**：PlanRevision 版本、Milestone 分组、依赖图与 critical path；
 3. **Task Detail**：spec、criteria、stage 历史、AgentSpec、Attempt、Submission/Candidate、VerificationRun；

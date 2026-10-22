@@ -168,6 +168,7 @@
 **背景**：文档审计快照为 `646e9a5`（2026-09-25）；连接仓库时 fork `LaPaGaYo/Axiom` 的 main 已在 `408499ec5`（比快照多 137 个上游提交），上游 main 又前进到 `3eb1adec2`（2026-09-26，#23291）。fork 内尚无任何 Axiom 改动。
 **决定**（Henry 2026-09-26）：先 fast-forward 到上游 main `3eb1adec2` 再冻结。已执行：`git merge --ff-only upstream/main`，本地 tag `axiom-base = 3eb1adec2`（push 到 origin 待在 Mac 上完成）。V1 期间不再同步上游，除非新的 Decision。
 **复核**：`646e9a5..3eb1adec2` 共 148 个提交，触及 orchestration/RPC 的 11 个中只有 #22555（party 解析）改变了编排模型（见 D14 修订）；其余为 native-chat、session tab、终端 handoff 移除等外围改动。审计报告的关键结论（`worker_done` 直接 `completed` 并解锁下游、`project.*` 占用、消息类型 CHECK 枚举、artifact 强制 onorca.dev 域、coordinator 已退役、`nestedWorkerMaxDepth=1`、`SCHEMA_VERSION=42`、`docs/` 缺 ARCHITECTURE/CONSTITUTION/CHARTER、`@ts-nocheck` 基线 132 个 runtime 模块）在新基线上全部复核成立。
+**修订（2026-10-22，D72）**：V1 前做一次全量基线重置（UPSTREAM-3，恢复开发后、M3-02 之前），完成后新基线 tag `axiom-base-2`；之后仍按 D56 只摘取。
 
 ## D20 · OpenAI 模型的接入方式：A-lite（Codex 在 Mac 上运行，由 Claude 经计算机使用启动） — ACCEPTED
 
@@ -538,6 +539,7 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **理由**：上游节奏（约 140 提交 / 天）与 1,017 个重叠文件使整体合并不可行；安全与平台修复是 fork 最难独立获得的部分；provider 适配直接决定 Attempt 能否启动。
 **后果**：DEF-7 去掉"上游同步策略"一项（保留冻结时点与替换路线图）；首批候选记在 `UPSTREAM_SYNC.md`（未应用，开发恢复后排期）。
 **取代规则**：DEF-7 复审（V1 出口前）决定是否冻结；冻结时以新 Decision 取代本条。
+**修订（2026-10-22，D72）**："整体合并已不现实"改为：V1 前做一次全量合并（D71 让 V1 UI 依赖上游正在重写的组件，越晚合并越贵），之后回到本条的只摘取规则。
 
 ## D57 · Worker 认证矩阵：身体（harness）× 大脑（model）× 接入方式（endpoint profile），只有登记的组合才能承担 Attempt — ACCEPTED（Henry 2026-10-17）
 
@@ -765,4 +767,35 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 4. `PAUSED` 语义：停止新 admission 与新 VerificationRun 领取；运行中的 Attempt 按 policy `pauseMode: drain | stop`（默认 `drain`：让它们跑完并提交，提交后的验证排队不领取；`stop`：停止 Attempt 并按 D68 `interrupted` 结算）；集成不启动新批次，进行中的批次跑完；暂停期间 Mission / Task 的 wall-clock 预算与 Approval 过期停表（与 DEF-20 ① 同一机制），记录 `pausedAt / resumedAt`；恢复回到 `previous_status` 并重算就绪。
 **理由**：没有回头路的收尾状态在真实仓库上必然撞到（用户在 Mission 期间会继续提交）；PAUSED 不定义就会出现"暂停了还在动"。
 **后果**：§6.1 表补四行；M4 实现 1–3，4 与 DEF-20 ① 同做；术语表 §4.1 加 `delivery_denied`、`pauseMode`。
+**取代规则**：以修订行记录。
+
+## D71 · V1 前端信息架构：对话优先的 Mission，建在 Orca 现成的入口与外壳上 — ACCEPTED（Henry 2026-10-22：简化版 sample "作为 v1 完全没有问题"；"很多东西，我们可以在 orca 的基础上面去修改……避免了我们在 v1 前面重复造轮子"；"我同意"）
+
+**背景**：2026-10-21 / 22 的多项目信息架构 sample（12 块画板）偏复杂；Henry 要求从用户打开软件开始重新梳理，并提出 Cowork 式的简化：描述项目 → 创建 → 进入对话窗口，侧边栏与状态栏复用 Orca，项目名旁的 ⋯ 进入详情页，右上角通知数字悬停显示任务清单（进度、产出、本次用到）。简化版 sample（Design 画布"Axiom 简化版 Sample"：新建项目、开始：确认目标与计划、执行中）被认可为 V1 形态。随后对照了 Orca 的实际入口：Add project 只问项目在哪儿（Browse folder / SSH 主机 / Clone from URL / Create new project）；New workspace 卡片是项目、名称或 issue / PR 链接、agent、备注与 setup 选项，没有描述任务的框，任务在 agent 的终端里交代。既有原则：AGENTS.md 的 Execution Kernel Boundary 与"先复用或泛化既有实现"；`claude/ui-reuse-map-v1.md` 的 19 个 Orca 现成件与 §2 要改写或隐藏的模式；D55 第 3、4 条（V1 内核照常复用，UI 壳排在替换顺序最后）。
+**决定**：
+1. **入口**：项目 = Orca 项目（一个文件夹 / 仓库），用 Orca 的 Add project 原样添加。Mission 从 Orca 新建工作区卡片的 **Mission 模式**发起：同一张卡上选项目（Add project 仍在项目选择器里），加目标输入（要做成什么、怎样算完成、不做什么）与资料附件，agent 默认"自动分配"；提交调用 `axiom.mission.create`，不创建 worktree、不启动 agent。卡片的 issue / PR 来源框留给 V2 的"从 issue 生成目标草稿"（DEF-22 ④）。Orca 原有的普通工作区模式保留，用于 Mission 之外的手工工作。
+2. **Mission 对话**：每个 Mission 是项目下的一条对话，用 Orca 的 native chat 组件渲染。对话里只有两类发言：Control Plane 发布的**卡片**（目标确认、澄清问题、计划、审批、验证结果、"你不在时"摘要、完成报告），以及一个**主助手**（界面名"Axiom"）。主助手不持有状态：每轮从 Control Plane 当前状态构建上下文（不是不断增长的对话历史），只读作答（DEF-10 ④"问这个 Mission"）；它起草的改动（改目标、调计划、追加 Task）只能以提案卡出现，经 Control Plane 的 schema 与 policy 校验、人在卡片上确认后才生效。Worker 从不在对话里发言，Worker 的 transcript 在 Task 详情与 Workbench 里只读查看。
+3. **权威动作只在卡片上**：批准计划、回答问题、通过或退回审阅、批准 Approval、交付，都是卡片按钮发出的 Control Plane 命令（带精确对象 id）；在输入框里打字不构成授权。
+4. **外壳复用 Orca**：侧边栏（项目 → Mission 行，沿用 Orca 的状态点与未读加粗，状态词汇按 DEF-22 ⑰）、状态栏（provider 用量）、通知与注意力模型、活动流、"等你"看板、Getting started 清单（加"创建第一个 Mission"）、设置与凭据存储。项目名旁的 ⋯ 菜单进入 Mission 详情页：计划与 DAG、Tasks、改动与证据、决策与审批、项目资料、项目设置、在 Workbench 打开。右上角通知数字悬停显示面板：等你处理、进度（按里程碑）、产出、本次用到（文件夹、资料、agent、skills、权限、用量）。M1-09 / M2-10 已有的 Mission 页面（`src/renderer/src/components/missions/`）改作这些详情页或并入卡片，`MissionCreateDialog` 由 Mission 模式取代。
+5. **实现方式**：在 Orca 原组件上加模式或插槽，不复制出第二个侧边栏、新建卡片或聊天视图。Orca 组件的含义按复用图 §2 改写或隐藏：Done 不等于完成；Mission worktree 里的 AI commit / PR、重启与续接按钮改走 Control Plane 或隐藏；native chat 的输入对 Mission 管理的会话不直接发话（DEF-22 ①）。
+6. **范围与顺序**：V1 按单项目验收，数据模型与路由按"项目 → Mission"组织（DEF-22 ⑯ 不变）；多项目首页与跨项目 Fleet 是 V2。实现排在 D72 的基线重置之后，以新版 Orca 的组件为底。
+**理由**：Orca 已有成熟的项目管理、注意力模型和结构化聊天；Axiom 的差异在 Control Plane（计划、验证、集成、审批、证据），不在外壳。对话加卡片让人只在需要决定时被打扰，同时保持"LLM 提议，Control Plane 校验与持久化"。
+**不变量对照**：不变量 1、5（主助手只提议，卡片命令经 Control Plane API）；6（对话记录不是权威状态，不另建状态库，对话由 Control Plane 事件重建）；11、12（完成与高风险动作仍靠证据与精确 Approval）。主助手没有持久状态、不负责调度、随时可重启，不构成 Master Agent；对话里只有 Control Plane 卡片和一个主助手，Worker 不进对话，"不是多 Agent 聊天室"仍然成立。
+**后果**：AGENTS.md "UI and Product Experience"、`docs/ARCHITECTURE.md` §15、章程 Objective 9 改为"主视图是 Mission 对话"（本次一并修改）；DEF-22 ⑰ 的细节按本条在 M3-09 brief 落；M3-09 改为先做入口、对话、侧边栏 Mission 行、⋯ 详情页与右上角面板，原验证面板的内容成为验证结果卡与 Task 详情页，范围扩大，brief 定稿时拆分并重估；设计参考为 Design 画布"Axiom 简化版 Sample"，旧的"Axiom 前端信息架构 Sample"留作详情页参考。
+**取代规则**：以修订行记录；改变"权威动作只在卡片上"或"Worker 不进对话"需要新的 Decision。
+
+## D72 · V1 前一次性基线重置：恢复开发后先全量合并 upstream/main（UPSTREAM-3），之后回到 D56 — ACCEPTED（Henry 2026-10-22："我同意"）
+
+**背景**：D19 把基线冻结在 `3eb1adec2`（2026-09-26）；D56 只摘取安全、平台与 provider 修复，当时判断整体合并已不现实；UPSTREAM-2 分诊（2026-10-20）的全量合并只读模拟是 254 个文件、868 个冲突块，并把"是否做一次基线重置（D56 修订）"留给 Henry。D71 让 V1 UI 建在 Orca 的现成件上，而上游自 fork 点以来（截至 2026-10-22 `66e50e22cc`，3,835 个提交）改得最多的正是这些部分：native chat 从 418 个文件增至 821 个（Claude、OpenCode、Antigravity 等能以聊天方式运行；新建工作区与默认 agent 可选聊天或 CLI，#31189、#31590）；侧边栏新增 205、修改 428、删除 50 个文件（从提交看，是改为主进程推送的数据源，桌面与手机共用，新实现仍在开关后面）；新建工作区目录 60 个文件，状态栏 146 个。Axiom 在这些目录的改动很小（侧边栏 59 个文件约 500 行，其余个位数）。2026-10-22 刷新的只读模拟（`git merge-tree 3eb1adec2 main upstream/main`，legacy 模式，不跟踪改名）：**303 个文件文本冲突、999 个冲突块**，其中 470 块在 6 个 i18n locale JSON；另有 91 个"Axiom 改过、上游删除"和 13 个"Axiom 改过、上游改名"的文件（明细见 `UPSTREAM_SYNC.md`）。两处内核接缝要语义处理：① schema 编号冲突——上游 `migrate-v43.ts`（`e42c0b3630`，#24230）把存储的 `session:<id>` 地址改写为 `orca_session_id:<id>`（上游 `SCHEMA_VERSION = 43`），Axiom 的 v43–v45 是 Axiom side tables、`agent_specs.spec` / `mission_policies.routing`、`verification_runs` 的列（`SCHEMA_VERSION = 45`）；② D14 的合成 session party 在 `src/main/axiom/execution/mission-caller.ts` 硬编码 `session:` 前缀。
+**决定**：
+1. Henry 说"继续"后第一件事是 **UPSTREAM-3：全量合并 upstream/main**，在 M3-02 之前完成；合并目标是开工当天 `git fetch --no-tags upstream main` 的头，SHA 记入 `UPSTREAM_SYNC.md`。
+2. 分工沿用 UPSTREAM-1 / 2：合并与提交由验证者经宿主 launcher 在独立分支上执行（Codex 沙盒不能写 `.git`），冲突由 Worker 在工作树里解决；依赖变更（`package.json` / `pnpm-lock.yaml`、Electron / Node）由验证者在宿主安装；分支验证通过后才推进 main。
+3. 冲突处置：i18n 机械合并；M0 的品牌、网络出口、已删除的树（`cloud/`、原生发布工作流）与遥测移除按原处置重新施加，上游新增的端点由 vendor-egress 棘轮与冷启动出口捕获拦下，按 M0 规则处置；"Axiom 改过、上游删除"的文件逐个判定（多为上游重构移走，改动跟到新位置）；Axiom 的内核接缝（§4b 拦截点、M2-01 service-only seam、D14 合成 session party）按上游新结构语义移植。
+4. schema：Axiom 的迁移改号到上游之后，再加一个按结构探测的补齐步骤，让已经到 Axiom v45 的库也执行上游 v43 的地址改写；Axiom 代码改用内核的会话地址 helper，不再硬编码前缀。开发库与 e2e 库都走这条迁移路径，不手改持久化状态。
+5. 验证：完整门禁与全量 suite；M0 网络隔离（棘轮、冷启动出口捕获、打包产物 egress 金丝雀）；M1 / M2 出口 e2e 与宿主 e2e（submit / launch）在新底子上重跑；真实 Codex Planner smoke 一次。
+6. 新基线：合并完成后打 tag `axiom-base-2`（等于合并目标的上游提交），只显式推送这一个 tag；`orca-mapping.md` 的基线与路径引用、UI 复用图的组件清单按新底子复核。
+7. 之后回到 D56：只摘取安全、平台、provider 修复，直到 V1 发布；是否冻结仍由 DEF-7 决定。
+**理由**：Axiom 还没在侧边栏、新建卡片、native chat 这几块动手，现在合并冲突最少；等 M3 在旧底子上改完再合，冲突会成倍增加，实际上等于放弃上游的这些改进。内核同理：M3-02 起的代码直接写在新底子上，不必日后再移植。
+**代价与风险**：粗估 2–4 天（10-20 估 1–2 天时只有 254 个冲突文件，且没算 schema 编号与会话地址两处），M3 相应推迟；上游新功能会扩大产品面（新 provider、远程服务器、手机配对等），按 M0 规则保持关闭或隐藏。若内核接缝的语义移植超过 1 天仍不能通过 M1 / M2 出口 e2e，停下来报告，由 Henry 决定继续还是放弃这次重置（main 不动，回到 D56 现状）。
+**后果**：D19 与 D56 各加一行修订指向本条；DEF-7 的"冻结前一次性合入清单"缩小为重置之后的增量；`docs/plans/M3.md` 的下一步改为 UPSTREAM-3 → M3-02；`UPSTREAM_SYNC.md` 记 2026-10-22 的模拟数据与计划。
 **取代规则**：以修订行记录。

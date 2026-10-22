@@ -81,3 +81,11 @@
 - 语义移植四项（上表"已应用（UPSTREAM-2）"）经两次 attempt（21 + 6 min）合入；attempt 2 只补了 `config/tsconfig.cli.json` 的三条登记（CLI 项目用显式文件列表，上游同一提交也加了这三条）。合入后 verify-main 只剩已知环境项；宿主 e2e（submit / launch）通过。
 - **UPSTREAM-2b（验证者宿主执行，`launchers/electron-bump.command`，`044491d60d`）**：Electron 43.7.0 → 43.7.8（`pnpm add -D electron@43.7.8`，13 s；native runtime 检查通过；floor 测试常量 43.7.8；去掉 `pnpm-workspace.yaml` 里对 `electron@43.7.0` 的 minimumReleaseAge 豁免）。上游随同的 `browser-find-frame-traversal` Electron 测试与 `src/shared/node-runtime-pin.ts` 在本树不存在，不移植。新 Electron 下宿主 e2e（submit / launch）各 27 s 通过。
 - 同步点不变（`ce2d60834c` 初筛点）。未摘取项的触发点：Claude 预信任 → `claude` 组合 D57 认证前；OpenCode 两条 → OpenCode 认证前；agent-launch 系列 → M2-09 真 Codex smoke 后评估 preamble 投递；`5b3366f78e` (a) 与跨实例锁 → 下一次 trust 批次。
+
+## 2026-10-22 · 基线重置决定（D72）与全量合并模拟刷新（只读）
+
+- 上游头 `66e50e22cc`（2026-10-22），fork 点 `3eb1adec2` 以来 3,835 个提交。起因：D71 让 V1 UI 建在 Orca 的侧边栏、新建工作区卡片与 native chat 上，而上游改得最多的正是这些目录（native chat 418 → 821 个文件；侧边栏新增 205 / 修改 428 / 删除 50；新建工作区 60；状态栏 146），Axiom 在这些目录只有很小的改动。
+- 模拟：`git merge-tree 3eb1adec2 main upstream/main`（legacy 模式，不跟踪改名）。changed in both 860 个文件、added in both 7、上游删除 3,062、上游新增 12,163（两者都含改名）、本地删除 101。**303 个文件文本冲突、999 个冲突块**：6 个 i18n locale JSON 470 块（机械合并）；renderer 82 个文件 / 118 块、`src/cli` 32 / 93、`src/main/runtime` 29 / 41、`config` 21 / 39、`src/shared` 19 / 28、`src/main/startup` 11 / 12、`.github` 10 / 18、`src/main/codex` 9 / 29、`docs` 8 / 12、`src/main/ipc` 7 / 11，其余每处不超过 5 个文件。2026-10-20 同口径是 254 个文件 / 868 块。
+- 改名感知的补充（`git diff -M50%`）：Axiom 改过、上游删除的文件 91 个（`src/main/ssh` 20、renderer 16、`config` 15、`src/main/providers` 8、`src/main/codex` 5、`src/main/runtime` 4、`src/main/ipc` 3、`src/main/claude-accounts` 3、`src/cli/specs` 3、`src/main/native-chat` 2）；Axiom 改过、上游改名的 13 个。
+- 语义接缝：上游 `migrate-v43.ts`（`e42c0b3630`，#24230，2026-10-01）把存储的 `session:<id>` 地址改写为 `orca_session_id:<id>`，与 Axiom 的 v43–v45 编号冲突（上游 `SCHEMA_VERSION = 43`，Axiom 45）；`src/main/axiom/execution/mission-caller.ts` 硬编码 `session:` 前缀（D14）。
+- 计划：UPSTREAM-3 = 全量合并，Henry 说"继续"后第一件事、M3-02 之前（D72 第 1–7 条）；完成后在同步点表加一行（新的 merge-base 与 tag `axiom-base-2`），之后回到 D56 的只摘取。

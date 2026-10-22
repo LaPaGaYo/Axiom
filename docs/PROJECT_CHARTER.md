@@ -139,7 +139,7 @@ Worker 的完成报告只能形成不可变的 Submission，使 Task 进入 `SUB
 
 ### Objective 9：提供 Mission-first 用户体验
 
-用户首先看到 Goal、Plan、DAG、Progress、Risk、Evidence 和 Approvals；终端、diff、编辑器是可钻取的执行工作台。
+用户首先看到 Mission 对话：Goal、Plan、Progress、Risk、Evidence 和 Approvals 以 Control Plane 卡片和状态面板呈现（D71）；DAG、Task 详情、终端、diff、编辑器是一次点击可达的钻取视图。
 
 预期结果：用户管理的是 Mission 和结果，不是几十个无法区分的终端窗口。
 

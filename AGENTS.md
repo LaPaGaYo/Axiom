@@ -407,7 +407,8 @@ Platform-specific behavior must be behind explicit runtime checks and covered by
 
 The product is Mission-first:
 
-- primary views show Goal, Plan, DAG, progress, risk, evidence, and Approvals;
+- the primary view is the Mission conversation (D71): Goal, Plan, progress, risk, evidence, and Approvals appear as Control Plane cards and in its status panel; Plan & DAG, Tasks, evidence, and Decisions & Approvals are detail pages one click away;
+- only Control Plane cards and one stateless lead assistant speak in the Mission conversation: Workers never post there, the conversation is never authoritative state, and human-authority actions exist only as card commands;
 - terminal, editor, diff, browser, and logs are drill-down execution views;
 - UI state is never authoritative Mission state;
 - every optimistic transition must reconcile with the Control Plane;
@@ -416,7 +417,7 @@ The product is Mission-first:
 - Task stage is rendered from `task_stages`; Orca `tasks.status = completed` is never shown as done;
 - "Mission Control" is not used as a UI label (macOS collision).
 
-Follow `docs/STYLEGUIDE.md`. Design tokens live in `src/renderer/src/assets/main.css`, and shared primitives are the shadcn components in `components/ui/`; both are lint-enforced (`pnpm run lint:design-system`). Do not create raw color systems, duplicate components, or local styling conventions when a repository primitive exists.
+Follow `docs/STYLEGUIDE.md`. Design tokens live in `src/renderer/src/assets/main.css`, and shared primitives are the shadcn components in `components/ui/`; both are lint-enforced (`pnpm run lint:design-system`). Do not create raw color systems, duplicate components, or local styling conventions when a repository primitive exists. Build Mission UI by generalizing Orca's existing components in place (sidebar, status bar, Add project, the New workspace composer, native chat, attention, and activity); do not add parallel Axiom copies (D71).
 
 Run Electron tests and apps in the background with `ORCA_BACKGROUND_LAUNCH=1`; they must never steal focus or reveal windows on the user's desktop. Validate UI with the `$electron` skill and Playwright over CDP.
 
