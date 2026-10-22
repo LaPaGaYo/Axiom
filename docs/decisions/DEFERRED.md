@@ -83,3 +83,7 @@ D71（V1 前端信息架构：对话优先的 Mission，建在 Orca 现成的入
 ## 2026-10-22 实机走查登记（Henry："我同意……先用 orca 目前的 UI 设计"）
 
 D71 修订行（V1 的 UI 先用 Orca 现有设计：五类分法与具体落点）；DEF-3 补窗口标题与 `~/orca/projects`、`~/orca/workspaces` 默认目录；`docs/plans/M3.md` 状态段记 M3-08 / M3-09 / M3-10 要点；全文 `claude/ui-hands-on-review-v1.md`。
+
+## 2026-10-22 强制聊天界面登记（Henry："……我们是否可以强制使用 chat ui？"）
+
+D71 修订二（Mission 相关界面一律聊天：建项目 / 建 Mission 后的落点、Attempt 过程的只读聊天显示、沿用 D58 不用 TUI 通道、只有带结构化通道的组合能承担 Mission 角色、聊天开关默认打开）；`docs/plans/M3.md` 状态段记 M3-08 / M3-09 / UPSTREAM-3 要点。
