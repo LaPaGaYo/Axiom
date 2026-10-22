@@ -783,6 +783,7 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **不变量对照**：不变量 1、5（主助手只提议，卡片命令经 Control Plane API）；6（对话记录不是权威状态，不另建状态库，对话由 Control Plane 事件重建）；11、12（完成与高风险动作仍靠证据与精确 Approval）。主助手没有持久状态、不负责调度、随时可重启，不构成 Master Agent；对话里只有 Control Plane 卡片和一个主助手，Worker 不进对话，"不是多 Agent 聊天室"仍然成立。
 **后果**：AGENTS.md "UI and Product Experience"、`docs/ARCHITECTURE.md` §15、章程 Objective 9 改为"主视图是 Mission 对话"（本次一并修改）；DEF-22 ⑰ 的细节按本条在 M3-09 brief 落；M3-09 改为先做入口、对话、侧边栏 Mission 行、⋯ 详情页与右上角面板，原验证面板的内容成为验证结果卡与 Task 详情页，范围扩大，brief 定稿时拆分并重估；设计参考为 Design 画布"Axiom 简化版 Sample"，旧的"Axiom 前端信息架构 Sample"留作详情页参考。
 **取代规则**：以修订行记录；改变"权威动作只在卡片上"或"Worker 不进对话"需要新的 Decision。
+**修订（2026-10-22，实机走查；Henry："我同意，因为我觉得其实很多的东西都可以先复用，因为重复造轮子不符合我们目前的情况，所以我们可以先用 orca 目前的 UI 设计"）**：V1 的 UI 先用 Orca 现有的设计。按 `claude/ui-hands-on-review-v1.md` 把界面分为原样、微调、改造、改含义、藏五类：外壳与执行视图（Add project、侧边栏、状态栏用量、通知、搜索、diff、源码管理、文件浏览、会话历史、设置框架、Getting started）原样或微调；新建工作区卡片（Mission 模式）、native chat（Mission 对话与卡片）、侧边栏行 / Agent Dashboard / Workspace board（数据源与按 stage 着色）改造；Done 的绿色、审批卡语义、全局 Yolo / Manual、Mission worktree 的写操作改含义；Orchestration、Tasks、Automations、Mobile 在 V1 主导航里藏起来。新写的只限 Orca 没有的内容组件（Mission 模式字段、Control Plane 卡片的内容、数据接线）。具体落点：⋯ 菜单加在现有的 Project actions 菜单里；右上角面板 = 徽标悬停看摘要 + 右侧栏新增 Mission 标签页；Mission 对话里的审批卡不占输入框；会话历史在 Mission 视图默认只看本 Mission；Mission worktree 不走模型生成分支名（D6a）。UPSTREAM-3 之后按新版 Orca 再走查一次，更新分类。
 
 ## D72 · V1 前一次性基线重置：恢复开发后先全量合并 upstream/main（UPSTREAM-3），之后回到 D56 — ACCEPTED（Henry 2026-10-22："我同意"）
 
