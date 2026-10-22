@@ -713,6 +713,11 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 ⑤ **代价与边界**：被放行的命令在沙盒外执行，所以只放行精确 argv；审批桥不经 DecisionEngine 定性（Decision Engine 边界：不得覆盖授权与文件系统范围）；它缩小 D63 补充所述"信任仓库内容"缺口里的读取与外联部分，但第三方仓库仍按 `repositoryTrust` 规则处理；M4 的 ApprovalGateway 复用审批桥的规则与审计，不另建。
 **后果**：M3-08 的第 ② 项改为"审批桥 + `workspace-write` 首选，`danger-full-access` 后备"；M3-08 的宿主 smoke 需证明：Planner 的 `plan propose` 与 Worker 的 `attempt submit` 经审批桥放行，一条越界写入被拒且 Task 不卡死；`codex-structured-permission-policy.ts` 的 Manual 映射对 Mission 会话改为接审批桥。
 
+**修订提议补充（2026-10-22，Orca 文档复审，Henry："可以按照这个登记进仓库"；随 D63 一并批准）——Worker CLI 作用域**：
+① **背景**：Orca 的 SSH 文档写明，host 上的 `orca` CLI 默认只能到达该 host 自己的终端与 orchestration 消息，可以向派发它的 coordinator 汇报，碰不到其他 host、桌面控制、账号与设置，放宽要逐 host 手动开启（`claude/orca-docs-review-v1.md` §2 第 7 条）。Axiom 的 Worker 经同一个 runtime socket 调 `axiom` CLI；如果 runtime 不按调用方区分，Worker 就可能借这条通道调用 `orca` 的其他命令组（agent launch、worktree create、terminal send、browser、linear），等于自行 spawn、广播或借用 app 的凭据。
+② **决定（提议）**：(a) Worker 的 `axiom` CLI 凭绑定单个 Attempt 的令牌调用，只能执行本角色动词集里的 report-up 动作（与审批桥是同一份动词集），令牌随 Attempt 结算失效；(b) runtime 侧按调用方（Attempt 令牌 / 发起终端）做 RPC 白名单，Mission 管理的终端默认拒绝 `orca` 的其他命令组——这是审批桥之外的纵深防御；(c) M3-08 先核实现状（runtime 现在是否按调用方区分 RPC），结论写进 M3-08 brief。
+**后果**：M3-08 的宿主 smoke 加一条：Worker 终端里调用 `orca worktree create` 与 `orca agent launch` 被拒并留审计，Task 不卡死。
+
 
 ## D67 · V1 平台范围：macOS 与 Linux；Windows 定为 V1.x — ACCEPTED（Henry 2026-10-21："windows 定为 1.x 版本，先做 macos 和 linux"）
 
