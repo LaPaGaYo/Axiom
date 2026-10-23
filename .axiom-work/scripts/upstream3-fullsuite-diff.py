@@ -5,7 +5,8 @@ usage: upstream3-fullsuite-diff.py <candidate.log> <baseline.log> [--report <out
 
 A test that fails in both logs is environmental on this host; a test that fails only in the candidate log is
 merge-caused. Tests are keyed by "<project> <file> > <describe…> > <name>" exactly as vitest prints them in its
-"Failed Tests" section. Read-only apart from the optional report.
+"Failed Tests" section, suite-level failures by "<project> <file> [ <file> ]" from "Failed Suites".
+Read-only apart from the optional report.
 """
 import collections, re, sys
 
@@ -15,7 +16,10 @@ sys.dont_write_bytecode = True
 def failures(path):
     raw = open(path, encoding='utf-8', errors='replace').read()
     text = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', raw)
-    start = text.find('Failed Tests')
+    # Why both sections: a file that fails to load or in a hook is listed under "Failed Suites" (key ends in
+    # "[ <file> ]"), not under "Failed Tests".
+    marks = [i for i in (text.find('Failed Suites'), text.find('Failed Tests')) if i >= 0]
+    start = min(marks) if marks else -1
     blocks = re.split(r'\n(?= FAIL  )', text[start:] if start >= 0 else text)
     found = {}
     for block in blocks[1:]:
