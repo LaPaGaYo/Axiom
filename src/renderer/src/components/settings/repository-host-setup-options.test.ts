@@ -25,7 +25,7 @@ function runtimeHost(
     detail: 'Axiom server',
     health: 'available',
     ...overrides
-  } as ExecutionHostRegistryEntry
+  }
 }
 
 function sshHost(health: ExecutionHostRegistryEntry['health']): ExecutionHostRegistryEntry {

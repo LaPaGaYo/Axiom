@@ -157,7 +157,7 @@ describe('sealStructuredSessionChild identity', () => {
       }
     })
 
-    it('on packaged Linux, through the bare-orca shim, named by absolute path', () => {
+    it('on packaged Linux, through the axiom shim, named by absolute path', () => {
       // Without this the child's first `orca orchestration check` execs GNOME Orca — the CLI
       // installs as `orca-ide` on Linux (stablyai/orca#7904) — and the dispatch hangs to timeout.
       pinPlatform('linux')
@@ -172,7 +172,7 @@ describe('sealStructuredSessionChild identity', () => {
       installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
       const env = sealedChildEnv(SESSION_ID, { PATH: '/usr/bin' })
       expect(env.PATH).toBe(`${join(RESOURCES, 'bin')}:/usr/bin`)
-      expect(env.ORCA_CLI_COMMAND).toBe(join(RESOURCES, 'bin', 'orca'))
+      expect(env.ORCA_CLI_COMMAND).toBe(join(RESOURCES, 'bin', 'axiom'))
     })
 
     it('on packaged Windows, through the bundled CLI dir under the env block spelling', () => {
@@ -181,8 +181,8 @@ describe('sealStructuredSessionChild identity', () => {
       const env = sealedChildEnv(SESSION_ID, { Path: 'C:\\Windows' })
       expect(env.Path).toBe(`${join(RESOURCES, 'bin')};C:\\Windows`)
       expect(env.PATH).toBeUndefined()
-      // The native launcher: `orca.cmd` refuses message bodies cmd.exe would mangle.
-      expect(env.ORCA_CLI_COMMAND).toBe(join(RESOURCES, 'bin', 'orca.exe'))
+      // The native launcher: `axiom.cmd` refuses message bodies cmd.exe would mangle.
+      expect(env.ORCA_CLI_COMMAND).toBe(join(RESOURCES, 'bin', 'axiom.exe'))
       expect(env.ORCA_CLI_BIN_DIR).toBeUndefined()
     })
 

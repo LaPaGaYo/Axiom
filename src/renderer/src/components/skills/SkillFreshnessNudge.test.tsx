@@ -38,7 +38,7 @@ function placement(
     topology: 'canonical-copy',
     status: 'outdated',
     currentPackageDigest: 'current',
-    lockSource: 'stablyai/orca',
+    lockSource: 'LaPaGaYo/Axiom',
     errorCategory: null,
     ...overrides
   }
@@ -145,7 +145,7 @@ describe('SkillFreshnessNudge', () => {
     expect(mocks.updateSettings).not.toHaveBeenCalled()
   })
 
-  it('counts only Orca-owned outdated skills', async () => {
+  it('counts only Axiom-owned outdated skills', async () => {
     mocks.inventory = {
       schemaVersion: 1,
       installations: [
@@ -170,7 +170,7 @@ describe('SkillFreshnessNudge', () => {
     await renderNudge()
 
     expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
-    expect(mocks.toastInfo.mock.calls[0]?.[0]).toBe('An installed Orca skill is out of date')
+    expect(mocks.toastInfo.mock.calls[0]?.[0]).toBe('An installed Axiom skill is out of date')
     expect(mocks.toastInfo.mock.calls[0]?.[1].description).toContain('Update orca-cli so')
   })
 

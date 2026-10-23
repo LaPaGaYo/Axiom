@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict'
 import { describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import {
@@ -15,7 +16,8 @@ describe('orchestration mutation recovery', () => {
         dispatchId: 'dispatch_1',
         originalCommand: ['axiom', 'orchestration', 'worker-start', '--task', 'task_1']
       })
-    ) as RuntimeClientError
+    )
+    assert(result instanceof RuntimeClientError)
 
     expect(result.data).toMatchObject({
       recovery: {
@@ -44,7 +46,7 @@ describe('orchestration mutation recovery', () => {
     expect(result.message.indexOf('axiom orchestration worker-show')).toBeLessThan(
       result.message.indexOf('axiom orchestration worker-start')
     )
-    expect((result.data as { nextSteps?: string[] }).nextSteps).toEqual([
+    expect(result.data).toHaveProperty('nextSteps', [
       'Run axiom orchestration worker-show --dispatch dispatch_1 --json before retrying.',
       'After inspecting the Dispatch, if keyed recovery is still needed, run axiom orchestration worker-start --task task_1 --retry-request request_1 from this same terminal. --retry-request reuses the same operation identity so Axiom can replay, join, or safely recover it without starting a separate duplicate.'
     ])
@@ -56,7 +58,8 @@ describe('orchestration mutation recovery', () => {
         orchestrationRequestId: 'request_2',
         originalCommand: ['axiom', 'orchestration', 'worker-start', '--task', 'task_2']
       })
-    ) as RuntimeClientError
+    )
+    assert(result instanceof RuntimeClientError)
 
     expect(result.data).toMatchObject({
       recovery: {
@@ -65,7 +68,7 @@ describe('orchestration mutation recovery', () => {
         workerDeathInferred: false
       }
     })
-    expect((result.data as Record<string, unknown>).recovery).not.toHaveProperty('dispatchId')
+    expect(result.data).not.toHaveProperty('recovery.dispatchId')
     expect(result.message).not.toContain('worker death')
   })
 
@@ -75,14 +78,16 @@ describe('orchestration mutation recovery', () => {
         orchestrationRequestId: 'request_4',
         originalCommand: ['axiom', 'orchestration', 'worker-start', '--task', 'task_4']
       })
-    ) as RuntimeClientError
+    )
+    assert(result instanceof RuntimeClientError)
 
     expect(result.data).toMatchObject({
       recovery: {
         queryCommand: ['axiom', 'orchestration', 'request-show', '--request', 'request_4', '--json']
       }
     })
-    expect((result.data as { nextSteps?: string[] }).nextSteps?.[0]).toBe(
+    expect(result.data).toHaveProperty(
+      'nextSteps.0',
       'Run axiom orchestration request-show --request request_4 --json before retrying.'
     )
   })
@@ -93,13 +98,18 @@ describe('orchestration mutation recovery', () => {
         orchestrationRequestId: 'request_5',
         originalCommand: ['axiom', 'orchestration', 'worker-start', '--task', 'task_5']
       })
-    ) as RuntimeClientError
-
-    expect((result.data as { nextSteps?: string[] }).nextSteps?.[1]).toContain(
-      'replay, join, or safely recover it without starting a separate duplicate'
     )
-    expect((result.data as { nextSteps?: string[] }).nextSteps?.[1]).toContain(
-      'absence does not prove a retry is safe'
+    assert(result instanceof RuntimeClientError)
+
+    expect(result.data).toHaveProperty(
+      'nextSteps.1',
+      expect.stringContaining(
+        'replay, join, or safely recover it without starting a separate duplicate'
+      )
+    )
+    expect(result.data).toHaveProperty(
+      'nextSteps.1',
+      expect.stringContaining('absence does not prove a retry is safe')
     )
   })
 
@@ -118,9 +128,10 @@ describe('orchestration mutation recovery', () => {
           'literal $(do-not-run)'
         ]
       })
-    ) as RuntimeClientError
+    )
+    assert(result instanceof RuntimeClientError)
 
-    expect((result.data as { nextSteps?: string[] }).nextSteps).toEqual([
+    expect(result.data).toHaveProperty('nextSteps', [
       'Run axiom-dev orchestration worker-show --dispatch dispatch_3 --json before retrying.',
       "After inspecting the Dispatch, if keyed recovery is still needed, run axiom-dev orchestration worker-start --task 'task 3' --comment 'literal $(do-not-run)' --retry-request request_3 from this same terminal. --retry-request reuses the same operation identity so Axiom can replay, join, or safely recover it without starting a separate duplicate."
     ])
@@ -134,11 +145,10 @@ describe('orchestration mutation recovery', () => {
         originalCommand:
           'orca-ide orchestration worker-stop --dispatch dispatch_4 --comment "quoted value"'
       })
-    ) as RuntimeClientError
+    )
+    assert(result instanceof RuntimeClientError)
 
-    expect(
-      (result.data as { recovery?: { retryCommand?: string[] } }).recovery?.retryCommand
-    ).toEqual([
+    expect(result.data).toHaveProperty('recovery.retryCommand', [
       'orca-ide',
       'orchestration',
       'worker-stop',
@@ -166,11 +176,14 @@ describe('orchestration mutation recovery', () => {
         orchestrationRequestId: 'request_exact',
         originalCommand
       })
-    ) as RuntimeClientError
+    )
+    assert(result instanceof RuntimeClientError)
 
-    expect(
-      (result.data as { recovery?: { retryCommand?: string[] } }).recovery?.retryCommand
-    ).toEqual([...originalCommand, '--retry-request', 'request_exact'])
+    expect(result.data).toHaveProperty('recovery.retryCommand', [
+      ...originalCommand,
+      '--retry-request',
+      'request_exact'
+    ])
   })
 
   it('reuses the request identity without duplicating an existing retry flag', () => {
@@ -186,11 +199,10 @@ describe('orchestration mutation recovery', () => {
           '--retry-request=request_reused'
         ]
       })
-    ) as RuntimeClientError
+    )
+    assert(result instanceof RuntimeClientError)
 
-    expect(
-      (result.data as { recovery?: { retryCommand?: string[] } }).recovery?.retryCommand
-    ).toEqual([
+    expect(result.data).toHaveProperty('recovery.retryCommand', [
       'axiom',
       'orchestration',
       'worker-retain',
@@ -303,7 +315,8 @@ describe('orchestration mutation recovery', () => {
         orchestrationRequestId: 'request_secret',
         originalCommand
       })
-    ) as RuntimeClientError
+    )
+    assert(result instanceof RuntimeClientError)
     const output = JSON.stringify({ message: result.message, data: result.data })
 
     expect(output).not.toContain(secret)
@@ -315,7 +328,7 @@ describe('orchestration mutation recovery', () => {
       }
     })
     expect(result.data).not.toHaveProperty('originalCommand')
-    expect((result.data as { recovery: object }).recovery).not.toHaveProperty('retryCommand')
+    expect(result.data).not.toHaveProperty('recovery.retryCommand')
   })
 
   // Pins the outcome-unknown codes (round-2 S5): only these get recovery guidance.

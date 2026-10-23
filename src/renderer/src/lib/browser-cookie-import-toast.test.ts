@@ -212,7 +212,7 @@ describe('emitBrowserCookieImportToast', () => {
       remoteExecution
     )
     expect(warningToastMock).toHaveBeenCalledWith(
-      '2 cookies were not imported because their site-partition could not be read. Sign in to those sites again in Orca.',
+      '2 cookies were not imported because their site-partition could not be read. Sign in to those sites again in Axiom.',
       { duration: 12000 }
     )
   })

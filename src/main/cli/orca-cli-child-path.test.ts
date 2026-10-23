@@ -70,16 +70,17 @@ describe('prependOrcaCliDirToChildPath', () => {
       ORCA_CLI_COMMAND: launcher
     })
   })
-  it('leads packaged Linux PATH with the bare-orca shim dir', () => {
-    // Why this matters at all: the Linux CLI installs as `axiom` so it never claims GNOME
-    // Axiom's /usr/bin/axiom screen reader, so bare `orca` only works through this shim.
+  it('leads packaged Linux PATH with this app’s axiom shim and returns its absolute path', () => {
+    // The desktop executable is axiom-ide; the profile shim forwards to the bundled axiom CLI.
     const env: Record<string, string> = { PATH: '/usr/local/bin:/usr/bin' }
-    prependOrcaCliDirToChildPath(env, {
-      isPackaged: true,
-      userDataPath: USER_DATA,
-      resourcesPath: RESOURCES,
-      platform: 'linux'
-    })
+    expect(
+      prependOrcaCliDirToChildPath(env, {
+        isPackaged: true,
+        userDataPath: USER_DATA,
+        resourcesPath: RESOURCES,
+        platform: 'linux'
+      })
+    ).toBe(join(SHIM_DIR, 'axiom'))
     expect(env.PATH).toBe(`${SHIM_DIR}:/usr/local/bin:/usr/bin`)
     expect(env.ORCA_CLI_BIN_DIR).toBe(SHIM_DIR)
     expect(shim.ensureLinuxTerminalOrcaCliShimDir).toHaveBeenCalledWith({

@@ -297,7 +297,7 @@ async function createWorkspaceFromSeededRepo(page, timeoutMs) {
 
 const OVERLAY_DISMISS_LABELS = ['Got it', 'Dismiss setup scripts', 'Dismiss tip', 'Dismiss update']
 const FEATURE_TIP_DIALOG_TITLES = [
-  'Let agents drive Orca with the Orca CLI',
+  'Let agents drive Axiom with the Axiom CLI',
   'Search every agent session'
 ]
 

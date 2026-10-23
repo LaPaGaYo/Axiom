@@ -1,4 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as ProductEgressPolicyModule from '../../shared/product-egress-policy'
+
+// Exercise request ownership with an explicitly configured sink; Axiom ships with none.
+vi.mock('../../shared/product-egress-policy', async (importOriginal) => {
+  const actual = await importOriginal<typeof ProductEgressPolicyModule>()
+  return {
+    ...actual,
+    PRODUCT_EGRESS_POLICY: {
+      ...actual.PRODUCT_EGRESS_POLICY,
+      feedbackApiUrl: 'https://feedback.example.test/v1/feedback'
+    }
+  }
+})
 
 const { fetchMock } = vi.hoisted(() => ({ fetchMock: vi.fn<typeof fetch>() }))
 

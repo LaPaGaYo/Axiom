@@ -367,7 +367,7 @@ ContextPackage 是可寻址（`id = sha256(manifest)`）、可复现、最小充
 - 每条消息携带 `missionId` 与相关 `taskId / attemptId / decisionId / artifactId`；摘要在消息，详细内容在 Artifact。
 - 路由：按对象关系（依赖边、HANDOFF 目标）与订阅为主，DecisionEngine 评分为辅；不全局广播。
 - 持久化复用 Orca `messages`/`deliveries`/唤醒机制，产品类型放 `payload.axiom.type`（D9）；映射表见 `orca-mapping.md` §3c。Worker 不得发出 `merge_ready`、`dispatch`、`decision_gate`。
-- Worker 通道：`axiom attempt submit | ask | blocked | handoff | inform | request | request-subtask | check`，携带 Orca dispatch capability；stale / duplicate / mismatched / unauthorized 由 Orca 既有拒绝码与 `mutation_receipts` 幂等处理（D11、D16）。
+- Worker 通道：`axiom attempt submit | ask | blocked | handoff | inform | request | request-subtask | check`，调用方身份由宿主核实（D73：终端 / 会话 → Dispatch → 进程代次）；stale / duplicate / mismatched / unauthorized 由 Orca 既有拒绝码与 `mutation_receipts` 幂等处理（D11 修订、D73、D16）。
 - Control Plane → Worker 的回复（answer、DECISION）投递到 `dispatch:<attemptId>` mailbox，复用 Orca 的 nudge 与长轮询。
 
 ## 11. Verification 设计
