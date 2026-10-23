@@ -6,6 +6,7 @@ import {
   type KeybindingOverrides
 } from '../../shared/keybindings'
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
+import { MOBILE_PAIRING_AVAILABLE } from '../../shared/mobile-pairing-availability'
 import { translateMain } from '../i18n/main-i18n'
 import { createAppMenuSelectionItem, resolveNativeEditTarget } from './app-menu-selection-item'
 import { createAppMenuQuitItem } from './app-menu-quit-item'
@@ -66,14 +67,11 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
 
   const isMac = process.platform === 'darwin'
   const appearance = getAppearanceState()
-  const shortcutLabel = (actionId: KeybindingActionId): string => {
-    const bindings = getEffectiveKeybindingsForAction(
-      actionId,
-      process.platform,
-      getKeybindings?.()
+  const shortcutLabel = (actionId: KeybindingActionId): string =>
+    formatKeybindingList(
+      getEffectiveKeybindingsForAction(actionId, process.platform, getKeybindings?.()),
+      process.platform
     )
-    return formatKeybindingList(bindings, process.platform)
-  }
 
   const reloadFocusedWindow = (ignoreCache: boolean): void => {
     const webContents = BrowserWindow.getFocusedWindow()?.webContents
@@ -266,12 +264,16 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
         checked: appearance.showAutomationsButton,
         click: () => onToggleAppearance('showAutomationsButton')
       },
-      {
-        label: translateMain('menu.showMobileButton', 'Show Axiom Mobile Button'),
-        type: 'checkbox',
-        checked: appearance.showMobileButton,
-        click: () => onToggleAppearance('showMobileButton')
-      },
+      ...(MOBILE_PAIRING_AVAILABLE
+        ? [
+            {
+              label: translateMain('menu.showMobileButton', 'Show Axiom Mobile Button'),
+              type: 'checkbox' as const,
+              checked: appearance.showMobileButton,
+              click: () => onToggleAppearance('showMobileButton')
+            }
+          ]
+        : []),
       {
         label: translateMain('menu.showTitlebarAppName', 'Show Titlebar App Name'),
         type: 'checkbox',
@@ -322,8 +324,6 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     ]
   }
 
-  const windowMenu = createAppWindowMenu(translateMain('menu.window', 'Window'), isMac)
-
   const helpMenu: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.help', 'Help'),
     submenu: [
@@ -342,11 +342,10 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   }
 
   const template: Electron.MenuItemConstructorOptions[] = [
-    ...(isMac ? [macAppMenu] : []),
-    ...(isMac ? [] : [fileMenu]),
+    isMac ? macAppMenu : fileMenu,
     editMenu,
     viewMenu,
-    windowMenu,
+    createAppWindowMenu(translateMain('menu.window', 'Window'), isMac),
     helpMenu
   ]
 

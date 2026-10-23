@@ -274,7 +274,7 @@ describe('MobilePage pairing connection mode', () => {
 
     // Switching to Orca Relay must clear the local QR, not remint a
     // local-only code under the Relay label.
-    await user.click(screen.getByRole('button', { name: 'Axiom Relay' }))
+    await user.click(screen.getByRole('button', { name: 'Orca Relay' }))
     await waitFor(() => expect(screen.getByTestId('mode')).toHaveTextContent('automatic'))
     await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('none'))
     await new Promise((resolve) => setTimeout(resolve, 20))
@@ -286,7 +286,7 @@ describe('MobilePage pairing connection mode', () => {
     mocks.storeState.orcaProfileAuthStatus = { state: 'local' }
     const user = userEvent.setup()
     await openPairingStep()
-    await user.click(screen.getByRole('button', { name: 'Axiom Relay' }))
+    await user.click(screen.getByRole('button', { name: 'Orca Relay' }))
     await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('none'))
     getPairingQR.mockClear()
 
@@ -305,7 +305,7 @@ describe('MobilePage pairing connection mode', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }))
 
     // Signed-out Anywhere (an explicit choice) shows no QR at all.
-    await user.click(screen.getByRole('button', { name: 'Axiom Relay' }))
+    await user.click(screen.getByRole('button', { name: 'Orca Relay' }))
     await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('none'))
     getPairingQR.mockClear()
 

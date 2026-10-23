@@ -2,6 +2,7 @@ import type { SettingsSearchEntry } from './settings-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
+import { MOBILE_PAIRING_AVAILABLE } from '../../../../shared/mobile-pairing-availability'
 
 export const getLeftSidebarAppearanceEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
   title: translate(
@@ -168,25 +169,50 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
       ...translateSearchKeyword('auto.components.settings.appearance.search.ac79fe4a04', 'show')
     ]
   },
-  {
-    title: translate(
-      'auto.components.settings.appearance.search.1de96ec8a6',
-      'Show Axiom Mobile Button'
-    ),
-    description: translate(
-      'auto.components.settings.appearance.search.682293cadf',
-      'Show the Axiom Mobile button at the top of the left sidebar.'
-    ),
-    keywords: [
-      ...translateSearchKeyword('auto.components.settings.appearance.search.74618577c7', 'mobile'),
-      ...translateSearchKeyword('auto.components.settings.appearance.search.5e5b8878bf', 'phone'),
-      ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
-      ...translateSearchKeyword('auto.components.settings.appearance.search.6cf5f54ce1', 'button'),
-      ...translateSearchKeyword('auto.components.settings.appearance.search.648eeada79', 'hide'),
-      ...translateSearchKeyword('auto.components.settings.appearance.search.ac79fe4a04', 'show'),
-      ...translateSearchKeyword('auto.components.settings.appearance.search.839fb1e3ed', 'toolbox')
-    ]
-  },
+  ...(MOBILE_PAIRING_AVAILABLE
+    ? [
+        {
+          title: translate(
+            'auto.components.settings.appearance.search.1de96ec8a6',
+            'Show Axiom Mobile Button'
+          ),
+          description: translate(
+            'auto.components.settings.appearance.search.682293cadf',
+            'Show the Axiom Mobile button at the top of the left sidebar.'
+          ),
+          keywords: [
+            ...translateSearchKeyword(
+              'auto.components.settings.appearance.search.74618577c7',
+              'mobile'
+            ),
+            ...translateSearchKeyword(
+              'auto.components.settings.appearance.search.5e5b8878bf',
+              'phone'
+            ),
+            ...translateSearchKeyword(
+              'auto.components.settings.appearance.search.5bff6a2ef0',
+              'sidebar'
+            ),
+            ...translateSearchKeyword(
+              'auto.components.settings.appearance.search.6cf5f54ce1',
+              'button'
+            ),
+            ...translateSearchKeyword(
+              'auto.components.settings.appearance.search.648eeada79',
+              'hide'
+            ),
+            ...translateSearchKeyword(
+              'auto.components.settings.appearance.search.ac79fe4a04',
+              'show'
+            ),
+            ...translateSearchKeyword(
+              'auto.components.settings.appearance.search.839fb1e3ed',
+              'toolbox'
+            )
+          ]
+        }
+      ]
+    : []),
   getWorkspaceCardLayoutEntry(),
   getLeftSidebarAppearanceEntry(),
   getShowPinnedWorktreesInGroupsEntry()

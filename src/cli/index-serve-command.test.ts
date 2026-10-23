@@ -1,4 +1,16 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+// D75: these cases exercise the dormant mobile companion.
+const mobilePairing = vi.hoisted(() => ({ available: true }))
+vi.mock('../shared/mobile-pairing-availability', () => ({
+  get MOBILE_PAIRING_AVAILABLE() {
+    return mobilePairing.available
+  }
+}))
+
+beforeEach(() => {
+  mobilePairing.available = true
+})
 
 const {
   callMock,
@@ -104,6 +116,28 @@ describe('orca cli worktree awareness', () => {
     expect(serveOrcaAppMock).toHaveBeenCalledWith(
       expect.objectContaining({ grantDesktopControl: true, mobilePairing: false })
     )
+  })
+
+  it('rejects mobile pairing while the mobile companion is dormant', async () => {
+    mobilePairing.available = false
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    try {
+      await main(
+        ['serve', '--pairing-address', '100.64.1.20', '--mobile-pairing', '--json'],
+        '/tmp/repo'
+      )
+
+      expect(serveOrcaAppMock).not.toHaveBeenCalled()
+      expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+        'Mobile pairing is not available in this version of Axiom.'
+      )
+      expect(process.exitCode).toBe(1)
+    } finally {
+      process.exitCode = priorExitCode
+    }
   })
 
   it('starts a foreground headless server with mobile pairing enabled', async () => {

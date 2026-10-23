@@ -13,6 +13,12 @@ describe('getServeOptionValidationError', () => {
     expect(getServeOptionValidationError(validOptions)).toBeNull()
   })
 
+  it('rejects mobile pairing while the mobile companion is dormant', () => {
+    expect(getServeOptionValidationError({ ...validOptions, mobilePairing: true })).toBe(
+      'Mobile pairing is not available in this version of Axiom.'
+    )
+  })
+
   it.each([
     [{ noPairing: true, mobilePairing: true }, /either --mobile-pairing or --no-pairing/i],
     [

@@ -10,6 +10,7 @@ import { ShareSkillsSettingsPane } from './ShareSkillsSettingsPane'
 import { SettingsSection } from './SettingsSection'
 import { translate } from '@/i18n/i18n'
 import type { SettingsRenderContext } from './settings-render-context'
+import { MOBILE_PAIRING_AVAILABLE } from '../../../../shared/mobile-pairing-availability'
 
 export function renderOrcaAccountSettingsSection(
   context: SettingsRenderContext
@@ -97,11 +98,13 @@ export function renderIntegrationsSettingsSection(
   )
 }
 
-export function renderMobileSettingsSection(
-  context: SettingsRenderContext
-): React.JSX.Element | null {
+export function renderMobileSettingsSection(context: {
+  model: Pick<SettingsRenderContext['model'], 'showDesktopOnlySettings'>
+  navigation: Pick<SettingsRenderContext['navigation'], 'getSectionSearchEntries'>
+  view: Pick<SettingsRenderContext['view'], 'isSectionMounted'>
+}): React.JSX.Element | null {
   const { model, navigation, view } = context
-  return model.showDesktopOnlySettings ? (
+  return model.showDesktopOnlySettings && MOBILE_PAIRING_AVAILABLE ? (
     <SettingsSection
       id="mobile"
       title={translate('auto.components.settings.Settings.c40dadaac8', 'Mobile')}

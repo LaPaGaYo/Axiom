@@ -5,7 +5,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { parseArgs } from './orcad-command-arguments'
 import { ORCAD_EXIT_CONFIGURATION } from './orcad-configuration-exit'
 import { ORCAD_EXIT_FAILED, resolveOrcadExitCode } from './orcad-exit-code'
@@ -19,7 +19,26 @@ import { OrcadInstanceLockError } from './orcad-data-root-privacy'
 import { ProfileStateAccessError } from '../persistence/profile-state/profile-state-access'
 import { OrcadBundledRuntimeError } from './orcad-bundled-runtime'
 
+// D75: these cases exercise the dormant mobile companion.
+const mobilePairing = vi.hoisted(() => ({ available: true }))
+vi.mock('../../shared/mobile-pairing-availability', () => ({
+  get MOBILE_PAIRING_AVAILABLE() {
+    return mobilePairing.available
+  }
+}))
+
+beforeEach(() => {
+  mobilePairing.available = true
+})
+
 describe('parseArgs', () => {
+  it('rejects mobile pairing while the mobile companion is dormant', () => {
+    mobilePairing.available = false
+    expect(() => parseArgs(['--mobile-pairing'])).toThrow(
+      'Mobile pairing is not available in this version of Axiom.'
+    )
+  })
+
   it('accepts help alongside valid server flags', () => {
     expect(parseArgs(['--help'])).toEqual({ help: true })
     expect(parseArgs(['-h'])).toEqual({ help: true })

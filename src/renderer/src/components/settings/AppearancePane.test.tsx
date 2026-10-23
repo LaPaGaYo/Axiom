@@ -244,6 +244,22 @@ describe('AppearancePane', () => {
     delete (window as unknown as { api?: unknown }).api
   })
 
+  it('omits the Mobile sidebar toggle with the shipped switch even when the setting is on', async () => {
+    mocks.state.settingsSearchQuery = 'sidebar'
+    const container = await renderAppearancePane({
+      ...getDefaultSettings('/tmp'),
+      showMobileButton: true
+    })
+
+    expect(container.textContent).not.toContain('Show Axiom Mobile Button')
+    expect(
+      container.querySelector('[role="switch"][aria-label="Show Tasks Button"]')
+    ).not.toBeNull()
+    expect(
+      container.querySelector('[role="switch"][aria-label="Show Automations Button"]')
+    ).not.toBeNull()
+  })
+
   it('keeps chat appearance controls out of the Appearance pane', async () => {
     mocks.state.settingsSearchQuery = ''
     const container = await renderAppearancePane({

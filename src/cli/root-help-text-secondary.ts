@@ -36,7 +36,7 @@ export const ROOT_HELP_TEXT_SECONDARY = [
   '',
   'Common Commands:',
   '  axiom open [--json]',
-  '  axiom serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--grant-desktop-control] [--project-root <path>] [--recipe-json] [--supervise] [--json]',
+  '  axiom serve [--port <port>] [--pairing-address <host>] [--no-pairing] [--grant-desktop-control] [--project-root <path>] [--recipe-json] [--supervise] [--json]',
   '  axiom status [--json]',
   '  axiom diagnostics memory [--json]',
   '  axiom agent-context [--json]',

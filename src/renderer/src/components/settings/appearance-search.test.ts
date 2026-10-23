@@ -3,6 +3,14 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { i18n } from '@/i18n/i18n'
 import { getFollowSymlinkedDirectoriesEntry, getLanguageEntries } from './appearance-search'
 import { matchesSettingsSearch } from './settings-search'
+import { getSidebarEntries } from './appearance-sidebar-search'
+
+it('omits the Mobile sidebar setting from the shipped appearance catalog', () => {
+  const titles = getSidebarEntries().map((entry) => entry.title)
+
+  expect(titles).not.toContain('Show Axiom Mobile Button')
+  expect(titles.slice(0, 2)).toEqual(['Show Tasks Button', 'Show Automations Button'])
+})
 
 // Native word for "language" in each supported UI language. These must be
 // findable no matter which locale the interface is currently rendered in, so a

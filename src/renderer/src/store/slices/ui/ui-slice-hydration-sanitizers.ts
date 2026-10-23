@@ -15,6 +15,7 @@ import { AGENT_STATUS_HYDRATE_MAX_AGE_MS } from '../../../../../shared/agent-sta
 import { resolveVisibleWorkspaceHostIds } from '../../../../../shared/workspace-view/workspace-host-visibility'
 import { persistedUIValuesEqual } from '../../../../../shared/persisted-ui-equality'
 import { DEFAULT_STATUS_BAR_ITEMS } from '../../../../../shared/constants'
+import { MOBILE_PAIRING_AVAILABLE } from '../../../../../shared/mobile-pairing-availability'
 import type { UISlice } from './ui-slice-contract'
 
 const MIN_SIDEBAR_WIDTH = 220
@@ -171,7 +172,8 @@ export function sanitizeWorkspaceCleanupDismissals(
 
 export function sanitizeHydratedActiveView(value: PersistedUIState['activeView']): TopLevelView {
   // Why: older data (pre-activeView) or a view a different build doesn't have falls back to terminal rather than rendering nothing.
-  if (!isTopLevelView(value)) {
+  // D75: a persisted Mobile view also falls back while the mobile companion is dormant.
+  if (!isTopLevelView(value) || (value === 'mobile' && !MOBILE_PAIRING_AVAILABLE)) {
     return 'terminal'
   }
   return value

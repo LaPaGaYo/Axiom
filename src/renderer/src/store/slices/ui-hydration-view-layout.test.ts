@@ -7,6 +7,14 @@ import { getSetupScriptPromptDismissalKey } from '../../lib/setup-script-prompt'
 import { getRepoHostIdentityForParts } from './repo-host-identity'
 import { createUIStore, makePersistedUI } from './ui-slice-test-harness'
 
+// D75: these cases exercise the dormant mobile companion.
+const mobilePairing = vi.hoisted(() => ({ available: true }))
+vi.mock('../../../../shared/mobile-pairing-availability', () => ({
+  get MOBILE_PAIRING_AVAILABLE() {
+    return mobilePairing.available
+  }
+}))
+
 const mocks = vi.hoisted(() => ({
   sendNotesToActiveAgentSession: vi.fn(),
   track: vi.fn(),
@@ -41,6 +49,7 @@ afterEach(() => {
 })
 
 beforeEach(() => {
+  mobilePairing.available = true
   mocks.sendNotesToActiveAgentSession.mockReset()
   mocks.sendNotesToActiveAgentSession.mockResolvedValue({ status: 'sent' })
   mocks.track.mockReset()
@@ -184,6 +193,15 @@ describe('createUISlice hydratePersistedUI', () => {
     store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'activity' }), 'startup')
 
     expect(store.getState().activeView).toBe('activity')
+  })
+
+  it('restores a persisted Mobile view as terminal while the mobile companion is dormant', () => {
+    mobilePairing.available = false
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'mobile' }), 'startup')
+
+    expect(store.getState().activeView).toBe('terminal')
   })
 
   it('restores a default-on view (mobile) even when its nav button is hidden', () => {
