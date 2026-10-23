@@ -261,7 +261,7 @@ marketplace 官方源禁用 / skills 安装源改 `LaPaGaYo/Axiom` / star 提示
 - `mobile/` **不**从 ratchet 排除（撤回 attempt 1 的排除；基线只减 cloud 的 pair）；保留 `mobile.yml` 检查、`install-mobile-dependencies` 及其所有使用、`pr.yml` 的 `mobile_web_app` 作业；只删 `mobile-android-release.yml` 与 `mobile-ios-release.yml`（原生 App 不构建不发布）。
 - 是否把"手机 companion"整体从桌面端移除（连同 web bundle、配对 UI、relay/push 客户端）是另一个产品决定，不在 M0 内。
 **取代规则**：取代 D33 中关于 mobile ratchet 排除与 mobile CI 的部分；cloud/ 删除部分不变。
-- **修订（2026-10-22，D75，Henry 同意）**：V1 起桌面打包不再内嵌 mobile web bundle，`mobile/` 不再算交付代码；棘轮把 `mobile/**` 作为不交付代码排除，上游 mobile 测试不阻塞合入。原生发布工作流仍是删除状态。手机端在 V1 之后必做（DEF-26）。
+- **修订（2026-10-22，D75，Henry 同意）**：V1 起桌面打包不再内嵌 mobile web bundle，`mobile/` 不再算交付代码；棘轮把 `mobile/**` 作为不交付代码排除，上游 mobile 测试不阻塞合入。原生发布工作流仍是删除状态。手机端在 V1 之后必做（DEF-26）。（2026-10-23 D75 修订：不打包与棘轮排除推迟，`mobile/` 暂仍随包交付、留在棘轮里，D33a 在这两点上继续有效。）
 
 ## D34 · M0-05b-2 集成记录 — ACCEPTED（事实记录）
 
@@ -843,3 +843,4 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **后果**：取代 D33a 里"`mobile/` 随桌面交付、留在棘轮与 CI"的部分（D33a 加修订行）；实施为 UPSTREAM-3 合入之后、M3-02 之前的一个小 hygiene Task（打包配置、入口隐藏、棘轮排除 `mobile/**`、相关测试与文档）；`docs/plans/M3.md` 记一笔。
 **取代规则**：恢复手机功能需新 Decision（DEF-26 触发时）。
 - **修订（2026-10-22，Henry："哪怕做 app 也要等到 V3 之后等 desktop 这边都跑通了之后才能开始"）**：手机端开工时间由"V1 之后"改为 V3 之后、desktop 全部跑通之后；方向默认复用 Orca 的 App 代码（`mobile/`），relay / push 服务端自建，届时再评估是否在仓库里 fork 裁剪。DEF-26 相应改写。
+- **修订（2026-10-23，D75 收尾范围，Henry："只关入口"）**：实施前查明 mobile web bundle 不止装进桌面应用（`out/mobile-web`，app.asar 解包），也装在 orcad 服务端模板里（模板随桌面打包、装到每台 SSH 主机），orcad 产物清单（`src/shared/orcad-artifacts.ts`）把它列为必需文件；按 ①③ 原文不打包、不构建，就要改 orcad 的产物契约、artifact identity 与构建脚本，正是第 2 条要避免的上游改动。改为：**① 只关入口**——所有手机配对入口（侧边栏 Axiom Mobile 按钮、View 菜单与外观设置里的显示开关及其搜索项、设置 › Mobile、启动时恢复出来的 Mobile 视图、`axiom serve` / 桌面 serve 模式 / orcad 的 `--mobile-pairing`）统一看一个开关 `MOBILE_PAIRING_AVAILABLE`（`src/shared/mobile-pairing-availability.ts`，值为 `false`）；mobile web bundle 继续随包（约 10 MB，两份），没有配对入口就没有已配对的手机，用不到它；局域网配对随入口停用。**③ 推迟**——`mobile/` 照旧构建、留在 vendor-egress 棘轮里（它仍随包交付，D33a 的理由仍成立）；不打包与棘轮排除放到下次基线重置或 DEF-26 时再做。第 2、4 条不变。实施 Task：D75-HYG。

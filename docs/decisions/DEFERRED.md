@@ -28,7 +28,7 @@
 | DEF-23 | 竞争 Attempt（best-of-N）：policy 允许时同一 Task 并行跑多个 Attempt（可换 harness），每个候选独立验证，确定性规则在 PASS 的候选里选一个进集成，其余记 `SUPERSEDED`（证据保留，清理走 Approval）；候选之间的分歧本身触发 QUESTION / HUMAN_REVIEW；DecisionEngine 只作建议，代理之间的一致不能代替检查。启用条件示例：同一 Task 连续失败 k 次、高风险 Task。来源：Orca 首页"多个 agent 跑同一个 bug，留下最好的结果"与"Race three agents"配方（`claude/orca-docs-review-v1.md` §5）。前提：今天一个 Task 只能有一个 ACTIVE 候选，需新 Decision；先用记分卡算 cost-of-pass | **V2 规划时**；或 V1 中某类 Task 反复失败、单 Attempt 的 cost-of-pass 明显偏高时（取先到者） | Orca 文档复审（Henry 2026-10-22："可以按照这个登记进仓库"）；DEF-9 / DEF-18 | OPEN（2026-10-22 登记） |
 | DEF-24 | 多候选 IntegrationBatch 的"部分冲突"策略（D5 的取代规则要求届时新开 Decision）：候选答案 = 原子合并——批次里任一候选合不进或合并树回归失败，整批都不提升（参照 GitHub 栈式 PR 的原子合并：一层合不进就都不合），失败批次按 D3（及其修订提议）生成 FIX_TASK；备选 = 剔除冲突候选后重组批次。交付侧可按里程碑出 PR 栈、走托管合并队列，托管 CI 记为交付证据（V2，`claude/orca-docs-review-v1.md` §5） | **引入多候选批次时**（V1 内批次固定为 1，D5） | Orca 文档复审（Henry 2026-10-22）；D3 / D5 | OPEN（2026-10-22 登记） |
 | DEF-25 | Worker 调用方身份的加固：按 socket 对端进程（peer pid 及其进程树归属的终端 / 会话）核实 `axiom` CLI 的调用方，而不是只信环境里的终端句柄、pane key 与 Orca session id（D73 ④ 的残余风险：伪造这些环境变量的 Worker 能冒充另一个仍在运行的 Worker） | V1 发布前的安全复审；或 Worker 默认改为 full-access 姿态时 | D73 | OPEN |
-| DEF-26 | 手机端（D75：V1 只做桌面，手机伴侣休眠不删；Henry："we must do mobile in the future"）。方向（Henry 2026-10-22 同意）：默认复用 Orca 的 App 代码（`mobile/`：Expo 55 + React Native 0.83 + expo-router，一套代码出 iOS / Android 原生 App 与桌面内嵌的网页版），在上面加 Mission 页面（看进度、批准 Approval、回答 QUESTION、通知），藏掉用不上的；relay 与推送网关服务端自建（`cloud/` 已删，不能用 Orca 的服务器），或先只做局域网 / 虚拟内网；配对与认证按 D73 的身份模型；上架需要 Apple / Google 开发者账号与签名（原生发布工作流可从历史恢复），身份 `com.lapagayo.axiom.mobile`（D21）。届时再评估：上游手机代码改动过快或手机端定位变成纯审批 / 通知时，在仓库里 fork 裁剪；只做网页版伴侣是更轻的选项（iOS 推送要求加到主屏幕）。恢复打包与门禁即撤销 D75 ①③ | V3 之后、desktop 全部跑通之后才开工（Henry 2026-10-22："哪怕做 app 也要等到 V3 之后等 desktop 这边都跑通了之后才能开始"） | D75 | OPEN |
+| DEF-26 | 手机端（D75：V1 只做桌面，手机伴侣休眠不删；Henry："we must do mobile in the future"）。方向（Henry 2026-10-22 同意）：默认复用 Orca 的 App 代码（`mobile/`：Expo 55 + React Native 0.83 + expo-router，一套代码出 iOS / Android 原生 App 与桌面内嵌的网页版），在上面加 Mission 页面（看进度、批准 Approval、回答 QUESTION、通知），藏掉用不上的；relay 与推送网关服务端自建（`cloud/` 已删，不能用 Orca 的服务器），或先只做局域网 / 虚拟内网；配对与认证按 D73 的身份模型；上架需要 Apple / Google 开发者账号与签名（原生发布工作流可从历史恢复），身份 `com.lapagayo.axiom.mobile`（D21）。届时再评估：上游手机代码改动过快或手机端定位变成纯审批 / 通知时，在仓库里 fork 裁剪；只做网页版伴侣是更轻的选项（iOS 推送要求加到主屏幕）。恢复时打开 `MOBILE_PAIRING_AVAILABLE`（D75 修订：配对入口统一看这个开关；不打包与棘轮排除尚未做，见 D75 修订行） | V3 之后、desktop 全部跑通之后才开工（Henry 2026-10-22："哪怕做 app 也要等到 V3 之后等 desktop 这边都跑通了之后才能开始"） | D75 | OPEN |
 
 ## M2 出口核对（2026-10-20，D61）
 
@@ -101,3 +101,7 @@ D75 ACCEPTED（手机伴侣在 V1 休眠：入口隐藏、桌面打包不内嵌 
 ## 2026-10-22 手机端方向登记（Henry："我同意，可能先进 DEF 26……哪怕做 app 也要等到 V3 之后等 desktop 这边都跑通了之后才能开始"）
 
 DEF-26 改写：方向为复用 Orca 的 App 代码、服务端 relay / push 自建；开工时间改为 V3 之后、desktop 跑通之后。D75 加修订行。
+
+## 2026-10-23 D75 收尾范围（Henry："只关入口"）
+
+D75 加修订行：只关配对入口（一个开关 `MOBILE_PAIRING_AVAILABLE`），不打包与棘轮排除推迟（orcad 模板也带 mobile web bundle，改它要动 orcad 产物契约）；D33a 修订行补注；DEF-26 改写恢复方式。实施 Task D75-HYG。
