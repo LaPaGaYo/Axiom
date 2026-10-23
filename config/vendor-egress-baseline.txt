@@ -3,7 +3,6 @@ config/i18n-translation-source.md:stablyai:1
 config/patches/ws@8.22.0.patch:stablyai:1
 config/reliability-gates.jsonc:stablyai:283
 config/scripts/adhoc-windows-parallelism.test.mjs:stablyai:1
-config/scripts/agent-state-rules-bundle.test.mjs:stablyai:1
 config/scripts/assert-github-release-is-draft.mjs:stablyai:1
 config/scripts/assert-github-release-is-draft.test.mjs:stablyai:4
 config/scripts/bump-android-apk-download-version.test.mjs:stablyai:1
@@ -40,7 +39,6 @@ config/scripts/setup-daily-release-repo.sh:stablyai:2
 config/scripts/setup-hourly-release-token.sh:stablyai:5
 config/scripts/verify-dev-channel-packaging.test.mjs:SignPath Foundation:3
 config/scripts/verify-packaged-plugin-resources.test.mjs:stablyai:3
-config/scripts/verify-skill-update-roundtrip.test.mjs:stablyai:1
 config/scripts/verify-windows-inner-signature.mjs:SignPath Foundation:1
 config/scripts/verify-windows-inner-signature.test.mjs:SignPath Foundation:6
 mobile/fastlane/Appfile:com.stably.orca:1
@@ -191,7 +189,6 @@ src/main/codex/codex-app-server-session.ts:stablyai:1
 src/main/daemon/daemon-adoption-telemetry-event.test.ts:posthog:2
 src/main/daemon/daemon-folder-access-mismatch.test.ts:posthog:1
 src/main/daemon/daemon-lifecycle-event.test.ts:posthog:2
-src/main/daemon/macos-daemon-launchd.test.ts:stablyai:1
 src/main/daemon/terminal-snapshot-osc8-roundtrip.test.ts:stablyai:1
 src/main/git/command-runner/gh-exec-file-deadline.test.ts:stablyai:4
 src/main/git/command-runner/hosted-cli-deadline-log.test.ts:stablyai:2
@@ -252,7 +249,6 @@ src/main/plugins/plugin-bundled-bootstrap-coordinator.test.ts:stablyai:2
 src/main/plugins/plugin-launch-content.test.ts:stablyai:4
 src/main/rate-limits/codex-fetcher-runtime-pairing.test.ts:stablyai:1
 src/main/repo-icon-autodetect.test.ts:stablyai:13
-src/main/runtime/agent-state-rules/agent-state-rules-live-update.test.ts:stablyai:1
 src/main/runtime/mobile-cloud-relay/relay-host-proof.test.ts:onorca.dev:1
 src/main/runtime/mobile-cloud-relay/relay-host-proof.test.ts:orca.dev:1
 src/main/runtime/orca-runtime-agent-skill-share.test.ts:onorca.dev:1
@@ -292,7 +288,6 @@ src/main/runtime/sidebar-inputs/repo-icon-remote-fetch.test.ts:stablyai:1
 src/main/runtime/sidebar-inputs/sidebar-project-catalog.test.ts:stablyai:1
 src/main/runtime/structured-session-child-env.test.ts:stablyai:1
 src/main/skills/skill-freshness-eligibility.test.ts:stablyai:1
-src/main/skills/skill-freshness-inventory.test.ts:stablyai:3
 src/main/skills/skill-lock-sources.test.ts:stablyai:6
 src/main/skills/skill-update-outcome.test.ts:stablyai:1
 src/main/startup/browser-process-user-agent-ordering.test.ts:orca.dev:1
@@ -333,7 +328,6 @@ src/renderer/src/components/automations/automation-source-display.test.ts:stably
 src/renderer/src/components/automations/automation-target-availability.test.ts:stablyai:6
 src/renderer/src/components/browser-pane/assemble-chrome/BrowserAddressBar.test.tsx:stablyai:2
 src/renderer/src/components/browser-pane/assemble-chrome/browser-address-bar-suggestions.test.ts:stablyai:11
-src/renderer/src/components/floating-terminal/FloatingTerminalOrchestrationDialog.freshness.test.tsx:stablyai:1
 src/renderer/src/components/github-project/ProjectRoadmap.test.tsx:stablyai:4
 src/renderer/src/components/github-project/github-project-picker-filter.test.ts:stablyai:8
 src/renderer/src/components/github-project/project-dialog-state.test.ts:stablyai:10
@@ -352,7 +346,6 @@ src/renderer/src/components/right-sidebar/source-control-branch-context-row.test
 src/renderer/src/components/right-sidebar/source-control-manual-review-url.test.ts:stablyai:12
 src/renderer/src/components/right-sidebar/use-hosted-review-actions.test.tsx:stablyai:6
 src/renderer/src/components/right-sidebar/useHostedReviewStackParent.test.tsx:stablyai:2
-src/renderer/src/components/settings/AgentSkillSetupPanel.freshness.test.tsx:stablyai:1
 src/renderer/src/components/settings/PluginSettingsRow.test.tsx:onorca.dev:1
 src/renderer/src/components/settings/PluginSettingsRow.test.tsx:orca.dev:1
 src/renderer/src/components/settings/PluginSettingsRow.test.tsx:stablyai:3
@@ -363,7 +356,6 @@ src/renderer/src/components/settings/local-network-connection-history.ts:orca.de
 src/renderer/src/components/settings/repository/identity/RepositoryIconPicker.github-avatar-refresh.test.tsx:stablyai:6
 src/renderer/src/components/settings/repository/identity/repository-icon-github.test.ts:stablyai:15
 src/renderer/src/components/sidebar/CommentMarkdown.test.tsx:stablyai:13
-src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.test.tsx:stablyai:1
 src/renderer/src/components/sidebar/folder-workspace-composer-submit.test.ts:stablyai:5
 src/renderer/src/components/sidebar/folder-workspace-linked-startup-plan.test.ts:stablyai:1
 src/renderer/src/components/sidebar/project-header-color.test.ts:stablyai:1
@@ -399,7 +391,6 @@ src/renderer/src/hooks/useComposerState-host-retarget.test.ts:stablyai:1
 src/renderer/src/hooks/useGitHubSlugMetadata.test.tsx:stablyai:8
 src/renderer/src/lib/agent-paste-draft-submit-retry.test.ts:stablyai:1
 src/renderer/src/lib/agent-paste-draft.test.ts:stablyai:1
-src/renderer/src/lib/agent-skill-nav-install-status.test.ts:stablyai:1
 src/renderer/src/lib/cmd-j-github-url-lookup.test.ts:stablyai:3
 src/renderer/src/lib/composer-issue-command.test.ts:stablyai:2
 src/renderer/src/lib/ephemeral-vm-worktree-creation.test.ts:stablyai:1
