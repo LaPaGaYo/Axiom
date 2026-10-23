@@ -299,7 +299,6 @@ src/main/telemetry/client-onboarding-language-cohort.test.ts:posthog:3
 src/main/telemetry/client.test.ts:posthog:1
 src/main/telemetry/onboarding-feature-setup-validator.test.ts:stablyai:1
 src/main/telemetry/validator.test.ts:posthog:1
-src/main/updater-agent-state-rules-release.test.ts:stablyai:3
 src/main/window/renderer-document-navigation.test.ts:stablyai:1
 src/renderer/src/components/LinuxPackageInstallRecoveryCard.test.tsx:stablyai:1
 src/renderer/src/components/WorktreeJumpPalette.linear-url.test.tsx:stablyai:9
@@ -367,8 +366,6 @@ src/renderer/src/components/sidebar/worktree-list-groups-host-labels.test.ts:sta
 src/renderer/src/components/sidebar/worktree-list-groups-lineage-nesting.test.ts:stablyai:2
 src/renderer/src/components/sidebar/worktree-list-groups-project-host-setups.test.ts:stablyai:21
 src/renderer/src/components/sidebar/worktree-list-groups-test-fixtures.ts:stablyai:1
-src/renderer/src/components/skills/SkillFreshnessNudge.test.tsx:stablyai:1
-src/renderer/src/components/skills/SkillFreshnessStatusPill.test.tsx:stablyai:1
 src/renderer/src/components/skills/SkillInstallManagementDialog.test.tsx:orca.dev:1
 src/renderer/src/components/skills/SkillSharedLinkRow.test.tsx:onorca.dev:1
 src/renderer/src/components/skills/SkillSharedLinkRow.test.tsx:orca.dev:1
@@ -403,7 +400,6 @@ src/renderer/src/lib/new-workspace.test.ts:stablyai:2
 src/renderer/src/lib/project-clone-url-prefill.test.ts:stablyai:2
 src/renderer/src/lib/project-host-workspace-target.test.ts:stablyai:35
 src/renderer/src/lib/repo-search.test.ts:stablyai:3
-src/renderer/src/lib/skill-freshness-display-status.test.ts:stablyai:1
 src/renderer/src/lib/smart-github-submit.test.ts:stablyai:20
 src/renderer/src/lib/terminal-links.test.ts:stablyai:1
 src/renderer/src/lib/terminal-quick-command-project-scope.test.ts:stablyai:5
