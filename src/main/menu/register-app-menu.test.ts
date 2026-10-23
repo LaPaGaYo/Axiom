@@ -24,7 +24,7 @@ vi.mock('electron', () => ({
     sendActionToFirstResponder: sendActionToFirstResponderMock
   },
   app: {
-    name: 'Orca'
+    name: 'Axiom'
   },
   webContents: {
     getFocusedWebContents: getFocusedWebContentsMock
@@ -96,7 +96,7 @@ describe('registerAppMenu', () => {
       getKeybindings: () => ({ 'app.settings': ['Mod+Comma'] })
     })
 
-    const submenu = getSubmenu(getTemplate(), isMac ? 'Orca' : 'File')
+    const submenu = getSubmenu(getTemplate(), isMac ? 'Axiom' : 'File')
     expect(submenu).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ label: `Settings\t${isMac ? '⌘,' : 'Ctrl+,'}` })
@@ -196,7 +196,7 @@ describe('registerAppMenu', () => {
     // Why: Check for Updates lives under the app-name menu on macOS and
     // under Help on Windows/Linux. The click behavior must be identical
     // either way.
-    const parentLabel = isMac ? 'Orca' : 'Help'
+    const parentLabel = isMac ? 'Axiom' : 'Help'
     const item = getSubmenu(getTemplate(), parentLabel).find(
       (entry) => entry.label === 'Check for Updates...'
     )
@@ -466,7 +466,7 @@ describe('registerAppMenu', () => {
     // Why: no redundant app-named "Orca" menu should exist on non-mac — the
     // app-menu contents (Settings, Exit, Check for Updates, About) have been
     // redistributed so users see them in File / Help instead.
-    expect(template.find((item) => item.label === 'Orca')).toBeUndefined()
+    expect(template.find((item) => item.label === 'Axiom')).toBeUndefined()
 
     const fileLabels = getSubmenu(template, 'File').map((item) => item.label)
     expect(fileLabels).not.toContain(`Export as PDF...\t${isMac ? '⌘⇧E' : 'Ctrl+Shift+E'}`)
@@ -488,7 +488,7 @@ describe('registerAppMenu', () => {
     registerAppMenu(buildMenuOptions())
 
     const template = getTemplate()
-    const appSubmenu = getSubmenu(template, 'Orca')
+    const appSubmenu = getSubmenu(template, 'Axiom')
     const appLabels = appSubmenu.map((item) => item.label)
     expect(appLabels).toEqual(expect.arrayContaining(['Check for Updates...', 'Settings']))
     // Why: on macOS File should NOT duplicate Settings/Exit — those live in
@@ -646,7 +646,7 @@ describe('registerAppMenu', () => {
     'keeps the native quit role unless the host supplies a quit handler (%s, #15537)',
     (platform) => {
       vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
-      const quitMenu = platform === 'darwin' ? 'Orca' : 'File'
+      const quitMenu = platform === 'darwin' ? 'Axiom' : 'File'
       const findQuit = (): Electron.MenuItemConstructorOptions | undefined =>
         getSubmenu(getTemplate(), quitMenu).find(
           (item) =>

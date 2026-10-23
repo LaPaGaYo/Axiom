@@ -94,7 +94,7 @@ const sections: SettingsNavSection[] = [
     searchEntries: [
       {
         title: 'Axiom CLI',
-        description: 'Register or remove the orca shell command.',
+        description: 'Register or remove the axiom shell command.',
         keywords: ['cli', 'path', 'terminal', 'command', 'shell command'],
         cmdJKeywords: ['cli', 'path', 'command', 'shell command'],
         targetSectionId: 'cli'
@@ -250,7 +250,7 @@ describe('Cmd+J palette middle-band ranking', () => {
     ['browser', 'settings:browser'],
     ['quick commands', 'settings:quick-commands'],
     ['add quick command', 'add-quick-command'],
-    ['orca cli', 'settings:general:cli'],
+    ['axiom cli', 'settings:general:cli'],
     ['shell command', 'settings:general:cli']
   ])('ranks %s first', (query, expectedId) => {
     expect(top(query)).toBe(expectedId)
@@ -263,7 +263,7 @@ describe('Cmd+J palette middle-band ranking', () => {
 
     expect(cliResult).toMatchObject({
       title: 'Axiom CLI',
-      description: 'Register or remove the orca shell command.',
+      description: 'Register or remove the axiom shell command.',
       sectionId: 'general',
       targetSectionId: 'cli'
     })

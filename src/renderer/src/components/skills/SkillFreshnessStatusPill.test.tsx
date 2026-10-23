@@ -49,7 +49,7 @@ function inventory(
       topology: 'canonical-copy',
       status: entry.status,
       currentPackageDigest: 'current',
-      lockSource: 'stablyai/orca',
+      lockSource: 'LaPaGaYo/Axiom',
       errorCategory: null
     })),
     eligibleUpdateNames,

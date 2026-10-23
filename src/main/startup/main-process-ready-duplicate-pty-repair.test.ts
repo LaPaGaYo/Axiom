@@ -34,6 +34,11 @@ const fixture = vi.hoisted(() => {
 })
 
 vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+// This suite pins PTY repair ordering, not Mission recovery.
+vi.mock('../axiom/control-plane-boot', () => ({
+  startAxiomControlPlane: vi.fn(),
+  stopAxiomControlPlane: vi.fn()
+}))
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('electron', () => ({
   app: { isPackaged: false, on: vi.fn(), once: vi.fn(), getPath: () => fixture.userData },

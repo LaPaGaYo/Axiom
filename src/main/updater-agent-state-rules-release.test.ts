@@ -1,6 +1,7 @@
 // Regression: agent state rules releases live in the app's own release feed, and must never change
-// what the updater resolves on any path: the stable Latest feed, the RC prerelease feed, or the
-// build picker.
+// what a user-triggered check resolves: the stable feed, the RC feed, or the build picker.
+// Axiom disables automatic checks (updater.product-policy.test.ts); feed parsing still applies
+// to explicit checks and must use the product's release repository.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getVersionChannel } from '../shared/release-channel'
 import { installNetRequestFetchAdapter } from './updater-net-request.fixture'
@@ -30,7 +31,7 @@ function atomFeed(tags: readonly string[]): string {
   const entries = tags
     .map(
       (tag) =>
-        `<entry><link rel="alternate" type="text/html" href="https://github.com/stablyai/orca/releases/tag/${tag}"/><title>${tag}</title></entry>`
+        `<entry><link rel="alternate" type="text/html" href="https://github.com/LaPaGaYo/Axiom/releases/tag/${tag}"/><title>${tag}</title></entry>`
     )
     .join('')
   return `<?xml version="1.0" encoding="UTF-8"?><feed>${entries}</feed>`
@@ -38,7 +39,7 @@ function atomFeed(tags: readonly string[]): string {
 
 function serveFeed(tags: readonly string[]): void {
   netFetchMock.mockImplementation((url: string) => {
-    if (url === 'https://github.com/stablyai/orca/releases.atom') {
+    if (url === 'https://github.com/LaPaGaYo/Axiom/releases.atom') {
       return Promise.resolve({ ok: true, text: () => Promise.resolve(atomFeed(tags)) })
     }
     const manifest = url.match(/\/releases\/download\/v([^/]+)\/latest(?:-[a-z]+)?\.yml$/)
@@ -49,7 +50,7 @@ function serveFeed(tags: readonly string[]): void {
         status: 200,
         text: () =>
           Promise.resolve(
-            `version: ${version}\npath: Orca-${version}.zip\nfiles:\n  - url: Orca-${version}.zip\n`
+            `version: ${version}\npath: Axiom-${version}.zip\nfiles:\n  - url: Axiom-${version}.zip\n`
           )
       })
     }
@@ -62,16 +63,16 @@ function apiRelease(tag: string, assets: readonly string[]) {
     tag_name: tag,
     draft: false,
     published_at: '2026-10-01T00:00:00Z',
-    html_url: `https://github.com/stablyai/orca/releases/tag/${tag}`,
+    html_url: `https://github.com/LaPaGaYo/Axiom/releases/tag/${tag}`,
     assets: assets.map((name) => ({ name }))
   }
 }
 
 const APP_ASSETS = [
   'latest-mac.yml',
-  'orca-macos-arm64.dmg',
+  'axiom-macos-arm64.dmg',
   'latest.yml',
-  'orca-windows-setup.exe'
+  'axiom-windows-setup.exe'
 ]
 
 beforeEach(() => {
