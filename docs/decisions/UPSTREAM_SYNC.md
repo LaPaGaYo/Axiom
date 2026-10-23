@@ -8,6 +8,7 @@
 |---|---|---|
 | 2026-09-26 | `3eb1adec2` | fork 点（Axiom main 与 upstream/main 的 merge-base） |
 | 2026-10-19 | `ce2d60834c` | 初筛点（已逐条分诊到此；按 D56 只摘取，不整体合并，merge-base 仍为 fork 点） |
+| 2026-10-23 | `41661e3312` | UPSTREAM-3 全量合并（D72；合并提交 `ccfc02a65c`，tag `axiom-base-2`），新的 merge-base；之后回到 D56 只摘取 |
 
 ## 2026-10-17 · 首次初筛（只读，未应用）
 
@@ -89,3 +90,11 @@
 - 改名感知的补充（`git diff -M50%`）：Axiom 改过、上游删除的文件 91 个（`src/main/ssh` 20、renderer 16、`config` 15、`src/main/providers` 8、`src/main/codex` 5、`src/main/runtime` 4、`src/main/ipc` 3、`src/main/claude-accounts` 3、`src/cli/specs` 3、`src/main/native-chat` 2）；Axiom 改过、上游改名的 13 个。
 - 语义接缝：上游 `migrate-v43.ts`（`e42c0b3630`，#24230，2026-10-01）把存储的 `session:<id>` 地址改写为 `orca_session_id:<id>`，与 Axiom 的 v43–v45 编号冲突（上游 `SCHEMA_VERSION = 43`，Axiom 45）；`src/main/axiom/execution/mission-caller.ts` 硬编码 `session:` 前缀（D14）。
 - 计划：UPSTREAM-3 = 全量合并，Henry 说"继续"后第一件事、M3-02 之前（D72 第 1–7 条）；完成后在同步点表加一行（新的 merge-base 与 tag `axiom-base-2`），之后回到 D56 的只摘取。
+
+## 2026-10-23 · UPSTREAM-3 已合入（合并提交 `ccfc02a65c` + attempt 6 修补；tag `axiom-base-2` = `41661e3312`）
+
+- **合并方式（D72）**：工作分支从 `cda0d49f15`（父 `393c083ebd` + `41661e3312`，带冲突标记提交）起，attempt 1–5 叠在 `axiom/attempt/UPSTREAM-3/1..5`；`git commit-tree <候选树> -p 393c083ebd -p 41661e3312` 生成一个合并提交，main 快进到它，中间带标记的提交不进 main 的历史（attempt 分支保留步骤历史）。之后 verify-main 与第一次完整全量查出的问题由 attempt 6（`--base main`）修补，以 `--no-ff` 合入。
+- **六次 attempt**（记录 `.axiom-work/verifications/UPSTREAM-3-{1,2,3,4,5,6}.md`、`UPSTREAM-3-full.md`）：1 = 301 个冲突文件 + 91 个 UD 路径 + 内核接缝（46 min）；2 = 给无冲突合入的上游代码补施加 M0（62 min）；3 = B1 按 D73（35 min）；4 = 两处测试（10 min）；5 = 宿主验证查出的 162 个合并引起测试、`opencode.json` 出包、两处冷启动外联（53 min）；6 = 第一次完整全量查出的 49 个测试、一个启动测试替身引起的未处理 rejection、7 处测试类型断言、smoke spec 读取上游 #22933 删掉的设置（18 min）。验证者另做的修改：两个 CLI 测试字符串；删掉 cherry-pick 残留的 `tests/e2e/agent-trust-completion.unit.test.ts`（上游 #23744 已删）；9 个旧 sidecar 里被本次合并有意推翻的检查项（改指向或撤掉，e2e typecheck 计数上限 214 / 215 → 226）。
+- **内核接缝**：上游 v43 逐字节保留，Axiom 的 v43–v45 改为 v44–v46（`SCHEMA_VERSION = 46`，存量 43–45 的库补跑一次幂等的地址改写）；`mission-caller` 用 `formatOrcaSessionAddress`；17 处 §4b 拦截点、M2-01 seam、Control Plane 接线保留；Attempt 身份按 D73；vendor-egress 按 D74（发版代码 0 对；合入后 468 → 459）；D75（V1 只做桌面，手机端休眠）；D37 冷启动零外联（agent-state-rules 实时更新改为显式开启、去掉 Google favicon；顺带修了上游新 Codex hook 启动对账绕过 provider 激活门的问题）。
+- **证据**：完整全量（`ORCA_BALANCE_UNIT_SHARDS=1`，约 13.5k 个文件；本地不带它时 cross-version 测试会让 vitest 提前结束）与同一台机器上的纯上游检出逐测试做差——剩下的失败要么在纯上游上同样失败（真实 zsh / bash PTY、macOS bash 3.2、`/var` vs `/private/var`、process-host dev rebuild、orcad forked child paths），要么是 D75 的 3 个 `MobilePage` Relay 用例；mobile-web-app 渲染套件缺新版 Playwright 浏览器；cross-version-wire 需要上游 release tag（本仓库按 `--no-tags` 抓取）。M1 / M2 出口 e2e、五个 fixture e2e、三种栈的冷启动出口 `{}`、真实 Codex Planner、打包（asar 契约 OK）、打包产物前台 75 s 出口 `{}`、verify-main（所有 sidecar 的并集；changed-code 门以 `41661e3312` 为基线）。
+- **之后**：同步点推进到 `41661e3312`；回到 D56 的只摘取（安全 / 平台 / provider 修复），下一次初筛从 `41661e3312..upstream/main` 开始。未签名本地包的终端宿主 helper 读不到代码签名、daemon 走 fork 回退——上游新代码，Axiom 签名之后再看。

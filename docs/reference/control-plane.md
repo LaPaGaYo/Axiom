@@ -77,7 +77,7 @@ ContextBuilder 固定强制顺序：(1) Task spec；(2) PlanRevision revision/mi
 
 规则与候选在纳入前脱敏：PRIVATE KEY 块、指定 provider token 前缀（兼容 hyphen/underscore）和 AKIA key 替换为 `[REDACTED]`；规则先脱敏再截断。候选的敏感部分在 omitted 中以 redacted 记录，安全替换文本仍可纳入；section header 标记 redacted。manifest ranked hash 绑定脱敏后的正文；强制 hash 绑定渲染节（第 4 节另含协议）。
 
-canonical manifest 无空白、对象键序固定，保留数组顺序，id = `ctx_` + sha256(canonical)。manifest 与完整 render template 均作为 Artifact 持久化，context row 只保留 JSON manifest/hash/引用。相同输入重复 build 不新增行或文件。模板最后的 `Axiom Worker protocol` 使用 D16 八个 `axiom attempt` verb；launcher 在交付时替换所有 `{{attemptId}}` 和 `{{dispatchCapability}}`，不能把真实 capability 写回 template 或 package identity。
+canonical manifest 无空白、对象键序固定，保留数组顺序，id = `ctx_` + sha256(canonical)。manifest 与完整 render template 均作为 Artifact 持久化，context row 只保留 JSON manifest/hash/引用。相同输入重复 build 不新增行或文件。模板最后的 `Axiom Worker protocol` 使用 D16 八个 `axiom attempt` verb；launcher 在交付时替换 `{{attemptId}}`；D73 之后模板不含任何凭据（身份由宿主核实）。
 
 M2 之后：M3 将失败验证证据纳入重试 ContextPackage；DEF-4/5 的 skills 与代码知识输入按登记触发点复审。
 
@@ -192,11 +192,11 @@ ContextBuilder 的 planner 形式为 `{missionId,role:'planner',goalRevisionId}`
 2. 仓库规则，沿用 Worker 的 `readRepositoryRules`，读取本次基线的根 AGENTS.md / CLAUDE.md，分别脱敏并限制为 16 KiB，缺失省略。
 3. `z.toJSONSchema(PlanProposalSchema.omit({provenance:true}))` 生成的 JSON Schema，以及唯一 Task id、合法边端点、默认 INTEGRATED、无环、至少一个 root、合法 milestoneId、kind/risk/maxAttempts 与可选 role 标签规则。
 4. 两个 Task、一条边的最小示例。
-5. `axiom plan propose --mission <id> --attempt {{attemptId}} --dispatch-capability {{dispatchCapability}} --file <proposal.json> --json` 配方，要求 worktree 保持 clean，并明确将 proposal JSON 写到 worktree 外。
+5. `axiom plan propose --mission <id> --attempt {{attemptId}} --file <proposal.json> --json` 配方，要求 worktree 保持 clean，并明确将 proposal JSON 写到 worktree 外。
 
-Planner 无 PlanRevision，因此只持久化 `context_package_manifest` 与 `context_package_render` 两个内容寻址 Artifacts，**不插入 context_packages**（其 plan_revision_id 为 NOT NULL）。binding.contextPackageId 为 render Artifact 的 `art_…` id；launcher 用 `artifacts.read` 取模板。capability 只在 preambleBuilder 交付时替换，不写回 Artifact。Planner dispatch 在该回调交付 preamble 前绑定，以支持快速 provider 在 readiness receipt 返回前提交。
+Planner 无 PlanRevision，因此只持久化 `context_package_manifest` 与 `context_package_render` 两个内容寻址 Artifacts，**不插入 context_packages**（其 plan_revision_id 为 NOT NULL）。binding.contextPackageId 为 render Artifact 的 `art_…` id；launcher 用 `artifacts.read` 取模板。preamble 由 preambleBuilder 交付时只替换 `{{attemptId}}`，D73 之后不含任何凭据。Planner dispatch 在该回调交付 preamble 前绑定，以支持快速 provider 在 readiness receipt 返回前提交。
 
-`axiom.plan.propose` 的 planner 形式通过同一 `resolveAttemptSender` capability / assignee / generation 链鉴权，但显式要求 planner AgentSpec、同 Mission/Goal/Run 的 pseudo-task 与 planner branch；Worker 通道仍要求真实 Task stage。提交前对记录的 worker.worktree_id 执行 `git status --porcelain`，非空返回 `planner_worktree_dirty`（data.files 为 porcelain 文件列表，错误消息同时列出文件供 CLI 显示）并写 planner.rejected，Plan/Mission 不变；缺少 worktree 路径返回 `planner_worktree_missing`。Git IO 后再次鉴权。干净提案经原 `missions.proposePlan` 完成 ANALYZING → PLAN_REVIEW；provenance 由服务写为 `{kind:'planner',actor:provider,model?:explicitModel,at}`（遵循 M2-09 brief 与现行 ProvenanceSchema；D48 旧文的 model kind 不作为新增枚举）。
+`axiom.plan.propose` 的 planner 形式通过同一 Attempt 身份链（D73：宿主核实的 worker 身份 / assignee / 进程代次）鉴权，但显式要求 planner AgentSpec、同 Mission/Goal/Run 的 pseudo-task 与 planner branch；Worker 通道仍要求真实 Task stage。提交前对记录的 worker.worktree_id 执行 `git status --porcelain`，非空返回 `planner_worktree_dirty`（data.files 为 porcelain 文件列表，错误消息同时列出文件供 CLI 显示）并写 planner.rejected，Plan/Mission 不变；缺少 worktree 路径返回 `planner_worktree_missing`。Git IO 后再次鉴权。干净提案经原 `missions.proposePlan` 完成 ANALYZING → PLAN_REVIEW；provenance 由服务写为 `{kind:'planner',actor:provider,model?:explicitModel,at}`（遵循 M2-09 brief 与现行 ProvenanceSchema；D48 旧文的 model kind 不作为新增枚举）。
 
 Plan 与 planner.proposed 的 Attempt 归属、mutation receipt 在同一外层事务提交，防止结算与停止之间崩溃丢失归属。提交后立即返回收据，通过 `setTimeout(..., PLANNER_STOP_GRACE_MS).unref()` 延迟 2,000ms 调用现有 `stopLocalWorker` / `releaseLocalWorker`，让 CLI 先收到响应再关闭其进程树；定时停止写 planner.stopped，记录 stop state 与 releaseDisposition。定时回调的异常只记录 Mission / dispatch 身份，stop_unknown 或资源维护失败交恢复处理，不回滚提案；宽限期内崩溃丢失定时器时，下一轮 Recovery 根据持久的 planner.proposed 补 stop/release。只读权限是合同约束；CLI Agent 没有运行时 filesystem write-scope 强制，G2 在 propose 时拒绝脏工作树，不自动清理文件或提交。
 
@@ -252,13 +252,13 @@ M1-01 契约证据见 `kernel-contract/*.test.ts` 与 [D14 spike](../review-evid
 
 ## 6. RPC、envelope 与错误
 
-M2-09 增加 mutation `axiom.mission.plan {missionId}`，响应 `{attempt:{attemptId:string|null,seq,branch,worktreeId:string|null,provider}}`；CLI 成功文本为 `Planner started: attempt <id> on <branch>`。`axiom.plan.propose` 的两个互斥形式为 `{missionId,planRevision,provenance}`（既有人工作法）或 `{missionId,planRevision,attemptId,from?}`（Planner）。后者由 CLI 的 `--attempt` / `--dispatch-capability` 提供身份，from 复用 Worker terminal/session 解析，capability 放 envelope，仍使用既有契约版本与 mutation receipts。传入 attemptId 时不得自报 provenance。`plan_pending` / `illegal_transition` 继续由原 proposal settlement 返回。Planner 的 `planner_worktree_dirty` / `planner_worktree_missing` 与既有 `no_eligible_provider` 经共享 mapper 的 structured runtime passthrough 保留 code/data，不走 `invalid_argument` 的 computer-use recovery 分支。Attempt 1 的映射阻塞已在 Attempt 2 修复，验证见 `.axiom-work/reports/M2-09-2.md`；旧报告保留为历史记录。
+M2-09 增加 mutation `axiom.mission.plan {missionId}`，响应 `{attempt:{attemptId:string|null,seq,branch,worktreeId:string|null,provider}}`；CLI 成功文本为 `Planner started: attempt <id> on <branch>`。`axiom.plan.propose` 的两个互斥形式为 `{missionId,planRevision,provenance}`（既有人工作法）或 `{missionId,planRevision,attemptId,from?}`（Planner）。后者由 CLI 的 `--attempt` 指明 Attempt，调用方身份由宿主核实（D73），from 复用 Worker terminal/session 解析，仍使用既有契约版本与 mutation receipts。传入 attemptId 时不得自报 provenance。`plan_pending` / `illegal_transition` 继续由原 proposal settlement 返回。Planner 的 `planner_worktree_dirty` / `planner_worktree_missing` 与既有 `no_eligible_provider` 经共享 mapper 的 structured runtime passthrough 保留 code/data，不走 `invalid_argument` 的 computer-use recovery 分支。Attempt 1 的映射阻塞已在 Attempt 2 修复，验证见 `.axiom-work/reports/M2-09-2.md`；旧报告保留为历史记录。
 
 M1 已注册 `axiom.mission.create/show/list/start/pause/resume/cancel`、`axiom.goal.propose/activate/show`、`axiom.plan.propose/approve/reject/list/show`、`axiom.task.list/show/cancel`；M2-02 已注册 `axiom.artifact.put/read/list`（put 参与 mutation fence/收据）；M2-05 已注册只读 `axiom.attempt.show {attemptId}` / `list {missionId, taskId?}`；返回 `attempt` / `attempts`（Glossary §4.6），未知 dispatch 返回 `attempt_not_found`，CLI 为 `axiom attempt show/list`。M0 的 `axiom.namespace.get` 保留。M2 的 policy、Worker verbs、message、task.create 与 mission.plan 已注册（详见本节对应段）；未注册方法在映射 §4c 明确标为后续。
 
 `AXIOM_MUTATION_METHODS` → `isOrchestrationMutation` 同时接入契约栅栏与 durable mutation 收据。mutation envelope 必须带 `orchestrationContractVersion:1`，缺失/不匹配会被 `orchestration_migration_required` 拒绝；不要把版本字段放进 params。调用方按约定必须带 `orchestrationRequestId`；内核收到该字段时，以 caller fingerprint + id 查 `mutation_receipts`：同 payload 回放，异 payload 拒绝 `request_mismatch`。当前内核无 request id 时直接执行，不提供去重，调用方不得依赖它自动补幂等。
 
-CLI `src/cli/runtime/client.ts` 为 `axiom.*` 打版本戳，为 durable mutation 默认生成 request id，`--retry-request` 沿用原 id；`axiom-client.ts` 为 renderer mutation 生成 id，不确定重试复用 id 与原 payload。Worker capability envelope 在 M2 接入，M1 CLI user commands 不冒充 Worker。runtime 公布 `axiom.control-plane.v1` capability。
+CLI `src/cli/runtime/client.ts` 为 `axiom.*` 打版本戳，为 durable mutation 默认生成 request id，`--retry-request` 沿用原 id；`axiom-client.ts` 为 renderer mutation 生成 id，不确定重试复用 id 与原 payload。Worker 身份在 M2 接入（D73 之后由宿主核实，不再随 envelope 携带 capability），M1 CLI user commands 不冒充 Worker。runtime 公布 `axiom.control-plane.v1` capability。
 
 CLI JSON 输出是 `{ ok, result, ... }` / `{ ok:false, error:{code,...}, ... }`；单对象 result 用 `mission` / `goalRevision` / `planRevision` / `task`，列表用 `missions` / `planRevisions` / `tasks`。M2-10 的唯一 `MissionSummary` 形状包含 `runId`；可选 `reason` 来自该 Mission 最新一条 `mission.status` 且 `after.status === mission.status` 的审计的 `after.reason`，缺失时省略。所有 Mission RPC（含 mutation 响应）共用 `missionSummary(mission, store)`。TaskListItem 的 `id` 是 Orca Task id，不是提案 id。
 
@@ -271,17 +271,17 @@ CLI JSON 输出是 `{ ok, result, ... }` / `{ ok:false, error:{code,...}, ... }`
 1. dispatch 不存在 → `unknown_dispatch`；没有 `attempt_bindings` → `unknown_dispatch`。
 2. dispatch 非 `dispatched` → `inactive_dispatch`。
 3. 同 Task 存在更高 seq（包括尚未绑定 dispatch 的 admission）→ `stale_dispatch`。
-4. 由 runtime 与 `orchestrationCallerIdentity` 解析 sender，调用内核 `verifyDispatchCapability`；缺失、错误、撤销的 capability 或 pane/process 不匹配 → `dispatch_capability_invalid`，保留内核 reason。
-5. 内核 `hasLifecycleAuthority` 失败 → `sender_not_assignee`；外来 pane 会先返回 `dispatch_capability_invalid`，因为 `verifyDispatchCapability` 已在 `hasLifecycleAuthority` 之前强制校验 pane 等价性，`sender_not_assignee` 仅保留给缺少 `assignee_pane_key` 的 legacy row 的 handle 鉴权回退（仍须先通过 capability 校验）。
+4. 调用方身份由宿主核实（D73，取代 dispatch capability，上游已删除）：由 runtime 与 `orchestrationCallerIdentity` 解析调用方；有宿主核实的会话调用方时按其 Orca session 对照 Dispatch 的 assignee，否则先过 lifecycle caller fence（另一编排方的终端被拒），再按上游 `workerReportRefusal` 校验 Dispatch 与进程代次（→ `dispatch_inactive` / `worker_identity_changed`）；Dispatch 未记录进程代次时调用方必须是该 Dispatch 的消息发送方。已结算 Attempt 只允许同一 pane、同一进程代次重放自己的 Submission。
+5. 内核 `hasLifecycleAuthority` 失败 → `sender_not_assignee`。
 6. binding、Task、Mission、Run 关联不一致 → `task_dispatch_mismatch`。
 
-CLI `axiom attempt <verb> --attempt <id> --dispatch-capability <token> --summary <text>` 支持 `--body` / `--body-file`（互斥）、可重复 `--artifact` / `--related-task`；子任务另需 `--title --objective --allowed-path --acceptance --evidence`，risk 默认 low；M2-06b 可重复 `--depends-on` 对应 subtask.dependsOn。from 复用 `resolveOrchestrationTerminalHandle`（`--from` / `ORCA_TERMINAL_HANDLE`），pane metadata 来自 `ORCA_PANE_KEY`；runtime 自行解析 pane，不信任该参数授予权限。capability 放 envelope，mutation 复用 `callOrchestrationMutation` 与 `--retry-request <原 UUID>`。失败的新请求不留收据；已完成请求沿用内核回放语义，同 id + 同 params 不重复写入，改变 params → `request_mismatch`。
+CLI `axiom attempt <verb> --attempt <id> --summary <text>` 支持 `--body` / `--body-file`（互斥）、可重复 `--artifact` / `--related-task`；子任务另需 `--title --objective --allowed-path --acceptance --evidence`，risk 默认 low；M2-06b 可重复 `--depends-on` 对应 subtask.dependsOn。from 复用 `resolveOrchestrationTerminalHandle`（`--from` / `ORCA_TERMINAL_HANDLE`），pane metadata 来自 `ORCA_PANE_KEY`；runtime 自行解析 pane，不信任该参数授予权限。调用方身份由宿主核实（D73：终端 / 会话 → Dispatch → 进程代次，见 orca-mapping 的 Worker 身份一节），mutation 复用 `callOrchestrationMutation` 与 `--retry-request <原 UUID>`。失败的新请求不留收据；已完成请求沿用内核回放语义，同 id + 同 params 不重复写入，改变 params → `request_mismatch`。
 
 `axiom.attempt.check {attemptId, from, senderPaneKey?, wait?, timeoutMs?, type?}` 是 read，不进 mutation 集合；鉴权后调用 `checkWorkerMailbox` 读取 `dispatch:<attemptId>`。type 是内核路由类型（可逗号分隔），保留 delivery replay、generation fence 与长轮询。CLI 为等待显式加 10 秒 transport grace；不新增 ack 参数，返回内核 deliveryId 等证据。
 
 `axiom.message.list {missionId, type?, taskId?, attemptId?, pendingOnly?}` 是 read，按 messages.sequence 从旧到新返回 `{messages:[{id,type,taskId,attemptId,summary,artifactIds,related,subtask?,createdAt,pending}]}`。读取 Mission Run 的全部严格 Axiom 载荷（包括投递副本），跳过普通/非法载荷；`REQUEST_SUBTASK` 在没有同 Mission、`objectKind: message`、`objectId: messageId` 的 `subtask.resolved` 审计时为 pending。M2-06b 增加内核 question_threads 的 QUESTION 投影：即使无 payload.axiom，也按 question message id 与 dispatch 关联识别；附带 question、options、answer（answer_body）、status，pending 仅在 status=pending 时为 true。CLI：`axiom message list --mission <id> [--type <T>] [--pending] --json`。
 
-M2 之后：M3 复用 typed channel 投递验证证据；D58 的执行通道不能绕过 capability / generation 栅栏。
+M2 之后：M3 复用 typed channel 投递验证证据；D58 的执行通道不能绕过身份 / 进程代次栅栏（D73）。
 
 ### Submission settlement（M2-07，D2 / D4 / D11 / D16）
 
@@ -289,7 +289,7 @@ M2 之后：M3 复用 typed channel 投递验证证据；D58 的执行通道不�
 
 ```sh
 axiom mission artifact put --mission <missionId> --kind worker_report --file REPORT.md --related <taskId> --json
-axiom attempt submit --attempt <attemptId> --dispatch-capability <dcap> --report <path.json> --json
+axiom attempt submit --attempt <attemptId> --report <path.json> --json
 ```
 
 实现位于 `execution/candidate-snapshot.ts` / `attempt-submission.ts` 与 `db/{candidates,submissions,verification-runs}-store.ts`，步骤对照映射 §5：
@@ -297,14 +297,14 @@ axiom attempt submit --attempt <attemptId> --dispatch-capability <dcap> --report
 | 步骤 | 当前实现与写入 |
 |---|---|
 | 1 · 栅栏/收据 | 复用 AXIOM_MUTATION_METHODS、OrchestrationMutationExecutor；`--retry-request` 原载荷回放，变更载荷 request_mismatch |
-| 2 · 鉴权/报告 | resolveAttemptSender 校验 dispatch、binding、seq、capability、pane/process、assignee、Mission/Run；zod 与 Artifact 归属在 Git 前校验 |
+| 2 · 鉴权/报告 | resolveAttemptSender 校验 dispatch、binding、seq、宿主核实的身份与进程代次（D73）、assignee、Mission/Run；zod 与 Artifact 归属在 Git 前校验 |
 | 3 · 快照 | 从 worker_dispatches.worktree_id 用 splitWorktreeIdForFilesystem 取路径；先验当前 branch，再 status --porcelain；dirty → add -A + Control Plane identity commit --no-verify（两次写操作均以临时空 core.hooksPath 禁用全部 hooks），clean → 采用 HEAD；读 commit/tree 后再验 branch |
 | 4 · 结算事务 | runLifecycleWriteTransaction('axiom_submit')：Candidate ACTIVE、旧 ACTIVE SUPERSEDED、不可变 Submission、artifact_git facet；settleWorkerReportInTransaction(succeeded)，rejected → 抛原 code 回滚；无 Axiom Submission 的内核 duplicate 也拒绝 |
 | 5 · 同事务后续 | actor=AttemptSettlement 推 RUNNING → SUBMITTED；VerificationRun QUEUED；candidate.superseded / attempt.submitted；事务内任何异常回滚整笔 |
 | 6 · 提交后保留与消息 | 先独立调用 retainWorkerTerminalResource，再用 store.transaction('attempt_retain') 审计 disposition 或失败；MessageRouter 直接 db.insertMessage(type=worker_done, payload.axiom.type=SUBMISSION)，不经 send/reconcileLifecycleMessage；此时 dispatch 已 completed；router 保存 submit receipt，再 notifyMessageArrived；stage_change 的既有提交后触发器重调度 |
 | 7 · 重复 | 同 dispatch 返回原 Submission/Candidate、duplicate=true，不再 Git/结算/入队；同 Attempt 的并发请求复用既有 keyed queue 串行化；重启后靠 DB UNIQUE 与收据，内存队列不保存权威状态 |
 
-结算撤销 capability 后，重复 submit 仅允许读取既有 Submission：仍验证原 capability hash（timingSafeEqual）、内核 pane 等价关系、相同 process incarnation、最新 binding 与 hasLifecycleAuthority，不恢复任何权限。错误 capability / 外来 pane 仍返回 dispatch_capability_invalid。不同请求丢失了提交后的消息时，可用认证后的重复 submit 补写一条；已有消息不重复插入。Git 在事务外，事务失败可能留下快照 commit；重试采用 clean HEAD，禁止 reset/clean/checkout 撤销证据。
+结算之后，重复 submit 仅允许读取既有 Submission：只接受同一 pane、同一进程代次的调用方（D73），并校验最新 binding 与 hasLifecycleAuthority，不恢复任何权限；其他 pane 或进程代次 → `worker_identity_changed`。不同请求丢失了提交后的消息时，可用认证后的重复 submit 补写一条；已有消息不重复插入。Git 在事务外，事务失败可能留下快照 commit；重试采用 clean HEAD，禁止 reset/clean/checkout 撤销证据。
 
 Candidate id 为 `cand_` + sha256(taskId + ':' + commit)。后续 Attempt 采用同一 Task 的相同 commit 返回 `invalid_argument: candidate_exists`，不得把旧 Candidate 改绑。唯一键是 commit，不是 tree；不同 commit 的同一 tree 不触发该唯一键。候选快照只允许在绑定的 `axiom/attempt/<taskId>/<seq>` 分支，不前进集成基线/目标分支。通用 stage API 对非 AttemptSettlement 的 RUNNING → SUBMITTED 返回 illegal_transition（reason=submission_required）。
 
