@@ -1,3 +1,4 @@
+import { formatOrcaSessionAddress } from '../../../shared/orca-session-address'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 import { WorkerStartParams } from '../../../shared/rpc-contract/orchestration-worker-start-params'
@@ -20,7 +21,7 @@ describe('D14 in-process dispatch caller identity', () => {
   let db: OrchestrationDb
   const sessionId = testOrcaSessionId('axiom-mission-dispatch-contract')
   const caller: OrchestrationSessionCaller = {
-    address: `session:${sessionId}`,
+    address: formatOrcaSessionAddress(sessionId),
     terminalHandle: null,
     paneKey: null,
     orcaSessionId: sessionId,
@@ -164,7 +165,7 @@ describe('D14 in-process dispatch caller identity', () => {
     expect(terminalRuntime.getTerminalPaneKey).toHaveBeenCalledWith(caller.address)
   })
 
-  it('exposes terminal wording and legacy worker verbs even with the axiom CLI name', () => {
+  it('exposes session wording and legacy worker verbs even with the axiom CLI name', () => {
     const prompt = buildDispatchPreamble({
       taskId: 'task_contract',
       dispatchId: 'dispatch_contract',
@@ -173,7 +174,7 @@ describe('D14 in-process dispatch caller identity', () => {
       workerHandle: 'term_worker',
       cliCommand: 'axiom'
     })
-    expect(prompt).toContain(`Your coordinator's terminal handle is: ${caller.address}`)
+    expect(prompt).toContain(`Your coordinator's Axiom session ID is: ${caller.address}`)
     expect(prompt).toContain('axiom orchestration send')
     expect(prompt).not.toContain('axiom attempt submit')
   })

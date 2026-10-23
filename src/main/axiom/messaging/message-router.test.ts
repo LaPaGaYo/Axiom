@@ -16,11 +16,11 @@ it.each(['inform', 'handoff', 'request'] as const)(
   async (verb) => {
     const t04 = f.bind('T04')
     const t07 = f.bind('T07')
-    const response = await f.call(
-      `axiom.attempt.${verb}`,
-      { from: f.t01.from, attemptId: f.t01.attemptId, summary: verb },
-      { orchestrationCapability: f.t01.capability }
-    )
+    const response = await f.call(`axiom.attempt.${verb}`, {
+      from: f.t01.from,
+      attemptId: f.t01.attemptId,
+      summary: verb
+    })
     expect(response.ok).toBe(true)
     const cp = f.db.getUnreadRunMailbox(f.mission.runId)[0]!
     expect(f.db.getInbox(100)).toHaveLength(verb === 'request' ? 1 : 2)
@@ -41,16 +41,12 @@ it.each(['inform', 'handoff'] as const)(
     const t04 = f.bind('T04')
     const t07 = f.bind('T07')
     expect(
-      await f.call(
-        `axiom.attempt.${verb}`,
-        {
-          from: f.t01.from,
-          attemptId: f.t01.attemptId,
-          summary: 'Targeted handoff',
-          related: { taskIds: [t07.taskId, t07.taskId] }
-        },
-        { orchestrationCapability: f.t01.capability }
-      )
+      await f.call(`axiom.attempt.${verb}`, {
+        from: f.t01.from,
+        attemptId: f.t01.attemptId,
+        summary: 'Targeted handoff',
+        related: { taskIds: [t07.taskId, t07.taskId] }
+      })
     ).toMatchObject({ ok: true })
     expect(f.db.getUnreadMessages(`dispatch:${t04.attemptId}`)).toEqual([])
     expect(f.db.getUnreadMessages(`dispatch:${t07.attemptId}`)).toHaveLength(1)
@@ -66,11 +62,11 @@ it('skips a downstream Attempt when a newer pending binding supersedes it', asyn
     branch: 'retry'
   })
   expect(
-    await f.call(
-      'axiom.attempt.inform',
-      { from: f.t01.from, attemptId: f.t01.attemptId, summary: 'News' },
-      { orchestrationCapability: f.t01.capability }
-    )
+    await f.call('axiom.attempt.inform', {
+      from: f.t01.from,
+      attemptId: f.t01.attemptId,
+      summary: 'News'
+    })
   ).toMatchObject({ ok: true })
   expect(f.db.getUnreadMessages(`dispatch:${t04.attemptId}`)).toEqual([])
 })
@@ -81,11 +77,12 @@ it.each([
 ])('rejects foreign references before writes: %j', async (extra) => {
   const before = f.snapshot()
   expect(
-    await f.call(
-      'axiom.attempt.inform',
-      { from: f.t01.from, attemptId: f.t01.attemptId, summary: 'Invalid', ...extra },
-      { orchestrationCapability: f.t01.capability }
-    )
+    await f.call('axiom.attempt.inform', {
+      from: f.t01.from,
+      attemptId: f.t01.attemptId,
+      summary: 'Invalid',
+      ...extra
+    })
   ).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
   expect(f.snapshot()).toEqual(before)
   expect(f.notify).not.toHaveBeenCalled()
@@ -94,8 +91,7 @@ it('rolls back all copies and audit if persistence fails, with no notifications'
   f.bind('T04')
   const { sender } = resolveAttemptSender({
     ...f,
-    ...f.t01,
-    orchestrationCapability: f.t01.capability
+    ...f.t01
   })
   const before = f.snapshot()
   vi.spyOn(f.store, 'appendAuditEvent').mockImplementation(() => {
@@ -125,7 +121,6 @@ it('keeps a durable receipt if notification fails, so a retry cannot duplicate m
   })
   const params = { from: f.t01.from, attemptId: f.t01.attemptId, summary: 'Durable' }
   const envelope = {
-    orchestrationCapability: f.t01.capability,
     orchestrationRequestId: 'notify-failure'
   }
   expect((await f.call('axiom.attempt.inform', params, envelope)).ok).toBe(false)

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { isOrcaSessionId } from '../../../shared/orca-session-address'
+import { formatOrcaSessionAddress, isOrcaSessionId } from '../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 import { OrchestrationDb } from '../../runtime/orchestration/db'
 import { runLifecycleWriteTransaction } from '../../runtime/orchestration/db/lifecycle-write-transaction-runner'
@@ -24,7 +24,7 @@ describe('D14 synthetic Mission session party', () => {
   let directory: string | undefined
   const sessionId = testOrcaSessionId(`axiom-mission-${randomUUID()}`)
   const caller: OrchestrationSessionCaller = {
-    address: `session:${sessionId}`,
+    address: formatOrcaSessionAddress(sessionId),
     terminalHandle: null,
     paneKey: null,
     orcaSessionId: sessionId,
@@ -86,7 +86,7 @@ describe('D14 synthetic Mission session party', () => {
       coordinator_orca_session_id: sessionId
     })
     expect(hasRunBindingKey(caller)).toBe(true)
-    expect(mailboxAddressOf(caller)).toBe(`session:${sessionId}`)
+    expect(mailboxAddressOf(caller)).toBe(formatOrcaSessionAddress(sessionId))
     expect(runBoundToCoordinator(run, caller)).toBe(true)
     expect(runCoordinatorKey(run)).toEqual({
       terminalHandle: null,
@@ -95,7 +95,7 @@ describe('D14 synthetic Mission session party', () => {
     })
     expect(db.getCurrentRunForCoordinator(caller)?.id).toBe(run.id)
     expect(() => resolveDeclaredCallerParty(caller.address, db)).toThrow(
-      'a chat is identified only by the session id its own environment sends'
+      'a chat is identified only by the Axiom session ID its own environment sends'
     )
   })
 

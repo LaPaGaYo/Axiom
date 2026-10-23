@@ -11,7 +11,9 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { runProcessSync } from '@orca/process-host'
+import { runCodexAppServerSession } from './codex/codex-app-server-session'
 
 const testState = {
   fakeHomeDir: '',
@@ -30,15 +32,6 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('node:os', async () => {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
-  const actual = await vi.importActual<typeof import('node:os')>('node:os')
-  return {
-    ...actual,
-    homedir: () => testState.fakeHomeDir
-  }
-})
-
 const {
   markAntigravityWorkspaceTrusted,
   markCodexProjectTrusted,
@@ -47,18 +40,26 @@ const {
 } = await import('./agent-trust-presets')
 const { runExclusivelyForCodexTrustConfig } =
   await import('./codex/codex-trust-config-mutation-queue')
+const { getLocalCodexTrustConfigFiles } = await import('./codex/codex-home-paths')
+
+// Why: fixture tests pin Axiom's half; only the real binary proves Codex reads the key
+// Axiom writes. CI sets REQUIRED so a missing binary fails instead of skipping.
+const codexTrustContract = {
+  binary: process.env.ORCA_CODEX_TRUST_CONTRACT_BINARY,
+  version: process.env.ORCA_CODEX_TRUST_CONTRACT_VERSION
+}
+if (process.env.ORCA_CODEX_TRUST_CONTRACT_REQUIRED === '1' && !codexTrustContract.binary) {
+  throw new Error('ORCA_CODEX_TRUST_CONTRACT_REQUIRED=1 but no Codex binary was given')
+}
 
 beforeEach(() => {
   testState.fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-trust-presets-'))
   testState.userDataDir = mkdtempSync(join(tmpdir(), 'orca-trust-presets-user-data-'))
-  vi.stubEnv('HOME', testState.fakeHomeDir)
-  vi.stubEnv('USERPROFILE', testState.fakeHomeDir)
   testState.previousUserDataPath = process.env.ORCA_USER_DATA_PATH
   process.env.ORCA_USER_DATA_PATH = testState.userDataDir
 })
 
 afterEach(() => {
-  vi.unstubAllEnvs()
   rmSync(testState.fakeHomeDir, { recursive: true, force: true })
   rmSync(testState.userDataDir, { recursive: true, force: true })
   if (testState.previousUserDataPath === undefined) {
@@ -75,7 +76,7 @@ describe('markCursorWorkspaceTrusted', () => {
   it('writes ~/.cursor/projects/<slug>/.workspace-trusted with the cwd payload', () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-cursor-ws-'))
     try {
-      markCursorWorkspaceTrusted(workspace)
+      markCursorWorkspaceTrusted(workspace, testState.fakeHomeDir)
       const projectsDir = join(testState.fakeHomeDir, '.cursor', 'projects')
       const slugDirs = readdirSync(projectsDir)
       expect(slugDirs.length).toBe(1)
@@ -92,12 +93,12 @@ describe('markCursorWorkspaceTrusted', () => {
   it('is idempotent — re-marking the same workspace does not overwrite trustedAt', () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-cursor-ws-'))
     try {
-      markCursorWorkspaceTrusted(workspace)
+      markCursorWorkspaceTrusted(workspace, testState.fakeHomeDir)
       const projectsDir = join(testState.fakeHomeDir, '.cursor', 'projects')
       const slugDirs = readdirSync(projectsDir)
       const trustFile = join(projectsDir, slugDirs[0], '.workspace-trusted')
       const firstPayload = readFileSync(trustFile, 'utf-8')
-      markCursorWorkspaceTrusted(workspace)
+      markCursorWorkspaceTrusted(workspace, testState.fakeHomeDir)
       const secondPayload = readFileSync(trustFile, 'utf-8')
       expect(secondPayload).toBe(firstPayload)
     } finally {
@@ -110,7 +111,7 @@ describe('markCopilotFolderTrusted', () => {
   it('appends the workspace to trustedFolders in ~/.copilot/config.json', () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-copilot-ws-'))
     try {
-      markCopilotFolderTrusted(workspace)
+      markCopilotFolderTrusted(workspace, testState.fakeHomeDir)
       const configPath = join(testState.fakeHomeDir, '.copilot', 'config.json')
       expect(existsSync(configPath)).toBe(true)
       const parsed = JSON.parse(readFileSync(configPath, 'utf-8'))
@@ -135,7 +136,7 @@ describe('markCopilotFolderTrusted', () => {
       writeFileSync(configPath, JSON.stringify({ copilotTokens: { a: 'secret' } }), {
         mode: 0o600
       })
-      markCopilotFolderTrusted(workspace)
+      markCopilotFolderTrusted(workspace, testState.fakeHomeDir)
       expect(statSync(configPath).mode & 0o777).toBe(0o600)
       expect(JSON.parse(readFileSync(configPath, 'utf-8')).copilotTokens).toEqual({ a: 'secret' })
     } finally {
@@ -151,7 +152,7 @@ describe('markCopilotFolderTrusted', () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-copilot-ws-'))
     const originalUmask = process.umask(0o022)
     try {
-      markCopilotFolderTrusted(workspace)
+      markCopilotFolderTrusted(workspace, testState.fakeHomeDir)
       const configPath = join(testState.fakeHomeDir, '.copilot', 'config.json')
       expect(statSync(configPath).mode & 0o777).toBe(0o600)
     } finally {
@@ -172,7 +173,7 @@ describe('markCopilotFolderTrusted', () => {
           trustedFolders: [realpath]
         })
       )
-      markCopilotFolderTrusted(workspace)
+      markCopilotFolderTrusted(workspace, testState.fakeHomeDir)
       const parsed = JSON.parse(
         readFileSync(join(testState.fakeHomeDir, '.copilot', 'config.json'), 'utf-8')
       )
@@ -188,7 +189,7 @@ describe('markAntigravityWorkspaceTrusted', () => {
   it('appends the workspace to trustedWorkspaces in ~/.gemini/antigravity-cli/settings.json', () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-agy-ws-'))
     try {
-      markAntigravityWorkspaceTrusted(workspace)
+      markAntigravityWorkspaceTrusted(workspace, testState.fakeHomeDir)
       const configPath = join(testState.fakeHomeDir, '.gemini', 'antigravity-cli', 'settings.json')
       expect(existsSync(configPath)).toBe(true)
       const parsed = JSON.parse(readFileSync(configPath, 'utf-8'))
@@ -215,7 +216,7 @@ describe('markAntigravityWorkspaceTrusted', () => {
           trustedWorkspaces: [realpath]
         })
       )
-      markAntigravityWorkspaceTrusted(workspace)
+      markAntigravityWorkspaceTrusted(workspace, testState.fakeHomeDir)
       const parsed = JSON.parse(
         readFileSync(
           join(testState.fakeHomeDir, '.gemini', 'antigravity-cli', 'settings.json'),
@@ -237,8 +238,8 @@ describe('markAntigravityWorkspaceTrusted', () => {
     const child = join(parent, 'child-worktree')
     try {
       mkdirSync(child, { recursive: true })
-      markAntigravityWorkspaceTrusted(parent)
-      markAntigravityWorkspaceTrusted(child)
+      markAntigravityWorkspaceTrusted(parent, testState.fakeHomeDir)
+      markAntigravityWorkspaceTrusted(child, testState.fakeHomeDir)
       const parsed = JSON.parse(
         readFileSync(
           join(testState.fakeHomeDir, '.gemini', 'antigravity-cli', 'settings.json'),
@@ -266,7 +267,10 @@ describe('markCodexProjectTrusted', () => {
     })
     try {
       const held = runExclusivelyForCodexTrustConfig(configPath, () => grantHoldingTheFile)
-      const marked = markCodexProjectTrusted(workspace)
+      const marked = markCodexProjectTrusted(
+        workspace,
+        getLocalCodexTrustConfigFiles(testState.fakeHomeDir)
+      )
       await Promise.resolve()
       expect(existsSync(configPath)).toBe(false)
 
@@ -279,72 +283,134 @@ describe('markCodexProjectTrusted', () => {
     }
   })
 
-  it.each(['linked', 'bare', 'separate-git-dir', 'main'] as const)(
-    'trusts only the workspace realpath for a %s checkout',
-    async (layout) => {
-      const fixtureRoot = join(testState.fakeHomeDir, 'fixture')
-      const repository = join(fixtureRoot, 'repo')
-      const workspace = layout === 'main' ? repository : join(fixtureRoot, 'worktrees', 'feature')
-      const gitDir = layout === 'bare' ? repository : join(repository, '.git')
-      const worktreeGitDir = join(gitDir, 'worktrees', 'feature')
-      mkdirSync(worktreeGitDir, { recursive: true })
-      mkdirSync(workspace, { recursive: true })
-      if (layout !== 'main') {
-        const metadata =
-          layout === 'separate-git-dir' ? join(fixtureRoot, 'metadata') : worktreeGitDir
-        mkdirSync(metadata, { recursive: true })
-        writeFileSync(join(workspace, '.git'), `gitdir: ${metadata}\n`)
-        writeFileSync(join(metadata, 'gitdir'), join(workspace, '.git'))
+  // Why: Codex checks the cwd's own entry before any repo root, so the workspace key
+  // must satisfy it whatever the git layout.
+  describe('linked worktree trust key', { timeout: 120_000 }, () => {
+    let fixtureRoot = ''
+    beforeAll(() => {
+      if (codexTrustContract.binary) {
+        const version = runProcessSync({ program: codexTrustContract.binary, args: ['--version'] })
+        expect(version.stdout.trim()).toBe(`codex-cli ${codexTrustContract.version}`)
       }
+    })
+    beforeEach(() => {
+      fixtureRoot = realpathSync.native(mkdtempSync(join(tmpdir(), 'orca-codex-layout-')))
+    })
+    afterEach(() => {
+      rmSync(fixtureRoot, { recursive: true, force: true })
+    })
 
-      await markCodexProjectTrusted(workspace)
+    function git(cwd: string, ...args: string[]): void {
+      const result = runProcessSync({
+        program: 'git',
+        args: ['-c', 'user.name=Axiom', '-c', 'user.email=orca@example.com', ...args],
+        cwd
+      })
+      expect(result.code, result.stderr).toBe(0)
+    }
 
-      for (const configPath of [
+    function initRepoWithCommit(repo: string, ...initArgs: string[]): void {
+      mkdirSync(repo, { recursive: true })
+      git(repo, 'init', '-q', ...initArgs)
+      git(repo, '-c', 'commit.gpgsign=false', 'commit', '-q', '--allow-empty', '-m', 'init')
+    }
+
+    async function expectWorkspaceTrusted(workspace: string): Promise<void> {
+      await markCodexProjectTrusted(workspace, getLocalCodexTrustConfigFiles(testState.fakeHomeDir))
+      const runtimeHome = join(testState.userDataDir, 'codex-runtime-home', 'home')
+      const [system, runtime] = [
         join(testState.fakeHomeDir, '.codex', 'config.toml'),
-        join(testState.userDataDir, 'codex-runtime-home', 'home', 'config.toml')
-      ]) {
-        const written = readFileSync(configPath, 'utf8')
-        expect(written).toBe(
-          `[projects."${escapeTomlBasicString(realpathSync.native(workspace))}"]\ntrust_level = "trusted"\n`
+        join(runtimeHome, 'config.toml')
+      ].map((path) =>
+        [...readFileSync(path, 'utf-8').matchAll(/^\[projects\."(.*)"\]$/gm)].map((m) =>
+          m[1].replaceAll('\\\\', '\\')
         )
+      )
+      expect(system).toEqual([workspace])
+      expect(runtime).toEqual([workspace])
+      if (codexTrustContract.binary) {
+        expect(await codexSandboxFor(workspace, runtimeHome)).toBe('workspaceWrite')
+        const emptyHome = join(fixtureRoot, 'empty-codex-home')
+        mkdirSync(emptyHome, { recursive: true })
+        expect(await codexSandboxFor(workspace, emptyHome)).toBe('readOnly')
       }
     }
-  )
 
-  it('preserves an older main-checkout trust entry while trusting a linked workspace', async () => {
-    const repository = join(testState.fakeHomeDir, 'repo')
-    const workspace = join(testState.fakeHomeDir, 'worktree')
-    const metadata = join(repository, '.git', 'worktrees', 'feature')
-    mkdirSync(metadata, { recursive: true })
-    mkdirSync(workspace)
-    writeFileSync(join(workspace, '.git'), `gitdir: ${metadata}\n`)
-    writeFileSync(join(metadata, 'gitdir'), join(workspace, '.git'))
-    const oldEntry = `# user's existing decision\n[projects."${escapeTomlBasicString(realpathSync.native(repository))}"]\ntrust_level = "untrusted"\n`
-    const configDirs = [
-      join(testState.fakeHomeDir, '.codex'),
-      join(testState.userDataDir, 'codex-runtime-home', 'home')
-    ]
-    for (const dir of configDirs) {
-      mkdirSync(dir, { recursive: true })
-      writeFileSync(join(dir, 'config.toml'), oldEntry)
-    }
-
-    await markCodexProjectTrusted(workspace)
-
-    for (const dir of configDirs) {
-      const written = readFileSync(join(dir, 'config.toml'), 'utf8')
-      expect(written).toContain(oldEntry)
-      expect(written).toContain(
-        `[projects."${escapeTomlBasicString(realpathSync.native(workspace))}"]\ntrust_level = "trusted"`
+    // Why thread/start: its default sandbox and the TUI trust prompt read the same
+    // project lookup, so workspaceWrite (not readOnly) means no prompt.
+    async function codexSandboxFor(cwd: string, codexHome: string): Promise<unknown> {
+      const binary = codexTrustContract.binary!
+      return runCodexAppServerSession(
+        {
+          command: binary,
+          args: ['-c', 'features.plugins=false', 'app-server'],
+          cliPath: binary,
+          env: { CODEX_HOME: codexHome, HOME: testState.fakeHomeDir },
+          timeoutMs: 60_000
+        },
+        async (rpc) => {
+          const started = await rpc.request('thread/start', { cwd })
+          const sandbox = isRecord(started) ? started.sandbox : undefined
+          return isRecord(sandbox) ? sandbox.type : undefined
+        }
       )
     }
+
+    it('trusts a linked worktree of a standard repository', async () => {
+      const repo = join(fixtureRoot, 'repo')
+      initRepoWithCommit(repo)
+      git(repo, 'worktree', 'add', '-q', join(fixtureRoot, 'wt'))
+      await expectWorkspaceTrusted(join(fixtureRoot, 'wt'))
+    })
+
+    it('trusts a worktree whose main checkout .git points at a sibling .bare dir', async () => {
+      const source = join(fixtureRoot, 'source')
+      const project = join(fixtureRoot, 'project')
+      initRepoWithCommit(source)
+      git(fixtureRoot, 'clone', '-q', '--bare', source, join(project, '.bare'))
+      writeFileSync(join(project, '.git'), 'gitdir: ./.bare\n', 'utf-8')
+      git(project, 'worktree', 'add', '-q', join(project, 'wt'))
+      await expectWorkspaceTrusted(join(project, 'wt'))
+    })
+
+    it('trusts a worktree of a bare repository', async () => {
+      const source = join(fixtureRoot, 'source')
+      const bare = join(fixtureRoot, 'proj.git')
+      initRepoWithCommit(source)
+      git(fixtureRoot, 'clone', '-q', '--bare', source, bare)
+      git(bare, 'worktree', 'add', '-q', join(fixtureRoot, 'wt'))
+      await expectWorkspaceTrusted(join(fixtureRoot, 'wt'))
+    })
+
+    it('trusts a worktree of a --separate-git-dir repository', async () => {
+      const repo = join(fixtureRoot, 'repo')
+      initRepoWithCommit(repo, `--separate-git-dir=${join(fixtureRoot, 'repo.git')}`)
+      git(repo, 'worktree', 'add', '-q', join(fixtureRoot, 'wt'))
+      await expectWorkspaceTrusted(join(fixtureRoot, 'wt'))
+    })
+
+    it('trusts a worktree whose parent .git points at another repository', async () => {
+      const source = join(fixtureRoot, 'source')
+      initRepoWithCommit(source)
+      git(fixtureRoot, 'clone', '-q', '--bare', source, join(fixtureRoot, 'proj.git'))
+      git(fixtureRoot, 'clone', '-q', '--bare', source, join(fixtureRoot, 'other.git'))
+      writeFileSync(join(fixtureRoot, '.git'), 'gitdir: ./other.git\n', 'utf-8')
+      git(join(fixtureRoot, 'proj.git'), 'worktree', 'add', '-q', join(fixtureRoot, 'wt'))
+      await expectWorkspaceTrusted(join(fixtureRoot, 'wt'))
+    })
+
+    it('trusts a plain folder workspace', async () => {
+      const folder = join(fixtureRoot, 'folder')
+      mkdirSync(folder)
+      await expectWorkspaceTrusted(folder)
+    })
   })
 
   it('writes ~/.codex/config.toml with the project marked trusted', async () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-codex-ws-'))
     try {
       const realpath = realpathSync.native(workspace)
-      await markCodexProjectTrusted(workspace)
+      await markCodexProjectTrusted(workspace, getLocalCodexTrustConfigFiles(testState.fakeHomeDir))
       const configPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
       const runtimeConfigPath = join(
         testState.userDataDir,
@@ -398,7 +464,7 @@ describe('markCodexProjectTrusted', () => {
         'utf-8'
       )
 
-      await markCodexProjectTrusted(workspace)
+      await markCodexProjectTrusted(workspace, getLocalCodexTrustConfigFiles(testState.fakeHomeDir))
 
       const written = readFileSync(join(codexDir, 'config.toml'), 'utf-8')
       const runtimeWritten = readFileSync(join(runtimeCodexDir, 'config.toml'), 'utf-8')
@@ -418,4 +484,8 @@ describe('markCodexProjectTrusted', () => {
 
 function escapeTomlBasicString(value: string): string {
   return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
 }

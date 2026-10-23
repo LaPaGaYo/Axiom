@@ -142,7 +142,8 @@ export function RepoIconGlyph({
   iconClassName?: string
   color?: string
 }): React.JSX.Element {
-  const imageSrc = repoIcon?.type === 'image' ? repoIcon.src : null
+  // D37: old persisted favicon choices render the existing Folder fallback offline.
+  const imageSrc = repoIcon?.type === 'image' && repoIcon.source !== 'favicon' ? repoIcon.src : null
   // Why: private-mode GHES avatars need a session cookie, so the load fails and would
   // render blank — track the failed src so a different icon still renders.
   const [failedImageSrc, setFailedImageSrc] = React.useState<string | null>(null)

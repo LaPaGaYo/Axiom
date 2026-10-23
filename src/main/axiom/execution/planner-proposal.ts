@@ -15,7 +15,7 @@ export async function proposePlannerPlan(
   p: z.infer<typeof PlanProposeParams> & { attemptId: string },
   ctx: RpcContext
 ) {
-  const { runtime, orchestrationCaller, orchestrationCapability } = ctx
+  const { runtime, orchestrationCaller, orchestrationCompatibilityEvidence } = ctx
   const db = runtime.getOrchestrationDb()
   const { store, missions } = getAxiomControlPlane(runtime)
   const authority = () => {
@@ -27,7 +27,7 @@ export async function proposePlannerPlan(
       attemptId: p.attemptId,
       from: orchestrationCaller?.address ?? p.from ?? '',
       orchestrationCaller,
-      orchestrationCapability
+      orchestrationCompatibilityEvidence
     })
     const spec = store.getAgentSpec(result.binding.agentSpecId)?.spec
     if (

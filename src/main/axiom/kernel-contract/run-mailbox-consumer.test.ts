@@ -1,3 +1,4 @@
+import { formatOrcaSessionAddress } from '../../../shared/orca-session-address'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -115,7 +116,7 @@ describe('D14 Mission Run mailbox consumer', () => {
     expect(db.acknowledgeRunDelivery(ack).duplicate).toBe(false)
     const next = db.insertMessage({
       from: 'term_sender',
-      to: `session:${sessionId}`,
+      to: formatOrcaSessionAddress(sessionId),
       subject: 'After restart',
       runId: run.id
     })
@@ -128,7 +129,7 @@ describe('D14 Mission Run mailbox consumer', () => {
 
   it('reads run-scoped session mail through the Run and unbound mail through the direct inbox', () => {
     const run = createMissionRun()
-    const address = `session:${sessionId}`
+    const address = formatOrcaSessionAddress(sessionId)
     const scoped = db.insertMessage({
       from: 'term_sender',
       to: address,

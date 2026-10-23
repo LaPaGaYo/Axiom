@@ -20,7 +20,7 @@ beforeEach(async () => {
   })
   vi.spyOn(observation, 'inspectWorkerTerminal').mockResolvedValue({
     status: 'exited',
-    terminal: null,
+    terminal: null, terminalHandle: null,
     exact: true
   })
   vi.spyOn(release, 'releaseLocalWorker').mockResolvedValue({
@@ -80,7 +80,7 @@ it('uses the durable unverifiable clock, then abandons/releases after tolerance'
   vi.mocked(observation.inspectWorkerTerminal).mockResolvedValue({
     status: 'unverifiable',
     exact: true,
-    terminal: null,
+    terminal: null, terminalHandle: null,
     reason: 'disconnected'
   })
   await recovery.reconcileAttempts()
@@ -101,7 +101,7 @@ it('enumerates planners on Mission cancellation even without a Task stage', asyn
   vi.mocked(observation.inspectWorkerTerminal).mockResolvedValue({
     status: 'unverifiable',
     exact: true,
-    terminal: null,
+    terminal: null, terminalHandle: null,
     reason: 'disconnected'
   })
   expect(

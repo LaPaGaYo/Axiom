@@ -14,7 +14,7 @@ afterEach(() => {
 function ask(extra = {}, signal?: AbortSignal, recordMutationReceipt = vi.fn()) {
   return askAttempt(
     { attemptId: f.t01.attemptId, from: f.t01.from, question: 'Format?', timeoutMs: 100, ...extra },
-    { runtime: f.runtime, signal, orchestrationCapability: f.t01.capability, recordMutationReceipt }
+    { runtime: f.runtime, signal, recordMutationReceipt }
   )
 }
 it('wakes from answer RPC and returns its body, after recording acceptance', async () => {

@@ -337,7 +337,7 @@ it('keeps the last index status visible while a save is in flight', async () => 
   })
 })
 
-it('lists one row per paired Orca server under this computer, and says where SSH stands', async () => {
+it('lists one row per paired Axiom server under this computer, and says where SSH stands', async () => {
   mocks.environments = [
     { id: 'env-1', name: 'build-box' },
     { id: 'env-2', name: 'office-mini' }

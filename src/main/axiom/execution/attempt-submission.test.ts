@@ -159,7 +159,7 @@ describe('Attempt submission settlement', () => {
       expect.objectContaining({ candidateId: candidate.id, status: 'QUEUED' })
     ])
     expect(f.db.getDispatchContextById(f.t01.attemptId)?.status).toBe('completed')
-    expect(f.db.getDispatchContextById(f.t01.attemptId)?.capability_revoked_at).toBeTruthy()
+    expect(f.db.getDispatchContextById(f.t01.attemptId)?.status).toBe('completed')
     expect(f.db.getWorkerTerminalResourceByOwner(f.t01.attemptId)?.release_state).toBe(
       'not_requested'
     )

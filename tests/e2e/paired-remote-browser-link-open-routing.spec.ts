@@ -323,7 +323,7 @@ async function openLinkFromRemotePaneContextMenu(page: Page): Promise<void> {
   await expect(page.getByTestId('remote-browser-context-menu')).toBeVisible({ timeout: 30_000 })
   // The item only renders once the remote hit-test resolves an anchor, so this wait is the
   // wait for the link lookup itself.
-  const openInOrca = page.getByRole('menuitem', { name: 'Open Link In Orca Browser' })
+  const openInOrca = page.getByRole('menuitem', { name: 'Open Link In Axiom Browser' })
   await expect(openInOrca).toBeVisible({ timeout: 30_000 })
   await openInOrca.click()
 }
@@ -364,6 +364,19 @@ test('opens a remote pane link on the pane runtime and refuses to fall back to t
       },
       { environmentId, worktreeId }
     )
+    // Activating the empty workspace seeds its first terminal, and that tab takes focus when it
+    // lands; on a slow host it lands after the focus below and hides the pane every act clicks.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            (worktreeId) =>
+              (window.__store?.getState().tabsByWorktree[worktreeId]?.length ?? 0) > 0,
+            worktreeId
+          ),
+        { timeout: 60_000, message: 'the activated workspace never seeded its first terminal' }
+      )
+      .toBe(true)
 
     // The host opens the page on itself: this is the "remote server" whose links must stay remote.
     await host.client.call(

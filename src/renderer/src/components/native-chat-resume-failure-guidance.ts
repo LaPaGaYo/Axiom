@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import type { ResumeFailure } from './native-chat-resume-on-restart-grouping'
 
 /**
- * What the user can do about a chat Orca could not resume, decided from the host's reason.
+ * What the user can do about a chat Axiom could not resume, decided from the host's reason.
  *
  * One sentence saying what to do and why, and the button that does it. Retry is the primary action
  * only where a second attempt can actually succeed — an ownership clash or a reconnect that never
@@ -78,7 +78,7 @@ function reasonGuidance(failure: Pick<ResumeFailure, 'outcome' | 'reason'>): Res
     return {
       text: translate(
         'auto.components.NativeChatResumeFailureGuidance.conflict',
-        'Another Axiom window or terminal still owns this session. Close it, then retry.'
+        'This chat is open in another Axiom window or terminal. Close it there, then retry.'
       ),
       primary: 'retry',
       secondary: 'open'
@@ -88,7 +88,7 @@ function reasonGuidance(failure: Pick<ResumeFailure, 'outcome' | 'reason'>): Res
     return {
       text: translate(
         'auto.components.NativeChatResumeFailureGuidance.ownershipUnknown',
-        'Axiom is still working out which process owns this session. Wait a moment, then retry.'
+        'This chat isn’t ready to resume yet. Wait a moment, then retry.'
       ),
       primary: 'retry',
       secondary: 'open'

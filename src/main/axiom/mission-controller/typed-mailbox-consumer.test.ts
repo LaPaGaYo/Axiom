@@ -18,16 +18,12 @@ afterEach(() => {
 it('drains typed Worker mail, records pending/blocked reports once across replay, and leaves stages alone', async () => {
   for (const verb of workerVerbs) {
     expect(
-      await f.call(
-        `axiom.attempt.${verb}`,
-        {
-          from: f.t01.from,
-          attemptId: f.t01.attemptId,
-          summary: verb,
-          ...(verb === 'request-subtask' ? { subtask } : {})
-        },
-        { orchestrationCapability: f.t01.capability }
-      )
+      await f.call(`axiom.attempt.${verb}`, {
+        from: f.t01.from,
+        attemptId: f.t01.attemptId,
+        summary: verb,
+        ...(verb === 'request-subtask' ? { subtask } : {})
+      })
     ).toMatchObject({ ok: true })
   }
   // SUBMISSION is audit-only here: settlement has already occurred before this row is inserted.

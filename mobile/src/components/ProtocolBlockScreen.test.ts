@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { KnownAppUpdate } from '../storage/app-update-preferences'
 import type { BlockedVerdict } from './ProtocolBlockScreen'
 import { ProtocolBlockScreen } from './ProtocolBlockScreen'
 
@@ -9,6 +10,14 @@ const nativeTestState = vi.hoisted(() => {
   const platform: { OS: 'ios' | 'android' } = { OS: 'ios' }
   return { openUrl: vi.fn(), platform }
 })
+
+const wallUpdate = vi.hoisted(() => {
+  const state: { current: KnownAppUpdate | null } = { current: null }
+  return state
+})
+
+// The release the installed app's update check found; the real hook imports the checker module.
+vi.mock('../app-update/use-wall-app-update', () => ({ useWallAppUpdate: () => wallUpdate.current }))
 
 vi.mock('react-native', () => ({
   Linking: { openURL: nativeTestState.openUrl },
@@ -30,7 +39,8 @@ const RELEASES_URL = 'https://github.com/stablyai/orca/releases'
 
 let renderer: ReactTestRenderer | null = null
 
-function render(verdict: BlockedVerdict): string {
+function render(verdict: BlockedVerdict, mobileUpdate: KnownAppUpdate | null = null): string {
+  wallUpdate.current = mobileUpdate
   act(() => {
     renderer = create(createElement(ProtocolBlockScreen, { verdict }))
   })
@@ -71,9 +81,9 @@ describe('ProtocolBlockScreen', () => {
       desktopVersion: 5,
       requiredMobileVersion: 99
     })
-    expect(mobile).toContain('Update Orca Mobile')
+    expect(mobile).toContain('Update Axiom Mobile')
     expect(mobile).toContain(
-      'This desktop needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again.'
+      'This desktop needs a newer Axiom Mobile app. Update Axiom Mobile from the App Store, then try this host again.'
     )
     expect(mobile).toContain('Open App Store')
     act(() => renderer?.unmount())
@@ -84,20 +94,29 @@ describe('ProtocolBlockScreen', () => {
       desktopVersion: 0,
       requiredDesktopVersion: 2
     })
-    expect(desktop).toContain('Update Orca on your computer')
+    expect(desktop).toContain('Update Axiom on your computer')
     expect(desktop).toContain(
-      'This paired desktop app is too old for your current Orca Mobile app. Update Orca on your computer, then try this host again.'
+      'This paired desktop app is too old for your current Axiom Mobile app. Update Axiom on your computer, then try this host again.'
     )
     expect(desktop).toContain('Open GitHub Releases')
   })
 
-  it('sends a host without a bundle to the desktop update', () => {
-    const output = render({ kind: 'blocked', reason: 'bundle-unavailable' })
-    expect(output).toContain('Update Orca on your computer')
-    expect(output).toContain(
-      'This paired desktop app does not include the mobile workspace yet. Update Orca on your computer, then try this host again.'
-    )
-    expect(primaryActionUrl()).toBe(RELEASES_URL)
+  it('tells a host without a bundle, or without this screen, the desktop is too old', () => {
+    for (const reason of ['bundle-unavailable', 'page-route-unlisted'] as const) {
+      const output = render({ kind: 'blocked', reason })
+      expect(output).toContain('Update Axiom on your computer')
+      expect(output).toContain(
+        'This paired desktop app is too old for your current Axiom Mobile app. Update Axiom on your computer, then try this host again.'
+      )
+      expect(output).not.toContain('does not include the mobile workspace')
+      expect(primaryActionUrl()).toBe(RELEASES_URL)
+    }
+  })
+
+  it('sends a screen that needs a grant this app lacks to the mobile update', () => {
+    const output = render({ kind: 'blocked', reason: 'page-route-grant-missing' })
+    expect(output).toContain('Update Axiom Mobile')
+    expect(output).toContain("This desktop's mobile workspace needs a newer Axiom Mobile app.")
   })
 
   it('sends an unknown manifest schema to the mobile update', () => {
@@ -106,9 +125,9 @@ describe('ProtocolBlockScreen', () => {
       reason: 'bundle-shell-too-old',
       schemaVersion: 2
     })
-    expect(output).toContain('Update Orca Mobile')
+    expect(output).toContain('Update Axiom Mobile')
     expect(output).toContain(
-      "This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again."
+      "This desktop's mobile workspace needs a newer Axiom Mobile app. Update Axiom Mobile from the App Store, then try this host again."
     )
     expect(primaryActionUrl()).toBe('itms-apps://apps.apple.com/app/orca-ide/id6766130217')
   })
@@ -129,7 +148,7 @@ describe('ProtocolBlockScreen', () => {
     // A store update cannot replace a stale cache, so neither store link is offered.
     expect(output).not.toContain('Open App Store')
     expect(output).not.toContain('Open GitHub Releases')
-    expect(output).not.toContain('Update Orca')
+    expect(output).not.toContain('Update Axiom')
     // Back to hosts is the only button left, and it is not a download.
     expect(pressableCount()).toBe(1)
     expect(output).toContain('Back to hosts')
@@ -146,8 +165,21 @@ describe('ProtocolBlockScreen', () => {
       hostProtocolVersion: 1,
       requiredHostProtocolVersion: 2
     })
-    expect(output).toContain('Update Orca on your computer')
-    expect(output).toContain('This paired desktop app is too old for your current Orca Mobile app')
+    expect(output).toContain('Update Axiom on your computer')
+    expect(output).toContain('This paired desktop app is too old for your current Axiom Mobile app')
+    expect(primaryActionUrl()).toBe(RELEASES_URL)
+  })
+
+  it('sends a desktop whose page is older than this shell to the desktop update', () => {
+    const output = render({
+      kind: 'blocked',
+      reason: 'bundle-incompatible',
+      side: 'desktop',
+      pageVersion: 0,
+      requiredPageVersion: 1
+    })
+    expect(output).toContain('Update Axiom on your computer')
+    expect(output).toContain('This paired desktop app is too old for your current Axiom Mobile app')
     expect(primaryActionUrl()).toBe(RELEASES_URL)
   })
 
@@ -158,7 +190,7 @@ describe('ProtocolBlockScreen', () => {
       reason: 'bundle-shell-too-old',
       schemaVersion: 2
     })
-    expect(output).toContain('Update Orca Mobile from GitHub Releases')
+    expect(output).toContain('Update Axiom Mobile from GitHub Releases')
     expect(primaryActionUrl()).toBe(RELEASES_URL)
   })
 
@@ -167,5 +199,44 @@ describe('ProtocolBlockScreen', () => {
     expect(output).toContain('Already updated? Go back to Hosts and refresh the connection.')
     // The presence precondition for the absence asserted on the refresh wall above.
     expect(pressableCount()).toBe(2)
+  })
+
+  describe('with the newest release known', () => {
+    const release = {
+      version: '0.0.52',
+      url: 'https://github.com/stablyai/orca/releases/tag/mobile-v0.0.52'
+    }
+
+    it.each(['ios', 'android'] as const)('opens that exact release on %s', (os) => {
+      nativeTestState.platform.OS = os
+      const output = render(
+        { kind: 'blocked', reason: 'bundle-shell-too-old', schemaVersion: 2 },
+        release
+      )
+      expect(output).toContain('Get Axiom 0.0.52')
+      expect(output).not.toContain('Open App Store')
+      expect(output).not.toContain('Open GitHub Releases')
+      expect(primaryActionUrl()).toBe(release.url)
+    })
+
+    it('leaves the desktop wall on the desktop releases', () => {
+      const output = render({ kind: 'blocked', reason: 'bundle-unavailable' }, release)
+      expect(output).not.toContain('Get Axiom')
+      expect(primaryActionUrl()).toBe(RELEASES_URL)
+    })
+  })
+
+  it.each([
+    ['ios', 'Open App Store', 'itms-apps://apps.apple.com/app/orca-ide/id6766130217'],
+    ['android', 'Open GitHub Releases', RELEASES_URL]
+  ] as const)('keeps the %s store link when no release is known', (os, label, url) => {
+    nativeTestState.platform.OS = os
+    const output = render(
+      { kind: 'blocked', reason: 'mobile-too-old', desktopVersion: 5, requiredMobileVersion: 9 },
+      null
+    )
+    expect(output).toContain(label)
+    expect(output).not.toContain('Get Axiom')
+    expect(primaryActionUrl()).toBe(url)
   })
 })

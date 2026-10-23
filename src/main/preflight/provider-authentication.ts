@@ -7,9 +7,9 @@ import type { ProviderActivationId } from '../../shared/provider-activation'
 import type { WslPreflightTarget } from '../ipc/preflight-wsl-agent-detection'
 import {
   execCommandInWslOrThrow,
-  execLocalPreflightCommandOrThrow,
-  shellQuote
+  execLocalPreflightCommandOrThrow
 } from '../ipc/preflight-command-exec'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 
 let activationStore: ProviderActivationStore | null = null
 export function setPreflightActivationStore(store: ProviderActivationStore | null): void {
@@ -25,12 +25,13 @@ export function mayProbeAuthentication(force: boolean, id: ProviderActivationId)
 
 export async function probeCliAuthentication(
   provider: 'gh' | 'glab',
-  wslTarget?: WslPreflightTarget
+  wslTarget?: WslPreflightTarget,
+  binary?: string
 ): Promise<boolean> {
   try {
     await (wslTarget
-      ? execCommandInWslOrThrow(wslTarget, `${shellQuote(provider)} auth status`)
-      : execLocalPreflightCommandOrThrow(provider, ['auth', 'status']))
+      ? execCommandInWslOrThrow(wslTarget, `${quotePosixShell(provider)} auth status`)
+      : execLocalPreflightCommandOrThrow(binary ?? provider, ['auth', 'status']))
     return true
   } catch (error) {
     // Both CLIs may report successful auth on stderr despite a nonzero exit.

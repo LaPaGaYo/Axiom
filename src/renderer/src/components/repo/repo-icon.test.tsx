@@ -10,6 +10,20 @@ afterEach(() => {
 const GHE_AVATAR = 'https://ghe.example.com/acme.png?size=64'
 
 describe('RepoIconGlyph', () => {
+  it('falls back locally for a legacy website favicon without requesting it', () => {
+    const { container } = render(
+      <RepoIconGlyph
+        repoIcon={{
+          type: 'image',
+          src: 'https://www.google.com/s2/favicons?domain=example.com&sz=64',
+          source: 'favicon'
+        }}
+      />
+    )
+    expect(container.querySelector('img')).toBeNull()
+    expect(container.querySelector('svg')?.getAttribute('class')).toContain('lucide-folder')
+  })
+
   it('falls back to a lucide icon when an image icon fails to load', () => {
     const { container } = render(
       <RepoIconGlyph repoIcon={{ type: 'image', src: GHE_AVATAR, source: 'github' }} />

@@ -1,3 +1,4 @@
+import { settingsInvokeEvent, store, type SettingsChangedListener } from './settings.test-support'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 
@@ -12,6 +13,7 @@ const {
   previewWarpThemeImportMock,
   prepareLocalWorktreeRootsForReposMock,
   resolveEnvironmentMock,
+  listEnvironmentsMock,
   rebuildAppMenuMock,
   applyBrowserSessionProxiesMock,
   applySessionSearchSettingsChangeMock,
@@ -27,6 +29,7 @@ const {
   previewWarpThemeImportMock: vi.fn(),
   prepareLocalWorktreeRootsForReposMock: vi.fn(),
   resolveEnvironmentMock: vi.fn(),
+  listEnvironmentsMock: vi.fn(),
   rebuildAppMenuMock: vi.fn(),
   applyBrowserSessionProxiesMock: vi.fn(),
   applySessionSearchSettingsChangeMock: vi.fn(),
@@ -81,29 +84,16 @@ vi.mock('../menu/register-app-menu', () => ({
 }))
 
 vi.mock('../../shared/runtime-environment-store', () => ({
-  resolveEnvironment: resolveEnvironmentMock
+  resolveEnvironment: resolveEnvironmentMock,
+  listEnvironments: listEnvironmentsMock
 }))
 
 import { registerSettingsHandlers } from './settings'
 
-const settingsInvokeEvent = { sender: { id: 1 } }
-type SettingsChangedListener = (
-  updates: unknown,
-  settings: unknown,
-  originWebContentsId?: number
-) => void
-
-const store = {
-  getSettings: vi.fn(),
-  updateSettings: vi.fn(),
-  getGitHubCache: vi.fn(),
-  setGitHubCache: vi.fn(),
-  onSettingsChanged: vi.fn(() => () => {})
-}
-
 describe('registerSettingsHandlers', () => {
   beforeEach(() => {
     handleMock.mockClear()
+    store.updateSettingsAndFlush.mockReset()
     onMock.mockClear()
     applyAppIconMock.mockClear()
     applyAgentStatusHooksEnabledMock.mockReset().mockResolvedValue([])
@@ -126,6 +116,28 @@ describe('registerSettingsHandlers', () => {
     store.getSettings.mockReset()
     store.updateSettings.mockReset()
     store.onSettingsChanged.mockClear()
+    listEnvironmentsMock.mockReset().mockReturnValue([])
+  })
+
+  it('repairs removed Active Server preferences on asynchronous and synchronous reads', () => {
+    store.getSettings.mockReturnValue({ activeRuntimeEnvironmentId: 'removed' })
+    store.updateSettings.mockImplementation((updates) => {
+      const next = { ...store.getSettings(), ...updates }
+      store.getSettings.mockReturnValue(next)
+      return next
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This handler only uses the settings methods supplied by the fixture.
+    registerSettingsHandlers(store as never)
+    const get = handleMock.mock.calls.find(([channel]) => channel === 'settings:get')?.[1]
+    const getSync = onMock.mock.calls.find(([channel]) => channel === 'settings:get-sync')?.[1]
+
+    expect(get()).toEqual({ activeRuntimeEnvironmentId: null })
+    store.getSettings.mockReturnValue({ activeRuntimeEnvironmentId: 'removed-again' })
+    const event = { returnValue: undefined }
+    getSync(event)
+    expect(event.returnValue).toEqual({ activeRuntimeEnvironmentId: null })
+    expect(store.updateSettings).toHaveBeenCalledTimes(2)
+    expect(listEnvironmentsMock).toHaveBeenCalledWith('/test/user-data', { requireStoreFile: true })
   })
 
   it('registers settings:previewGhosttyImport handler', () => {
@@ -223,6 +235,40 @@ describe('registerSettingsHandlers', () => {
     )
   })
 
+  it('propagates a failed durable force-delete preference write through settings:set', async () => {
+    store.getSettings.mockReturnValue({ alwaysForceDeleteWorktrees: false })
+    store.updateSettingsAndFlush.mockRejectedValue(new Error('Disk full'))
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1]
+    if (typeof handler !== 'function') {
+      throw new Error('Missing settings:set handler')
+    }
+    await expect(
+      handler(settingsInvokeEvent, { alwaysForceDeleteWorktrees: true, editorWordWrap: false })
+    ).rejects.toThrow('Disk full')
+    expect(store.updateSettingsAndFlush).toHaveBeenCalledWith(
+      { alwaysForceDeleteWorktrees: true, editorWordWrap: false },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+  })
+
+  it('flushes the preserved-branch deletion preference before returning', async () => {
+    store.getSettings.mockReturnValue({ alwaysForceDeletePreservedBranches: false })
+    store.updateSettingsAndFlush.mockRejectedValue(new Error('Disk full'))
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1]
+    if (typeof handler !== 'function') {
+      throw new Error('Missing settings:set handler')
+    }
+    await expect(
+      handler(settingsInvokeEvent, { alwaysForceDeletePreservedBranches: true })
+    ).rejects.toThrow('Disk full')
+    expect(store.updateSettingsAndFlush).toHaveBeenCalledWith(
+      { alwaysForceDeletePreservedBranches: true },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+  })
+
   it('persists Active Server only through the dedicated preference channel', () => {
     store.updateSettings.mockReturnValue({ activeRuntimeEnvironmentId: 'windows-2' })
     registerSettingsHandlers(store as never)
@@ -244,7 +290,7 @@ describe('registerSettingsHandlers', () => {
     )
 
     expect(() => handler(settingsInvokeEvent, { environmentId: 42 as never })).toThrow(
-      'Invalid Active Server preference'
+      'Invalid default host for new projects'
     )
     expect(() => handler(settingsInvokeEvent, { environmentId: 'does-not-exist' })).toThrow(
       'Runtime environment not found'

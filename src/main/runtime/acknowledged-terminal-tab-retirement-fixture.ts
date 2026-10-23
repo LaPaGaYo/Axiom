@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
+import type { PersistedState } from '../../shared/persisted-state-types'
 import type { RuntimeSyncWindowGraph } from '../../shared/runtime-types'
 import { closeTerminalTabInWorkspaceSession } from '../../shared/workspace-session-terminal-tab-close'
 import { ProfileStateSqliteAuthority } from '../persistence/profile-state/profile-state-sqlite-authority'
@@ -11,7 +12,7 @@ import { Store } from '../persistence/loading-store/store'
 import { OrcaRuntimeService } from './orca-runtime'
 import { buildHeadlessMobileSessionTerminalTabs } from './mobile-session-terminal-projection'
 import { setRuntimeDesktopSurface } from './runtime-desktop-surface'
-import { advanceTerminalTopologyRevision } from './workspace-session-terminal-membership-authority'
+import { advanceTerminalTopologyRevision } from '../persistence/terminal-topology/terminal-topology-membership'
 
 export const ACK_WORKTREE = 'repo1::/tmp/worktree'
 export const ACK_TAB = '11111111-1111-4111-8111-111111111111'
@@ -30,8 +31,9 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
 
 export function createAcknowledgedTabRetirementFixture(bound = false) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-close-ack-'))
+  const databasePath = join(directory, 'profile-state.db')
   const authority = new DelayedAuthority(
-    new ProfileStateSqliteAuthority(join(directory, 'profile-state.db'), 'ack-retirement')
+    new ProfileStateSqliteAuthority(databasePath, 'ack-retirement')
   )
   const store = new Store({
     dataFile: join(directory, 'orca-data.json'),
@@ -86,8 +88,11 @@ export function createAcknowledgedTabRetirementFixture(bound = false) {
   setRuntimeDesktopSurface({
     showNotification: () => false,
     findWindowById: () => {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the exercised close path only checks window and WebContents destruction.
-      return { isDestroyed: () => false, webContents: { isDestroyed: () => false } } as never
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the exercised close path only checks destruction and, for a paired client's close, throttling.
+      return {
+        isDestroyed: () => false,
+        webContents: { isDestroyed: () => false, setBackgroundThrottling: () => {} }
+      } as never
     },
     onIpc: () => {},
     removeIpcListener: () => {}
@@ -149,6 +154,7 @@ export function createAcknowledgedTabRetirementFixture(bound = false) {
   store.setWorkspaceSession(
     advanceTerminalTopologyRevision(store.getWorkspaceSession(), ACK_WORKTREE)
   )
+  let finalFlush: Promise<void> | undefined
   const entered = deferred()
   const acknowledgement = deferred()
   const closeTerminalTab = vi.fn(async () => {
@@ -172,7 +178,6 @@ export function createAcknowledgedTabRetirementFixture(bound = false) {
     splitTerminal: () => {},
     renameTerminal: () => {},
     focusTerminal: () => {},
-    sleepWorktree: () => {},
     terminalFitOverrideChanged: () => {},
     terminalDriverChanged: () => {}
   })
@@ -184,15 +189,30 @@ export function createAcknowledgedTabRetirementFixture(bound = false) {
     acknowledgement,
     closeTerminalTab,
     publish,
+    /** Reads what a relaunch would load, independent of the store's in-memory state. */
+    readDisk: (): PersistedState => {
+      const reader = new ProfileStateSqliteAuthority(databasePath, 'ack-retirement')
+      try {
+        return JSON.parse(reader.readSerializedState() ?? '{}')
+      } finally {
+        reader.close()
+      }
+    },
     hasTab: () =>
       store.getWorkspaceSession().tabsByWorktree[ACK_WORKTREE].some((tab) => tab.id === ACK_TAB),
     close: (options: { force?: boolean } = {}) =>
       runtime.closeMobileSessionTab(`id:${ACK_WORKTREE}`, ACK_TAB, { reason: 'user', ...options }),
+    /** The app-quit flush; it finalizes persistence, so dispose must not flush again. */
+    quit: () => (finalFlush ??= store.flushFinalOrThrowAsync()),
     dispose: async () => {
       runtime.setNotifier(null)
       runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
-      await store.flushPendingOrThrowAsync()
-      await store.freezeWritesAsync()
+      if (finalFlush) {
+        await finalFlush
+      } else {
+        await store.flushPendingOrThrowAsync()
+        await store.freezeWritesAsync()
+      }
       setRuntimeDesktopSurface(null)
       rmSync(directory, { recursive: true, force: true })
     }

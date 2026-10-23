@@ -114,7 +114,7 @@ describe('ContextBuilder', () => {
     const first = await builder.build({ missionId, taskId })
     expect(upstream).toHaveLength(2)
     expect(first.packageId).toBe(
-      'ctx_3333b2dd2787f4a916aff40c8bdb80b484c6b68cddce0bce40cbc101e7367e05'
+      'ctx_3599d3b3f9a5714e93da101687b40d125c6eabb438d692c02cb594d2ca312aff'
     )
     expect(first.manifest.mandatory.map((entry) => entry.section)).toEqual(sections)
     expect(first.packageId).toBe(`ctx_${sha256(canonicalContextManifest(first.manifest))}`)
@@ -219,9 +219,7 @@ describe('ContextBuilder', () => {
       'request-subtask',
       'check'
     ]) {
-      expect(renderTemplate).toContain(
-        `axiom attempt ${verb} --attempt {{attemptId}} --dispatch-capability {{dispatchCapability}}`
-      )
+      expect(renderTemplate).toContain(`axiom attempt ${verb} --attempt {{attemptId}}`)
     }
     expect(renderTemplate).toContain(`axiom mission artifact put --mission ${missionId}`)
     expect(renderTemplate).toContain(`--related ${taskId}`)

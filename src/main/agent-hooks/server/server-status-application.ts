@@ -1,15 +1,18 @@
+import { deriveCliWriterTopology } from './cli-writer-observation'
 import { createHash } from 'node:crypto'
 
 import { getCohortAtEmit } from '../../telemetry/cohort-classifier'
 import { track } from '../../telemetry/client'
 import { isCommandCodeNewTurnWhileWorking } from '../../../shared/command-code-turn-boundary'
 import { isNewTurnEvent } from '../../../shared/agent-hook-listener/provider-event-routing'
+import { reduceHostTurnEnd } from '../../../shared/agent-hook-turn-end-timing'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type {
   AgentStatusObservation,
   AgentStatusObservationOrigin
 } from '../../../shared/agent-status-observation'
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
+import type { AgentStatusState, ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import { admitLegacyAgentStatus } from '../../../shared/agent-hook-listener/listener-state'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { agentTypeToPromptSentAgentKind } from './server-status-identity'
@@ -18,11 +21,47 @@ import { AgentHookServerStatusDisposition } from './server-status-disposition'
 /** Bounds the retained observation clock; eviction only degrades a replay to `now`. */
 const MAX_REMEMBERED_EVIDENCE_OBSERVATIONS = 1024
 
+function mainAgentState(payload: ParsedAgentStatusPayload): AgentStatusState {
+  return payload.mainAgent?.state ?? payload.state
+}
+
+/**
+ * When the main agent's current turn began. Its own turn-opening event stamps it (the same
+ * classifier the observation boundary uses), except a session boundary, which lands idle with no
+ * turn open. Replays, child events and identity-only rows restate a turn rather than open one.
+ */
+function resolveTurnStartedAt(
+  previous: EnrichedAgentHookEventPayload | undefined,
+  payload: AgentHookEventPayload,
+  at: number
+): number | undefined {
+  if (
+    payload.source !== undefined &&
+    payload.toolAgentId === undefined &&
+    payload.isReplay !== true &&
+    payload.providerSessionOnly !== true &&
+    isNewTurnEvent(payload.source, payload.hookEventName)
+  ) {
+    return payload.payload.sessionBoundary === true ? undefined : at
+  }
+  // Why: a settled main agent running again with no opening event (an OSC repaint racing the
+  // prompt hook) is a turn edge nothing dated; carrying the old stamp would count from that turn.
+  if (
+    previous &&
+    mainAgentState(previous.payload) === 'done' &&
+    mainAgentState(payload.payload) !== 'done'
+  ) {
+    return undefined
+  }
+  return previous?.turnStartedAt
+}
+
 export abstract class AgentHookServerStatusApplication extends AgentHookServerStatusDisposition {
   protected refreshTerminalStatusEvidence(
     previous: EnrichedAgentHookEventPayload,
     mutationBefore?: EnrichedAgentHookEventPayload,
-    emitEnrichedStatus = false
+    emitEnrichedStatus = false,
+    newRun = false
   ): void {
     if (!this.canWriteLegacyStatusRow(previous)) {
       return
@@ -43,13 +82,18 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
       isReplay: _isReplay,
       ...payload
     } = previous
-    const refreshed: EnrichedAgentHookEventPayload = {
-      ...payload,
-      receivedAt: now,
-      evidenceObservedAt: now,
-      stateStartedAt,
-      observation: this.stampObservation(payload, 'osc', now)
-    }
+    const refreshed = deriveCliWriterTopology(
+      {
+        ...payload,
+        receivedAt: now,
+        evidenceObservedAt: now,
+        stateStartedAt,
+        observation: this.stampObservation(payload, 'osc', now)
+      },
+      mutationBefore ?? previous,
+      this.cliWriterExecutionMatches,
+      newRun
+    )
     const firstRuntimeObservation = !this.runtimeObservedStatusPaneKeys.has(refreshed.paneKey)
     this.runtimeObservedStatusPaneKeys.add(refreshed.paneKey)
     if (!this.writeLegacyStatusRow(refreshed)) {
@@ -113,12 +157,32 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
       previous && previous.payload.state === payload.payload.state && !commandCodeNewTurn
         ? previous.stateStartedAt
         : (observedAt ?? now)
+    const turnStartedAt = resolveTurnStartedAt(previous, payload, observedAt ?? now)
+    // Why: a relay's row was minted on the relay, which saw the event; main only restates it.
+    const { hostTurn, ...turnEnd } = reduceHostTurnEnd(
+      previous,
+      payload,
+      observedAt ?? now,
+      payload.connectionId === null
+    )
+    const {
+      stopHookActive: _stopHookActive,
+      nativeTurnKey: _nativeTurnKey,
+      turnEndedAt: _turnEndedAt,
+      turnEndDisposition: _turnEndDisposition,
+      hostTurn: _hostTurn,
+      ...event
+    } = payload
     // Why: `stateStartedAt` tracks the current state, while `receivedAt` tracks every arrival.
     return {
-      ...payload,
+      ...event,
       receivedAt: now,
       evidenceObservedAt: observedAt ?? this.resolveEvidenceObservedAt(payload, previous, now),
-      stateStartedAt
+      stateStartedAt,
+      // Always written here, so a producer can never declare it.
+      turnStartedAt,
+      ...turnEnd,
+      ...(hostTurn ? { hostTurn } : {})
     }
   }
 

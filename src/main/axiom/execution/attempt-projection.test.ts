@@ -124,7 +124,7 @@ it('projects the bound role and immutable submission evidence', async () => {
     f.store,
     { ...binding, agentSpecId: spec.id },
     fleetWorker,
-    async () => ({ status: 'live', exact: true, terminal: null })
+    async () => ({ status: 'live', exact: true, terminal: null, terminalHandle: null })
   )
   expect(result).toMatchObject({
     role: 'planner',
@@ -161,7 +161,7 @@ it.each<{
     const binding = { ...f.store.getAttemptBinding('task', 1)!, dispatchId: 'd1' }
     const worker = fleetWorker()
     expect(worker.liveness).toMatchObject({ verdict: 'unverifiable', reason: 'missing_status' })
-    const inspectTerminal = vi.fn(async () => ({ status, exact: true, terminal: null }))
+    const inspectTerminal = vi.fn(async () => ({ status, exact: true, terminal: null, terminalHandle: null }))
     expect(await projectAttempt(f.store, binding, () => worker, inspectTerminal)).toMatchObject({
       attemptId: 'd1',
       state: 'RUNNING',
@@ -181,7 +181,7 @@ it('preserves the host reason even when no fleet worker is available', async () 
       status: 'unverifiable',
       reason: 'missing_liveness_verdict',
       exact: true,
-      terminal: null
+      terminal: null, terminalHandle: null
     })
   expect(await projectAttempt(f.store, binding, () => null, inspectTerminal)).toMatchObject({
     state: 'START_UNKNOWN',
@@ -201,7 +201,7 @@ it('continues to fold fleet resource release state independently of host livenes
     .mockResolvedValue({
       status: 'live',
       exact: true,
-      terminal: null
+      terminal: null, terminalHandle: null
     })
   expect((await projectAttempt(f.store, binding, projectWorker, inspectTerminal)).workspace).toBe(
     null

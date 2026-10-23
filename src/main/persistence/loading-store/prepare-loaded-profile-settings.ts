@@ -15,6 +15,7 @@ import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import { hasUnsupportedTuiAgentArgs } from '../../../shared/tui-agent-launch-defaults'
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
 import { normalizeTerminalLineHeight } from '../../../shared/terminal-line-height-settings'
+import { normalizeUiLanguage } from '../../../shared/ui-language'
 import { migrateAgentYoloDefaults } from '../applying-settings/terminal-settings-migrations'
 import {
   normalizeLoadedOnboardingState,
@@ -23,6 +24,7 @@ import {
 } from '../applying-settings/onboarding-normalization'
 
 export type PreparedLoadedProfileSettings = {
+  normalizedUiLanguage: GlobalSettings['uiLanguage']
   migratedExperimentalActivity: GlobalSettings['experimentalActivity']
   migratedAutoRenameBranchFromWork: Pick<
     GlobalSettings,
@@ -60,6 +62,10 @@ export function prepareLoadedProfileSettings(
   defaults: PersistedState,
   markNeedsSave: () => void
 ): PreparedLoadedProfileSettings {
+  const normalizedUiLanguage = normalizeUiLanguage(parsed.settings?.uiLanguage)
+  if (parsed.settings?.uiLanguage !== normalizedUiLanguage) {
+    markNeedsSave()
+  }
   const experimentalActivityDefaultedOffForAllUsers =
     parsed.settings?.experimentalActivityDefaultedOffForAllUsers === true
   // Why: preserve the legacy rollout boundary while loading profiles created before the Agents tab graduated.
@@ -232,6 +238,7 @@ export function prepareLoadedProfileSettings(
     markNeedsSave()
   }
   return {
+    normalizedUiLanguage,
     migratedExperimentalActivity,
     migratedAutoRenameBranchFromWork,
     migratedTerminalCursorStyle,

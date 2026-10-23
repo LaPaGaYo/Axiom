@@ -1,6 +1,7 @@
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 import type * as Wsl from '../wsl'
+import type * as FsPromises from 'node:fs/promises'
 
 // Why: every split pty IPC suite must mock the same module graph; the vi.mock calls stay
 // per-file (hoisting is per-file) but delegate their factories here so the vi.fn instances
@@ -106,14 +107,19 @@ export const childProcessModuleMock = (original: Record<string, unknown>) => ({
 })
 
 export const openCodeHookServiceModuleMock = () => ({
+  OpenCodeHookService: class {
+    buildPtyEnv = vi.fn(() => ({}))
+  },
   openCodeHookService: {
     buildPtyEnv: openCodeBuildPtyEnvMock,
+    refreshLegacySharedPlugin: vi.fn<() => void>(),
     clearPty: openCodeClearPtyMock
   },
   // Separate mock per variant: assembly.ts picks the service by variant, and a shared
   // mock would hide a regression that hands an OpenCode 2 pane the v1 plugin.
   openCode2HookService: {
     buildPtyEnv: openCode2BuildPtyEnvMock,
+    refreshLegacySharedPlugin: vi.fn<() => void>(),
     clearPty: openCodeClearPtyMock
   }
 })
@@ -143,6 +149,17 @@ export const piTitlebarExtensionModuleMock = () => ({
 
 export const pwshModuleMock = () => ({
   isPwshAvailableAsync: isPwshAvailableMock
+})
+
+// Why: async stats read the same fake filesystem the suites stage through existsSync/statSync.
+export const fsPromisesModuleMock = (original: typeof FsPromises) => ({
+  ...original,
+  stat: async (path: string) => {
+    if (!existsSyncMock(path)) {
+      throw Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' })
+    }
+    return statSyncMock(path)
+  }
 })
 
 export const wslModuleMock = (original: typeof Wsl) => ({

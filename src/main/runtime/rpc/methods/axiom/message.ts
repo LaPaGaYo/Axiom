@@ -12,11 +12,13 @@ import { OrchestrationError } from '../../../orchestration/orchestration-error'
 export const AXIOM_MESSAGE_METHODS = [
   defineMethod({
     name: 'axiom.message.answer',
+    permission: 'workspace',
     params: MessageAnswerParams,
     handler: answerMissionQuestion
   }),
   defineMethod({
     name: 'axiom.message.resolve',
+    permission: 'workspace',
     params: MessageResolveParams,
     handler: (p, { runtime, recordMutationReceipt }) => {
       const { store, missions } = getAxiomControlPlane(runtime)
@@ -38,6 +40,7 @@ export const AXIOM_MESSAGE_METHODS = [
   }),
   defineMethod({
     name: 'axiom.message.list',
+    permission: 'workspace',
     params: MessageListParams,
     handler: (p, { runtime }) => {
       const { store, missions } = getAxiomControlPlane(runtime)

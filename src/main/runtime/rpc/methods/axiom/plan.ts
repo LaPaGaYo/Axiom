@@ -13,6 +13,7 @@ import { OrchestrationError } from '../../../orchestration/orchestration-error'
 export const AXIOM_PLAN_METHODS = [
   defineMethod({
     name: 'axiom.plan.propose',
+    permission: 'workspace',
     params: PlanProposeParams,
     handler: (p, ctx) => {
       if (p.attemptId) {
@@ -31,6 +32,7 @@ export const AXIOM_PLAN_METHODS = [
   }),
   defineMethod({
     name: 'axiom.plan.approve',
+    permission: 'workspace',
     params: PlanApproveParams,
     handler: (p, { runtime }) => ({
       planRevision: getAxiomControlPlane(runtime).missions.approvePlan({
@@ -41,6 +43,7 @@ export const AXIOM_PLAN_METHODS = [
   }),
   defineMethod({
     name: 'axiom.plan.reject',
+    permission: 'workspace',
     params: PlanRejectParams,
     handler: (p, { runtime }) => ({
       planRevision: getAxiomControlPlane(runtime).missions.rejectPlan(p)
@@ -48,6 +51,7 @@ export const AXIOM_PLAN_METHODS = [
   }),
   defineMethod({
     name: 'axiom.plan.show',
+    permission: 'workspace',
     params: PlanShowParams,
     handler: (p, { runtime }) => ({
       planRevision: getAxiomControlPlane(runtime).missions.getPlan(p.planRevisionId)
@@ -55,6 +59,7 @@ export const AXIOM_PLAN_METHODS = [
   }),
   defineMethod({
     name: 'axiom.plan.list',
+    permission: 'workspace',
     params: PlanListParams,
     handler: (p, { runtime }) => ({
       planRevisions: getAxiomControlPlane(runtime).missions.listPlans(p.missionId)

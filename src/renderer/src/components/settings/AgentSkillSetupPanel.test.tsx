@@ -235,7 +235,7 @@ describe('AgentSkillSetupPanel', () => {
     const html = renderPanel({
       installed: true,
       installLabel: 'Install CLI & Skill',
-      preInstallNotice: 'Install the Orca CLI before running agent skill setup.'
+      preInstallNotice: 'Install the Axiom CLI before running agent skill setup.'
     })
 
     expect(html).toContain('Installed')
@@ -248,7 +248,7 @@ describe('AgentSkillSetupPanel', () => {
       installed: true,
       installedCommand: UPDATE_COMMAND,
       installLabel: 'Install CLI & Skill',
-      preInstallNotice: 'Install the Orca CLI before running agent skill setup.',
+      preInstallNotice: 'Install the Axiom CLI before running agent skill setup.',
       getPrerequisiteStatus: vi.fn(
         async () =>
           ({

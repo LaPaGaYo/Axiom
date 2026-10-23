@@ -89,6 +89,7 @@
 
 **决定**：Worker 侧命令 `axiom attempt submit | ask | blocked | handoff | inform | request | request-subtask | check`（命令形状由 D16 定为 `axiom attempt <verb>`），直接调用 `axiom.attempt.*` RPC；RPC 层复用 Orca 的 `--dispatch-capability` 校验（`hasLifecycleAuthority` + capability hash + `consumer_generation` 栅栏 + `mutation_receipts` 幂等）；Control Plane → Worker 的回复仍通过 Orca `dispatch:<id>` mailbox 投递以复用唤醒/nudge 机制。不引入 MCP server。
 **理由**：Orca 已有 stale/duplicate/unauthorized 拒绝码，正好满足章程的两条量化指标；避免第二套认证。
+- **修订（2026-10-22，D73，Henry："D73 B"）**：上游 `9afd1101ff` 删掉了 dispatch capability。Worker 认证改为复用宿主核实的 worker 身份：调用方终端 / pane / Orca session（宿主注入，不接受命令行指定）→ Dispatch → `process_incarnation`，加上游 `worker-report-admission.ts` 的同一条报告规则与另一编排方栅栏；Axiom 不重建令牌，命令里不再有 `--dispatch-capability`。`hasLifecycleAuthority`、`consumer_generation` 栅栏与 `mutation_receipts` 幂等照旧。
 
 ## D12 · Axiom 代码放独立强类型模块，不进入 `@ts-nocheck` 的 `orca-runtime-*.ts` — ACCEPTED（Henry 2026-10-17）
 
@@ -260,6 +261,7 @@ marketplace 官方源禁用 / skills 安装源改 `LaPaGaYo/Axiom` / star 提示
 - `mobile/` **不**从 ratchet 排除（撤回 attempt 1 的排除；基线只减 cloud 的 pair）；保留 `mobile.yml` 检查、`install-mobile-dependencies` 及其所有使用、`pr.yml` 的 `mobile_web_app` 作业；只删 `mobile-android-release.yml` 与 `mobile-ios-release.yml`（原生 App 不构建不发布）。
 - 是否把"手机 companion"整体从桌面端移除（连同 web bundle、配对 UI、relay/push 客户端）是另一个产品决定，不在 M0 内。
 **取代规则**：取代 D33 中关于 mobile ratchet 排除与 mobile CI 的部分；cloud/ 删除部分不变。
+- **修订（2026-10-22，D75，Henry 同意）**：V1 起桌面打包不再内嵌 mobile web bundle，`mobile/` 不再算交付代码；棘轮把 `mobile/**` 作为不交付代码排除，上游 mobile 测试不阻塞合入。原生发布工作流仍是删除状态。手机端在 V1 之后必做（DEF-26）。
 
 ## D34 · M0-05b-2 集成记录 — ACCEPTED（事实记录）
 
@@ -801,3 +803,43 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **代价与风险**：粗估 2–4 天（10-20 估 1–2 天时只有 254 个冲突文件，且没算 schema 编号与会话地址两处），M3 相应推迟；上游新功能会扩大产品面（新 provider、远程服务器、手机配对等），按 M0 规则保持关闭或隐藏。若内核接缝的语义移植超过 1 天仍不能通过 M1 / M2 出口 e2e，停下来报告，由 Henry 决定继续还是放弃这次重置（main 不动，回到 D56 现状）。
 **后果**：D19 与 D56 各加一行修订指向本条；DEF-7 的"冻结前一次性合入清单"缩小为重置之后的增量；`docs/plans/M3.md` 的下一步改为 UPSTREAM-3 → M3-02；`UPSTREAM_SYNC.md` 记 2026-10-22 的模拟数据与计划。
 **取代规则**：以修订行记录。
+
+## D73 · Worker 认证跟随上游：Attempt 授权改用宿主核实的调用方身份，不再用 dispatch capability — ACCEPTED（Henry 2026-10-22："D73 B、D74 B"；验证者提议，UPSTREAM-3 attempt 1 的 B1）
+
+**背景**：上游 `9afd1101ff`（#23994，2026-09-30）删掉了 per-Dispatch capability：不再铸造、preamble 不再打印 `--dispatch-capability`，`RpcRequest` / `RpcContext` 去掉 `orchestrationCapability`，DB 去掉 `verifyDispatchCapability` / `revokeDispatchCapability`，`prepareStartingWorkerAuthority` 不再返回令牌（CLI 仍接受并转发旧旗标，给老宿主用）。上游的理由：令牌只存在于 agent 的对话里——`/clear` 或上下文压缩后就丢了，而且随提示词发给模型 provider、留在会话记录里。替代做法是宿主核实"确切的 worker 进程"：按调用方终端 / pane / Orca session（session id 由宿主注入环境，不接受命令行指定）找到它的 Dispatch，比对 `process_incarnation`；来自另一个编排方（Run 协调者或别的 Dispatch 的 worker）终端的报告一律拒绝；`stopping` 中的 worker 不能报告（`worker-report-admission.ts` 一条规则，本地和远端共用）。D11 原文是"复用 Orca 的 `--dispatch-capability` 校验（`hasLifecycleAuthority` + capability hash + `consumer_generation` 栅栏 + `mutation_receipts` 幂等）"。合并后 Axiom 的 `resolveAttemptSender`、Attempt launcher（把令牌放进 ContextPackage / preamble）、`axiom.attempt.*` RPC 失去依据：`tc:node` 53 个错误、聚焦测试 131 个失败，全部来自这一处。Worker 没有复活上游删掉的子系统，也没有用一律放行的假校验顶替，而是停下来报告（`.axiom-work/reports/UPSTREAM-3-1.md` B1）。
+**选项**：
+- A：Axiom 自建 per-Attempt 能力令牌（Axiom 表里存 hash，Attempt preamble 打印，CLI 用旧 wire 字段或 Axiom 信封带回，Axiom RPC 校验，保留 pane / 进程 / 重放约束）。语义与 D11 原文一致，移植面小；但等于在 Axiom 里重建上游刻意删掉的机制：令牌进提示词和会话记录（与"秘密不进提示词、日志、Artifact"冲突），Worker `/clear` 或压缩后就丢了身份，每次同步上游都要维护这条平行链路。
+- B（建议）：Attempt 授权改用宿主核实的调用方身份——`orchestrationCallerIdentity` 给出的终端 / pane / Orca session，加上游同一条 worker 报告规则（不在 `stopping`；记录了 `process_incarnation` 的必须是当前进程，否则是该 Dispatch 的消息发送方）和另一编排方栅栏。Axiom 自己的检查全部保留：Attempt ↔ Dispatch 绑定、`stale_dispatch`（更新的 Attempt 拥有 Task）、`hasLifecycleAuthority`（assignee）、Mission / Task / Run 一致、`mutation_receipts` 幂等、结算后只允许读回同一 Submission（重放按同一 pane + 进程代次核实）。Attempt preamble 与 ContextPackage 不再含令牌。
+**决定**：B。
+1. `resolveAttemptSender` 用上述身份校验替换 `verifyDispatchCapability`；`axiom.attempt.*`、Planner、消息、子任务路径去掉 `orchestrationCapability`；Attempt launcher 不再生成或注入令牌。
+2. 测试把"capability 铸造 / 校验 / 吊销"改写为身份上的等价情形：另一个 Attempt 的进程、同一 pane 里换了进程（代次不同）、另一编排方的终端、`stopping` 中的 worker、旧 Attempt（stale）、结算后的重放，均被拒绝；合法 Worker 的 submit / ask / blocked / request-subtask 被接受且幂等。
+3. 结构化 Worker（M3-08 通道 B）用同一套 session 身份。
+4. 残余风险：伪造环境变量（终端句柄 / pane key / session id）的 Worker 能冒充另一个仍在运行的 Worker。旧令牌同样挡不住有本机用户权限、能读别人会话记录的恶意进程；V1 的边界仍是沙盒、文件范围检查、独立验证与串行集成。加固项（按 socket 对端进程归属核实调用方）登记为 DEF-25，V1 不做。
+**理由**：上游删令牌的理由在 Axiom 同样成立；B 不把秘密放进提示词，Worker `/clear` 或压缩后身份不丢，Axiom 继续复用内核的认证而不是维护第二套——这正是 D11 当初"避免第二套认证"的本意。
+**后果**：D11 加修订行（"复用 Orca dispatch capability"改为"复用宿主核实的 worker 身份"）；`docs/reference/orca-mapping.md` 的 D14 / D15 / §4b 段落按新身份模型复核；UPSTREAM-3 的 B1 移植按本条写进后续 attempt。
+**取代规则**：以修订行记录。
+
+## D74 · 基线重置后的 vendor-egress 基线：发版代码按 M0 规则清掉，上游新增的测试样本与来源链接按新底子一次性入账 — ACCEPTED（Henry 2026-10-22："D73 B、D74 B"；验证者提议，UPSTREAM-3 attempt 1 之后）
+
+**背景**：vendor-egress 棘轮（M0-01，`config/scripts/check-vendor-egress-ratchet.mjs`）的基线在 fork 点初始化——上游已有的身份 / 端点引用全部入账——之后只能缩小。全量合并后棘轮报 121 个新 pair、15 个计数增长。验证者修好 i18n 目录里的两处后：23 个在发版代码（launchd / daemon 标签 `com.stablyai…`、iTunes / GitHub 更新源、Windows 管理员模式的文档链接、发布脚本要求的 PostHog key、`skill-freshness` 的 `stablyai/orca`、注释里引用的上游 issue 等）；109 个在上游新增的测试与 fixture（把 `stablyai/orca` 当示例仓库，App Store / GitHub API 响应样本）和来源链接（`config/reliability-gates.jsonc` 里指向上游 PR 的 15 处、`ci-shard-timings.md`）；另有 `@stablyai/playwright-test` 这样的依赖包名。
+**选项**：
+- A：全部清掉。测试样本改成中性值（如 `acme/widgets`），来源链接改写或删除。符合"只能缩小"的原文；代价是上游测试与 Axiom 分叉（以后按 D56 摘取上游修复时这些行会冲突），改写来源链接等于改动证据记录。
+- B（建议）：发版代码按 M0 规则清掉（身份 → D21，端点 → `PRODUCT_EGRESS_POLICY` / 删除，遥测 → 删除），由 UPSTREAM-3 attempt 2 做；上游新增的测试 / fixture 样本、来源链接、npm scope 包名，在新底子上一次性入账，与 M0-01 在 fork 点初始化基线同一做法，之后基线仍只能缩小。入账范围按路径规则确定（`.test.` / `.spec.` / fixture / `reliability-gates.jsonc` / `ci-shard-timings.md` / 依赖包名所在行），由验证者在 UPSTREAM-3 的合入里重写基线文件，前后数量与清单记进 `UPSTREAM_SYNC.md`。
+**决定**：B。
+**理由**：棘轮管的是"产品不向原厂发请求、不冒用原厂身份"。测试样本和来源链接不发请求；M0 对 fork 点的同类引用也是入账，而不是清除。
+**后果**：棘轮脚本不改；UPSTREAM-3 合入提交里的基线文件变更单独说明；以后再做全量合并时按同一规则处理。
+- **执行说明（2026-10-22，验证者）**：入账范围另加 `config/patches/`——上游第三方补丁在它加进去的代码里引用上游 issue；改补丁会改变 pnpm 的 patch hash，锁文件随之失配（attempt 2 实际撞到：Worker 把 `ws@8.22.0.patch` 里的 `stablyai/orca#23398` 改成中性写法，之后沙盒里每个 `pnpm run` 都先触发自动安装、清空了根 `node_modules`）。这处引用按来源链接入账，补丁保持上游原样。一次性重建由 `.axiom-work/scripts/upstream3-egress-rebaseline.py` 执行：基线 430 对 → 468 对，入账 87 对（清单 `.axiom-work/reports/UPSTREAM-3-egress-rebaseline.md`），45 对随引用消失而缩小或删除；发版代码剩余 0 对。
+**取代规则**：以修订行记录。
+
+## D75 · V1 只做桌面：手机伴侣（mobile web bundle、配对、relay / push）保持休眠、不删；手机端放到后续版本，必做 — ACCEPTED（Henry 2026-10-22："Sure, I'm agree with you recommendation of mobile feature, I feel like we must do mobile in the future."）
+
+**背景**：仓库里的"手机"有两层。① 原生 iOS / Android App：D33a 已删掉原生发布工作流，Axiom 不构建、不发布。② 桌面内嵌的手机伴侣：打包时把 `mobile/` 构建出的 mobile web bundle（`out/mobile-web`）装进桌面应用，配对后由桌面把这个网页版界面提供给手机浏览器，手机不需要装 App。配对有两条路：经 Orca 云端 relay / push（egress 策略 `cloudAuth: null`、`pushGatewayOrigin: null` 已关闭，`cloud/` 已删），或同一局域网直连（目前仍可用）。D33a 把 `mobile/` 留在 vendor-egress 棘轮与 CI 里，前提正是"mobile web bundle 随桌面交付"；D71 已把 Mobile 从 V1 主导航藏起来。UPSTREAM-3 带来大量手机相关改动（`mobile/pnpm-lock.yaml` 改了 4,760 行，attempt 2 验证里约 40 个 mobile-web-app 测试文件失败）。Henry 的判断：做手机功能就需要手机 App 一起支持，V1 不做；手机端以后一定要做。
+**决定**：
+1. V1 只交付桌面，手机伴侣保持休眠：隐藏所有配对入口（含 Settings 里的 Mobile 页与配对二维码）；桌面打包不再内嵌 mobile web bundle（`config/electron-builder.config.cjs` 去掉 `out/mobile-web/**` 及其打包断言，构建流程不再生成它）；relay / push 继续由 egress 策略关闭；局域网配对随入口一起停用。
+2. 不删代码：`mobile/` 与桌面侧配对 / relay / push 代码留在仓库、不改动——删掉几千个上游文件会让以后每次同步上游都冲突，也让恢复变难。
+3. 门禁：`mobile/` 不再随桌面交付，D33a 把它留在棘轮与 CI 的理由随之消失——vendor-egress 棘轮把 `mobile/**` 作为不交付代码排除（基线相应收缩）；上游工作流文件照旧不动（PR-only，不在 fork 上跑，D45）；上游的 mobile 测试留在树里，V1 不为它们投入修复，只要求桌面构建、类型检查与 lint 通过。UPSTREAM-3 的合入验证里，mobile-web-app 类测试失败不阻塞合入（桌面门禁仍须全绿）。
+4. 手机端必做，放在后续版本：登记 DEF-26（V1 发布之后、V2 规划时决定），届时决定原生 App 还是 web 伴侣、自建 relay / push（`cloud/` 已删，需要新的部署方案）、配对与认证（与 D73 的身份模型对齐），以及 Mission 在手机上的范围（看进度、批准 Approval、回答 QUESTION）。
+**理由**：没有自建 relay / push，手机伴侣在互联网上本来就连不上；只剩局域网配对的半成品不值得在 V1 维护；休眠而不删把以后恢复的成本降到最低。
+**后果**：取代 D33a 里"`mobile/` 随桌面交付、留在棘轮与 CI"的部分（D33a 加修订行）；实施为 UPSTREAM-3 合入之后、M3-02 之前的一个小 hygiene Task（打包配置、入口隐藏、棘轮排除 `mobile/**`、相关测试与文档）；`docs/plans/M3.md` 记一笔。
+**取代规则**：恢复手机功能需新 Decision（DEF-26 触发时）。
+- **修订（2026-10-22，Henry："哪怕做 app 也要等到 V3 之后等 desktop 这边都跑通了之后才能开始"）**：手机端开工时间由"V1 之后"改为 V3 之后、desktop 全部跑通之后；方向默认复用 Orca 的 App 代码（`mobile/`），relay / push 服务端自建，届时再评估是否在仓库里 fork 裁剪。DEF-26 相应改写。

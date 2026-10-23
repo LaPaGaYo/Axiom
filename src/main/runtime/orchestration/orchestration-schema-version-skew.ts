@@ -48,13 +48,13 @@ const VERSIONED_POST_V6_COLUMNS = [
   { version: 42, table: 'runs', column: 'coordinator_orca_session_id_generation' },
   { version: 42, table: 'dispatch_contexts', column: 'assignee_orca_session_id' },
   { version: 42, table: 'dispatch_contexts', column: 'creator_orca_session_id' },
-  { version: 44, table: 'agent_specs', column: 'spec' },
-  { version: 44, table: 'mission_policies', column: 'routing' },
-  { version: 45, table: 'verification_runs', column: 'runtime_epoch' },
-  { version: 45, table: 'verification_runs', column: 'claim_count' },
-  { version: 45, table: 'verification_runs', column: 'worktree_id' },
-  { version: 45, table: 'verification_runs', column: 'started_at' },
-  { version: 45, table: 'verification_runs', column: 'finished_at' }
+  { version: 45, table: 'agent_specs', column: 'spec' },
+  { version: 45, table: 'mission_policies', column: 'routing' },
+  { version: 46, table: 'verification_runs', column: 'runtime_epoch' },
+  { version: 46, table: 'verification_runs', column: 'claim_count' },
+  { version: 46, table: 'verification_runs', column: 'worktree_id' },
+  { version: 46, table: 'verification_runs', column: 'started_at' },
+  { version: 46, table: 'verification_runs', column: 'finished_at' }
 ] as const
 
 // Why: v34 shipped without these two, so a v34 stamp proves nothing about them; v35 repairs both

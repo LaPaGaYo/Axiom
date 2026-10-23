@@ -15,6 +15,7 @@ import {
 export const ORCHESTRATION_WORKER_STOP_METHODS = [
   defineMethod({
     name: 'orchestration.workerStop',
+    permission: 'workspace',
     params: WorkerDispatchParams,
     handler: (params, { runtime, orchestrationMutation }) => {
       const db = runtime.getOrchestrationDb()

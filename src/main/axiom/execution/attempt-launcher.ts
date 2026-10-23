@@ -22,7 +22,7 @@ import type { AdmittedAttempt, AttemptLaunch } from '../scheduler/scheduler'
 import { redactContext } from '../context-builder/redaction'
 import { missionCaller } from './mission-caller'
 
-type LauncherRuntime = Pick<OrcaRuntimeService, 'createManagedWorktree' | 'getClientSettings'>
+type LauncherRuntime = Pick<OrcaRuntimeService, 'createManagedWorktree' | 'requireStore'>
 export type AttemptWorkerStartArgs = Omit<Parameters<typeof startLocalWorker>[0], 'runtime'> & {
   runtime: LauncherRuntime
 }
@@ -184,7 +184,7 @@ export function createAttemptLauncher(
           callerIdentity: caller,
           preambleBuilder: (p) => {
             // The provider can propose before startLocalWorker returns its readiness receipt.
-            // Bind before delivering its capability-bearing preamble.
+            // Bind before delivering its Attempt preamble.
             if (planner) {
               const current = missions.getMission(attempt.missionId)
               if (
@@ -196,14 +196,17 @@ export function createAttemptLauncher(
                   'Planner launch is no longer current.'
                 )
               }
-              if (!store.bindAttemptDispatch(attempt.taskId, attempt.seq, p.dispatchId) &&
-                  store.getAttemptBinding(attempt.taskId, attempt.seq)?.dispatchId !== p.dispatchId) {
-                throw new OrchestrationError('invalid_argument', 'Planner dispatch binding changed.')
+              if (
+                !store.bindAttemptDispatch(attempt.taskId, attempt.seq, p.dispatchId) &&
+                store.getAttemptBinding(attempt.taskId, attempt.seq)?.dispatchId !== p.dispatchId
+              ) {
+                throw new OrchestrationError(
+                  'invalid_argument',
+                  'Planner dispatch binding changed.'
+                )
               }
             }
-            return render
-              .replaceAll('{{attemptId}}', p.dispatchId)
-              .replaceAll('{{dispatchCapability}}', p.dispatchCapability ?? '')
+            return render.replaceAll('{{attemptId}}', p.dispatchId)
           }
         }
       }

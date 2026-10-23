@@ -61,7 +61,7 @@ it.each([true, false])(
           '--file',
           'proposal.json',
           '--json',
-          ...(planner ? ['--attempt', 'a', '--dispatch-capability', 'dcap_fixture'] : [])
+          ...(planner ? ['--attempt', 'a'] : [])
         ],
         COMMAND_SPECS.map((s) => s.path),
         COMMAND_SPECS
@@ -75,9 +75,7 @@ it.each([true, false])(
           planRevision,
           ...(planner ? { attemptId: 'a', from: 'term_planner' } : { provenance })
         },
-        planner
-          ? { orchestrationCapability: 'dcap_fixture' }
-          : { orchestrationRequestId: undefined }
+        ...(!planner ? [{ orchestrationRequestId: undefined }] : [])
       )
     } finally {
       await rm(root, { recursive: true, force: true })

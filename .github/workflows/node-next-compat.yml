@@ -1,7 +1,7 @@
-name: Node next compatibility
+name: Scheduled x86 unit compatibility
 
 on:
-  # Why no schedule/push: Axiom's gates run locally and main is pushed directly (D41, option A); hosted runs are manual only until DEF-1 is decided.
+  # D41: automatic schedule/push triggers are disabled for the fork.
   workflow_dispatch:
 
 concurrency:
@@ -12,9 +12,13 @@ permissions:
   contents: read
 
 jobs:
-  # A cold cache would otherwise make all eight Node 26 shards compile the same native addons.
+  # Prime each Node ABI before its shards restore native modules.
   test_native_cache:
-    name: prepare test native cache node 26
+    name: prepare test native cache node ${{ matrix.node }}
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['24', '26']
     runs-on: ubuntu-latest
 
     steps:
@@ -26,10 +30,14 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
-          node-version: '26'
+          node-version: ${{ matrix.node }}
+
+  unit_plan:
+    uses: ./.github/workflows/unit-plan.yml
 
   test:
-    needs: [test_native_cache]
+    needs: [test_native_cache, unit_plan]
     uses: ./.github/workflows/unit-tests.yml
     with:
-      node_versions: '["26"]'
+      node_versions: '["24", "26"]'
+      shards: ${{ needs.unit_plan.outputs.shards }}

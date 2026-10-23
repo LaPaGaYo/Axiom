@@ -6,16 +6,8 @@ export const AXIOM_PLAN_COMMAND_SPECS: CommandSpec[] = [
     path: ['plan', 'propose'],
     summary: 'Propose a validated Task graph',
     usage:
-      'axiom plan propose --mission <id> --file <proposal.json> [--attempt <id> --dispatch-capability <dcap>] [--retry-request <id>] [--json]',
-    allowedFlags: [
-      ...GLOBAL_FLAGS,
-      'mission',
-      'file',
-      'retry-request',
-      'attempt',
-      'dispatch-capability',
-      'from'
-    ],
+      'axiom plan propose --mission <id> --file <proposal.json> [--attempt <id>] [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'mission', 'file', 'retry-request', 'attempt', 'from'],
     examples: ['axiom plan propose --mission mission_123 --file proposal.json']
   },
   {

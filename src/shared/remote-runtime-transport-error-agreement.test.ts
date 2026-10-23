@@ -16,8 +16,7 @@
  *
  * WHAT THIS GUARD CANNOT CATCH: a transient code whose message matches no fragment. The
  * message side has nothing to disagree with, so the pair looks consistent. `remote_runtime_busy`
- * is exactly that case today — its messages say "retry after…" but match no fragment, so it
- * classifies fatal and this guard stays silent. Tracked as STA-3479; do not "fix" it here.
+ * was that case until STA-3479; its pairs are pinned recoverable below for that reason.
  */
 import { Buffer } from 'node:buffer'
 import { describe, expect, it } from 'vitest'
@@ -36,9 +35,9 @@ import {
 } from './remote-runtime-connect-bound'
 import {
   invalidRemoteRuntimeResponseError,
-  parseAuthenticatedFrame,
-  parseReadyFrame,
   parseRemoteRuntimeRpcFrame,
+  remoteRuntimeAuthReplyError,
+  remoteRuntimeReadyError,
   remoteRuntimeTimeoutError,
   remoteRuntimeUnavailableError
 } from './remote-runtime-request-frames'
@@ -79,7 +78,7 @@ const REQUEST_TRANSPORT_ERRORS: TransportErrorPair[] = [
   {
     producer: 'remote-runtime-client.ts:192',
     code: 'runtime_timeout',
-    message: 'Timed out waiting for the remote Orca runtime to respond.'
+    message: 'Timed out waiting for the remote Axiom runtime to respond.'
   },
   {
     producer: 'remote-runtime-client.ts:238 / :639',
@@ -89,7 +88,7 @@ const REQUEST_TRANSPORT_ERRORS: TransportErrorPair[] = [
   {
     producer: 'remote-runtime-client.ts:258 / :654',
     code: 'remote_runtime_unavailable',
-    message: 'Could not connect to the remote Orca runtime.'
+    message: 'Could not connect to the remote Axiom runtime.'
   },
   producedPair(
     'remote-runtime-connect-bound.ts (elapsed handshakeTimeout; request-socket, request-websocket and subscription-transport onError)',
@@ -98,42 +97,42 @@ const REQUEST_TRANSPORT_ERRORS: TransportErrorPair[] = [
   {
     producer: 'remote-runtime-client.ts:270 / :667 (formatRemoteRuntimeCloseMessage, 1006)',
     code: 'remote_runtime_unavailable',
-    message: 'Remote Orca runtime closed the connection.'
+    message: 'Remote Axiom runtime closed the connection.'
   },
   {
     producer: 'remote-runtime-client.ts:270 / :667 (formatRemoteRuntimeCloseMessage, 1011)',
     code: 'remote_runtime_unavailable',
-    message: `Remote Orca runtime closed the connection (1011: ${CLOSE_REASON.toString()}).`
+    message: `Remote Axiom runtime closed the connection (1011: ${CLOSE_REASON.toString()}).`
   },
   {
     producer: 'remote-runtime-client.ts:289',
     code: 'invalid_runtime_response',
-    message: 'Remote Orca runtime returned an unexpected binary frame.'
+    message: 'Remote Axiom runtime returned an unexpected binary frame.'
   },
   {
     producer: 'remote-runtime-client.ts:310 / :693',
     code: 'invalid_runtime_response',
-    message: 'Remote Orca runtime returned an undecryptable frame.'
+    message: 'Remote Axiom runtime returned an undecryptable frame.'
   },
   {
     producer: 'remote-runtime-client.ts:393 / :801 (rejected token)',
     code: 'unauthorized',
-    message: 'Remote Orca runtime rejected the pairing token.'
+    message: 'Remote Axiom runtime rejected the pairing token.'
   },
   {
     producer: 'remote-runtime-client.ts:393 / :801 (unparseable auth failure)',
     code: 'invalid_runtime_response',
-    message: 'Remote Orca runtime returned an invalid E2EE auth frame.'
+    message: 'Remote Axiom runtime returned an invalid E2EE auth frame.'
   },
   {
     producer: 'remote-runtime-client.ts:415',
     code: 'remote_runtime_unavailable',
-    message: 'Remote Orca runtime request was released before it could be sent.'
+    message: 'Remote Axiom runtime request was released before it could be sent.'
   },
   {
     producer: 'remote-runtime-client.ts:459 / :829',
     code: 'invalid_runtime_response',
-    message: 'Remote Orca runtime returned a mismatched response id.'
+    message: 'Remote Axiom runtime returned a mismatched response id.'
   },
   {
     producer: 'remote-runtime-client.ts:476 (non-Error status validation failure)',
@@ -143,27 +142,27 @@ const REQUEST_TRANSPORT_ERRORS: TransportErrorPair[] = [
   {
     producer: 'remote-runtime-client.ts:556',
     code: 'runtime_timeout',
-    message: 'Timed out waiting for the remote Orca runtime subscription to start.'
+    message: 'Timed out waiting for the remote Axiom runtime subscription to start.'
   },
   {
     producer: 'remote-runtime-client.ts:587',
     code: 'remote_runtime_unavailable',
-    message: 'Remote Orca runtime send buffer overflow; reconnecting.'
+    message: 'Remote Axiom runtime send buffer overflow; reconnecting.'
   },
   {
     producer: 'remote-runtime-client.ts:735',
     code: 'remote_runtime_unavailable',
-    message: 'Remote Orca runtime stopped responding; the stream connection was reset.'
+    message: 'Remote Axiom runtime stopped responding; the stream connection was reset.'
   },
   {
     producer: 'remote-runtime-client.ts:842',
     code: 'invalid_runtime_response',
-    message: 'Remote Orca runtime returned binary data before authentication.'
+    message: 'Remote Axiom runtime returned binary data before authentication.'
   },
   {
     producer: 'remote-runtime-client.ts:852',
     code: 'invalid_runtime_response',
-    message: 'Remote Orca runtime returned an undecryptable binary frame.'
+    message: 'Remote Axiom runtime returned an undecryptable binary frame.'
   },
   {
     producer: 'remote-runtime-request-websocket.ts:115',
@@ -198,22 +197,25 @@ const REQUEST_TRANSPORT_ERRORS: TransportErrorPair[] = [
   },
   producedPair('remote-runtime-request-frames.ts:24', remoteRuntimeUnavailableError()),
   producedPair('remote-runtime-request-frames.ts:30', remoteRuntimeTimeoutError()),
-  producedPair('remote-runtime-request-frames.ts:46', parseReadyFrame('not-json')),
-  producedPair('remote-runtime-request-frames.ts:55', parseReadyFrame('{"type":"nope"}')),
-  producedPair('remote-runtime-request-frames.ts:67', parseAuthenticatedFrame('not-json')),
+  producedPair('remoteRuntimeReadyError (invalid)', remoteRuntimeReadyError('invalid')),
+  producedPair('remoteRuntimeReadyError (unexpected)', remoteRuntimeReadyError('unexpected')),
   producedPair(
-    'remote-runtime-request-frames.ts:81 (rejected token)',
-    parseAuthenticatedFrame(JSON.stringify({ error: { code: 'unauthorized' } }))
+    'remoteRuntimeAuthReplyError (invalid)',
+    remoteRuntimeAuthReplyError({ kind: 'invalid' })
   ),
   producedPair(
-    'remote-runtime-request-frames.ts:81 (unrecognized auth frame)',
-    parseAuthenticatedFrame(JSON.stringify({ type: 'e2ee_other' }))
+    'remoteRuntimeAuthReplyError (rejected token)',
+    remoteRuntimeAuthReplyError({ kind: 'rejected', type: null, errorCode: 'unauthorized' })
+  ),
+  producedPair(
+    'remoteRuntimeAuthReplyError (unrecognized auth frame)',
+    remoteRuntimeAuthReplyError({ kind: 'rejected', type: 'e2ee_other', errorCode: null })
   ),
   frameError('remote-runtime-request-frames.ts:91', 'not-json'),
   frameError('remote-runtime-request-frames.ts:103', JSON.stringify({ not: 'an envelope' })),
   producedPair(
     'remote-runtime-request-frames.ts:37 (invalid handshake frame)',
-    invalidRemoteRuntimeResponseError('Remote Orca runtime returned an invalid E2EE auth frame.')
+    invalidRemoteRuntimeResponseError('Remote Axiom runtime returned an invalid E2EE auth frame.')
   ),
   producedPair(
     'runtime-rpc-call-queue.ts:70 / :74 / :81',
@@ -237,7 +239,7 @@ const SHARED_CONTROL_TRANSPORT_ERRORS: TransportErrorPair[] = [
   producedPair(
     'remote-runtime-shared-control-open.ts:86',
     remoteRuntimeUnavailableError(
-      'Remote Orca runtime stopped responding; resetting the control connection.'
+      'Remote Axiom runtime stopped responding; resetting the control connection.'
     )
   ),
   producedPair(
@@ -260,11 +262,7 @@ const SHARED_CONTROL_TRANSPORT_ERRORS: TransportErrorPair[] = [
   }
 ]
 
-/**
- * `remote_runtime_busy` is semantically transient but absent from `RECOVERABLE_CODES`, so it
- * classifies fatal. It is listed here (not omitted) so the corpus stays complete; STA-3479
- * covers the classification itself.
- */
+/** Client-side admission caps: each frees as pending work settles, so the caller retries. */
 const BUSY_TRANSPORT_ERRORS: TransportErrorPair[] = [
   {
     producer: 'remote-runtime-prepared-request-admission.ts:100',
@@ -313,17 +311,17 @@ const HOST_FORWARDED_TRANSPORT_ERRORS: TransportErrorPair[] = [
   {
     producer: 'main/runtime/rpc/errors.ts:145 (STRUCTURED_RUNTIME_PASSTHROUGH_CODES)',
     code: 'remote_runtime_unavailable',
-    message: 'Remote Orca runtime closed the connection.'
+    message: 'Remote Axiom runtime closed the connection.'
   },
   {
     producer: 'main/runtime/rpc/errors.ts:145 (STRUCTURED_RUNTIME_PASSTHROUGH_CODES)',
     code: 'runtime_timeout',
-    message: 'Timed out waiting for the remote Orca runtime to respond.'
+    message: 'Timed out waiting for the remote Axiom runtime to respond.'
   },
   {
     producer: 'main/runtime/rpc/errors.ts:145 (STRUCTURED_RUNTIME_PASSTHROUGH_CODES)',
     code: 'invalid_runtime_response',
-    message: 'Remote Orca runtime returned an invalid response frame.'
+    message: 'Remote Axiom runtime returned an invalid response frame.'
   },
   {
     producer: 'main/runtime/rpc/errors.ts:145 (STRUCTURED_RUNTIME_PASSTHROUGH_CODES)',
@@ -344,7 +342,7 @@ const TAILSCALE_HINTED_TRANSPORT_ERRORS: TransportErrorPair[] = [
     producer: 'main/ipc/runtime-environment-transport-routing.ts:153',
     code: 'remote_runtime_unavailable',
     message: withRemoteRuntimeTailscaleHint(
-      'Could not connect to the remote Orca runtime.',
+      'Could not connect to the remote Axiom runtime.',
       'https://desk.example.com'
     )
   },
@@ -352,7 +350,7 @@ const TAILSCALE_HINTED_TRANSPORT_ERRORS: TransportErrorPair[] = [
     producer: 'main/ipc/runtime-environment-transport-routing.ts:200',
     code: 'remote_runtime_unavailable',
     message: withRemoteRuntimeTailscaleHint(
-      'Remote Orca runtime closed the connection.',
+      'Remote Axiom runtime closed the connection.',
       'https://desk.tail1234.ts.net'
     )
   },
@@ -375,18 +373,18 @@ const CODED_TRANSPORT_ERRORS: TransportErrorPair[] = [
 const CODELESS_TRANSPORT_ERRORS: (TransportErrorPair & { recoverable: boolean })[] = [
   {
     producer: 'web-runtime-client.ts:117 / :328',
-    message: 'Remote Orca runtime is not connected.',
+    message: 'Remote Axiom runtime is not connected.',
     recoverable: true
   },
   {
     producer: 'web-runtime-client.ts:359 / :360 / :591',
-    message: 'Remote Orca runtime connection closed.',
+    message: 'Remote Axiom runtime connection closed.',
     recoverable: true
   },
   {
     producer: 'web-runtime-client.ts:437 / :601',
     message: withRemoteRuntimeTailscaleHint(
-      'Could not connect to the remote Orca runtime.',
+      'Could not connect to the remote Axiom runtime.',
       'https://desk.example.com'
     ),
     recoverable: true
@@ -398,7 +396,7 @@ const CODELESS_TRANSPORT_ERRORS: (TransportErrorPair & { recoverable: boolean })
   },
   {
     producer: 'remote-runtime-terminal-multiplexer.ts:511',
-    message: 'Remote Orca runtime closed the connection.',
+    message: 'Remote Axiom runtime closed the connection.',
     recoverable: true
   },
   {
@@ -505,12 +503,11 @@ describe('transport error code/message classification agreement', () => {
     expect(unbacked).toEqual([])
   })
 
-  it('pins why the guard cannot see the remote_runtime_busy exception (STA-3479)', () => {
+  it('classifies remote_runtime_busy recoverable with or without its code (STA-3479)', () => {
     for (const pair of BUSY_TRANSPORT_ERRORS) {
-      // Fatal by code with a message that matches nothing: the two sides cannot disagree, so the
-      // differential above stays silent. Fixing the classification is STA-3479, not this file.
-      expect(isRecoverableRemoteRuntimeConnectionError(pair)).toBe(false)
-      expect(matchingRecoverableFragment(pair.message)).toBeNull()
+      expect(isRecoverableRemoteRuntimeConnectionError(pair)).toBe(true)
+      // Electron IPC keeps only the message, so the fragment fallback must agree with the code.
+      expect(isRecoverableRemoteRuntimeConnectionError({ message: pair.message })).toBe(true)
     }
   })
 })

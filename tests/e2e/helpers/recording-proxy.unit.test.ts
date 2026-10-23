@@ -1,7 +1,7 @@
 import { request } from 'node:http'
 import { connect } from 'node:net'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import * as childProcess from '../../../src/shared/child-process/run-process'
+import * as childProcess from '@orca/process-host'
 import { RecordingProxy, resolvePeerProcess } from './recording-proxy'
 
 it('returns empty tallies before any request', () => {

@@ -70,7 +70,7 @@ export class BridgeRequestOversizedError extends Error {
   readonly code = 'bridge_request_oversized'
 
   constructor() {
-    super('This action sends too much at once to reach Orca. Try it on fewer files.')
+    super('This action sends too much at once to reach Axiom. Try it on fewer files.')
     this.name = 'BridgeRequestOversizedError'
   }
 }
@@ -84,5 +84,26 @@ export class BridgeClientNotNativeVerbError extends Error {
   constructor(method: string) {
     super(`${method} is not a native verb`)
     this.name = 'BridgeClientNotNativeVerbError'
+  }
+}
+
+/** Extra wire fields for a shell that granted no `rpcEnvelope`. Refused rather than dropped, because
+ *  the call would otherwise run on the desktop without what its caller said it needs. */
+export class BridgeRpcEnvelopeUngrantedError extends Error {
+  readonly code = 'bridge_rpc_envelope_ungranted'
+
+  constructor() {
+    super('this app version cannot send extra request fields; update the Axiom app')
+    this.name = 'BridgeRpcEnvelopeUngrantedError'
+  }
+}
+
+/** Extra wire fields that are not a plain JSON object, which the shell's reader would drop. */
+export class BridgeRpcEnvelopeInvalidError extends Error {
+  readonly code = 'bridge_rpc_envelope_invalid'
+
+  constructor() {
+    super('extra request fields must be a plain JSON object')
+    this.name = 'BridgeRpcEnvelopeInvalidError'
   }
 }

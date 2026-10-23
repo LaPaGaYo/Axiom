@@ -1,7 +1,10 @@
 import { createConnection } from 'node:net'
 import { randomUUID } from 'node:crypto'
 import { findTransport, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
-import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
+import type {
+  ExpectedRuntimeSource,
+  RuntimeOrchestrationEnvelope
+} from '../../shared/runtime-rpc-envelope'
 import { isKeepaliveFrame, RuntimeRpcEnvelopeSchema } from './envelope-schema'
 import { RuntimeClientError, type RuntimeRpcResponse } from './types'
 import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../shared/timer-delay'
@@ -12,7 +15,9 @@ export async function sendRequest<TResult>(
   method: string,
   params: unknown,
   timeoutMs: number,
-  envelope?: RuntimeOrchestrationEnvelope
+  envelope?: RuntimeOrchestrationEnvelope,
+  // Why separate from the envelope: federation forwards envelopes to other runtimes.
+  expectedRuntimeSource?: ExpectedRuntimeSource
 ): Promise<RuntimeRpcResponse<TResult>> {
   if (!isSafeTimerDelayMs(timeoutMs)) {
     throw new RuntimeClientError(
@@ -77,7 +82,7 @@ export async function sendRequest<TResult>(
           runtimeAccessDeniedError(error, metadata.pid) ??
           new RuntimeClientError(
             'runtime_unavailable',
-            'Could not connect to the running Orca app. Restart Orca and try again.'
+            'Could not connect to the running Axiom app. Restart Axiom and try again.'
           )
       })
     })
@@ -90,7 +95,7 @@ export async function sendRequest<TResult>(
         ok: false,
         error: new RuntimeClientError(
           'runtime_unavailable',
-          'The Orca runtime closed the connection before responding. Restart Orca and try again.'
+          'The Axiom runtime closed the connection before responding. Restart Axiom and try again.'
         )
       })
     })
@@ -203,7 +208,8 @@ export async function sendRequest<TResult>(
           orchestrationContractVersion: envelope?.orchestrationContractVersion,
           orchestrationRequestId: envelope?.orchestrationRequestId,
           compatibilityInvocationId: envelope?.compatibilityInvocationId,
-          orchestrationCompatibilityEvidence: envelope?.orchestrationCompatibilityEvidence
+          orchestrationCompatibilityEvidence: envelope?.orchestrationCompatibilityEvidence,
+          expectedRuntimeSource
         })}\n`
       )
     })

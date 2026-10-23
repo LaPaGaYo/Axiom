@@ -5,14 +5,14 @@ description: >-
   on-demand, disposable runtime (cloud sandbox, VM, SSH host, or local container)
   Axiom creates fresh for each workspace. Use to stand up a new recipe end to end,
   fix an `environmentRecipes` entry in `orca.yaml`, scaffold provider lifecycle
-  scripts, or resolve an `orca vm recipe doctor` failure. Use `orca-cli` for
+  scripts, or resolve an `axiom vm recipe doctor` failure. Use `orca-cli` for
   ordinary worktree and workspace creation with no recipe involved.
 ---
 
 # Per-Workspace Environments
 
 `ORCA` is a placeholder for the executable you resolved in the stub; substitute it before running.
-Inside the lifecycle scripts the placeholder does not apply: `orca serve` written there runs on
+Inside the lifecycle scripts the placeholder does not apply: `axiom serve` written there runs on
 the remote machine's own binary.
 
 ## Autonomy envelope
@@ -31,7 +31,7 @@ created by a failed step.
 
 ## The branch that shapes everything
 
-In **Axiom-server** mode `create` runs `orca serve` in the environment and emits a `pairingCode`. In
+In **Axiom-server** mode `create` runs `axiom serve` in the environment and emits a `pairingCode`. In
 **SSH** mode `create` runs no server and emits a `connection.type:"ssh"` block Axiom dials into.
 Settle this first; it changes the `create` output and half the templates.
 
@@ -107,7 +107,7 @@ Provisioning and building often takes 20 to 30 minutes.
 - Clone with the git token via `GIT_ASKPASS` (section 5).
 - Trap errors and remove the half-built environment, so a crash does not leave a paid resource
   running.
-- **Never snapshot a machine on which the Axiom runtime has already run.** The first `orca serve`
+- **Never snapshot a machine on which the Axiom runtime has already run.** The first `axiom serve`
   creates the runtime's user-data directory, and everything in it is baked into the image and shared
   by every environment booted from it: the pairing keypair and device-token registry
   (`orca-devices.json`, `orca-e2ee-keypair.json`), `agent-session-authority.key`, and the build
@@ -153,7 +153,7 @@ login in their own terminal and tells you when it finished. Verify and re-snapsh
 > prefix, `! <cmd>`, including the required space after `!`. Other harnesses have no such
 > affordance; the portable rule is that the user runs it wherever they have a terminal.
 
-Section 3's rule still applies: if you ran `orca serve` on this machine to smoke-test it, delete
+Section 3's rule still applies: if you ran `axiom serve` on this machine to smoke-test it, delete
 the runtime's user-data directory before re-snapshotting, or every workspace from this image
 shares one pairing identity.
 
@@ -250,7 +250,7 @@ set -euo pipefail
 # 1. boot from snapshotId with a published port; capture the public URL → pairing address
 #    (an externally reachable wss:// URL); trap: remove the environment on error
 # 2. remote exec: ensure repo at desired commit; rebuild only if commit changed (cache marker)
-# 3. Axiom-server mode only: remote exec starting orca serve and reading the recipe JSON it writes
+# 3. Axiom-server mode only: remote exec starting axiom serve and reading the recipe JSON it writes
 # 4. print one recipe-result JSON object to stdout
 ```
 
@@ -304,30 +304,30 @@ The base result, which is what Axiom-server mode prints:
 `pairingCode` and `projectRoot` are required; `schemaVersion` (`1`) and `userData` are optional.
 Three named deltas change that shape:
 
-- **`orca serve --recipe-json` output** is this same object without `userData`. Merge your own
+- **`axiom serve --recipe-json` output** is this same object without `userData`. Merge your own
   `userData` into it rather than rebuilding it.
 - **SSH mode** replaces `pairingCode` and `projectRoot` with a `connection` block whose `type` is
-  `"ssh"`, and does not run `orca serve`. The exact target shape is in `references/ssh-host.md`.
+  `"ssh"`, and does not run `axiom serve`. The exact target shape is in `references/ssh-host.md`.
 - **Provisioned root** applies only to direct SSH and only when the user explicitly asked for it. Add
   `checkoutMode: provisioned-root` to the recipe, require `ORCA_RECIPE_RESULT_SCHEMA_VERSION=2`, and
   emit `"schemaVersion": 2` with `"checkoutMode": "provisioned-root"`. Fail if the requested schema
   is not `2` rather than falling back to the ordinary shape. Details are in `references/ssh-host.md`.
 
-### The `orca serve` invocation
+### The `axiom serve` invocation
 
 Inside the environment, in Axiom-server mode, run exactly this. These flags are verified; do not
 improvise them.
 
 ```bash
-orca serve \
+axiom serve \
   --port "$PORT" \
   --project-root "$ABS_REPO_PATH_ON_REMOTE" \
   --pairing-address "$EXTERNAL_WSS_URL" \
   --recipe-json
 ```
 
-In an environment built from source, run it as `pnpm exec orca-dev serve …` from the repo root;
-`orca-dev` is the in-repo entrypoint. Plain `orca serve …` is the same command when the built CLI is
+In an environment built from source, run it as `pnpm exec axiom-dev serve …` from the repo root;
+`axiom-dev` is the in-repo entrypoint. Plain `axiom serve …` is the same command when the built CLI is
 on that machine's PATH, and the flags and output are identical either way. There is no `--host` flag,
 and `--project-root` must be an absolute directory on the remote.
 
@@ -370,7 +370,7 @@ rejected too, keep these rules, use the command's `--help`, and do not guess fla
 | Action gate                                                                               | Bundled reference               |
 | ----------------------------------------------------------------------------------------- | ------------------------------- |
 | Writing the base-snapshot, auth, or create script for a snapshot-capable cloud provider   | `references/provider-vercel.md` |
-| The recipe connects over SSH instead of starting `orca serve`, including provisioned root | `references/ssh-host.md`        |
+| The recipe connects over SSH instead of starting `axiom serve`, including provisioned root | `references/ssh-host.md`        |
 | The environment is a local Docker container reached over SSH                              | `references/docker-ssh.md`      |
 | The user's desktop is Windows and you are scaffolding local-side scripts                  | `references/windows-scripts.md` |
 | A doctor, provision, clone, login, or snapshot step failed                                | `references/failure-modes.md`   |

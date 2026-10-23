@@ -75,7 +75,7 @@ it('awaits execution-host inspection for bound attempts in both read methods', a
   const inspect = vi.spyOn(workerObservation, 'inspectWorkerTerminal').mockResolvedValue({
     status: 'live',
     exact: true,
-    terminal: null
+    terminal: null, terminalHandle: null
   })
   const shown = await f.call('axiom.attempt.show', { attemptId: 'd1' })
   if (!shown.ok) {
@@ -91,7 +91,7 @@ it('awaits execution-host inspection for bound attempts in both read methods', a
     status: 'unverifiable',
     reason: 'missing_liveness_verdict',
     exact: true,
-    terminal: null
+    terminal: null, terminalHandle: null
   })
   const listed = await f.call('axiom.attempt.list', { missionId: mission.id })
   if (!listed.ok) {

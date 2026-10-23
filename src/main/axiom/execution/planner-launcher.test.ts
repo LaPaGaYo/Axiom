@@ -140,9 +140,7 @@ it('persists ordered reproducible planner sections as two artifacts without a co
     'Minimal example',
     'Planner proposal recipe'
   ])
-  expect(result.renderTemplate).toContain(
-    `--mission ${f.mission.id} --attempt {{attemptId}} --dispatch-capability {{dispatchCapability}}`
-  )
+  expect(result.renderTemplate).toContain(`--mission ${f.mission.id} --attempt {{attemptId}}`)
   expect(result.renderTemplate).toContain('"role"')
   expect(result.renderTemplate).toContain('outside the worktree')
   expect(f.store.listArtifacts({ missionId: f.mission.id })).toHaveLength(2)

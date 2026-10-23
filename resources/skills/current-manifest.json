@@ -1,12 +1,10 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "skills": [
     {
       "name": "computer-use",
       "sourcePath": "skills/computer-use",
-      "releaseRevision": 10,
       "packageDigest": "98dc582045f20661b59c703604aa8b384cfb5cf9532599b180fe0be73b3f8a49",
-      "gitTreeSha": "f86d679340b7d986fcacec5599671fdaebd02bde",
       "files": [
         {
           "path": "SKILL.md",
@@ -20,11 +18,25 @@
       ]
     },
     {
+      "name": "jira-tickets",
+      "sourcePath": "skills/jira-tickets",
+      "packageDigest": "01beea92519ba09924c54044a7498f17c5235bdc1bb294be11c7a0ee96a10df7",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 1892,
+          "executable": false,
+          "classification": "text",
+          "exactSha256": "8b84bc467c95bea52954993c617d0b0424e1e83b5498c9b2c643dd92d2087f88",
+          "textNormalizedSha256": "8b84bc467c95bea52954993c617d0b0424e1e83b5498c9b2c643dd92d2087f88",
+          "identitySha256": "8b84bc467c95bea52954993c617d0b0424e1e83b5498c9b2c643dd92d2087f88"
+        }
+      ]
+    },
+    {
       "name": "linear-tickets",
       "sourcePath": "skills/linear-tickets",
-      "releaseRevision": 12,
       "packageDigest": "41b74cf6507533291195981aad4605913e2d2b75b88a8aab117726453e7ed0f7",
-      "gitTreeSha": "8b4a0775ff3ada1621bfa188a6ea8b82cfbc5e00",
       "files": [
         {
           "path": "SKILL.md",
@@ -40,9 +52,7 @@
     {
       "name": "orca-cli",
       "sourcePath": "skills/orca-cli",
-      "releaseRevision": 38,
       "packageDigest": "ee44abf5694821049a97c3b26905ecc76bd4ba835d3bbf110ac69c8046772ea1",
-      "gitTreeSha": "8c761894036b9d6c4f3e2b8479556585c5430410",
       "files": [
         {
           "path": "SKILL.md",
@@ -58,9 +68,7 @@
     {
       "name": "orca-emulator",
       "sourcePath": "skills/orca-emulator",
-      "releaseRevision": 9,
       "packageDigest": "7864d7020623566a5caec731c4d0fb2da9effd22beee442c6925c09b89d0f63c",
-      "gitTreeSha": "f97b74c7089c4c575c91c86e6ddf1989368b3704",
       "files": [
         {
           "path": "SKILL.md",
@@ -76,9 +84,7 @@
     {
       "name": "orca-emulator-android",
       "sourcePath": "skills/orca-emulator-android",
-      "releaseRevision": 7,
       "packageDigest": "0d01d15bf095daf1fac3dabcd5031655554013d62614a43bda3928f79a9d4671",
-      "gitTreeSha": "ff4bc1fb2c50d1ff0e367ca4ce4c014a0943eb2a",
       "files": [
         {
           "path": "SKILL.md",
@@ -92,11 +98,25 @@
       ]
     },
     {
+      "name": "orca-jira",
+      "sourcePath": "skills/orca-jira",
+      "packageDigest": "37c1bed0b74ae54a4bbd3d6ff31579add4aacdda594c737788f484c52bec3fb7",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 1843,
+          "executable": false,
+          "classification": "text",
+          "exactSha256": "6ecf54161a242b7b392ea59e2cbf454dc4f77f6ae055af3ddc491ee5a8602202",
+          "textNormalizedSha256": "6ecf54161a242b7b392ea59e2cbf454dc4f77f6ae055af3ddc491ee5a8602202",
+          "identitySha256": "6ecf54161a242b7b392ea59e2cbf454dc4f77f6ae055af3ddc491ee5a8602202"
+        }
+      ]
+    },
+    {
       "name": "orca-linear",
       "sourcePath": "skills/orca-linear",
-      "releaseRevision": 10,
       "packageDigest": "389e50543fcbfca00031af4117c08d52d7b922c76f2305d4ab502000dca01d3f",
-      "gitTreeSha": "a44b505127c284261f20fd09c3a522896536f747",
       "files": [
         {
           "path": "SKILL.md",
@@ -112,9 +132,7 @@
     {
       "name": "orca-per-workspace-env",
       "sourcePath": "skills/orca-per-workspace-env",
-      "releaseRevision": 7,
       "packageDigest": "5cf77608e8896829c3bd659b7dcb1b9875283a2543f36557a9ab3d9769b61f68",
-      "gitTreeSha": "0da622082e580ae7434a9306321cea0bdf2a93b3",
       "files": [
         {
           "path": "SKILL.md",
@@ -130,9 +148,7 @@
     {
       "name": "orchestration",
       "sourcePath": "skills/orchestration",
-      "releaseRevision": 30,
       "packageDigest": "09daf1ffb172355b5addda095879b51a192015d930d5e6098a60e252dfcfa4e7",
-      "gitTreeSha": "938c6e0857401df5c0f53c408ba23fa720da5d38",
       "files": [
         {
           "path": "SKILL.md",

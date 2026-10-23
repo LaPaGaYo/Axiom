@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   TerminalStreamOpcode,
   encodeTerminalStreamFrame
@@ -7,6 +7,19 @@ import {
   createRemoteRuntimeTransportMocks,
   type MultiplexSubscriptionCallbacks
 } from './remote-runtime-pty-transport-test-harness'
+
+// These transport fixtures never read abandoned-launch ownership from the app store.
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
 let resolvedPaneHandle = 'terminal-1'
@@ -64,7 +77,10 @@ describe('createRemoteRuntimePtyTransport', () => {
         ackOutputSourceRanges: 1,
         desktopViewportClaims: 1,
         outputPause: 1,
-        writeUnavailable: 1
+        outputPauseDropNotice: 1,
+        writeUnavailable: 1,
+        endpointLossNotice: 1,
+        inputAck: 1
       })
     )
     expect(runtimeSubscribe).toHaveBeenCalledWith(
@@ -203,7 +219,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         async (_args: unknown, callbacks: NonNullable<typeof subscriptionCallbacks>) => {
           attempt += 1
           if (attempt === 1) {
-            throw Object.assign(new Error('Could not connect to the remote Orca runtime.'), {
+            throw Object.assign(new Error('Could not connect to the remote Axiom runtime.'), {
               code: 'remote_runtime_unavailable'
             })
           }
@@ -302,7 +318,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         queueMicrotask(() =>
           callbacks.onError?.({
             code: 'unauthorized',
-            message: 'Remote Orca runtime rejected the pairing token.'
+            message: 'Remote Axiom runtime rejected the pairing token.'
           })
         )
         return { unsubscribe, sendBinary: subscriptionSendBinary }

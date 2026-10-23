@@ -29,7 +29,7 @@ function setup() {
   }
   return { call, run }
 }
-it('routes ask with repeated options, resume, capability, retry id and transport grace', async () => {
+it('routes ask with repeated options, resume, caller identity, retry id and transport grace', async () => {
   const f = setup()
   vi.stubEnv('ORCA_TERMINAL_HANDLE', 'term_worker')
   await f.run([
@@ -37,8 +37,6 @@ it('routes ask with repeated options, resume, capability, retry id and transport
     'ask',
     '--attempt',
     'a',
-    '--dispatch-capability',
-    'dcap_test',
     '--question',
     'Format?',
     '--option',
@@ -62,7 +60,6 @@ it('routes ask with repeated options, resume, capability, retry id and transport
     }),
     {
       timeoutMs: 125000,
-      orchestrationCapability: 'dcap_test',
       orchestrationRequestId: '55cbf3b9-90ab-4ac0-a4e3-660c26727a1f'
     }
   )
@@ -153,8 +150,6 @@ it('carries repeated REQUEST_SUBTASK dependencies through the Worker CLI', async
     'request-subtask',
     '--attempt',
     'a',
-    '--dispatch-capability',
-    'dcap_test',
     '--summary',
     'Split',
     '--title',
@@ -174,7 +169,6 @@ it('carries repeated REQUEST_SUBTASK dependencies through the Worker CLI', async
   ])
   expect(f.call).toHaveBeenCalledWith(
     'axiom.attempt.request-subtask',
-    expect.objectContaining({ subtask: expect.objectContaining({ dependsOn: ['t1', 't2'] }) }),
-    expect.anything()
+    expect.objectContaining({ subtask: expect.objectContaining({ dependsOn: ['t1', 't2'] }) })
   )
 })

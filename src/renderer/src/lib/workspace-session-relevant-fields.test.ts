@@ -36,9 +36,9 @@ describe('SESSION_RELEVANT_FIELDS', () => {
     lastKnownRelayPtyIdByTabId: true,
     lastVisitedAtByWorktreeId: true,
     defaultTerminalTabsAppliedByWorktreeId: true,
-    closedTerminalTabTombstonesByTabId: true,
     sleepingAgentSessionsByPaneKey: true,
     clientHostedBrowserCloseIntentsByEnvironment: true,
+    pairedTerminalTabCloseIntentsByEnvironment: true,
     pendingReconnectPtyIdByTabId: true,
     deferredSshSessionIdsByTabId: true
   }

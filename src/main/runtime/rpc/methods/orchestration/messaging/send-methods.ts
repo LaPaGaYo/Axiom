@@ -2,35 +2,48 @@ import { assertNotMissionManaged, assertWorkerMessageAllowed } from '../../../..
 import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { isGroupAddress } from '../../../../orchestration/groups'
+import {
+  dispatchReportMailbox,
+  isDispatchReportType
+} from '../../../../orchestration/dispatch-report-mailbox'
 import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration-rpc-contract'
-import { SendParams, isWorkerReportOutcome, parseRemoteWorkerPayload } from '../schemas'
+import {
+  SendParams,
+  isDispatchMutationMessageType,
+  isWorkerReportOutcome,
+  parseRemoteWorkerPayload
+} from '../schemas'
 import { resolveMessageRun } from '../routing'
 import {
   assertDispatchMailboxDeliverable,
   resolveBareOrchestrationRecipient,
+  resolveRunBoundDispatchRecipient,
   type SendRecipientWarning
 } from './recipient-routing'
 import {
   readMutationReplayNudge,
   readWorkerDoneReplayNudge,
   stripMutationReplayNudge
-} from '../../../orchestration-mutation-executor'
+} from '../../../orchestration-mutation-receipt'
 import { replayMutationNudge } from './mutation-replay-nudge'
+import { handBackReplayTargets } from '../../../../orchestration/db/messages/helper-mailbox-hand-back'
 import { sendRemoteMessage } from './send-remote'
+import { mayNameSession } from './session-recipient'
 import { sendPointToPointMessage } from './send-point-to-point'
 import { sendGroupMessage } from './send-group'
 import { sendFederatedControlMail } from './send-control-mail'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
+import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 
 export const ORCHESTRATION_SEND_METHODS = [
   defineMethod({
     name: 'orchestration.send',
+    permission: 'workspace',
     params: SendParams,
     handler: async (
       params,
       {
         runtime,
-        orchestrationCapability,
         legacyCoordinatorRunId,
         revalidateLegacyCoordinator,
         orchestrationCompatibilityCallerAuthority,
@@ -38,6 +51,7 @@ export const ORCHESTRATION_SEND_METHODS = [
         markWorkerDoneMutationEffectFree,
         replayedMutationReceipt,
         orchestrationCaller,
+        orchestrationCompatibilityEvidence,
         signal
       }
     ) => {
@@ -54,6 +68,12 @@ export const ORCHESTRATION_SEND_METHODS = [
           : undefined)
       if (replayNudge) {
         replayMutationNudge(runtime, replayNudge)
+        const settled =
+          params.type === 'worker_done' ? settledDispatchId(replayedMutationReceipt) : undefined
+        // Why: derived, since the executor's receipt rewrites drop stored hand-back targets.
+        for (const target of settled ? handBackReplayTargets(db, settled) : []) {
+          runtime.notifyMessageArrived(target.to, target.type)
+        }
         return stripMutationReplayNudge(replayedMutationReceipt)
       }
       const from = params.from ?? 'unknown'
@@ -68,6 +88,14 @@ export const ORCHESTRATION_SEND_METHODS = [
         paneKey: attestedCaller?.paneKey ?? runtime.getTerminalPaneKey(from)
       })
       const senderPaneKey = sender.paneKey ?? undefined
+      // Why: a session caller was already bound to its own identity at the dispatch entry.
+      if (isDispatchMutationMessageType(params.type) && !orchestrationCaller) {
+        assertLifecycleCallerIsNotAnotherParty(runtime, {
+          from,
+          fromPaneKey: senderPaneKey,
+          evidence: orchestrationCompatibilityEvidence
+        })
+      }
       const remoteAttachment = senderPaneKey
         ? db.findActiveRemoteAttachmentForPane(senderPaneKey)
         : undefined
@@ -83,7 +111,6 @@ export const ORCHESTRATION_SEND_METHODS = [
             attestedCaller?.processIncarnation ??
             runtime.getTerminalProcessIncarnation(from) ??
             undefined,
-          orchestrationCapability,
           signal
         })
       }
@@ -119,7 +146,11 @@ export const ORCHESTRATION_SEND_METHODS = [
         (!to ||
           ((params.type === 'worker_done' || params.type === 'heartbeat') && routing.dispatchId))
       ) {
-        to = `run:${routing.run.id}`
+        const reporting =
+          routing.dispatchId && isDispatchReportType(params.type)
+            ? db.getDispatchContextById(routing.dispatchId)
+            : undefined
+        to = reporting ? dispatchReportMailbox(db, reporting) : `run:${routing.run.id}`
       }
       if (!to) {
         throw new OrchestrationError(
@@ -132,6 +163,10 @@ export const ORCHESTRATION_SEND_METHODS = [
       const sendWarnings: SendRecipientWarning[] = []
       let messageRunId = routing.run?.id
       if (!isGroupAddress(to) && !to.startsWith('run:') && !to.startsWith('dispatch:')) {
+        if (mayNameSession(to)) {
+          // Recipient routing reads the session record store, which the host opens lazily.
+          await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
+        }
         const recipient = resolveBareOrchestrationRecipient({
           runtime,
           db,
@@ -164,7 +199,18 @@ export const ORCHESTRATION_SEND_METHODS = [
             : undefined
         // Federated targets perform their own liveness check before relaying.
         if (addressedDispatchId && !federatedTarget) {
-          assertDispatchMailboxDeliverable(db, addressedDispatchId)
+          assertDispatchMailboxDeliverable(runtime, db, addressedDispatchId)
+          const runBound = resolveRunBoundDispatchRecipient(
+            runtime,
+            db,
+            addressedDispatchId,
+            params.run
+          )
+          if (runBound) {
+            to = runBound.to
+            messageRunId = runBound.runId
+            sendWarnings.push(runBound.warning)
+          }
         }
         const federatedControl = sendFederatedControlMail({
           params,
@@ -190,7 +236,6 @@ export const ORCHESTRATION_SEND_METHODS = [
           messageRunId,
           senderPaneKey,
           legacyCoordinatorRunId,
-          orchestrationCapability,
           resolveProcessIncarnation: () =>
             attestedCaller?.processIncarnation ??
             runtime.getTerminalProcessIncarnation(from) ??
@@ -220,3 +265,16 @@ export const ORCHESTRATION_SEND_METHODS = [
     }
   })
 ]
+
+function settledDispatchId(receipt: unknown): string | undefined {
+  if (!receipt || typeof receipt !== 'object' || !('lifecycle' in receipt)) {
+    return undefined
+  }
+  const { lifecycle } = receipt
+  return lifecycle &&
+    typeof lifecycle === 'object' &&
+    'dispatchId' in lifecycle &&
+    typeof lifecycle.dispatchId === 'string'
+    ? lifecycle.dispatchId
+    : undefined
+}

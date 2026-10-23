@@ -6,7 +6,7 @@ import Database from '../../../../sqlite/sync-database'
 import { resolveOrchestrationMigrationStartVersion } from '../../orchestration-schema-version-skew'
 import { SCHEMA_VERSION } from '../contract-constants'
 import { OrchestrationDb } from '../orchestration-db'
-import { migrateV43 } from './migrate-v43'
+import { migrateV44 } from './migrate-v44'
 
 // Independent contract from orca-mapping §6 and M1-03; do not derive this from the DDL.
 const TABLE_COLUMNS: Record<string, string> = {
@@ -165,7 +165,7 @@ function seedMission(db: Database, id: string): void {
   }
 }
 
-describe('Axiom v43 side tables', () => {
+describe('Axiom v44 side tables', () => {
   const roots: string[] = []
   const databases = new Set<OrchestrationDb>()
 
@@ -181,7 +181,7 @@ describe('Axiom v43 side tables', () => {
   }
 
   function filePath(): string {
-    const root = mkdtempSync(join(tmpdir(), 'axiom-v43-'))
+    const root = mkdtempSync(join(tmpdir(), 'axiom-v44-'))
     roots.push(root)
     return join(root, 'orchestration.db')
   }
@@ -198,8 +198,8 @@ describe('Axiom v43 side tables', () => {
 
   it('creates all 17 tables, specified columns, indexes and three triggers on a fresh database', () => {
     const { db } = open()
-    expect(SCHEMA_VERSION).toBe(45)
-    expect(db.pragma('user_version', { simple: true })).toBe(45)
+    expect(SCHEMA_VERSION).toBe(46)
+    expect(db.pragma('user_version', { simple: true })).toBe(46)
     expect(Object.keys(TABLE_COLUMNS)).toHaveLength(17)
     for (const [table, columns] of Object.entries(TABLE_COLUMNS)) {
       expect(
@@ -250,24 +250,24 @@ describe('Axiom v43 side tables', () => {
       previous.close()
     }
     const migrated = open(path)
-    expect(migrated.db.pragma('user_version', { simple: true })).toBe(45)
+    expect(migrated.db.pragma('user_version', { simple: true })).toBe(46)
     expect(axiomSchema(migrated.db)).toBe(axiomSchema(open().db))
     expect(migrated.db.prepare('SELECT * FROM runs WHERE id = ?').get('run-kept')).toEqual(run)
     expect(migrated.db.prepare('SELECT * FROM tasks WHERE id = ?').get('kept')).toEqual(task)
   })
 
-  it('upgrades v43 columns without changing rows and reopens idempotently', () => {
+  it('upgrades v44 columns without changing rows and reopens idempotently', () => {
     const path = filePath()
     const first = open(path)
     seedMission(first.db, 'kept')
     first.db.exec('ALTER TABLE agent_specs DROP COLUMN spec')
     first.db.exec('ALTER TABLE mission_policies DROP COLUMN routing')
-    first.db.pragma('user_version = 43')
+    first.db.pragma('user_version = 44')
     const spec = first.db.prepare('SELECT * FROM agent_specs').get()
     const policy = first.db.prepare('SELECT * FROM mission_policies').get()
     close(first)
     const upgraded = open(path)
-    expect(upgraded.db.pragma('user_version', { simple: true })).toBe(45)
+    expect(upgraded.db.pragma('user_version', { simple: true })).toBe(46)
     expect(upgraded.db.prepare('SELECT * FROM agent_specs').get()).toEqual({ ...spec, spec: '{}' })
     expect(upgraded.db.prepare('SELECT * FROM mission_policies').get()).toEqual({
       ...policy,
@@ -284,7 +284,7 @@ describe('Axiom v43 side tables', () => {
     })
   })
 
-  it('upgrades v44 verification rows and reopens idempotently with transparent downgrade probes', () => {
+  it('upgrades v45 verification rows and reopens idempotently with transparent downgrade probes', () => {
     const path = filePath()
     const first = open(path)
     seedMission(first.db, 'verification')
@@ -298,9 +298,9 @@ describe('Axiom v43 side tables', () => {
     ]) {
       first.db.exec(`ALTER TABLE verification_runs DROP COLUMN ${column}`)
     }
-    first.db.pragma('user_version = 44')
+    first.db.pragma('user_version = 45')
     const before = first.db.prepare('SELECT * FROM verification_runs').get()
-    expect(resolveOrchestrationMigrationStartVersion(first.db, 44, 45)).toBe(44)
+    expect(resolveOrchestrationMigrationStartVersion(first.db, 45, 46)).toBe(45)
     close(first)
     const upgraded = open(path)
     const expected = {
@@ -311,7 +311,7 @@ describe('Axiom v43 side tables', () => {
       started_at: null,
       finished_at: null
     }
-    expect(upgraded.db.pragma('user_version', { simple: true })).toBe(45)
+    expect(upgraded.db.pragma('user_version', { simple: true })).toBe(46)
     expect(upgraded.db.prepare('SELECT * FROM verification_runs').get()).toEqual(expected)
     expect(
       upgraded.db
@@ -324,7 +324,7 @@ describe('Axiom v43 side tables', () => {
         detail: expect.stringContaining('USING INDEX idx_verification_runs_status')
       })
     ])
-    expect(resolveOrchestrationMigrationStartVersion(upgraded.db, 45, 44)).toBe(45)
+    expect(resolveOrchestrationMigrationStartVersion(upgraded.db, 46, 45)).toBe(46)
     const schema = axiomSchema(upgraded.db)
     close(upgraded)
     const reopened = open(path)
@@ -344,7 +344,66 @@ describe('Axiom v43 side tables', () => {
     expect(axiomSchema(open(path).db)).toBe(before)
   })
 
-  it('repairs indexes and triggers in v43 only when the prior version requires migration', () => {
+  it.each([43, 45])('upgrades old Axiom numbering %s and respells all session addresses', (version) => {
+    const path = filePath()
+    const first = open(path)
+    seedMission(first.db, 'legacy')
+    first.db.exec(`
+      INSERT INTO messages (id, run_id, from_handle, to_handle, subject, body)
+      VALUES ('legacy-mail', 'run-legacy', 'session:sender', 'session:recipient', 'kept', 'session:body');
+      INSERT INTO coordinator_runs (id, spec, coordinator_handle)
+      VALUES ('legacy-coordinator', '{}', 'session:coordinator');
+      INSERT INTO run_coordinator_handles (run_id, terminal_handle)
+      VALUES ('run-legacy', 'session:coordinator');
+      INSERT INTO structured_pointer_operations
+        (mailbox_handle, session_id, operation_id, batch_fingerprint, minted_at_ms)
+      VALUES ('session:recipient', 'recipient', 'operation', 'fingerprint', 1);
+    `)
+    if (version === 43) {
+      first.db.exec('ALTER TABLE agent_specs DROP COLUMN spec')
+      first.db.exec('ALTER TABLE mission_policies DROP COLUMN routing')
+      first.db.exec('DROP INDEX idx_verification_runs_status')
+      for (const column of ['runtime_epoch', 'claim_count', 'worktree_id', 'started_at', 'finished_at']) {
+        first.db.exec(`ALTER TABLE verification_runs DROP COLUMN ${column}`)
+      }
+    }
+    first.db.pragma(`user_version = ${version}`)
+    close(first)
+
+    const upgraded = open(path)
+    expect(upgraded.db.pragma('user_version', { simple: true })).toBe(46)
+    expect(upgraded.db.prepare('SELECT from_handle, to_handle, body FROM messages WHERE id = ?').get('legacy-mail')).toEqual({
+      from_handle: 'orca_session_id:sender',
+      to_handle: 'orca_session_id:recipient',
+      body: 'session:body'
+    })
+    expect(upgraded.db.prepare('SELECT coordinator_handle FROM coordinator_runs WHERE id = ?').get('legacy-coordinator')).toEqual({
+      coordinator_handle: 'orca_session_id:coordinator'
+    })
+    expect(upgraded.db.prepare('SELECT terminal_handle FROM run_coordinator_handles WHERE run_id = ?').all('run-legacy')).toContainEqual({
+      terminal_handle: 'orca_session_id:coordinator'
+    })
+    expect(upgraded.db.prepare('SELECT mailbox_handle FROM structured_pointer_operations').all()).toEqual([
+      { mailbox_handle: 'orca_session_id:recipient' }
+    ])
+    for (const [table, column] of [
+      ['messages', 'from_handle'], ['messages', 'to_handle'],
+      ['coordinator_runs', 'coordinator_handle'], ['run_coordinator_handles', 'terminal_handle'],
+      ['structured_pointer_operations', 'mailbox_handle']
+    ]) {
+      expect(upgraded.db.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE ${column} LIKE 'session:%'`).get()).toEqual({ count: 0 })
+    }
+    expect(upgraded.db.prepare('SELECT runtime_epoch, claim_count, worktree_id, started_at, finished_at FROM verification_runs').get()).toEqual({
+      runtime_epoch: null, claim_count: 0, worktree_id: null, started_at: null, finished_at: null
+    })
+    expect(upgraded.db.prepare('SELECT spec FROM agent_specs').get()).toEqual({ spec: '{}' })
+    expect(upgraded.db.prepare('SELECT routing FROM mission_policies').get()).toEqual({ routing: '{}' })
+    const schema = axiomSchema(upgraded.db)
+    close(upgraded)
+    expect(axiomSchema(open(path).db)).toBe(schema)
+  })
+
+  it('repairs indexes and triggers in v44 only when the prior version requires migration', () => {
     const orchestration = open()
     const { db } = orchestration
     const before = axiomSchema(db)
@@ -356,11 +415,11 @@ describe('Axiom v43 side tables', () => {
     }
     const missing = axiomSchema(db)
     expect(missing).not.toBe(before)
-    migrateV43.call(orchestration, 43)
+    migrateV44.call(orchestration, 44)
     expect(axiomSchema(db)).toBe(missing)
-    migrateV43.call(orchestration, 44)
+    migrateV44.call(orchestration, 45)
     expect(axiomSchema(db)).toBe(missing)
-    migrateV43.call(orchestration, 42)
+    migrateV44.call(orchestration, 43)
     expect(axiomSchema(db)).toBe(before)
   })
 
@@ -369,17 +428,17 @@ describe('Axiom v43 side tables', () => {
     const first = open(path)
     seedMission(first.db, 'future')
     const before = axiomSchema(first.db)
-    first.db.pragma('user_version = 46')
+    first.db.pragma('user_version = 47')
     close(first)
     const { db } = open(path)
-    expect(db.pragma('user_version', { simple: true })).toBe(46)
-    expect(resolveOrchestrationMigrationStartVersion(db, 46, SCHEMA_VERSION)).toBe(46)
-    expect(resolveOrchestrationMigrationStartVersion(db, 44, 43)).toBe(44)
+    expect(db.pragma('user_version', { simple: true })).toBe(47)
+    expect(resolveOrchestrationMigrationStartVersion(db, 47, SCHEMA_VERSION)).toBe(47)
+    expect(resolveOrchestrationMigrationStartVersion(db, 45, 44)).toBe(45)
     expect(axiomSchema(db)).toBe(before)
     expect(db.prepare('SELECT id FROM missions').all()).toEqual([{ id: 'future' }])
     // The completeness probe must also ignore absent Axiom tables at a current-version stamp.
     dropAxiomSchema(db)
-    expect(resolveOrchestrationMigrationStartVersion(db, 43, SCHEMA_VERSION)).toBe(43)
+    expect(resolveOrchestrationMigrationStartVersion(db, 44, SCHEMA_VERSION)).toBe(44)
   })
 
   it('delete triggers remove both task edge directions, retain audit history, and clean every Mission table on run deletion', () => {

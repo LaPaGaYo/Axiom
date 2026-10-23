@@ -1,14 +1,22 @@
 name: Terminal IME E2E
 
 on:
-  # Why no schedule/push: Axiom's gates run locally and main is pushed directly (D41, option A); hosted runs are manual only until DEF-1 is decided.
+  # D41: automatic schedule/push triggers are disabled for the fork.
   # Why workflow_call and not pull_request: pr.yml owns the path filter that decides when an IME
   # change is worth a real ibus session. A pull_request trigger here would run it on every PR.
   workflow_call:
   workflow_dispatch:
-
+    inputs:
+      diagnose_wayland_input:
+        description: Capture passive Wayland input diagnostics while running both native lanes
+        required: false
+        type: boolean
+        default: false
 permissions:
   contents: read
+
+env:
+  ORCA_BACKGROUND_LAUNCH: '1'
 
 jobs:
   linux-x11:
@@ -91,12 +99,13 @@ jobs:
         env:
           VITE_EXPOSE_STORE: 'true'
         run: |
-          pnpm run build:relay
+          pnpm run build:wsl-guest
           pnpm exec electron-vite build --mode e2e
           pnpm run build:web-from-renderer
       - name: Run native Wayland Hangul terminating digit
         env:
           SKIP_BUILD: '1'
+          ORCA_E2E_WAYLAND_INPUT_DIAGNOSTICS: ${{ inputs.diagnose_wayland_input && '1' || '' }}
         run: node config/scripts/run-terminal-ibus-hangul-e2e.mjs --nested-wayland
       - name: Upload Wayland terminal IME evidence
         if: always()

@@ -33,11 +33,10 @@ it.each(['task', 'attempt'] as const)(
       snapshotCommitted: false
     })
     expect(
-      await f.call(
-        'axiom.attempt.submit',
-        { ...f.params(), report: { ...report, artifacts: [saved.id] } },
-        { orchestrationCapability: f.t01.capability }
-      )
+      await f.call('axiom.attempt.submit', {
+        ...f.params(),
+        report: { ...report, artifacts: [saved.id] }
+      })
     ).toMatchObject({ ok: true })
     expect(f.db.getAttemptObservationFacts(f.t01.attemptId)).toContainEqual(
       expect.objectContaining({
@@ -57,11 +56,10 @@ it.each(['mission', 'relation'] as const)(
     )
     const before = f.snapshot()
     expect(
-      await f.call(
-        'axiom.attempt.submit',
-        { ...f.params(), report: { ...report, artifacts: ['art-report'] } },
-        { orchestrationCapability: f.t01.capability }
-      )
+      await f.call('axiom.attempt.submit', {
+        ...f.params(),
+        report: { ...report, artifacts: ['art-report'] }
+      })
     ).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
     expect(f.snapshot()).toEqual(before)
     expect(f.snapshotGit).not.toHaveBeenCalled()
@@ -153,11 +151,10 @@ it('recovers a missing post-commit message through authenticated duplicate submi
     throw new Error('message write failed')
   })
   expect(
-    await f.call(
-      'axiom.attempt.submit',
-      { ...f.params(), report: { ...report, summary: 'x'.repeat(4000) } },
-      { orchestrationCapability: f.t01.capability }
-    )
+    await f.call('axiom.attempt.submit', {
+      ...f.params(),
+      report: { ...report, summary: 'x'.repeat(4000) }
+    })
   ).toMatchObject({ ok: false })
   const stored = f.store.getSubmissionByDispatch(f.t01.attemptId)
   expect(stored?.report.summary).toBe('x'.repeat(4000))

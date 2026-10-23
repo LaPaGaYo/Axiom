@@ -29,7 +29,7 @@ export function workerProtocol(missionId: string, taskId: string): string {
       '```sh',
       ...verbs.map(
         (verb) =>
-          `axiom attempt ${verb} --attempt {{attemptId}} --dispatch-capability {{dispatchCapability}}${verb === 'submit' ? ' --report <path.json>' : ''}`
+          `axiom attempt ${verb} --attempt {{attemptId}}${verb === 'submit' ? ' --report <path.json>' : ''}`
       ),
       `axiom mission artifact put --mission ${missionId} --kind <kind> --file <path> --related ${taskId}`,
       '```'

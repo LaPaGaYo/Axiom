@@ -5,6 +5,7 @@ import type { BrowserPage as BrowserPageState } from '../../../../../shared/brow
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
 import { convertBrowserPageToWorkspaceDoc } from '@/lib/file-preview'
 import { openWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-open'
+import { resolveBrowserSourceUnifiedTab } from '@/lib/browser-workspace-source-resolution'
 import { useBrowserPageChromeFocus } from '../assemble-chrome/use-browser-page-chrome-focus'
 import { useBrowserAddressBarEditSession } from '../assemble-chrome/use-browser-address-bar-edit-session'
 import { useElementGuestFocus } from '../assemble-chrome/browser-page-guest-focus'
@@ -322,11 +323,11 @@ export function RemoteBrowserPagePane({
   const markup = useMarkupMode({
     getCaptureContext: useCallback((): MarkupCaptureContext | null => {
       const element = imageRef.current
-      const container = remoteViewportRef.current
-      if (!element || !container) {
+      if (!element || !remoteViewportRef.current) {
         return null
       }
-      const rect = container.getBoundingClientRect()
+      // Why the image's box: the frame is letterboxed, and the pane's shape would distort it.
+      const rect = element.getBoundingClientRect()
       if (rect.width <= 0 || rect.height <= 0) {
         return null
       }
@@ -354,10 +355,17 @@ export function RemoteBrowserPagePane({
           onOpenLinkInOrcaBrowser={() => {
             const linkUrl = contextMenu.linkUrl!
             setContextMenu(null)
+            const sourceUnifiedTab = resolveBrowserSourceUnifiedTab(
+              useAppStore.getState(),
+              browserTab.id,
+              worktreeId
+            )
             void openWorkspaceBrowserTab({
               workspaceId: worktreeId,
               url: linkUrl,
+              ...(sourceUnifiedTab ? { afterTabId: sourceUnifiedTab.id } : {}),
               focusOnCreate: false,
+              selectWorktree: false,
               intent: { kind: 'url' },
               expectedRuntimeEnvironmentId: runtimeEnvironmentId,
               placementPreference: 'server'
@@ -387,6 +395,7 @@ export function RemoteBrowserPagePane({
         addressBarEditSession={addressBarEditSession}
         busy={busy}
         loading={browserTab.loading}
+        loadFailed={browserTab.loadError !== null}
         markup={markup}
         frameUrl={frameUrl}
         isActive={isActive}
@@ -413,6 +422,7 @@ export function RemoteBrowserPagePane({
         runtimeTarget={runtimeTarget}
         onReload={() => void runRemoteNavigation('browser.reload')}
         onGoto={(url) => void runRemoteNavigation('browser.goto', url)}
+        onNavigateToUrl={navigateToUrl}
         onReconnect={reconnectRemoteStream}
         handleRemotePointerDown={handleRemotePointerDown}
         handleRemotePointerUp={handleRemotePointerUp}

@@ -20,7 +20,7 @@ function cli(args) {
   try { response = JSON.parse(result.stdout) } catch { response = { ok: false } }
   return { status: result.status, response }
 }
-async function submitFixture(attemptId, capability, missionId, taskId) {
+async function submitFixture(attemptId, missionId, taskId) {
   const deadline = Date.now() + 60000
   // Preamble acknowledgment precedes the launcher's binding CAS. Wait for that public identity.
   while (!cli(['attempt', 'show', '--attempt', attemptId]).response.ok) {
@@ -62,7 +62,7 @@ async function submitFixture(attemptId, capability, missionId, taskId) {
   try {
     const file = path.join(temp, 'report.json')
     writeFileSync(file, JSON.stringify(report))
-    const submission = cli(['attempt', 'submit', '--attempt', attemptId, '--dispatch-capability', capability, '--report', file])
+    const submission = cli(['attempt', 'submit', '--attempt', attemptId, '--report', file])
     appendFileSync(process.env.AXIOM_E2E_LEDGER, JSON.stringify({ kind: 'submission', attemptId, ...submission }) + '\\n')
     if (!submission.response.ok) throw new Error('Attempt submit failed')
   } finally {
@@ -86,13 +86,13 @@ function fixtureProposal(tasks, goalRevisionId) {
     risks: []
   }
 }
-function submitPlannerFixture(attemptId, capability, missionId, goalRevisionId) {
+function submitPlannerFixture(attemptId, missionId, goalRevisionId) {
   const decomposition = JSON.parse(readFileSync(path.join(process.cwd(), 'scenarios', 'goal', 'decomposition.json'), 'utf8'))
   const temp = mkdtempSync(path.join(os.tmpdir(), 'axiom-plan-proposal-'))
   try {
     const file = path.join(temp, 'proposal.json')
     writeFileSync(file, JSON.stringify(fixtureProposal(decomposition.tasks, goalRevisionId)))
-    const result = cli(['plan', 'propose', '--mission', missionId, '--attempt', attemptId, '--dispatch-capability', capability, '--file', file])
+    const result = cli(['plan', 'propose', '--mission', missionId, '--attempt', attemptId, '--file', file])
     appendFileSync(process.env.AXIOM_E2E_LEDGER, JSON.stringify({ kind: 'proposal', attemptId, ...result }) + '\\n')
   } finally {
     rmSync(temp, { recursive: true, force: true })
@@ -125,15 +125,14 @@ process.stdin.on('data', chunk => {
     const end = delivered.indexOf('\\x1b[201~')
     const preamble = begin >= 0 && end >= 0 ? delivered.slice(begin + 6, end) : delivered
     const attemptId = preamble.match(/--attempt (\\S+)/)?.[1]
-    const capability = preamble.match(/--dispatch-capability (dcap_[A-Za-z0-9_-]+)/)?.[1]
     const artifactRecipe = preamble.match(/axiom mission artifact put --mission (\\S+) --kind <kind> --file <path> --related (\\S+)/)
-    if (!attemptId || !capability || mode !== 'bracketed') {
+    if (!attemptId || mode !== 'bracketed') {
       process.stdout.write('PASTE_PROTOCOL_ERROR\\n')
       return
     }
     recorded = true
     appendFileSync(process.env.AXIOM_E2E_LEDGER, JSON.stringify({
-      cwd: process.cwd(), attemptId, capability,
+      cwd: process.cwd(), attemptId, terminalHandle: process.env.ORCA_TERMINAL_HANDLE, paneKey: process.env.ORCA_PANE_KEY,
       preambleSha256: createHash('sha256').update(preamble).digest('hex'),
       preambleBytes: Buffer.byteLength(preamble, 'utf8')
     }) + '\\n')
@@ -145,13 +144,13 @@ process.stdin.on('data', chunk => {
       if (plannerRecipe) {
         const goalRevisionId = preamble.match(/"goalRevisionId":\\s*"([^"]+)"/)?.[1]
         if (!goalRevisionId) throw new Error('Missing planner GoalRevision')
-        spawn(process.execPath, [__filename, '--planner-submit', attemptId, capability, plannerRecipe[1], goalRevisionId], {
+        spawn(process.execPath, [__filename, '--planner-submit', attemptId, plannerRecipe[1], goalRevisionId], {
           cwd: process.cwd(), env: process.env, detached: true, stdio: 'ignore'
         }).unref()
         return
       }
       if (!artifactRecipe) throw new Error('Missing Artifact protocol recipe')
-      void submitFixture(attemptId, capability, artifactRecipe[1], artifactRecipe[2]).catch(error => {
+      void submitFixture(attemptId, artifactRecipe[1], artifactRecipe[2]).catch(error => {
         appendFileSync(process.env.AXIOM_E2E_LEDGER, JSON.stringify({ kind: 'error', attemptId, message: error.message }) + '\\n')
       })
     }

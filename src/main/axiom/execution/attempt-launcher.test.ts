@@ -27,7 +27,7 @@ const createManagedWorktree = vi.fn(async (_args: RuntimeManagedWorktreeCreateAr
 })
 const runtime = {
   createManagedWorktree,
-  getClientSettings: () => {
+  requireStore: () => {
     throw new Error('No settings in fake host')
   }
 }
@@ -109,7 +109,7 @@ it('kernel inputs: precreates from integration base and sends one synthetic call
   const args = startWorker.mock.calls[0][0]
   expect(args.coordinator).toBe(args.callerSession)
   expect(args.params).toEqual({
-    from: `session:${mission.coordinatorOrcaSessionId}`,
+    from: `orca_session_id:${mission.coordinatorOrcaSessionId}`,
     task: attempt.taskId,
     worktree: 'current',
     agent: 'codex',
@@ -128,13 +128,12 @@ it('kernel inputs: precreates from integration base and sends one synthetic call
   })
   const rendered = args.controlPlane?.preambleBuilder?.({
     dispatchId: 'd1',
-    dispatchCapability: 'dcap_x',
     taskId: attempt.taskId,
     taskSpec: '',
     coordinatorHandle: args.params.from,
     workerHandle: 'term_worker'
   })
-  expect(rendered).toContain('--attempt d1 --dispatch-capability dcap_x')
+  expect(rendered).toContain('--attempt d1')
   expect(rendered).not.toContain('{{')
   expect(binding()?.dispatchId).toBe(`d-${attempt.taskId}`)
   expect(stage()).toBe('RUNNING')
@@ -237,7 +236,7 @@ it('settles a thrown kernel validation error before dispatch', async () => {
 })
 
 it.each(['abandoned', 'circuit_broken'] as const)(
-  'launches a retry after %s using the latest dispatch identity',
+  'applies upstream retry admission after %s using the latest dispatch identity',
   async (outcome) => {
     await admit()
     const previous = f.db.createStartingWorkerDispatch({
@@ -248,7 +247,7 @@ it.each(['abandoned', 'circuit_broken'] as const)(
     }).dispatch
     f.store.bindAttemptDispatch(attempt.taskId, attempt.seq, previous.id)
     if (outcome === 'abandoned') {
-      f.db.abandonWorkerDispatch(previous.id)
+      f.db.abandonWorkerDispatch(previous.id, 'test-runtime')
     } else {
       f.db.db
         .prepare('UPDATE dispatch_contexts SET failure_count = 2 WHERE id = ?')
@@ -277,7 +276,16 @@ it.each(['abandoned', 'circuit_broken'] as const)(
       return { taskId: attempt.taskId, dispatchId: next.id, state: 'ready' }
     })
     await launcher()(attempt)
-    expect(stage()).toBe('RUNNING')
-    expect(binding()?.dispatchId).not.toBeNull()
+    if (outcome === 'circuit_broken') {
+      expect(stage()).toBe('BLOCKED')
+      expect(binding()?.dispatchId).toBeNull()
+      expect(events('attempt.launch_failed')[0].after).toMatchObject({
+        message: expect.stringContaining('will not retry it again')
+      })
+      expect(f.db.getDispatchContext(attempt.taskId)?.id).toBe(previous.id)
+    } else {
+      expect(stage()).toBe('RUNNING')
+      expect(binding()?.dispatchId).not.toBeNull()
+    }
   }
 )

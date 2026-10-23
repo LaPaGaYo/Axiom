@@ -5,7 +5,7 @@ import {
   resolveStructuredWorkerForDispatch,
   stopStructuredWorker
 } from '../../orchestration-structured-worker-lifecycle'
-import { isStructuredWorkerHandle } from '../../../../structured-worker-identity'
+import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
 
 export function stopLocalWorker(runtime: OrcaRuntimeService, dispatchId: string): Promise<unknown> {
   return dedupeWorkerStop(runtime, dispatchId, async () => {
@@ -43,6 +43,7 @@ export function stopLocalWorker(runtime: OrcaRuntimeService, dispatchId: string)
       })
     }
     const observation = await inspectWorkerTerminal(runtime, db, dispatchId)
+    const liveHandle = observation.terminalHandle ?? handle
     // The host exit can settle this stop while terminal inspection is awaiting inventory.
     if (db.getWorkerDispatch(dispatchId)?.state === 'stopped') {
       runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
@@ -55,9 +56,12 @@ export function stopLocalWorker(runtime: OrcaRuntimeService, dispatchId: string)
     }
     // Why `unverifiable` still proceeds: losing contact is a reason to report
     // the outcome honestly, never a reason to stop trying to stop the worker.
+    // A structured worker remains addressable after exit; close its current session, including /clear successors.
     if (
       !observation.exact ||
-      (observation.status !== 'live' && observation.status !== 'unverifiable')
+      (observation.status !== 'live' &&
+        observation.status !== 'unverifiable' &&
+        !isStructuredWorkerHandle(handle))
     ) {
       return unknownReceipt(
         dispatchId,
@@ -103,7 +107,7 @@ export function stopLocalWorker(runtime: OrcaRuntimeService, dispatchId: string)
       }
     }
     const closed = await runtime
-      .closeTerminal(handle)
+      .closeTerminal(liveHandle)
       .then((close) => ({ close }) as const)
       .catch(
         (error: unknown) =>

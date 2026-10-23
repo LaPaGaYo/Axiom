@@ -71,7 +71,7 @@ test.describe('Feature tour modal', () => {
       orcaPage.getByText("Enables agents to navigate and verify pages in Orca's browser.")
     ).toBeVisible()
     await expect(orcaPage.getByRole('heading', { name: 'CLI skill' })).toHaveCount(0)
-    await expect(orcaPage.getByText('With the Orca CLI skill', { exact: false })).toHaveCount(0)
+    await expect(orcaPage.getByText('With the Axiom CLI skill', { exact: false })).toHaveCount(0)
   })
 
   test('shows unified task copy without leaving the walkthrough', async ({ orcaPage }) => {

@@ -4,7 +4,7 @@ import { GLOBAL_FLAGS } from '../args'
 export const AGENT_HOOK_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['agent', 'hooks', 'prepare-codex'],
-    summary: 'Repair Axiom-managed Codex hook trust before a shell launch',
+    summary: "Prepare a WSL pane's Axiom-managed Codex home before a shell launch",
     usage: 'axiom agent hooks prepare-codex',
     allowedFlags: [...GLOBAL_FLAGS]
   },

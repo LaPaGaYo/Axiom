@@ -1,17 +1,12 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   buildWindowsHookPowerShellCommand,
   wrapPosixHookCommand,
   wrapWindowsHookCommand
 } from '../agent-hooks/installer-utils'
-import * as definition from './codex-hook-definition'
+import { buildCodexHookCommand } from './codex-hook-command-form'
 import { getManagedCommand, getManagedScriptPath } from './codex-hook-definition'
 import { isRetiredCodexHookCommand } from './codex-hook-retired-commands'
-
-vi.mock('./codex-hook-definition', async (importOriginal) => ({
-  ...(await importOriginal<typeof definition>())
-}))
-afterEach(() => vi.restoreAllMocks())
 
 // Frozen from the real-home lane's Windows launcher before Windows left that lane.
 function encodedLauncher(scriptPath: string): string {
@@ -48,16 +43,20 @@ describe('isRetiredCodexHookCommand', () => {
   })
 
   // Why: every build writes the frozen form and older builds still write theirs;
-  // sweeping either would strip a live entry another Orca relies on.
+  // sweeping either would strip a live entry another Axiom relies on.
   it.each([
     ["this build's command", getManagedCommand(getManagedScriptPath())],
     [
       "this build's cmd.exe spelling for a spaced profile",
-      'C:\\Windows\\System32\\cmd.exe --% /d /v:off /c @"C:/Users/Jo Smith/.orca/agent-hooks/codex-hook.cmd"'
+      buildCodexHookCommand('C:\\Users\\Jo Smith\\.orca\\agent-hooks\\codex-hook.cmd', 'win32', {
+        SystemRoot: 'C:\\Windows'
+      })
     ],
     [
       "this build's cmd.exe spelling with Windows on another drive",
-      'D:\\Windows\\System32\\cmd.exe --% /d /v:off /c @"C:/Users/Jo Smith/.orca/agent-hooks/codex-hook.cmd"'
+      buildCodexHookCommand('C:\\Users\\Jo Smith\\.orca\\agent-hooks\\codex-hook.cmd', 'win32', {
+        SystemRoot: 'D:\\Windows'
+      })
     ],
     [
       'the bare-cmd spelling that the managed installer and app start convert',
@@ -86,28 +85,4 @@ describe('isRetiredCodexHookCommand', () => {
   ])('leaves %s alone', (_case, command) => {
     expect(isRetiredCodexHookCommand(command)).toBe(false)
   })
-})
-
-// Axiom keeps the fork's command builders; the two cmd.exe fixtures above are
-// frozen upstream output because codex-hook-command-form.ts is not ported.
-it('never retires any current Axiom POSIX, Windows shared-path, or WSL command', () => {
-  const posixPath = '/temporary-home/.orca/agent-hooks/codex-hook.sh'
-  const windowsPath = 'C:\\Users\\temporary-home\\.orca\\agent-hooks\\codex-hook.cmd'
-  const commands = [
-    getManagedCommand(getManagedScriptPath()),
-    wrapPosixHookCommand(posixPath),
-    definition.wrapReadablePosixHookCommand(posixPath),
-    definition.wrapReadablePosixHookCommand(
-      '/mnt/c/Users/temporary-home/.orca/agent-hooks/codex-hook.sh'
-    )
-  ]
-  for (const command of commands) {
-    expect(isRetiredCodexHookCommand(command)).toBe(false)
-  }
-  expect(wrapPosixHookCommand(posixPath)).toContain(
-    '{ command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :'
-  )
-  vi.spyOn(definition, 'getManagedScriptPath').mockReturnValue(windowsPath)
-  expect(isRetiredCodexHookCommand(windowsPath)).toBe(false)
-  expect(isRetiredCodexHookCommand(windowsPath.replaceAll('\\', '/'))).toBe(false)
 })

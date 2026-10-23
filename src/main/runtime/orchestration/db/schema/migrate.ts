@@ -16,6 +16,7 @@ import { migrateV42 } from './migrate-v42'
 import { migrateV43 } from './migrate-v43'
 import { migrateV44 } from './migrate-v44'
 import { migrateV45 } from './migrate-v45'
+import { migrateV46 } from './migrate-v46'
 
 // Why: CREATE TABLE IF NOT EXISTS won't alter existing DBs; migrate in a txn that bumps user_version only on success (atomic all-or-nothing).
 export function migrate(this: OrchestrationDb): void {
@@ -46,6 +47,12 @@ export function migrate(this: OrchestrationDb): void {
     migrateV43.call(this, current)
     migrateV44.call(this, current)
     migrateV45.call(this, current)
+    migrateV46.call(this, current)
+    // Why: Axiom builds before UPSTREAM-3 numbered Axiom's own steps 43–45, so a database they wrote reports 43–45
+    // without upstream's v43 address respelling. The respelling is idempotent and its WHERE clauses are the probe.
+    if (current >= 43 && current <= 45) {
+      migrateV43.call(this, 42)
+    }
     this.createMailboxDeliveryIndexesIfPossible()
     // Why: rebuild steps above RENAME the table, which SQLite refuses while a view names it.
     this.db.exec(DERIVED_DELIVERY_SCHEMA_SQL)

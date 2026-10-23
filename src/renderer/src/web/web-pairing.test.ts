@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { decideWebPairingStartup, parseWebPairingInput, type WebPairingOffer } from './web-pairing'
+import {
+  decideWebPairingStartup,
+  parseWebPairingInput,
+  readPairingInputFromLocation,
+  type WebPairingOffer
+} from './web-pairing'
+import { PAIRING_INPUT_MAX_CHARACTERS } from '../../../shared/mobile-pairing-protocol-limits'
 
 describe('web pairing input', () => {
   const offer: WebPairingOffer = {
@@ -23,6 +29,30 @@ describe('web pairing input', () => {
 
   it('still parses legacy hash-form pairing URLs', () => {
     expect(parseWebPairingInput(`axiom://pair#${encodeOffer()}`)).toEqual(offer)
+  })
+
+  it('rejects oversized raw codes, URLs, and location queries before parsing', () => {
+    const code = encodeOffer()
+    const oversizedRawCode = `${code}${' '.repeat(PAIRING_INPUT_MAX_CHARACTERS)}`
+    const oversizedQuery = `?pairing=${code}&ignored=${'A'.repeat(PAIRING_INPUT_MAX_CHARACTERS)}`
+    const location = { search: oversizedQuery, hash: '' }
+
+    expect(parseWebPairingInput(oversizedRawCode)).toBeNull()
+    expect(
+      parseWebPairingInput(`axiom://pair${oversizedQuery.replace('pairing=', 'code=')}`)
+    ).toBeNull()
+    expect(readPairingInputFromLocation(location)).toBeNull()
+  })
+
+  it('preserves legacy padding and aliases with the same decoded offer', () => {
+    const paddedOffer = { ...offer, endpoint: `${offer.endpoint}/` }
+    const code = encodeOffer(paddedOffer)
+    expect(code.length % 4).toBe(2)
+    const alias = `${code.slice(0, -1)}${base64Alias(code.at(-1)!)}`
+
+    expect(parseWebPairingInput(`${code}=`)).toEqual(paddedOffer)
+    expect(parseWebPairingInput(`${code}==`)).toEqual(paddedOffer)
+    expect(parseWebPairingInput(alias)).toEqual(paddedOffer)
   })
 
   it('preserves optional device scope metadata', () => {
@@ -49,6 +79,17 @@ describe('web pairing input', () => {
     ['http://proxy.example:8080/orca/runtime', 'ws://proxy.example:8080/orca/runtime']
   ])('preserves reverse-proxy endpoint routing for %s', (endpoint, expected) => {
     expect(parseWebPairingInput(encodeOffer({ endpoint }))).toMatchObject({ endpoint: expected })
+  })
+
+  it('keeps a readable host descriptor and drops an unreadable one without refusing', () => {
+    const hostDescriptor = { installationId: '11111111-1111-4111-8111-111111111111' }
+    expect(parseWebPairingInput(encodeOffer({ hostDescriptor }))).toEqual({
+      ...offer,
+      hostDescriptor
+    })
+    expect(parseWebPairingInput(encodeOffer({ hostDescriptor: { installationId: 7 } }))).toEqual(
+      offer
+    )
   })
 
   it('treats invalid device scope metadata as unknown', () => {
@@ -101,3 +142,8 @@ describe('web pairing input', () => {
     })
   })
 })
+
+function base64Alias(character: string): string {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+  return alphabet[alphabet.indexOf(character) + 1]!
+}

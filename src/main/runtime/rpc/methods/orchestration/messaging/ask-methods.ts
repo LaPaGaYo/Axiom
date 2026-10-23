@@ -3,6 +3,7 @@ import { assertNotMissionManaged } from '../../../../../axiom/admission/mission-
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { clampOrchestrationAskTimeoutMs } from '../../../../../../shared/orchestration-ask-timeout'
 import { isGroupAddress } from '../../../../orchestration/groups'
+import { dispatchReportMailbox } from '../../../../orchestration/dispatch-report-mailbox'
 import { AskParams } from '../schemas'
 import { rejectFederatedExplicitTarget } from '../routing'
 import { askRemoteRunHome } from './ask-remote'
@@ -11,14 +12,23 @@ import {
   runCoordinatorKey
 } from '../../../../orchestration/orchestration-caller-identity'
 import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
+import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
+import { assertWorkerCanReport } from '../../../../orchestration/worker-report-admission'
 
 export const ORCHESTRATION_ASK_METHODS = [
   defineMethod({
     name: 'orchestration.ask',
+    permission: 'workspace',
     params: AskParams,
     handler: async (
       params,
-      { runtime, signal, orchestrationCapability, recordMutationReceipt }
+      {
+        runtime,
+        signal,
+        recordMutationReceipt,
+        orchestrationCaller,
+        orchestrationCompatibilityEvidence
+      }
     ) => {
       // Why: group addresses have no unambiguous first-answer authority.
       if (params.to && isGroupAddress(params.to)) {
@@ -33,19 +43,26 @@ export const ORCHESTRATION_ASK_METHODS = [
       // Why: echoed on every return so a clamped caller reports the budget actually waited, not the one it asked for.
       const timeoutMs = clampOrchestrationAskTimeoutMs(params.timeoutMs)
       const paneKey = runtime.getTerminalPaneKey(from) ?? undefined
+      if (!orchestrationCaller) {
+        assertLifecycleCallerIsNotAnotherParty(runtime, {
+          from,
+          fromPaneKey: paneKey,
+          evidence: orchestrationCompatibilityEvidence
+        })
+      }
       const remoteAttachment = paneKey ? db.findActiveRemoteAttachmentForPane(paneKey) : undefined
-      if (remoteAttachment) {
+      if (remoteAttachment && paneKey) {
         rejectFederatedExplicitTarget(params)
         return askRemoteRunHome({
           params: { ...params, timeoutMs },
           runtime,
           signal,
-          orchestrationCapability,
           recordMutationReceipt,
           from,
-          paneKey: paneKey as string,
+          paneKey,
           dispatchId: remoteAttachment.dispatch_id,
-          taskId: remoteAttachment.task_id
+          taskId: remoteAttachment.task_id,
+          workerState: remoteAttachment.state
         })
       }
       const activeDispatch = db.getActiveDispatchForIdentity(from, paneKey)
@@ -56,17 +73,18 @@ export const ORCHESTRATION_ASK_METHODS = [
         )
       }
       assertNotMissionManaged(runtime, { dispatchId: activeDispatch.id, verb: 'orchestration.ask' })
-      if (activeDispatch.capability_hash) {
-        const authority = db.verifyDispatchCapability({
-          dispatchId: activeDispatch.id,
-          capability: orchestrationCapability,
-          paneKey,
-          processIncarnation: runtime.getTerminalProcessIncarnation(from) ?? undefined
-        })
-        if (!authority.valid) {
-          throw new OrchestrationError('dispatch_capability_invalid', authority.reason)
-        }
-      }
+      assertWorkerCanReport({
+        dispatchId: activeDispatch.id,
+        from,
+        workerState: db.getWorkerDispatch(activeDispatch.id)?.state,
+        processCurrent:
+          !activeDispatch.process_incarnation ||
+          db.isDispatchProcessCurrent({
+            dispatchId: activeDispatch.id,
+            paneKey: paneKey ?? null,
+            processIncarnation: runtime.getTerminalProcessIncarnation(from)
+          })
+      })
       const options =
         params.options
           ?.split(',')
@@ -94,9 +112,11 @@ export const ORCHESTRATION_ASK_METHODS = [
             `Dispatch ${activeDispatch.id} belongs to Run ${run.id}, not ${params.run}.`
           )
         }
+        const reportTo = dispatchReportMailbox(db, activeDispatch)
         if (
           params.to &&
           params.to !== `run:${run.id}` &&
+          params.to !== reportTo &&
           resolveOrchestrationParty(params.to, db).address !==
             mailboxAddressOf(runCoordinatorKey(run))
         ) {
@@ -105,15 +125,18 @@ export const ORCHESTRATION_ASK_METHODS = [
             `ask from Dispatch ${activeDispatch.id} must target its owning Run ${run.id}.`
           )
         }
+        // An explicit Run or coordinator target still reaches the Run; otherwise the asker's creator.
+        const to = params.to && params.to !== reportTo ? `run:${run.id}` : reportTo
         const created = db.createQuestion({
           runId: run.id,
           dispatchId: activeDispatch.id,
           askerHandle: from,
           question: params.question as string,
-          options
+          options,
+          to
         })
         question = created.question
-        runtime.notifyMessageArrived(`run:${run.id}`, created.message.type)
+        runtime.notifyMessageArrived(to, created.message.type)
       }
 
       const questionId = question.message_id

@@ -74,7 +74,7 @@ export async function buildPlannerContext(
     [
       'Planner proposal recipe',
       [
-        `axiom plan propose --mission ${mission.id} --attempt {{attemptId}} --dispatch-capability {{dispatchCapability}} --file <proposal.json> --json`,
+        `axiom plan propose --mission ${mission.id} --attempt {{attemptId}} --file <proposal.json> --json`,
         'do not create, edit or commit any file in this worktree except the proposal JSON you pass with --file; the proposal is read from --file and the worktree must stay clean',
         'Write the proposal JSON outside the worktree (for example in a temporary directory) so git status --porcelain is empty.',
         'This is a read-only planning Attempt: permissions.write = []. Your only output channel is axiom plan propose.'

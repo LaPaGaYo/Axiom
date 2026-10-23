@@ -5,13 +5,18 @@ import { defineMethod } from '../../../core'
 import { releaseFederatedWorker } from '../federation/federated-worker-release'
 import { ORCHESTRATION_WORKER_LIST_METHOD } from './worker-list-method'
 import { resolvePinnedFederatedServer } from './worker-observation'
-import { archiveSummary, type WorkerReleaseReceipt } from './worker-release-completion'
-import { WorkerDispatchParams, WorkerRetainParams } from './worker-release-schemas'
+import { archiveSummary } from './worker-terminal-resource-presentation'
+import type { WorkerReleaseReceipt } from './worker-release-completion'
+import {
+  WorkerDispatchParams,
+  WorkerRetainParams
+} from '../../../../../../shared/rpc-contract/orchestration-worker-release-schemas-params'
 import { OrchestrationWorkerTerminalUserInputParams } from '../../../../../../shared/rpc-contract/orchestration-worker-release-params'
 
 export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
   defineMethod({
     name: 'orchestration.workerRelease',
+    permission: 'workspace',
     params: WorkerDispatchParams,
     handler: async (params, { runtime, orchestrationMutation }): Promise<WorkerReleaseReceipt> => {
       const db = runtime.getOrchestrationDb()
@@ -40,6 +45,7 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
   }),
   defineMethod({
     name: 'orchestration.workerRetain',
+    permission: 'workspace',
     params: WorkerRetainParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
@@ -91,6 +97,7 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
   ORCHESTRATION_WORKER_LIST_METHOD,
   defineMethod({
     name: 'orchestration.workerTerminalUserInput',
+    permission: 'workspace',
     // `sessionId` addresses a worker that IS a structured agent session. Its pane key is a random
     // identity credential that never leaves main, so the caller names the session and the owning
     // runtime resolves it — a renderer echoing the pane key back would make it learnable.

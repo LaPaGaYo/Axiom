@@ -146,11 +146,11 @@ describe('Attempt recovery', () => {
     })
     vi.mocked(f.runtime.confirmTerminalShellForeground).mockImplementationOnce(async () => {
       expect(
-        await f.call(
-          'axiom.attempt.submit',
-          { attemptId: f.t01.attemptId, from: f.t01.from, report },
-          { orchestrationCapability: f.t01.capability }
-        )
+        await f.call('axiom.attempt.submit', {
+          attemptId: f.t01.attemptId,
+          from: f.t01.from,
+          report
+        })
       ).toMatchObject({ ok: true })
       return true
     })
@@ -462,11 +462,7 @@ describe('Attempt recovery', () => {
       throw new Error('crash window')
     })
     expect(
-      await f.call(
-        'axiom.attempt.submit',
-        { attemptId: f.t01.attemptId, from: f.t01.from, report },
-        { orchestrationCapability: f.t01.capability }
-      )
+      await f.call('axiom.attempt.submit', { attemptId: f.t01.attemptId, from: f.t01.from, report })
     ).toMatchObject({ ok: true })
     expect(f.db.getWorkerTerminalResourceByOwner(f.t01.attemptId)?.release_state).toBe(
       'not_requested'
@@ -576,7 +572,8 @@ describe('Attempt recovery', () => {
     vi.mocked(f.runtime.showTerminal).mockReturnValueOnce(gate.promise)
     const first = recovery.reconcileAttempts()
     const second = recovery.reconcileAttempts({ missionId: f.mission.id })
-    expect(f.runtime.showTerminal).toHaveBeenCalledTimes(2) // fixture read plus one in-flight inspection
+    // The kernel resolves the worker identity asynchronously before inspecting its terminal.
+    await vi.waitFor(() => expect(f.runtime.showTerminal).toHaveBeenCalledTimes(2))
     gate.resolve(terminal)
     await Promise.all([first, second])
     expect(stage()?.stage).toBe('RUNNING')

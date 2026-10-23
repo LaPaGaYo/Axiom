@@ -25,10 +25,6 @@ export const DAILY_RELEASE_REPO = productReleaseRepositorySlug()
 export const ADHOC_RELEASE_REPO = productReleaseRepositorySlug()
 export const MAIN_RELEASE_REPO = productReleaseRepositorySlug()
 
-export const HOURLY_PRERELEASE_IDENTIFIER = 'hourly'
-export const DAILY_PRERELEASE_IDENTIFIER = 'daily'
-export const ADHOC_PRERELEASE_IDENTIFIER = 'adhoc'
-
 /** Legacy dev-channel grouping retained for channel-specific build selection. */
 const DEDICATED_REPO_CHANNELS = ['hourly', 'daily', 'adhoc'] as const
 
@@ -176,18 +172,6 @@ export function isDailyVersion(version: string): boolean {
 
 export function isAdhocVersion(version: string): boolean {
   return ADHOC_VERSION.test(normalizeTagToVersion(version))
-}
-
-export function formatHourlyVersion(baseVersion: string, stamp: string): string {
-  return `${baseVersion}-${HOURLY_PRERELEASE_IDENTIFIER}.${stamp}`
-}
-
-export function formatDailyVersion(baseVersion: string, stamp: string): string {
-  return `${baseVersion}-${DAILY_PRERELEASE_IDENTIFIER}.${stamp}`
-}
-
-export function formatAdhocVersion(baseVersion: string, stamp: string): string {
-  return `${baseVersion}-${ADHOC_PRERELEASE_IDENTIFIER}.${stamp}`
 }
 
 /** Returns the build's UTC timestamp, or null when the version isn't hourly. */

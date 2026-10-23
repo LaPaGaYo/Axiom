@@ -10,21 +10,38 @@ This package is a **self-contained Next.js app**. It is intentionally **not** a 
 
 ## Local development
 
+Use Node.js 24 and the pnpm version pinned in `package.json`. CI reads the
+Node.js version from this package's `engines.node` field.
+
 ```bash
 cd docs/site
-pnpm --ignore-workspace install
-pnpm --ignore-workspace dev
+pnpm install
+pnpm dev
 ```
 
 Open [http://localhost:3004/docs](http://localhost:3004/docs).
+
+## Linting
+
+Run `pnpm lint` inside this directory. The isolated Oxlint
+configuration keeps the native equivalents of the previous Next.js, React,
+React hooks and accessibility checks at their existing severities, including
+alt text on Next.js `Image` components. Generated Next.js and MDX output is
+excluded. Oxlint also reports its default correctness warnings.
+
+The migration does not provide equivalents for React's deprecated-API check,
+React Compiler configuration/gating diagnostics, or Next.js's relative
+`location.assign` advisory. JSX variable-use bookkeeping is handled by Oxlint's
+parser. Keep TypeScript and the production Next.js build in the validation
+workflow; this is not a claim of complete ESLint rule parity.
 
 ## Production build
 
 ```bash
 cd docs/site
-pnpm --ignore-workspace install
-pnpm --ignore-workspace build
-pnpm --ignore-workspace start
+pnpm install
+pnpm build
+pnpm start
 ```
 
 `pnpm start` serves the production build on port 3004. Paths:
@@ -70,5 +87,5 @@ change.
 ## Isolation from the desktop app
 
 - Own `package.json` + `pnpm-lock.yaml` under `docs/site/`
-- Not listed in the root `pnpm-workspace.yaml`; install with `pnpm --ignore-workspace`
+- Not listed in the root `pnpm-workspace.yaml`; its own `pnpm-workspace.yaml` makes it a separate workspace root and holds its pnpm settings, which pnpm 12 ignores under `--ignore-workspace`
 - Engineering notes remain in repo-root `docs/` — do not confuse with this package

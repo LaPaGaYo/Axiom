@@ -24,7 +24,8 @@ describe('agent exit observation', () => {
     observation = {
       status: 'live',
       exact: true,
-      terminal: {
+      terminalHandle: null,
+    terminal: {
         handle: f.t01.from,
         ptyId: 'pty-1',
         worktreeId: 'repo::T01',

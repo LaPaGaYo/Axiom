@@ -13,8 +13,8 @@ const mocks = vi.hoisted(() => ({
   updateSettings: vi.fn()
 }))
 vi.mock('electron', () => ({ app: { getPath: () => '/test/profile' } }))
-vi.mock('../codex/codex-real-home-hook-install', () => ({
-  ensureRealHomeCodexHookState: mocks.ensure
+vi.mock('../codex/codex-hook-reconcile', () => ({
+  reconcileCodexHooksForLaunch: mocks.ensure
 }))
 vi.mock('../codex/hook-service', () => ({
   codexHookService: { prepareRuntimeHomeForLaunch: mocks.prepareHooks }
@@ -22,7 +22,7 @@ vi.mock('../codex/hook-service', () => ({
 vi.mock('../agent-trust-presets', () => ({ markCodexProjectTrusted: mocks.trust }))
 vi.mock('../wsl', () => ({ getDefaultWslDistro: () => 'Ubuntu' }))
 vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
-  isAgentStatusHooksEnabled: () => true
+  isAgentStatusHooksEnabledForAgent: () => true
 }))
 vi.mock('./main-process-state', () => ({
   mainProcessState: {
@@ -57,22 +57,21 @@ describe('Codex launch activation', () => {
       expect(mocks.getSettings().providerActivations.codex.source).toBe('agent-launch')
     })
     await prepareCodexRuntimeHomeForLaunch(undefined, undefined, {
-      launchAgent: 'codex',
-      workspacePath: '/repo'
+      launchesCodex: true
     })
     expect(mocks.ensure).toHaveBeenCalledOnce()
-    expect(mocks.trust).toHaveBeenCalledWith('/repo')
   })
   it('records a WSL launch before preparing its managed hooks', async () => {
     mocks.runtimeHome.prepareForCodexLaunchAsync.mockResolvedValue('/wsl/home')
     await prepareCodexRuntimeHomeForLaunch({ runtime: 'wsl', wslDistro: 'Ubuntu' }, undefined, {
-      launchAgent: 'codex'
+      launchesCodex: true
     })
     expect(mocks.getSettings().providerActivations.codex.source).toBe('agent-launch')
     expect(mocks.ensure).not.toHaveBeenCalled()
     expect(mocks.prepareHooks).toHaveBeenCalledWith(
       '/wsl/home',
       { runtime: 'wsl', wslDistro: 'Ubuntu' },
+      expect.any(Function),
       true
     )
   })

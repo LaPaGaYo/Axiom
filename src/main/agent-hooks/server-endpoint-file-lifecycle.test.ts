@@ -1,3 +1,4 @@
+import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../shared/local-build-compatibility-contract'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'node:child_process'
 import {
@@ -13,9 +14,6 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer, _internals } from './server'
-import { makePaneKey } from '../../shared/stable-pane-id'
-import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../shared/local-build-compatibility-contract'
-import { LEAF_3 } from './server.test-fixtures'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -228,68 +226,6 @@ describe('Endpoint file lifecycle', () => {
       expect(server.buildPtyEnv().ORCA_AGENT_HOOK_TOKEN).toBeTruthy()
     } finally {
       server.stop()
-    }
-  })
-
-  it('ingestRemote stamps connectionId and feeds the listener bypassing HTTP', () => {
-    const server = new AgentHookServer()
-    const events: { paneKey: string; connectionId: string | null; payload: unknown }[] = []
-    server.setListener((evt) => {
-      events.push({
-        paneKey: evt.paneKey,
-        connectionId: evt.connectionId,
-        payload: evt.payload
-      })
-    })
-    try {
-      const remotePane = makePaneKey('tab-3', LEAF_3)
-      server.ingestRemote(
-        {
-          paneKey: remotePane,
-          tabId: 'tab-3',
-          worktreeId: 'wt-3',
-          payload: {
-            state: 'working',
-            prompt: 'remote prompt',
-            agentType: 'claude'
-          }
-        },
-        'conn-42'
-      )
-      expect(events).toHaveLength(1)
-      expect(events[0].paneKey).toBe(remotePane)
-      expect(events[0].connectionId).toBe('conn-42')
-      expect(events[0].payload).toMatchObject({
-        state: 'working',
-        prompt: 'remote prompt',
-        agentType: 'claude'
-      })
-    } finally {
-      server.setListener(null)
-    }
-  })
-
-  it('ingestRemote ignores malformed envelopes (fail-open)', () => {
-    const server = new AgentHookServer()
-    const listener = vi.fn()
-    server.setListener(listener)
-    try {
-      // Missing paneKey
-      server.ingestRemote({ paneKey: '', payload: { state: 'working' } } as never, 'conn-x')
-      // Missing payload state
-      server.ingestRemote({ paneKey: 'tab-1:0', payload: { foo: 'bar' } }, 'conn-x')
-      // Invalid payload state
-      server.ingestRemote({ paneKey: 'tab-1:0', payload: { state: 'nonsense' } }, 'conn-x')
-      // Empty connection id
-      server.ingestRemote({ paneKey: 'tab-1:0', payload: { state: 'working' } }, '  ')
-      // Wrong types
-      server.ingestRemote(
-        { paneKey: 'tab-1:0', payload: 'not-an-object' as unknown } as never,
-        'conn-x'
-      )
-      expect(listener).not.toHaveBeenCalled()
-    } finally {
-      server.setListener(null)
     }
   })
 

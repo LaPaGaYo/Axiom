@@ -138,6 +138,13 @@ test.describe('Native chat transcript anchoring', () => {
         sessionId,
         transcriptPath
       })
+      // Exercise the supported manual paging fallback while the reader stays mid-transcript.
+      await orcaPage.evaluate(() => {
+        Object.defineProperty(window, 'IntersectionObserver', {
+          value: undefined,
+          configurable: true
+        })
+      })
       await toggleTerminalTabToChatView(orcaPage, {
         tabId,
         worktreeId: descriptor.worktreeId
@@ -283,7 +290,18 @@ test.describe('Native chat transcript anchoring', () => {
           )
         )
         .toBeGreaterThan(1_000)
-      const readingAt = await scroll.evaluate((element) => element.scrollTop)
+      // Rows the wheel mounted above the reader settle their measured heights frames later.
+      const readingAt = await scroll.evaluate(async (element) => {
+        let previousGeometry = ''
+        let stableFrames = 0
+        for (let frame = 0; frame < 120 && stableFrames < 5; frame += 1) {
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+          const geometry = `${element.scrollHeight}:${element.scrollTop}`
+          stableFrames = geometry === previousGeometry ? stableFrames + 1 : 0
+          previousGeometry = geometry
+        }
+        return element.scrollTop
+      })
       await expect(jump).toBeVisible()
 
       await activateNewTerminalTab(orcaPage, descriptor.worktreeId)

@@ -3,7 +3,7 @@ import { getDefaultPersistedState } from '../../shared/constants'
 
 const mocks = vi.hoisted(() => ({
   getSettings: vi.fn(),
-  ensure: vi.fn(),
+  startCodexHooks: vi.fn(),
   installCodex: vi.fn(),
   installClaude: vi.fn(),
   runtime: {
@@ -38,8 +38,8 @@ vi.mock('../crash-reporting/process-gone-diagnostics', () => ({
 }))
 vi.mock('./main-window-lifecycle-flags', () => ({ recordProcessGoneCrash: vi.fn() }))
 vi.mock('./gpu-lifecycle', () => ({ handleGpuChildCrash: vi.fn() }))
-vi.mock('../codex/codex-real-home-hook-install', () => ({
-  ensureRealHomeCodexHookState: mocks.ensure
+vi.mock('../codex/codex-hook-reconcile', () => ({
+  startCodexHooks: mocks.startCodexHooks
 }))
 vi.mock('../agent-hooks/local-agent-cli-presence', () => ({
   detectLocalManagedAgentCliPresence: async () => ({
@@ -65,8 +65,12 @@ vi.mock('./configure-process', () => ({ shouldInstallManagedHooks: () => true })
 vi.mock('../agent-hooks/install-telemetry', () => ({ recordManagedHookInstallFailure: vi.fn() }))
 vi.mock('./main-process-state', () => ({
   mainProcessState: {
-    store: { getSettings: mocks.getSettings, getRepos: () => [] },
-    codexRuntimeHome: { isHostSystemDefaultRealHomeSelected: () => true },
+    store: {
+      getSettings: mocks.getSettings,
+      getRepos: () => [],
+      getProfileStorageDirectory: () => '/profile'
+    },
+    codexRuntimeHome: { resolveHostCodexHomePathForLaunchReadOnly: () => null },
     isQuitting: false
   }
 }))
@@ -91,7 +95,6 @@ import { initializeReadyRuntimeServices } from './main-process-ready-runtime'
 describe('startup hook provider activation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.ensure.mockResolvedValue(undefined)
     mocks.installCodex.mockResolvedValue({ agent: 'codex', state: 'installed' })
     mocks.installClaude.mockResolvedValue({ agent: 'claude', state: 'installed' })
   })
@@ -109,7 +112,10 @@ describe('startup hook provider activation', () => {
       await vi.waitFor(() => expect(mocks.installClaude).toHaveBeenCalledOnce())
       // The loop awaits each installer; drain it before asserting absence.
       await new Promise<void>((resolve) => setImmediate(resolve))
-      expect(mocks.ensure).toHaveBeenCalledTimes(activated ? 1 : 0)
+      expect(mocks.startCodexHooks).toHaveBeenCalledOnce()
+      const hookConfig = mocks.startCodexHooks.mock.calls[0][0]
+      expect(hookConfig.isEnabled()).toBe(activated)
+      expect(hookConfig.resolveLaunchHome()).toBeNull()
       expect(mocks.installCodex).toHaveBeenCalledTimes(activated ? 1 : 0)
     }
   )

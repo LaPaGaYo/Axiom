@@ -29,7 +29,12 @@ function sendAttemptMessage(
   p: z.infer<typeof AttemptMessageParams> | z.infer<typeof AttemptRequestSubtaskParams>,
   ctx: RpcContext
 ) {
-  const { runtime, orchestrationCaller, orchestrationCapability, recordMutationReceipt } = ctx
+  const {
+    runtime,
+    orchestrationCaller,
+    orchestrationCompatibilityEvidence,
+    recordMutationReceipt
+  } = ctx
   const db = runtime.getOrchestrationDb()
   const { store } = getAxiomControlPlane(runtime)
   const { mission, task, sender } = resolveAttemptSender({
@@ -38,7 +43,7 @@ function sendAttemptMessage(
     store,
     ...p,
     orchestrationCaller,
-    orchestrationCapability
+    orchestrationCompatibilityEvidence
   })
   return routeWorkerMessage(
     { runtime, db, store, recordMutationReceipt },
@@ -63,39 +68,51 @@ function sendAttemptMessage(
 export const AXIOM_ATTEMPT_METHODS = [
   defineMethod({
     name: 'axiom.attempt.submit',
+    permission: 'workspace',
     params: AttemptSubmitParams,
     handler: submitAttempt
   }),
-  defineMethod({ name: 'axiom.attempt.ask', params: AttemptAskParams, handler: askAttempt }),
+  defineMethod({
+    name: 'axiom.attempt.ask',
+    permission: 'workspace',
+    params: AttemptAskParams,
+    handler: askAttempt
+  }),
   defineMethod({
     name: 'axiom.attempt.inform',
+    permission: 'workspace',
     params: AttemptMessageParams,
     handler: (p, ctx) => sendAttemptMessage('INFORM', p, ctx)
   }),
   defineMethod({
     name: 'axiom.attempt.request',
+    permission: 'workspace',
     params: AttemptMessageParams,
     handler: (p, ctx) => sendAttemptMessage('REQUEST', p, ctx)
   }),
   defineMethod({
     name: 'axiom.attempt.blocked',
+    permission: 'workspace',
     params: AttemptMessageParams,
     handler: (p, ctx) => sendAttemptMessage('BLOCKED', p, ctx)
   }),
   defineMethod({
     name: 'axiom.attempt.handoff',
+    permission: 'workspace',
     params: AttemptMessageParams,
     handler: (p, ctx) => sendAttemptMessage('HANDOFF', p, ctx)
   }),
   defineMethod({
     name: 'axiom.attempt.request-subtask',
+    permission: 'workspace',
     params: AttemptRequestSubtaskParams,
     handler: (p, ctx) => sendAttemptMessage('REQUEST_SUBTASK', p, ctx)
   }),
   defineMethod({
     name: 'axiom.attempt.check',
+    permission: 'workspace',
     params: AttemptCheckParams,
-    handler: (p, { runtime, orchestrationCaller, orchestrationCapability, signal }) => {
+    handler: (p, { runtime, orchestrationCaller, orchestrationCompatibilityEvidence, signal }) => {
       const db = runtime.getOrchestrationDb()
       const { store } = getAxiomControlPlane(runtime)
       const { sender, dispatch } = resolveAttemptSender({
@@ -104,7 +121,7 @@ export const AXIOM_ATTEMPT_METHODS = [
         store,
         ...p,
         orchestrationCaller,
-        orchestrationCapability
+        orchestrationCompatibilityEvidence
       })
       return checkWorkerMailbox({
         params: { terminal: p.from, wait: p.wait, timeoutMs: p.timeoutMs, types: p.type },
@@ -121,6 +138,7 @@ export const AXIOM_ATTEMPT_METHODS = [
   }),
   defineMethod({
     name: 'axiom.attempt.show',
+    permission: 'workspace',
     params: AttemptShowParams,
     handler: async (p, { runtime }) => {
       const { store } = getAxiomControlPlane(runtime)
@@ -140,6 +158,7 @@ export const AXIOM_ATTEMPT_METHODS = [
   }),
   defineMethod({
     name: 'axiom.attempt.list',
+    permission: 'workspace',
     params: AttemptListParams,
     handler: async (p, { runtime }) => {
       const { store, missions } = getAxiomControlPlane(runtime)

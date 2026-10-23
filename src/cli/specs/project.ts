@@ -16,7 +16,7 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['project', 'setups'],
     summary: 'List project host setups',
-    usage: 'axiom project setups [--project <id>] [--host <host-id>] [--json]',
+    usage: 'axiom project setups [--project <id>] [--host <host>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'project', 'host'],
     notes: [
       'A setup means a project is available on a host at a concrete filesystem path.',
@@ -35,27 +35,27 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     path: ['project', 'setup-existing-folder'],
     summary: 'Make a project available on a host by importing an existing folder',
     usage:
-      'axiom project setup-existing-folder --project <id> --host <host-id> --path <path> [--kind git|folder] [--display-name <name>] [--json]',
+      'axiom project setup-existing-folder --project <id> --host <host> --path <path> [--kind git|folder] [--display-name <name>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'project', 'host', 'path', 'kind', 'display-name'],
     notes: [
       'For remote runtimes, --path must be an absolute path on the remote server.',
-      '--host runtime:<environment-id> targets that paired Axiom server; use the id from `axiom environment list`, not the environment name.',
+      '--host takes local, ssh:<target-id>, runtime:<environment-id>, or the bare host name `axiom host list` prints for any of them.',
       'SSH targets are set up through the desktop UI because the desktop client owns SSH connections.'
     ],
     examples: [
       `axiom project setup-existing-folder --project github:${productReleaseRepositorySlug()} --host local --path ~/orca`,
-      `axiom project setup-existing-folder --project github:${productReleaseRepositorySlug()} --host runtime:03ef704c-b180-4b10-998d-e28fbd5de9a3 --path /home/me/orca --kind git --json`
+      `axiom project setup-existing-folder --project github:${productReleaseRepositorySlug()} --host runtime:03ef704c-b180-4b10-998d-e28fbd5de9a3 --path /home/me/axiom --kind git --json`
     ]
   },
   {
     path: ['project', 'setup-clone'],
     summary: 'Make a project available on a host by cloning a repository',
     usage:
-      'axiom project setup-clone --project <id> --host <host-id> --url <clone-url> --destination <path> [--display-name <name>] [--json]',
+      'axiom project setup-clone --project <id> --host <host> --url <clone-url> --destination <path> [--display-name <name>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'project', 'host', 'url', 'destination', 'display-name'],
     notes: [
       'For remote runtimes, --destination must be an absolute parent directory on the remote server.',
-      '--host runtime:<environment-id> targets that paired Axiom server; use the id from `axiom environment list`, not the environment name.',
+      '--host takes local, ssh:<target-id>, runtime:<environment-id>, or the bare host name `axiom host list` prints for any of them.',
       'SSH targets are cloned through the desktop UI because the desktop client owns SSH connections.'
     ],
     examples: [
@@ -67,7 +67,7 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     path: ['project', 'setup-create'],
     summary: 'Create independent project host setup metadata',
     usage:
-      'axiom project setup-create --project <id> --host <host-id> [--setup-id <id>] [--path <path>] [--kind git|folder] [--display-name <name>] [--worktree-base-path <path>] [--git-username <name>] [--state ready|not-set-up|setting-up|error|unsupported] [--method imported-existing-folder|cloned|provisioned] [--json]',
+      'axiom project setup-create --project <id> --host <host> [--setup-id <id>] [--path <path>] [--kind git|folder] [--display-name <name>] [--worktree-base-path <path>] [--git-username <name>] [--state ready|not-set-up|setting-up|error|unsupported] [--method imported-existing-folder|cloned|provisioned] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'project',
@@ -83,7 +83,7 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     ],
     notes: [
       'Creates setup metadata without registering a repo compatibility record.',
-      '--host runtime:<environment-id> targets that paired Axiom server; use the id from `axiom environment list`, not the environment name.',
+      '--host takes local, ssh:<target-id>, runtime:<environment-id>, or the bare host name `axiom host list` prints for any of them.',
       'Use setup-existing-folder when Axiom should import and manage an actual checkout path now.'
     ],
     examples: [
@@ -94,10 +94,11 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     path: ['project', 'setup-update'],
     summary: 'Update project host setup metadata',
     usage:
-      'axiom project setup-update --setup <setup-id> [--display-name <name>] [--path <path>] [--worktree-base-path <path>] [--git-username <name>] [--kind git|folder] [--state ready|not-set-up|setting-up|error|unsupported] [--method legacy-repo|imported-existing-folder|cloned|provisioned] [--json]',
+      'axiom project setup-update --setup <setup-id> [--host <host>] [--display-name <name>] [--path <path>] [--worktree-base-path <path>] [--git-username <name>] [--kind git|folder] [--state ready|not-set-up|setting-up|error|unsupported] [--method legacy-repo|imported-existing-folder|cloned|provisioned] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'setup',
+      'host',
       'display-name',
       'path',
       'worktree-base-path',
@@ -108,22 +109,24 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     ],
     notes: [
       'Repo-backed setups mirror safe fields onto the repo record.',
+      '--host picks the setup when the project is set up on more than one host under the same setup id.',
       'Path and availability state changes are only supported for independent setup records.'
     ],
     examples: [
       `axiom project setup-update --setup github:${productReleaseRepositorySlug()}::gpu --display-name "GPU VM"`,
-      `axiom project setup-update --setup github:${productReleaseRepositorySlug()}::gpu --path /srv/orca --state ready --json`
+      `axiom project setup-update --setup github:${productReleaseRepositorySlug()}::gpu --path /srv/axiom --state ready --json`
     ]
   },
   {
     path: ['project', 'setup-delete'],
     destructive: true,
     summary: 'Remove a project host setup',
-    usage: 'axiom project setup-delete --setup <setup-id> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'setup'],
+    usage: 'axiom project setup-delete --setup <setup-id> [--host <host>] [--force] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'setup', 'host', 'force'],
     notes: [
       'Independent setups are removed directly.',
-      'Repo-backed setups remove the registered repo compatibility record.'
+      'Repo-backed setups remove the registered repo compatibility record.',
+      'Refuses while the project has open terminals or saved workspace details; --force removes it anyway.'
     ],
     examples: [
       `axiom project setup-delete --setup github:${productReleaseRepositorySlug()}::gpu --json`

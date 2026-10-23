@@ -1,12 +1,12 @@
-import { timingSafeEqual } from 'node:crypto'
+import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration-compatibility-evidence'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { OrchestrationDb } from '../../runtime/orchestration/db'
-import { hashDispatchCapability } from '../../runtime/orchestration/db/dispatch-capability-hash'
-import { isEquivalentPaneKey } from '../../runtime/orchestration/db/pane-key-match'
 import type { OrchestrationSessionCaller } from '../../runtime/orchestration/orchestration-caller-identity'
 import { OrchestrationError } from '../../runtime/orchestration/orchestration-error'
 import { hasLifecycleAuthority } from '../../runtime/orchestration/lifecycle-reconciliation'
 import { orchestrationCallerIdentity } from '../../runtime/rpc/methods/orchestration/runs/run-scope'
+import { workerReportRefusal } from '../../runtime/orchestration/worker-report-admission'
+import { assertLifecycleCallerIsNotAnotherParty } from '../../runtime/rpc/methods/orchestration/messaging/lifecycle-caller-fence'
 import type { AxiomStore } from '../db/axiom-store'
 
 type SenderInput = {
@@ -16,7 +16,7 @@ type SenderInput = {
   from: string
   attemptId: string
   orchestrationCaller?: OrchestrationSessionCaller
-  orchestrationCapability?: string
+  orchestrationCompatibilityEvidence?: OrchestrationCompatibilityEvidence
   allowSubmissionReplay?: boolean
 }
 
@@ -55,8 +55,19 @@ function resolveWorkerSender(
 }
 
 function resolveAttemptIdentity(input: SenderInput) {
-  const { runtime, db, store, from, attemptId, orchestrationCaller, orchestrationCapability } =
-    input
+  const { runtime, db, store, from, attemptId, orchestrationCaller } = input
+  const sender = orchestrationCallerIdentity(runtime, {
+    handle: from,
+    paneKey: runtime.getTerminalPaneKey(from),
+    session: orchestrationCaller
+  })
+  if (!orchestrationCaller) {
+    assertLifecycleCallerIsNotAnotherParty(runtime, {
+      from,
+      fromPaneKey: sender.paneKey ?? undefined,
+      evidence: input.orchestrationCompatibilityEvidence
+    })
+  }
   const dispatch = db.getDispatchContextById(attemptId)
   if (!dispatch) {
     throw new OrchestrationError('unknown_dispatch', 'Attempt dispatch was not found.')
@@ -66,7 +77,7 @@ function resolveAttemptIdentity(input: SenderInput) {
     throw new OrchestrationError('unknown_dispatch', 'Attempt binding was not found.')
   }
   // Settlement revokes mutation authority. A saved Submission permits only an authenticated
-  // read of that immutable result; it never reactivates the capability or dispatch.
+  // read of that immutable result; it never reactivates the dispatch.
   const replay =
     input.allowSubmissionReplay && dispatch.status === 'completed'
       ? store.getSubmissionByDispatch(attemptId)
@@ -77,22 +88,33 @@ function resolveAttemptIdentity(input: SenderInput) {
   if (store.nextAttemptSeq(binding.taskId) > binding.seq + 1) {
     throw new OrchestrationError('stale_dispatch', 'A newer Attempt owns this Task.')
   }
-  const sender = orchestrationCallerIdentity(runtime, {
-    handle: from,
-    paneKey: runtime.getTerminalPaneKey(from),
-    session: orchestrationCaller
-  })
-  const capabilityInput = {
+  const processIdentity = {
     dispatchId: attemptId,
-    capability: orchestrationCapability,
-    paneKey: sender.paneKey ?? undefined,
-    processIncarnation: runtime.getTerminalProcessIncarnation(from) ?? undefined
+    paneKey: sender.paneKey ?? null,
+    processIncarnation: runtime.getTerminalProcessIncarnation(from) ?? null
   }
-  const authority = replay
-    ? verifySubmissionReplay(dispatch, capabilityInput)
-    : db.verifyDispatchCapability(capabilityInput)
-  if (!authority.valid) {
-    throw new OrchestrationError('dispatch_capability_invalid', authority.reason)
+  if (replay) {
+    verifySubmissionReplay(db, processIdentity)
+  } else {
+    const refusal = workerReportRefusal({
+      dispatchId: attemptId,
+      from,
+      workerState: db.getWorkerDispatch(attemptId)?.state,
+      processCurrent: !dispatch.process_incarnation || db.isDispatchProcessCurrent(processIdentity)
+    })
+    if (refusal) {
+      throw new OrchestrationError(refusal.code, refusal.reason)
+    }
+    if (
+      !dispatch.process_incarnation &&
+      !db.isDispatchMessageSender({
+        dispatchId: attemptId,
+        handle: sender.address,
+        paneKey: sender.paneKey
+      })
+    ) {
+      throw new OrchestrationError('sender_not_assignee', 'Sender is not the Attempt assignee.')
+    }
   }
   if (
     !hasLifecycleAuthority(dispatch, {
@@ -121,23 +143,13 @@ function resolveAttemptIdentity(input: SenderInput) {
   return { mission, binding, dispatch, run, sender }
 }
 function verifySubmissionReplay(
-  dispatch: NonNullable<ReturnType<OrchestrationDb['getDispatchContextById']>>,
-  input: Parameters<OrchestrationDb['verifyDispatchCapability']>[0]
+  db: OrchestrationDb,
+  identity: Parameters<OrchestrationDb['isDispatchProcessCurrent']>[0]
 ) {
-  const expected = Buffer.from(dispatch.capability_hash ?? '', 'hex')
-  const observed = Buffer.from(hashDispatchCapability(input.capability ?? ''), 'hex')
-  const valid = Boolean(
-    input.capability &&
-    expected.length === observed.length &&
-    timingSafeEqual(expected, observed) &&
-    dispatch.assignee_pane_key &&
-    input.paneKey &&
-    isEquivalentPaneKey(dispatch.assignee_pane_key, input.paneKey) &&
-    dispatch.process_incarnation &&
-    input.processIncarnation === dispatch.process_incarnation
-  )
-  return {
-    valid,
-    reason: 'Submission replay requires the original Dispatch capability, pane and process.'
+  if (!db.isDispatchProcessCurrent(identity)) {
+    throw new OrchestrationError(
+      'worker_identity_changed',
+      'Submission replay requires the original Dispatch pane and process.'
+    )
   }
 }

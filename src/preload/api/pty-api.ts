@@ -1,10 +1,26 @@
+import type { PaintedRestorePane } from '../../shared/painted-restore-ack'
+import type {
+  PtyFencedTerminationRequest,
+  PtyFencedTerminationOutcome
+} from '../../shared/pty-fenced-termination'
+import type { ResourceViewAdmission } from '../../shared/resource-view-admission'
+import type { SpawnIntent } from '../../shared/host-spawn-admission'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session-resume'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
+import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import type {
+  TerminalLeafMoveRequest,
+  TerminalLeafMoveResult
+} from '../../shared/terminal-leaf-move'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
-import type { PtyListedSession, PtySessionListScope } from '../../shared/pty-listed-session'
+import type {
+  PtyListedSession,
+  PtySessionListScope,
+  PtySessionLifecycle
+} from '../../shared/pty-listed-session'
 import type { PtyMainDeliveryDiagnostics } from '../../shared/pty-delivery-diagnostics'
 import type { PtyModelRestoreNeededEvent } from '../../shared/pty-model-restore-marker'
 import type {
@@ -15,15 +31,18 @@ import type { AgentKind, LaunchSource, RequestKind } from '../../shared/telemetr
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { TerminalPanePlacement } from '../../shared/terminal-pane-placement'
+import type { AgentPaneLaunchRequest } from '../../shared/agent-pane-launch-request'
 import type { PtyManagementApi } from './pty-management-api'
 import type { TerminalProcessInspection } from '../../shared/terminal-process-inspection'
+import type { CodexSharedServerStatus } from '../../shared/codex-shared-server-command'
+import type { NewerDaemonHeldScreen, NewerDaemonReopenResult } from '../../shared/newer-daemon-hold'
 
 export type PtyApi = {
   spawn: (opts: {
     cols: number
     rows: number
     cwd?: string
-    cwdFallback?: 'worktree'
     env?: Record<string, string>
     envToDelete?: string[]
     command?: string
@@ -43,11 +62,19 @@ export type PtyApi = {
     terminalColorQueryReplies?: { foreground?: string; background?: string }
     // Why: mark the PTY hidden before its first byte so the delivery gate owns spawn-time queries (terminal-query-authority.md §races).
     initiallyHidden?: boolean
+    // Layout-owner build: attach to `sessionId` or start nothing; older mains ignore it.
+    attachOnlyView?: boolean
     // Why: main sync-flushes the (worktreeId,tabId,leafId→ptyId) binding before pty:spawn returns to close a SIGKILL race (INVESTIGATION.md).
     tabId?: string
     leafId?: string
     // Why: a pane with a live owner is otherwise reattached; a restart names the PTY main must stop first.
     replacesPtyId?: string
+    // Which tab and leaf a fresh PTY joins; older mains ignore it.
+    placement?: TerminalPanePlacement
+    // Visible restores are `user-resume`, hidden ones `automatic-restore`; the fork gate validates.
+    spawnIntent?: SpawnIntent
+    // The agent launch this pane's spawn starts; main admits and plans it.
+    agentLaunch?: AgentPaneLaunchRequest
     // Why: main fires `agent_started` only on spawn success, so launch metadata rides this field (telemetry-plan.md §Agent launch semantics).
     telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
   }) => Promise<{
@@ -75,16 +102,27 @@ export type PtyApi = {
     /** Host verdict on the shell-ready marker; absent when the execution host predates the field. */
     shellReadyArmed?: boolean
   }>
-  write: (id: string, data: string) => void
-  writeAccepted: (id: string, data: string) => Promise<boolean>
+  write: (id: string, data: string, inputKind: TerminalInputKind) => void
+  /** `requireWriteSettlement` waits for the provider's acknowledgment on any provider. */
+  writeAccepted: (
+    id: string,
+    data: string,
+    inputKind: TerminalInputKind,
+    options?: { requireWriteSettlement?: true }
+  ) => Promise<boolean>
   onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
   resize: (id: string, cols: number, rows: number) => void
   claimViewport: (id: string, cols: number, rows: number) => void
   reportGeometry: (id: string, cols: number, rows: number) => void
   signal: (id: string, signal: string) => void
   clearBuffer: (id: string) => void
+  resetInputModes: (id: string) => void
+  killFenced: (request: PtyFencedTerminationRequest) => Promise<PtyFencedTerminationOutcome>
   kill: (id: string, opts?: { keepHistory?: boolean }) => Promise<void>
-  ackColdRestore: (id: string) => void
+  /** The view painted the restore; `pane` names the pane it painted (layout-owner build). */
+  ackColdRestore: (id: string, pane?: PaintedRestorePane) => void
+  /** Hidden-output recovery painted main's snapshot; retires the hidden-delivery drop latch. */
+  ackHiddenOutputRestoreApplied: (id: string, hiddenDropEpisode?: number) => void
   ackData: (id: string, charCount: number, processedChars?: number) => void
   onDeliveryResyncRequest: (callback: (payload: { requestId: number }) => void) => () => void
   respondDeliveryResync: (payload: {
@@ -124,13 +162,38 @@ export type PtyApi = {
     }
   ) => Promise<TerminalProcessInspection>
   confirmForegroundProcess: (id: string) => Promise<string | null>
+  /** Local panes only; never joined for any other pane. */
+  isCodexOnSharedServer: (id: string) => Promise<CodexSharedServerStatus>
+  /** Runs the fix with the pane's own Codex; true only once verified. Local panes only. */
+  disableCodexSharedServerAutoStart: (id: string) => Promise<boolean>
+  stopCodexSharedServer: (id: string) => Promise<boolean>
+  /** A local pane whose daemon lacks the claude function and whose claude runs another account
+   *  than the one selected for the pane's runtime; false for any other pane. */
+  openedBeforeClaudeAccounts: (
+    id: string,
+    target: { runtime: 'host' } | { runtime: 'wsl'; wslDistro: string }
+  ) => Promise<boolean>
+  /** A local host pane whose Claude may open its diff panel unasked, judged from Claude's saved
+   *  config; false for any other pane. */
+  claudeDiffPanelMayAutoOpen: (
+    id: string,
+    target: { runtime: 'host' } | { runtime: 'wsl'; wslDistro: string }
+  ) => Promise<boolean>
+  /** A held local session's last saved screen, read without spawning. */
+  readNewerDaemonHeldScreen: (sessionId: string) => Promise<NewerDaemonHeldScreen | null>
+  /** Stops the newer daemons; reopened only once each is confirmed exited. */
+  reopenNewerDaemonTerminals: () => Promise<NewerDaemonReopenResult>
   getCwd: (id: string) => Promise<string>
   getSize: (id: string) => Promise<{ cols: number; rows: number } | null>
-  listSessions: (scope?: PtySessionListScope) => Promise<PtyListedSession[]>
+  listSessions: (
+    scope?: PtySessionListScope,
+    admission?: ResourceViewAdmission
+  ) => Promise<PtyListedSession[]>
   getAuthoritativeBufferSnapshotCapabilities?: (
     ids: string[]
   ) => Promise<{ id: string; authoritative: boolean | null }[]>
   hasPty: (id: string) => Promise<boolean | null>
+  moveLeafToNewTab: (request: TerminalLeafMoveRequest) => Promise<TerminalLeafMoveResult>
   getMainBufferSnapshot: (
     id: string,
     opts?: { scrollbackRows?: number }
@@ -213,13 +276,14 @@ export type PtyApi = {
       preserveRendererBinding?: boolean
       /** Which lifetime of `id` died; absent when the execution host predates the field. */
       incarnationId?: string
+      hostId?: string
       /** Set only when the owning relay disowned this id; never a claim that the process died. */
       ptySourceDisowned?: true
       /** Main stopped this PTY so a new process could take its pane; the pane is not dying. */
       replacedByRestart?: true
     }) => void
   ) => () => void
-  onSpawned: (callback: (data: { id: string }) => void) => () => void
+  onSpawned: (callback: (data: PtySessionLifecycle) => void) => () => void
   onSerializeBufferRequest: (
     callback: (data: {
       requestId: string
@@ -228,6 +292,7 @@ export type PtyApi = {
     }) => void
   ) => () => void
   onClearBufferRequest: (callback: (data: { ptyId: string }) => void) => () => void
+  onResetInputModesRequest: (callback: (data: { ptyId: string }) => void) => () => void
   sendSerializedBuffer: (
     requestId: string,
     snapshot: {

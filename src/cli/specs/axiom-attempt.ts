@@ -4,15 +4,8 @@ export const AXIOM_ATTEMPT_COMMAND_SPECS: CommandSpec[] = [
     path: ['attempt', 'submit'],
     summary: 'Submit an immutable Candidate and Worker report',
     usage:
-      'axiom attempt submit --attempt <id> --dispatch-capability <dcap> --report <path.json> [--retry-request <id>] [--json]',
-    allowedFlags: [
-      ...GLOBAL_FLAGS,
-      'attempt',
-      'from',
-      'dispatch-capability',
-      'report',
-      'retry-request'
-    ],
+      'axiom attempt submit --attempt <id> --report <path.json> [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'attempt', 'from', 'report', 'retry-request'],
     notes: [
       'Attach REPORT.md first with axiom mission artifact put --kind worker_report; include its Artifact id in report.artifacts.'
     ]
@@ -21,12 +14,11 @@ export const AXIOM_ATTEMPT_COMMAND_SPECS: CommandSpec[] = [
     path: ['attempt', 'ask'],
     summary: 'Ask a blocking Worker question',
     usage:
-      'axiom attempt ask --attempt <id> --dispatch-capability <token> --question <text> [--option <o>] [--timeout-ms <n>] [--resume <questionId>] [--retry-request <id>] --json',
+      'axiom attempt ask --attempt <id> --question <text> [--option <o>] [--timeout-ms <n>] [--resume <questionId>] [--retry-request <id>] --json',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'attempt',
       'from',
-      'dispatch-capability',
       'question',
       'option',
       'timeout-ms',
@@ -38,12 +30,11 @@ export const AXIOM_ATTEMPT_COMMAND_SPECS: CommandSpec[] = [
   ...['inform', 'request', 'blocked', 'handoff', 'request-subtask'].map((verb): CommandSpec => ({
     path: ['attempt', verb],
     summary: `Send a typed Worker ${verb} message`,
-    usage: `axiom attempt ${verb} --attempt <id> --dispatch-capability <token> --summary <text> [--body <text> | --body-file <path>] [--artifact <id>] [--related-task <id>]${verb === 'request-subtask' ? ' --title <text> --objective <text> --allowed-path <path> --acceptance <text> --evidence <text> [--risk low|medium|high] [--depends-on <taskId>]' : ''} [--json]`,
+    usage: `axiom attempt ${verb} --attempt <id> --summary <text> [--body <text> | --body-file <path>] [--artifact <id>] [--related-task <id>]${verb === 'request-subtask' ? ' --title <text> --objective <text> --allowed-path <path> --acceptance <text> --evidence <text> [--risk low|medium|high] [--depends-on <taskId>]' : ''} [--json]`,
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'attempt',
       'from',
-      'dispatch-capability',
       'retry-request',
       'summary',
       'body',
@@ -69,16 +60,8 @@ export const AXIOM_ATTEMPT_COMMAND_SPECS: CommandSpec[] = [
     path: ['attempt', 'check'],
     summary: 'Read the current Attempt mailbox',
     usage:
-      'axiom attempt check --attempt <id> --dispatch-capability <token> [--wait] [--timeout-ms <n>] [--type <routing-type>] --json',
-    allowedFlags: [
-      ...GLOBAL_FLAGS,
-      'attempt',
-      'from',
-      'dispatch-capability',
-      'wait',
-      'timeout-ms',
-      'type'
-    ]
+      'axiom attempt check --attempt <id> [--wait] [--timeout-ms <n>] [--type <routing-type>] --json',
+    allowedFlags: [...GLOBAL_FLAGS, 'attempt', 'from', 'wait', 'timeout-ms', 'type']
   },
   {
     path: ['attempt', 'show'],

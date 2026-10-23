@@ -61,7 +61,7 @@ it('consumes a Task crash marker before the stub, exits without submitting, then
   await expect(
     runInNewContext(
       `${AXIOM_TEST_PROVIDER_SOURCE}
-submitFixture('attempt-1', 'dcap_fixture', 'mission-1', 'task-1')`,
+submitFixture('attempt-1', 'mission-1', 'task-1')`,
       context
     )
   ).rejects.toThrow('provider exit 137')
@@ -84,7 +84,7 @@ submitFixture('attempt-1', 'dcap_fixture', 'mission-1', 'task-1')`,
   spawnSync.mockClear()
   await runInNewContext(
     `${AXIOM_TEST_PROVIDER_SOURCE}
-submitFixture('attempt-2', 'dcap_fixture', 'mission-1', 'task-1')`,
+submitFixture('attempt-2', 'mission-1', 'task-1')`,
     { ...context }
   )
   expect(spawnSync.mock.calls[1]![1]).toEqual([

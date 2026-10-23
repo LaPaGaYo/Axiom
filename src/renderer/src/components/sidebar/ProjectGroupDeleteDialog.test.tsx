@@ -99,7 +99,7 @@ describe('ProjectGroupDeleteDialog', () => {
 
     expect(document.body.textContent).toContain('Delete Platform.')
     expect(document.body.textContent).not.toContain('will stay in Orca')
-    expect(document.body.textContent).not.toContain('will be removed from Orca')
+    expect(document.body.textContent).not.toContain('will be removed from Axiom')
     expect(document.body.textContent).not.toContain('unless selected below')
     expect(getCheckbox().getAttribute('aria-checked')).toBe('true')
     expect(findButton('Delete Group')).toBeTruthy()

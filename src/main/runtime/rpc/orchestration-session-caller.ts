@@ -1,5 +1,5 @@
 /**
- * Resolves an orchestration caller that names itself by the Orca agent session id in its injected
+ * Resolves an orchestration caller that names itself by the Axiom agent session id in its injected
  * environment. Both dispatchers call this once, before params parse and the unary/streaming split,
  * so it runs ahead of legacy compatibility, receipt lookup and every method. Before parsing, so a
  * session caller need not name itself in a param that requires a caller.
@@ -8,18 +8,22 @@
  * user, so the checks are about getting the identity right, not about keeping anyone out:
  * - Same host only. A paired client, an SSH environment or a WSL shell is another host, where
  *   "same machine, same user" does not hold, so a session claim from one is refused.
- * - The Orca id, never the provider's: that one rotates on `/clear`.
+ * - The Axiom id, never the provider's: that one rotates on `/clear`.
  * - A live lease: released, mid owner change or unreconciled sessions cannot act.
  * - The session wins over any declared caller: a declared handle must name this same session, and
  *   a structured worker's session id maps to the handle and pane it was minted.
- * - A request with no session id that declares a `session:` caller gets the party it names: a
+ * - A request with no session id that declares an `orca_session_id:` caller gets the party it names: a
  *   worker's handle, or a refusal for a chat, whose address alone identifies nobody.
  */
 import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import { isOrcaSessionId, parseOrcaSessionAddress } from '../../../shared/orca-session-address'
+import { ORCA_AGENT_SESSION_ID_ENV } from '../../../shared/agent-session-caller-env'
+import {
+  ORCA_SESSION_ADDRESS_PREFIX,
+  isOrcaSessionId,
+  parseOrcaSessionAddress
+} from '../../../shared/orca-session-address'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../shared/orchestration-session-caller-codes'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { OrchestrationSessionCaller } from '../orchestration/orchestration-caller-identity'
 import { OrchestrationError } from '../orchestration/orchestration-error'
@@ -30,8 +34,11 @@ import {
   resolveOrcaSessionParty,
   resolveOrchestrationParty
 } from '../orchestration/orchestration-party'
+import { lookupOrcaAgentSession } from '../orchestration/structured-session-mail-address'
+import { readAgentSessionRecordStore } from '../orchestration/structured-session-lineage'
 import { structuredWorkerHostScope } from '../structured-worker-identity'
 import type { RpcRequest } from './core'
+import { isAxiomAttemptCallerMethod } from '../../../shared/axiom-contract/attempt-caller-methods'
 
 type CallerParam = 'from' | 'terminal' | 'callerTerminalHandle'
 
@@ -59,6 +66,11 @@ export const ORCHESTRATION_CALLER_PARAM: Readonly<Record<string, CallerParam>> =
   'orchestration.workerStart': 'from'
 }
 
+// D73: Axiom Worker/Planner commands use the same host-resolved caller boundary.
+function callerParam(method: string): CallerParam | undefined {
+  return isAxiomAttemptCallerMethod(method) ? 'from' : ORCHESTRATION_CALLER_PARAM[method]
+}
+
 export type OrchestrationRequestRoute = {
   /** Set only by the paired WebSocket route: the request came from another host's client. */
   pairedDeviceId?: string
@@ -73,11 +85,11 @@ export type ResolvedOrchestrationRequest = {
 const NO_EFFECTS = { effectsApplied: false } as const
 
 /**
- * Whether this request names its caller by a session id, or declares a `session:` address as its
+ * Whether this request names its caller by a session id, or declares an `orca_session_id:` address as its
  * caller. Synchronous, so every other request, terminal callers included, takes no extra async hop.
  */
 export function needsOrchestrationCallerResolution(request: RpcRequest): boolean {
-  if (!request.method.startsWith('orchestration.')) {
+  if (!request.method.startsWith('orchestration.') && !isAxiomAttemptCallerMethod(request.method)) {
     return false
   }
   return (
@@ -87,7 +99,7 @@ export function needsOrchestrationCallerResolution(request: RpcRequest): boolean
 }
 
 function declaredSessionAddress(request: RpcRequest): string | undefined {
-  const name = ORCHESTRATION_CALLER_PARAM[request.method]
+  const name = callerParam(request.method)
   const params: unknown = request.params
   if (!name || !params || typeof params !== 'object' || Array.isArray(params)) {
     return undefined
@@ -110,18 +122,18 @@ export async function resolveOrchestrationSessionCaller(
   const claimed: unknown = evidence?.agentSessionId
   if (route?.pairedDeviceId !== undefined) {
     throw hostBoundary(
-      'This request reached Axiom from a paired client, and an agent session id identifies a caller only on the host that runs that session.'
+      'This request reached Axiom from a paired client, and an Axiom session ID identifies a caller only on the host that runs that session.'
     )
   }
   if (evidence?.host) {
     throw hostBoundary(
-      `This command ran in ${evidence.host.kind === 'ssh' ? 'an SSH' : 'a WSL'} environment, and an agent session id identifies a caller only on the host that runs that session.`
+      `This command ran in ${evidence.host.kind === 'ssh' ? 'an SSH' : 'a WSL'} environment, and an Axiom session ID identifies a caller only on the host that runs that session.`
     )
   }
   if (typeof claimed !== 'string' || !isOrcaSessionId(claimed)) {
     throw new OrchestrationError(
       CODES.unknown,
-      'The caller named an agent session id that is not an Axiom session id. No effects were applied.',
+      'The caller named an ID that is not an Axiom session ID. No effects were applied.',
       NO_EFFECTS
     )
   }
@@ -149,10 +161,10 @@ async function readSessionRecord(
   runtime: OrcaRuntimeService,
   sessionId: string
 ): Promise<AgentSessionRecord> {
-  let store: ReturnType<typeof sessionRecordStore>
+  let store: ReturnType<typeof readAgentSessionRecordStore>
   try {
     await runtime.ensureStructuredAgentSessionHost()
-    store = sessionRecordStore()
+    store = readAgentSessionRecordStore()
   } catch {
     store = null
   }
@@ -163,16 +175,15 @@ async function readSessionRecord(
       NO_EFFECTS
     )
   }
-  const record = store.getRecord(sessionId)
-  if (record) {
-    return record
+  const found = lookupOrcaAgentSession(store, sessionId)
+  if (found.kind === 'found') {
+    return found.record
   }
-  const owner = store.listRecords().find((candidate) => namesProviderSession(candidate, sessionId))
-  if (owner) {
+  if (found.kind === 'provider-id') {
     throw new OrchestrationError(
       CODES.providerId,
-      `${sessionId} is the provider's own session id, which changes on /clear. This session's Axiom id is ${owner.sessionId}; use that instead. No effects were applied.`,
-      { ...NO_EFFECTS, orcaSessionId: owner.sessionId }
+      `${sessionId} is the provider's own session id, which changes on /clear. This session's Axiom session ID is ${ORCA_SESSION_ADDRESS_PREFIX}${found.orcaSessionId}; set ${ORCA_AGENT_SESSION_ID_ENV}=${found.orcaSessionId} instead. No effects were applied.`,
+      { ...NO_EFFECTS, orcaSessionId: found.orcaSessionId }
     )
   }
   throw new OrchestrationError(
@@ -182,23 +193,10 @@ async function readSessionRecord(
   )
 }
 
-function sessionRecordStore(): {
-  getRecord: (sessionId: string) => AgentSessionRecord | null
-  listRecords: () => AgentSessionRecord[]
-} | null {
-  return getStructuredAgentSessionHost()?.deps.store ?? null
-}
-
-function namesProviderSession(record: AgentSessionRecord, id: string): boolean {
-  return record.providerHandleChain.some(({ handle }) =>
-    handle.provider === 'claude' ? handle.sessionId === id : handle.threadId === id
-  )
-}
-
 function assertSessionCanAct(sessionId: string, record: AgentSessionRecord): void {
   if (!structuredWorkerHostScope(record.location)) {
     throw hostBoundary(
-      `Agent session ${sessionId} runs on another host, and an agent session id identifies a caller only on the host that runs that session.`
+      `Agent session ${sessionId} runs on another host, and an Axiom session ID identifies a caller only on the host that runs that session.`
     )
   }
   if (agentSessionLeaseAdmitsWriter(record.lease)) {
@@ -219,9 +217,9 @@ function assertSessionCanAct(sessionId: string, record: AgentSessionRecord): voi
   )
 }
 
-/** A request with no session id that declares a `session:` caller: a worker's is its handle. */
+/** A request with no session id that declares an `orca_session_id:` caller: a worker's is its handle. */
 function bindDeclaredSessionAddress(db: OrchestrationDb, request: RpcRequest): RpcRequest {
-  const name = ORCHESTRATION_CALLER_PARAM[request.method]
+  const name = callerParam(request.method)
   const declared = declaredSessionAddress(request)
   const params: unknown = request.params
   if (!name || declared === undefined || !params || typeof params !== 'object') {
@@ -257,7 +255,7 @@ function bindDeclaredCaller(
   caller: OrchestrationSessionCaller,
   db: OrchestrationDb
 ): unknown {
-  const name = ORCHESTRATION_CALLER_PARAM[method]
+  const name = callerParam(method)
   if (!name || !params || typeof params !== 'object' || Array.isArray(params)) {
     return params
   }

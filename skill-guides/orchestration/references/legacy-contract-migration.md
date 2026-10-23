@@ -47,7 +47,7 @@ On packaged Windows, a legacy ask uses a two-step commit/resume protocol. The
 initial command commits the question, prints its exact
 `ask --resume <message_id>` command, and exits with launcher status `75`. Run
 that exact resume after the launcher or update boundary. For an attested WSL
-launch, preserve the printed `orca-ide` executable and distro route. Older WSL
+launch, preserve the printed `axiom` executable and distro route. Older WSL
 workers without launch proof remain lifecycle read-only even while their
 terminal and filesystem work continue.
 

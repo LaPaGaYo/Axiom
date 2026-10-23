@@ -11,16 +11,12 @@ afterEach(() => {
 })
 it('lists in insertion order, filters typed rows, and does not trust a foreign payload Mission', async () => {
   for (const verb of ['inform', 'request-subtask']) {
-    await f.call(
-      `axiom.attempt.${verb}`,
-      {
-        from: f.t01.from,
-        attemptId: f.t01.attemptId,
-        summary: verb,
-        ...(verb === 'request-subtask' ? { subtask } : {})
-      },
-      { orchestrationCapability: f.t01.capability }
-    )
+    await f.call(`axiom.attempt.${verb}`, {
+      from: f.t01.from,
+      attemptId: f.t01.attemptId,
+      summary: verb,
+      ...(verb === 'request-subtask' ? { subtask } : {})
+    })
   }
   const mail = f.db.getUnreadRunMailbox(f.mission.runId)
   f.db.insertMessage({

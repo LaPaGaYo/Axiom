@@ -4,7 +4,7 @@ import { sessionId } from '../mission-controller/controller-fixture.test-support
 
 it('builds a handle-less session caller on the precreated Attempt workspace', () => {
   expect(missionCaller(sessionId, 'wt')).toEqual({
-    address: `session:${sessionId}`,
+    address: `orca_session_id:${sessionId}`,
     terminalHandle: null,
     paneKey: null,
     orcaSessionId: sessionId,

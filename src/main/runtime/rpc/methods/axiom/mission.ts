@@ -15,11 +15,13 @@ import { getAxiomControlPlane, missionSummary } from '../../../../axiom/control-
 export const AXIOM_MISSION_METHODS = [
   defineMethod({
     name: 'axiom.mission.plan',
+    permission: 'workspace',
     params: MissionPlanParams,
     handler: (p, { runtime }) => getAxiomControlPlane(runtime).planner.start(p.missionId)
   }),
   defineMethod({
     name: 'axiom.mission.create',
+    permission: 'workspace',
     params: MissionCreateParams,
     handler: async (p, { runtime }) => {
       const repo = await runtime.showRepo(p.repo)
@@ -37,6 +39,7 @@ export const AXIOM_MISSION_METHODS = [
   }),
   defineMethod({
     name: 'axiom.mission.show',
+    permission: 'workspace',
     params: MissionShowParams,
     handler: (p, { runtime }) => {
       const { missions, store } = getAxiomControlPlane(runtime)
@@ -45,6 +48,7 @@ export const AXIOM_MISSION_METHODS = [
   }),
   defineMethod({
     name: 'axiom.mission.list',
+    permission: 'workspace',
     params: MissionListParams,
     handler: async (p, { runtime }) => {
       const repo = p.repo === undefined ? undefined : await runtime.showRepo(p.repo)
@@ -62,6 +66,7 @@ export const AXIOM_MISSION_METHODS = [
   }),
   defineMethod({
     name: 'axiom.mission.start',
+    permission: 'workspace',
     params: MissionStartParams,
     handler: async (p, { runtime }) => {
       const { missions, store } = getAxiomControlPlane(runtime)
@@ -85,6 +90,7 @@ export const AXIOM_MISSION_METHODS = [
   }),
   defineMethod({
     name: 'axiom.mission.pause',
+    permission: 'workspace',
     params: MissionPauseParams,
     handler: (p, { runtime }) => {
       const { missions, store } = getAxiomControlPlane(runtime)
@@ -93,6 +99,7 @@ export const AXIOM_MISSION_METHODS = [
   }),
   defineMethod({
     name: 'axiom.mission.resume',
+    permission: 'workspace',
     params: MissionResumeParams,
     handler: (p, { runtime }) => {
       const { missions, store } = getAxiomControlPlane(runtime)
@@ -101,6 +108,7 @@ export const AXIOM_MISSION_METHODS = [
   }),
   defineMethod({
     name: 'axiom.mission.cancel',
+    permission: 'workspace',
     params: MissionCancelParams,
     handler: async (p, { runtime }) => {
       const plane = getAxiomControlPlane(runtime)

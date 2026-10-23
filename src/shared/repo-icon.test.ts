@@ -73,11 +73,7 @@ describe('sanitizeRepoIcon', () => {
         src: 'https://www.google.com/s2/favicons?domain=example.com&sz=64',
         source: 'favicon'
       })
-    ).toEqual({
-      type: 'image',
-      src: 'https://www.google.com/s2/favicons?domain=example.com&sz=64',
-      source: 'favicon'
-    })
+    ).toBeUndefined()
     expect(
       sanitizeRepoIcon({
         type: 'image',

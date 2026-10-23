@@ -32,10 +32,7 @@ export function submissionFixture() {
   })
   const retain = vi.spyOn(f.db, 'retainWorkerTerminalResource')
   const params = (worker = f.t01) => ({ attemptId: worker.attemptId, from: worker.from, report })
-  const submit = (worker = f.t01) =>
-    f.call('axiom.attempt.submit', params(worker), {
-      orchestrationCapability: worker.capability
-    })
+  const submit = (worker = f.t01) => f.call('axiom.attempt.submit', params(worker))
   const tables = z
     .array(z.object({ name: z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/) }))
     .parse(

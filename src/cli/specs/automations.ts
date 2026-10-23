@@ -41,12 +41,13 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['automations', 'create'],
     summary: 'Create a scheduled Axiom automation',
     usage:
-      'axiom automations create --name <name> --trigger <preset|cron|rrule> --prompt <text> --provider <agent> [--precheck <command>] [--repo <selector>|--workspace <selector>|--project <id> [--host <id>]|--project-host-setup <id>] [--json]',
+      'axiom automations create --name <name> --trigger <preset|cron|rrule> --prompt <text> --provider <agent> [--precheck <command>] [--repo <selector>|--workspace <selector>|--project <id-or-name> [--host <host>]|--project-host-setup <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'name',
       'prompt',
       'provider',
+      'extra-agent-args',
       ...AUTOMATION_PRECHECK_FLAGS,
       ...AUTOMATION_TARGET_FLAGS,
       ...AUTOMATION_SCHEDULE_FLAGS,
@@ -55,17 +56,19 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Trigger accepts hourly, daily, weekdays, weekly, a 5-field cron expression, or an RRULE string.',
       'When --repo is omitted, the CLI uses the enclosing Axiom worktree when one can be resolved from cwd.',
-      'Use --project with --host, or --project-host-setup, to run on a specific project host setup.',
-      '--host runtime:<environment-id> targets that paired Axiom server; use the id from `axiom environment list`, not the environment name.',
+      'Use --project, or --project-host-setup, to run on a specific project host setup. --project takes the project id or the display name from `axiom project list`, and --host is only needed when the project is set up on more than one host.',
+      '--host takes local, ssh:<target-id>, runtime:<environment-id>, or the bare host name `axiom host list` prints for any of them.',
       'Use --source-context with a JSON TaskSourceContext when task/provider data should come from a specific host/account; pass null on edit to clear it.',
       'Use --workspace to run in an existing worktree; otherwise the automation creates a new worktree per run.',
       'Use --precheck to run a bounded command before scheduled runs; exit code 0 continues, anything else records a skipped run.',
-      'Use --reuse-session only with existing-workspace automations to submit later runs to the previous live automation session when it is still available. Use --fresh-session to disable reuse.'
+      'Use --reuse-session only with existing-workspace automations to submit later runs to the previous live automation session when it is still available. Use --fresh-session to disable reuse.',
+      'Use --extra-agent-args="--model opus --effort high" to add arguments after the host\'s default agent Arguments on each fresh run. Only model, effort, and a few safe options are accepted (Claude, Codex, CodeBuddy, Cursor, Grok, OMP); extras cannot be combined with --reuse-session. On edit, --extra-agent-args= clears them.'
     ],
     examples: [
       'axiom automations create --name "Daily review" --trigger daily --prompt "Review open changes" --provider codex',
       'axiom automations create --name "Weekday triage" --trigger "0 9 * * 1-5" --prompt "Triage issues" --provider claude --repo my-repo',
-      'axiom automations create --name "PR review" --trigger hourly --precheck "gh pr list --json number -q .[0].number" --prompt "Review requested PRs" --provider codex'
+      'axiom automations create --name "PR review" --trigger hourly --precheck "gh pr list --json number -q .[0].number" --prompt "Review requested PRs" --provider codex',
+      'axiom automations create --name "Docs pass" --trigger daily --prompt "Tidy the docs" --provider claude --extra-agent-args="--model opus --effort high --add-dir docs"'
     ]
   },
   {
@@ -78,6 +81,7 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       'name',
       'prompt',
       'provider',
+      'extra-agent-args',
       ...AUTOMATION_PRECHECK_FLAGS,
       ...AUTOMATION_TARGET_FLAGS,
       ...AUTOMATION_SCHEDULE_FLAGS,
@@ -86,7 +90,8 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
     positionalArgs: ['id'],
     examples: [
       'axiom automations edit 2f9e... --disabled',
-      'axiom automations edit --id 2f9e... --trigger "30 * * * *" --json'
+      'axiom automations edit --id 2f9e... --trigger "30 * * * *" --json',
+      'axiom automations edit 2f9e... --extra-agent-args='
     ]
   },
   {
@@ -104,13 +109,29 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
     usage: 'axiom automations run <id> [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'id'],
     positionalArgs: ['id'],
-    examples: ['axiom automations run 2f9e...', 'axiom automations run --id 2f9e... --json']
+    notes: [
+      'Use the full automation UUID from axiom automations list; shortened prefixes are not accepted.',
+      'A queued or dispatching run has been accepted but may not have a workspace or terminal yet. Use axiom automations runs --id <automation-id> to follow its progress.'
+    ],
+    examples: [
+      'axiom automations run 497bafa9-5a97-4f85-9e48-2b211b8f31fa',
+      'axiom automations run --id 497bafa9-5a97-4f85-9e48-2b211b8f31fa --json'
+    ]
   },
   {
     path: ['automations', 'runs'],
     summary: 'List automation run history',
-    usage: 'axiom automations runs [--id <automation-id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'id'],
-    examples: ['axiom automations runs', 'axiom automations runs --id 2f9e... --json']
+    usage:
+      'axiom automations runs [--id <automation-id>] [--limit <n>] [--cursor <cursor>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'id', 'limit', 'cursor'],
+    notes: [
+      'Without --limit or --cursor, reads the whole history in pages, so a large history from a paired server still fits in its replies.',
+      'With --limit or --cursor, prints one page (newest first, at most 100 runs) and its nextCursor; pass that as --cursor for the next page.'
+    ],
+    examples: [
+      'axiom automations runs',
+      'axiom automations runs --id 2f9e... --json',
+      'axiom automations runs --limit 20 --json'
+    ]
   }
 ]

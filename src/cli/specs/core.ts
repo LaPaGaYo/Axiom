@@ -2,9 +2,12 @@ import { productReleaseRepositorySlug } from '../../shared/product-egress-policy
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
 import { WORKTREE_LISTING_SCOPE_NOTES } from './worktree-listing-scope-notes'
+import { WORKTREE_SET_COMMAND_SPEC } from './worktree-set'
 import { SERVE_COMMAND_SPECS } from './serve'
+import { REPO_COMMAND_SPECS } from './repo'
 import { TERMINAL_SEND_COMMAND_SPEC } from './terminal-send'
 import { TERMINAL_CLOSE_COMMAND_SPEC } from './terminal-close'
+import { TERMINAL_SET_PANE_TITLE_COMMAND_SPEC } from './terminal-set-pane-title'
 
 export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -20,6 +23,9 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Show app/runtime/graph readiness',
     usage: 'axiom status [--json]',
     allowedFlags: [...GLOBAL_FLAGS],
+    notes: [
+      "caller.orcaSessionId is this agent's Axiom session ID, as Axiom resolved it, when the agent runs as an Axiom session; otherwise caller is omitted."
+    ],
     examples: ['axiom status', 'axiom status --json']
   },
   {
@@ -34,36 +40,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     ],
     examples: ['axiom claude-teams', 'axiom claude-teams --resume <session-id>']
   },
-  {
-    path: ['repo', 'list'],
-    summary: 'List repos registered in Axiom',
-    usage: 'axiom repo list [--json]',
-    allowedFlags: [...GLOBAL_FLAGS]
-  },
-  {
-    path: ['repo', 'add'],
-    summary: 'Add a project to Axiom by filesystem path',
-    usage: 'axiom repo add --path <path> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'path']
-  },
-  {
-    path: ['repo', 'show'],
-    summary: 'Show one registered repo',
-    usage: 'axiom repo show --repo <selector> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'repo']
-  },
-  {
-    path: ['repo', 'set-base-ref'],
-    summary: "Set the repo's default base ref for future worktrees",
-    usage: 'axiom repo set-base-ref --repo <selector> --ref <ref> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'ref']
-  },
-  {
-    path: ['repo', 'search-refs'],
-    summary: 'Search branch/tag refs within a repo',
-    usage: 'axiom repo search-refs --repo <selector> --query <text> [--limit <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'query', 'limit']
-  },
+  ...REPO_COMMAND_SPECS,
   {
     path: ['worktree', 'list'],
     summary: 'List Axiom-managed worktrees',
@@ -89,9 +66,10 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['worktree', 'create'],
+    repeatableFlags: ['reference'],
     summary: 'Create a new Axiom-managed worktree',
     usage:
-      'axiom worktree create --name <name> [--repo <selector>|--project <id> [--host <host-id>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--setup run|skip|inherit] [--base-branch <ref>] [--issue <number>] [--linear-issue <identifier-or-url>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]',
+      'axiom worktree create --name <name> [--repo <selector>|--project <id-or-name> [--host <host>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--model <id>] [--effort <level>] [--surface chat|terminal] [--setup run|skip|inherit] [--base-branch <ref>] [--reference <url-or-jira-key>...] [--reference-site <id>] [--issue <number>] [--pr <number>] [--linear-issue <identifier-or-url>] [--gitlab-issue <number-or-url>] [--gitlab-mr <number-or-url>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--retry-launch <operationId>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'repo',
@@ -101,9 +79,18 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'name',
       'agent',
       'prompt',
+      'model',
+      'effort',
+      'surface',
+      'retry-launch',
       'base-branch',
+      'reference',
+      'reference-site',
       'issue',
+      'pr',
       'linear-issue',
+      'gitlab-issue',
+      'gitlab-mr',
       'comment',
       'setup',
       'parent-worktree',
@@ -112,23 +99,28 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'activate'
     ],
     notes: [
-      'This creates a new checkout. For a fresh agent in an existing worktree, use `axiom terminal create --worktree active --command "codex"` instead.',
+      'Repeat --reference to attach full issue or review URLs, or Jira issue keys, before setup or agent startup. Use --reference-site to choose the Jira site for keys. Other providers require full URLs. Cannot combine with legacy link flags.',
+      'This creates a new checkout. For a fresh agent in an existing worktree, use `axiom agent launch` instead.',
       'By default, Axiom records the new worktree as a child of the caller context when it can infer one from the Axiom terminal or current directory.',
       'If --repo is omitted, Axiom infers the repo from the current Axiom-managed worktree.',
-      'Use --project with --host to create on a ready project host setup without spelling the backing repo id.',
-      '--host runtime:<environment-id> creates on that paired Axiom server; use the id from `axiom environment list`, not the environment name.',
+      'Use --project to create on a ready project host setup without spelling the backing repo id. --project takes the project id or the display name from `axiom project list`.',
+      '--host is only needed when the project is set up on more than one host; with a single setup Axiom uses it. When it is ambiguous the error names every host the project is set up on.',
+      '--host takes local, ssh:<target-id>, runtime:<environment-id>, or the bare host name `axiom host list` prints for any of them.',
       'For related work, use the inferred parent or pass --parent-worktree active, folder:<id>, or worktree:<worktreeId> to make the relationship explicit. Worktree ids are the full <repo-id>::<path> values returned by `axiom worktree list --json`.',
       'Use --no-parent when the new worktree should be independent of the current context.',
       '--no-parent only affects Axiom lineage; omit --base-branch to use the repo default base, or pass the default base ref explicitly for independent top-level work.',
       'By default this creates the worktree and its first terminal without switching the active Axiom view.',
-      'Pass --agent to launch an agent in the first terminal; --prompt sends initial work to that agent.',
-      'With --agent --json, read the new agent handle from result.agentTerminalHandle; older runtimes return only result.startupTerminal.handle, and may return neither for folder-based repos.',
+      'Pass --agent to start an agent with the worktree, as a chat or a terminal per your Chat UI setting, exactly as a new agent tab does; --prompt sends initial work to it. --model and --effort pick its model and reasoning effort, and --surface chat|terminal picks chat or terminal for this launch instead of your setting.',
+      'After a lost agent launch reply, re-issue the same command from the same directory on the same host with --retry-launch <operationId> from the error. Never retry as a fresh launch; older hosts require inspecting the workspace first.',
+      'With --agent --json, result.launch says what started: launch.outcome.kind (structured chat or terminal), launch.outcome.handle, and launch.receipt.detail for why. An Axiom host older than this returns the terminal agent handle in result.agentTerminalHandle instead.',
       'Repo-defined setup hooks follow the repository setup policy; pass --setup run to force them.',
       'Pass --activate when the CLI caller intentionally wants to reveal the new worktree in the app.',
-      'Passing --run-hooks is kept as a legacy alias for --setup run and reveals the worktree.'
+      'Passing --run-hooks is kept as a legacy alias for --setup run and reveals the worktree.',
+      'Use --pr for GitHub pull requests; --gitlab-issue and --gitlab-mr write separate GitLab links. GitLab URLs must match the stored source project or remote; they cannot select a foreign project.'
     ],
     examples: [
       'axiom worktree create --name agent-task --agent codex --prompt "hi" --json',
+      'axiom worktree create --name design --no-parent --agent codex --model gpt-6-astra --effort high --prompt "Write the design doc" --json',
       'axiom worktree create --repo id:<repoId> --name related-task --json',
       `axiom worktree create --project github:${productReleaseRepositorySlug()} --host runtime:03ef704c-b180-4b10-998d-e28fbd5de9a3 --name benchmark --json`,
       'axiom worktree create --repo id:<repoId> --name linear-task --linear-issue https://linear.app/stably/issue/STA-335/test-issue --json',
@@ -138,31 +130,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'axiom worktree create --repo id:<repoId> --name independent-task --no-parent --json'
     ]
   },
-  {
-    path: ['worktree', 'set'],
-    summary: 'Update Axiom metadata for a worktree',
-    usage:
-      'axiom worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--linear-issue <identifier-or-url|null>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]',
-    allowedFlags: [
-      ...GLOBAL_FLAGS,
-      'worktree',
-      'display-name',
-      'issue',
-      'linear-issue',
-      'comment',
-      'workspace-status',
-      'parent-worktree',
-      'no-parent'
-    ],
-    notes: [
-      'Workspace status ids match the board columns (defaults: todo, in-progress, in-review, completed); custom statuses use their configured id.',
-      'Pass --linear-issue null to clear the Linear issue link.'
-    ],
-    examples: [
-      'axiom worktree set --worktree active --linear-issue STA-335 --json',
-      'axiom worktree set --worktree active --linear-issue null --json'
-    ]
-  },
+  WORKTREE_SET_COMMAND_SPEC,
   {
     path: ['worktree', 'rm'],
     // Why: agents reach for git's `remove`/`delete` verbs; accept them as
@@ -255,15 +223,15 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'command', 'shell', 'title', 'focus'],
     notes: [
       'Creates a visible terminal tab without switching focus when possible; falls back to a background handle if the UI cannot adopt it. Pass --focus to switch to it.',
-      'Use this, not worktree create, for a fresh agent in the current checkout.',
+      'This creates a terminal and runs --command in it. To start an agent, use `axiom agent launch` (or `axiom worktree create --agent` for a new checkout), which follows your Chat UI setting.',
       '--shell picks the shell the terminal IS on a Windows host (cmd.exe, powershell.exe, pwsh.exe, wsl.exe, bash.exe, git-bash); --command is typed into whatever shell the host started, so `--command cmd.exe` leaves a cmd running INSIDE the default shell and exiting it drops back to that shell.',
       'A host that cannot apply --shell refuses the create rather than quietly spawning its default shell: macOS and Linux execution hosts spawn the login shell, terminals routed over SSH resolve their shell on the SSH host, a --shell that contradicts the project execution runtime (WSL vs Windows host) is refused, and an Axiom host older than --shell is refused by the CLI.'
     ],
     examples: [
       'axiom terminal create --json',
-      'axiom terminal create --worktree active --command "codex" --json',
-      'axiom terminal create --worktree path:/projects/myapp --title "RUNNER" --command "opencode"',
-      'axiom terminal create --worktree path:/projects/myapp --command "opencode" --focus',
+      'axiom terminal create --worktree active --command "pnpm dev" --json',
+      'axiom terminal create --worktree path:/projects/myapp --title "RUNNER" --command "npm test"',
+      'axiom terminal create --worktree path:/projects/myapp --command "pnpm dev" --focus',
       'axiom terminal create --worktree path:C:/src/app --shell cmd.exe --json'
     ]
   },
@@ -275,6 +243,9 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Switch to a terminal tab in the UI',
     usage: 'axiom terminal switch [--terminal <handle>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
+    notes: [
+      "With --environment, the desktop app on this machine switches to that server's terminal; a server has no window of its own."
+    ],
     examples: ['axiom terminal switch --terminal term_abc123']
   },
   TERMINAL_CLOSE_COMMAND_SPEC,
@@ -289,6 +260,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'axiom terminal rename --terminal term_abc123 --json'
     ]
   },
+  TERMINAL_SET_PANE_TITLE_COMMAND_SPEC,
   {
     path: ['terminal', 'split'],
     summary: 'Split an existing terminal pane',

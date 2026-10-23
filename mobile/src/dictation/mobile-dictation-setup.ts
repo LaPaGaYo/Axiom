@@ -20,7 +20,7 @@ export type MobileSpeechModel = MobileSpeechModelReply
 // instead of dead-ending on a toast.
 const SETUP_REQUIRED_CODES = new Set(['voice_dictation_disabled', 'voice_model_not_selected'])
 const LEGACY_DESKTOP_SPEECH_SETUP_MESSAGE =
-  'Update the paired desktop Orca app to use mobile voice settings.'
+  'Update the paired desktop Axiom app to use mobile voice settings.'
 
 // Why: mobile can pair with older desktop runtimes that predate speech.models.list;
 // show upgrade guidance instead of leaking the raw denial or not-found error.
@@ -38,6 +38,17 @@ function isLegacyDesktopSpeechSetupReply(reply: RpcResponse): boolean {
   )
 }
 
+// Why: headless servers from 1.4.229 until #31174 had no speech at all; name the fix, not the code.
+export const SPEECHLESS_SERVER_MESSAGE = 'Update Axiom on this server to use voice dictation.'
+
+export function isSpeechlessServerError(message: string): boolean {
+  return message.startsWith('speech_unavailable')
+}
+
+function isSpeechlessServerReply(reply: RpcResponse): boolean {
+  return !reply.ok && isSpeechlessServerError(reply.error?.message ?? '')
+}
+
 export function isDictationSetupRequiredError(message: string): boolean {
   return SETUP_REQUIRED_CODES.has(message) || message.startsWith('voice_model_not_ready:')
 }
@@ -46,6 +57,9 @@ export async function fetchDictationSetup(client: RpcClient): Promise<MobileSpee
   const reply = await requestDictationSetupReply(client)
   if (isLegacyDesktopSpeechSetupReply(reply)) {
     throw new Error(LEGACY_DESKTOP_SPEECH_SETUP_MESSAGE)
+  }
+  if (isSpeechlessServerReply(reply)) {
+    throw new Error(SPEECHLESS_SERVER_MESSAGE)
   }
   return interpretOrThrowRefusalMessage(
     () => dictationSetupRead.interpret(reply),
@@ -108,4 +122,30 @@ export function isDictationReady(setup: MobileSpeechSetup): boolean {
   }
   const selected = setup.models.find((m) => m.id === setup.selectedModelId)
   return selected?.status === 'ready'
+}
+
+// Why no "desktop": the paired computer may be a headless server. Short so the name keeps its room.
+export const CLOUD_MODEL_NEEDS_KEY = 'Needs an OpenAI key'
+
+/** What a model row in the setup sheet and Voice settings offers. */
+export type DictationModelRowAction =
+  | 'in-use'
+  | 'use'
+  | 'download'
+  | 'downloading'
+  | 'needs-api-key'
+
+// Why cloud rows are selectable: a host with no on-device recognizer (Windows or a managed SSH
+// server) lists only cloud models, so a read-only row left the sheet with nothing to pick.
+export function dictationModelRowAction(
+  model: MobileSpeechModel,
+  selectedModelId: string | undefined
+): DictationModelRowAction {
+  if (model.status === 'ready') {
+    return model.id === selectedModelId ? 'in-use' : 'use'
+  }
+  if (model.provider === 'openai') {
+    return 'needs-api-key'
+  }
+  return isModelInFlight(model) ? 'downloading' : 'download'
 }

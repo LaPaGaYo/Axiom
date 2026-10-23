@@ -14,8 +14,7 @@ const resolve = (attemptId = f.t01.attemptId) =>
   resolveAttemptSender({
     ...f,
     from: f.t01.from,
-    attemptId,
-    orchestrationCapability: f.t01.capability
+    attemptId
   })
 it('resolves the durable binding, Task, Mission, Run and kernel sender identity', () => {
   expect(resolve()).toMatchObject({
@@ -44,11 +43,11 @@ it('rejects a kernel dispatch with no Axiom binding', () => {
   expect(() => resolve(dispatch.id)).toThrow(expect.objectContaining({ code: 'unknown_dispatch' }))
   expect(f.snapshot()).toEqual(before)
 })
-it.each(['revoked', 'incarnation', 'pane'] as const)(
+it.each(['stopping', 'incarnation', 'pane'] as const)(
   'keeps the kernel %s fence and has no effects',
   (reason) => {
-    if (reason === 'revoked') {
-      f.db.revokeDispatchCapability(f.t01.attemptId)
+    if (reason === 'stopping') {
+      f.db.beginWorkerStop(f.t01.attemptId, f.runtime.getRuntimeId())
     }
     if (reason === 'incarnation') {
       f.processes.set(f.t01.from, 'new-process')
@@ -58,7 +57,7 @@ it.each(['revoked', 'incarnation', 'pane'] as const)(
     }
     const before = f.snapshot()
     expect(() => resolve()).toThrow(
-      expect.objectContaining({ code: 'dispatch_capability_invalid' })
+      expect.objectContaining({ code: reason === 'stopping' ? 'dispatch_inactive' : 'worker_identity_changed' })
     )
     expect(f.snapshot()).toEqual(before)
   }
@@ -73,5 +72,27 @@ it('rejects mismatched binding ownership', () => {
   })
   const before = f.snapshot()
   expect(() => resolve()).toThrow(expect.objectContaining({ code: 'task_dispatch_mismatch' }))
+  expect(f.snapshot()).toEqual(before)
+})
+
+it('requires the message sender when a dispatch has no recorded process incarnation', () => {
+  f.db.db.prepare('UPDATE dispatch_contexts SET process_incarnation = NULL WHERE id = ?').run(f.t01.attemptId)
+  expect(resolve().sender.address).toBe(f.t01.from)
+  f.panes.set(f.t01.from, 'foreign-pane')
+  const before = f.snapshot()
+  expect(() => resolve()).toThrow(expect.objectContaining({ code: 'sender_not_assignee' }))
+  expect(f.snapshot()).toEqual(before)
+})
+it.each(['coordinator', 'worker'])('fences another %s terminal before looking up the Attempt', (party) => {
+  const caller = party === 'worker' ? f.bind('T02') : { from: 'term_coordinator', paneKey: 'coordinator-pane' }
+  f.panes.set(caller.from, caller.paneKey)
+  if (party === 'coordinator') {
+    f.db.createRun({ coordinatorHandle: caller.from, coordinatorPaneKey: caller.paneKey, objective: 'Other Run' })
+  }
+  const before = f.snapshot()
+  expect(() => resolveAttemptSender({
+    ...f, from: f.t01.from, attemptId: 'missing',
+    orchestrationCompatibilityEvidence: { terminalHandle: caller.from, paneKey: caller.paneKey }
+  })).toThrow(expect.objectContaining({ code: 'consumer_fenced' }))
   expect(f.snapshot()).toEqual(before)
 })

@@ -18,12 +18,7 @@ const params = () => ({
   options: ['JSON', 'CSV'],
   timeoutMs: 0
 })
-const ask = (extra = {}) =>
-  f.call(
-    'axiom.attempt.ask',
-    { ...params(), ...extra },
-    { orchestrationCapability: f.t01.capability }
-  )
+const ask = (extra = {}) => f.call('axiom.attempt.ask', { ...params(), ...extra })
 
 describe('Mission questions', () => {
   it('persists one pending question, blocks admission, answers and resumes with stored evidence', async () => {
@@ -91,53 +86,61 @@ describe('Mission questions', () => {
       await f.call('axiom.message.list', { missionId: f.mission.id, pendingOnly: true })
     ).toMatchObject({ ok: true, result: { messages: [] } })
   })
-  it.each(['missing', 'wrong', 'stale', 'foreign', 'inactive', 'assignee'] as const)(
-    'rejects %s authority without side effects',
-    async (reason) => {
-      if (reason === 'stale') {
-        f.store.insertAttemptBinding({
-          ...f.store.getAttemptBinding(f.t01.taskId, 1)!,
-          seq: 2,
-          dispatchId: null,
-          branch: 'retry'
-        })
-      }
-      if (reason === 'foreign' || reason === 'assignee') {
-        f.panes.set(f.t01.from, 'foreign')
-      }
-      if (reason === 'assignee') {
-        vi.spyOn(f.db, 'verifyDispatchCapability').mockReturnValue({ valid: true })
-      }
-      if (reason === 'inactive') {
-        f.db.settleWorkerReport({
-          taskId: f.t01.taskId,
-          dispatchId: f.t01.attemptId,
-          outcome: 'succeeded',
-          result: 'settled'
-        })
-      }
-      const before = f.snapshot()
-      const capability =
-        reason === 'missing' ? undefined : reason === 'wrong' ? 'dcap_wrong' : f.t01.capability
-      expect(
-        await f.call('axiom.attempt.ask', params(), { orchestrationCapability: capability })
-      ).toMatchObject({
-        ok: false,
-        error: {
-          code:
-            reason === 'stale'
-              ? 'stale_dispatch'
-              : reason === 'inactive'
-                ? 'inactive_dispatch'
-                : reason === 'assignee'
-                  ? 'sender_not_assignee'
-                  : 'dispatch_capability_invalid'
-        }
-      })
-      expect(f.snapshot()).toEqual(before)
-      expect(f.db.db.prepare('SELECT * FROM question_threads').all()).toEqual([])
+  it.each([
+    'missing-process',
+    'other-process',
+    'stale',
+    'foreign',
+    'inactive',
+    'assignee'
+  ] as const)('rejects %s authority without side effects', async (reason) => {
+    if (reason === 'missing-process') {
+      f.processes.delete(f.t01.from)
     }
-  )
+    if (reason === 'other-process') {
+      f.processes.set(f.t01.from, 'another-attempt-process')
+    }
+    if (reason === 'stale') {
+      f.store.insertAttemptBinding({
+        ...f.store.getAttemptBinding(f.t01.taskId, 1)!,
+        seq: 2,
+        dispatchId: null,
+        branch: 'retry'
+      })
+    }
+    if (reason === 'foreign' || reason === 'assignee') {
+      f.panes.set(f.t01.from, 'foreign')
+    }
+    if (reason === 'assignee') {
+      f.db.db
+        .prepare('UPDATE dispatch_contexts SET process_incarnation = NULL WHERE id = ?')
+        .run(f.t01.attemptId)
+    }
+    if (reason === 'inactive') {
+      f.db.settleWorkerReport({
+        taskId: f.t01.taskId,
+        dispatchId: f.t01.attemptId,
+        outcome: 'succeeded',
+        result: 'settled'
+      })
+    }
+    const before = f.snapshot()
+    expect(await f.call('axiom.attempt.ask', params())).toMatchObject({
+      ok: false,
+      error: {
+        code:
+          reason === 'stale'
+            ? 'stale_dispatch'
+            : reason === 'inactive'
+              ? 'inactive_dispatch'
+              : reason === 'assignee'
+                ? 'sender_not_assignee'
+                : 'worker_identity_changed'
+      }
+    })
+    expect(f.snapshot()).toEqual(before)
+    expect(f.db.db.prepare('SELECT * FROM question_threads').all()).toEqual([])
+  })
   it('returns dispatch_inactive after settlement closes a pending question', async () => {
     await ask()
     const id = f.db.getUnreadRunMailbox(f.mission.runId)[0]!.id
@@ -177,8 +180,7 @@ it('answers an RPC waiter and replays ask/answer receipts without duplicate mail
   })
   const p = { ...params(), timeoutMs: 5000 }
   const envelope = {
-    orchestrationRequestId: 'ask-retry',
-    orchestrationCapability: f.t01.capability
+    orchestrationRequestId: 'ask-retry'
   }
   expect(await f.call('axiom.attempt.ask', p, envelope)).toMatchObject({
     ok: true,
@@ -196,8 +198,7 @@ it('checks Mission ownership on answer and retains an accepted receipt if notifi
     throw new Error('notification unavailable')
   })
   const envelope = {
-    orchestrationRequestId: 'ask-notify-fail',
-    orchestrationCapability: f.t01.capability
+    orchestrationRequestId: 'ask-notify-fail'
   }
   expect(await f.call('axiom.attempt.ask', params(), envelope)).toMatchObject({ ok: false })
   const before = f.snapshot()
@@ -210,7 +211,7 @@ it('checks Mission ownership on answer and retains an accepted receipt if notifi
   expect(
     await f.call('axiom.message.answer', {
       missionId: f.mission.id,
-      questionId: 'missing',
+      questionId: 'missing-process',
       body: 'x'
     })
   ).toMatchObject({ ok: false, error: { code: 'question_not_found' } })

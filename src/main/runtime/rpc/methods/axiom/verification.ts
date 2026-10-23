@@ -25,6 +25,7 @@ function view(store: AxiomStore, run: VerificationRun) {
 export const AXIOM_VERIFICATION_METHODS = [
   defineMethod({
     name: 'axiom.verification.show',
+    permission: 'workspace',
     params: VerificationShowParams,
     handler: (p, { runtime }) => {
       const { store } = getAxiomControlPlane(runtime)
@@ -37,6 +38,7 @@ export const AXIOM_VERIFICATION_METHODS = [
   }),
   defineMethod({
     name: 'axiom.verification.list',
+    permission: 'workspace',
     params: VerificationListParams,
     handler: (p, { runtime }) => {
       const { store, missions } = getAxiomControlPlane(runtime)

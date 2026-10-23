@@ -16,16 +16,12 @@ async function request(auto: boolean) {
   const policy = f.store.getPolicy(f.mission.id)!
   f.store.upsertPolicy(f.mission.id, { ...policy, approvalRules: { subtaskAutoCreate: auto } })
   expect(
-    await f.call(
-      'axiom.attempt.request-subtask',
-      {
-        from: worker.from,
-        attemptId: worker.attemptId,
-        summary: 'Split migration',
-        subtask: { ...subtask, allowedPaths: ['src/storage/migrate.ts'] }
-      },
-      { orchestrationCapability: worker.capability }
-    )
+    await f.call('axiom.attempt.request-subtask', {
+      from: worker.from,
+      attemptId: worker.attemptId,
+      summary: 'Split migration',
+      subtask: { ...subtask, allowedPaths: ['src/storage/migrate.ts'] }
+    })
   ).toMatchObject({ ok: true })
   const message = f.db.getUnreadRunMailbox(f.mission.runId)[0]!
   new RunMailboxConsumer(f.runtime, f.store, f.missions, {

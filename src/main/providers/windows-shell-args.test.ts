@@ -205,7 +205,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
 
   it('preserves complex PowerShell startup command text through EncodedCommand', () => {
     const startupCommand =
-      '& "C:\\Program Files\\Orca CLI\\orca.exe" "--label" "quoted value"; $env:ORCA_VALUE = "nested"'
+      '& "C:\\Program Files\\Axiom CLI\\orca.exe" "--label" "quoted value"; $env:ORCA_VALUE = "nested"'
     const result = resolveWindowsShellLaunchArgs(
       'powershell.exe',
       'C:\\Users\\alice',
@@ -306,6 +306,29 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(result.shellArgs[1]).toContain('chcp.com 65001')
     expect(result.shellArgs[1]).toContain('--rcfile')
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
+  })
+
+  it('gives a plain Git Bash tab the same rcfile as one with a startup command', () => {
+    const plain = resolveWindowsShellLaunchArgs(
+      'C:\\Program Files\\Git\\bin\\bash.exe',
+      'C:\\Users\\alice',
+      'C:\\Users\\alice'
+    )
+    const launched = resolveWindowsShellLaunchArgs(
+      'C:\\Program Files\\Git\\bin\\bash.exe',
+      'C:\\Users\\alice',
+      'C:\\Users\\alice',
+      undefined,
+      "codex 'fix the bug'"
+    )
+
+    expect(plain.shellArgs).toEqual(launched.shellArgs)
+    // Why: only the rcfile carries the account-following claude function and codex --no-daemon wrapper.
+    const rcfile = readFileSync(getGitBashRcfilePath(plain.shellArgs[1]), 'utf8')
+    expect(rcfile).toContain('function claude {')
+    expect(rcfile).toContain('set -- --no-daemon "$@"')
+    expect(rcfile).toContain('source "$HOME/.bash_profile"')
+    expect(launched.startupCommandDeliveredInShellArgs).toBeUndefined()
   })
 
   it('quotes a spaced preflight path through each shell environment', () => {

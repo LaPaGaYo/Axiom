@@ -1,7 +1,7 @@
 /**
  * Agent/tool preflight detection. Split out of `ipc/preflight.ts` so the Orca
- * runtime — which calls `detectInstalledAgentsWithShellPathHydration` and
- * `detectRemoteAgents` during normal operation — can reach this logic without
+ * runtime — which calls `detectInstalledAgentsWithShellPathHydration`
+ * during normal operation — can reach this logic without
  * dragging `ipcMain` into its module graph. The Electron handler registration
  * stays in `ipc/preflight.ts` and imports from here.
  */
@@ -15,12 +15,7 @@ import { getBitbucketAuthStatus } from '../bitbucket/client'
 import { getGiteaAuthStatus } from '../gitea/client'
 import { _resetKnownHostsCache } from '../gitlab/gl-utils'
 import { mergePersistedWindowsPathAsync } from '../pty/windows-environment-path'
-import { getActiveMultiplexer } from '../ssh/ssh-target-registry'
-import {
-  detectWslCommandsOnPath,
-  type WslPreflightTarget
-} from '../ipc/preflight-wsl-agent-detection'
-import { detectCommandsInInstallDirs } from '../ipc/local-agent-install-dir-detection'
+import type { WslPreflightTarget } from '../ipc/preflight-wsl-agent-detection'
 import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
@@ -28,7 +23,7 @@ import {
 
 export type { PreflightRuntimeContext }
 import { hydrateShellPathForAgentDetection } from '../ipc/agent-detection-shell-path'
-import { isCommandAvailable, isCommandOnPath } from '../ipc/preflight-command-exec'
+import { findRunnableLocalCommand, isCommandAvailable } from '../ipc/preflight-command-exec'
 import {
   detectRemoteWindowsTerminalCapabilities,
   type RemoteWindowsTerminalCapabilities
@@ -37,9 +32,11 @@ import {
   getTuiAgentDetectionProbeCommands,
   KNOWN_TUI_AGENT_DETECTION_COMMANDS,
   resolveDetectedTuiAgentIds
-} from '../ipc/tui-agent-detection-commands'
+} from '../../shared/tui-agent-detection-commands'
 import { invalidateWslGuestEnvironment } from '../wsl/wsl-guest-environment'
 import { prunePreflightWslCache } from '../preflight-wsl-cache'
+import { detectAgentCommandsOnHost } from './agent-command-detection'
+export { detectAgentCommandsOnHost } from './agent-command-detection'
 
 import type { PreflightStatus } from '../../shared/preflight-status'
 export type { PreflightStatus } from '../../shared/preflight-status'
@@ -106,59 +103,35 @@ export function _resetPreflightCache(): void {
   preflightCacheEpoch += 1
 }
 
-function uniqueAgentIds(ids: Iterable<string>): string[] {
-  return [...new Set(ids)]
-}
+/** A CLI verdict and, on the local path, the exact copy that produced it. */
+type CommandRuntime = { installed: boolean; wslTarget?: WslPreflightTarget; binary?: string }
 
 async function detectCommandRuntime(
   command: string,
   context?: PreflightRuntimeContext
-): Promise<{ installed: boolean; wslTarget?: WslPreflightTarget }> {
+): Promise<CommandRuntime> {
   const wslTarget = getPreflightWslTarget(context)
   if (wslTarget) {
     return (await isCommandAvailable(command, wslTarget))
       ? { installed: true, wslTarget }
       : { installed: false }
   }
-  if (await isCommandAvailable(command)) {
-    return { installed: true }
-  }
-  return { installed: false }
+  // Pin auth to the copy that passed --version, so PATH cannot select the dead shim again.
+  const probe = await findRunnableLocalCommand(command)
+  return probe.status === 'available'
+    ? { installed: true, binary: probe.binary }
+    : { installed: false }
 }
 
 export async function detectInstalledAgents(context?: PreflightRuntimeContext): Promise<string[]> {
-  const wslTarget = getPreflightWslTarget(context)
-  if (wslTarget) {
-    const foundCommands = await detectWslCommandsOnPath(
-      wslTarget,
-      getTuiAgentDetectionProbeCommands(KNOWN_TUI_AGENT_DETECTION_COMMANDS, 'wsl')
-    )
-    return resolveDetectedTuiAgentIds(KNOWN_TUI_AGENT_DETECTION_COMMANDS, foundCommands, 'wsl')
-  }
-
-  const probeCommands = getTuiAgentDetectionProbeCommands(
+  const commands = getTuiAgentDetectionProbeCommands(
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
-    process.platform
-  )
-  const pathChecks = await Promise.all(
-    probeCommands.map(async (cmd) => ({
-      cmd,
-      installedOnPath: await isCommandOnPath(cmd)
-    }))
-  )
-  const missedCommands = pathChecks.filter((check) => !check.installedOnPath).map(({ cmd }) => cmd)
-  // Why: PATH may still be unhydrated on a cold GUI launch; bulk resolution
-  // computes user install dirs once instead of blocking once per missed CLI.
-  const installDirCommands = detectCommandsInInstallDirs(missedCommands)
-  const foundCommands = new Set(
-    pathChecks
-      .filter(({ cmd, installedOnPath }) => installedOnPath || installDirCommands.has(cmd))
-      .map(({ cmd }) => cmd)
+    getPreflightWslTarget(context) ? 'wsl' : process.platform
   )
   return resolveDetectedTuiAgentIds(
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
-    foundCommands,
-    process.platform
+    await detectAgentCommandsOnHost(commands, { context }),
+    getPreflightWslTarget(context) ? 'wsl' : process.platform
   )
 }
 
@@ -222,19 +195,6 @@ export async function refreshShellPathAndDetectAgents(
     pathSource: hydration.ok ? 'shell_hydrate' : 'sync_seed_only',
     pathFailureReason: hydration.failureReason
   }
-}
-
-export async function detectRemoteAgents(args: { connectionId: string }): Promise<string[]> {
-  const mux = getActiveMultiplexer(args.connectionId)
-  if (!mux || mux.isDisposed()) {
-    // Why: remote agent detection is passive UI polling. A disconnected host has
-    // no detectable agents until reconnect, but should not spam IPC errors.
-    return []
-  }
-  const result = (await mux.request('preflight.detectAgents', {
-    commands: KNOWN_TUI_AGENT_DETECTION_COMMANDS
-  })) as { agents: string[] }
-  return uniqueAgentIds(result.agents)
 }
 
 export async function runPreflightCheck(
@@ -310,6 +270,8 @@ async function executePreflightCheck(
 ): Promise<PreflightStatus> {
   if (process.platform === 'win32' && !wslTarget) {
     await mergePersistedWindowsPathAsync(process.env, { forceRefresh: force })
+  } else if (process.platform !== 'win32') {
+    await hydrateShellPathForAgentDetection(context, force)
   }
 
   if (force) {
@@ -333,14 +295,14 @@ async function executePreflightCheck(
   const unchecked = { configured: false, authenticated: false, checked: false, account: null }
   const uncheckedTokenApi = { ...unchecked, baseUrl: null, tokenConfigured: false }
   const [ghAuthenticated, glabAuthenticated, bitbucket, azureDevOps, gitea] = await Promise.all([
-    ghChecked ? probeCliAuthentication('gh', ghProbe.wslTarget) : Promise.resolve(false),
-    glabChecked ? probeCliAuthentication('glab', glabProbe.wslTarget) : Promise.resolve(false),
+    ghChecked ? probeCliAuthentication('gh', ghProbe.wslTarget, ghProbe.binary) : Promise.resolve(false),
+    glabChecked ? probeCliAuthentication('glab', glabProbe.wslTarget, glabProbe.binary) : Promise.resolve(false),
     mayProbeAuthentication(force, 'bitbucket') ? getBitbucketAuthStatus() : unchecked,
     mayProbeAuthentication(force, 'azureDevOps') ? getAzureDevOpsAuthStatus() : uncheckedTokenApi,
     mayProbeAuthentication(force, 'gitea') ? getGiteaAuthStatus() : uncheckedTokenApi
   ])
 
-  const result = {
+  return {
     git: { installed: gitProbe.installed },
     gh: {
       installed: ghProbe.installed,
@@ -356,6 +318,4 @@ async function executePreflightCheck(
     azureDevOps,
     gitea
   }
-
-  return result
 }

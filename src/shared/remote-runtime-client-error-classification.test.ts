@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  RECOVERABLE_CODES,
+  RECOVERABLE_MESSAGE_FRAGMENTS,
   isRecoverableRemoteRuntimeConnectionError,
   isRuntimeRpcQueueOverloadError,
   toRemoteRuntimeClientErrorLike
@@ -8,6 +10,7 @@ import {
 describe('remote runtime client error classification', () => {
   it.each([
     'remote_runtime_unavailable',
+    'remote_runtime_busy',
     'runtime_rpc_queue_overloaded',
     'runtime_timeout',
     'runtime_unavailable',
@@ -34,7 +37,7 @@ describe('remote runtime client error classification', () => {
     expect(
       isRecoverableRemoteRuntimeConnectionError({
         code: 'unauthorized',
-        message: 'Remote Orca runtime closed the connection.'
+        message: 'Remote Axiom runtime closed the connection.'
       })
     ).toBe(false)
   })
@@ -49,14 +52,76 @@ describe('remote runtime client error classification', () => {
   })
 
   it.each([
-    'Could not connect to the remote Orca runtime.',
-    'Remote Orca runtime closed the connection.',
-    'Remote Orca runtime connection closed.',
-    'Remote Orca runtime is not connected.',
+    'Could not connect to the remote Axiom runtime.',
+    'Remote Axiom runtime closed the connection.',
+    'Remote Axiom runtime connection closed.',
+    'Remote Axiom runtime is not connected.',
     "Error invoking remote method 'runtimeEnvironments:call': RuntimeRpcCallQueueOverloadError: Remote runtime call queue is full; retry after current calls finish.",
-    'Remote runtime subscription closed before it started.'
+    'Remote runtime subscription closed before it started.',
+    "Error invoking remote method 'runtimeEnvironments:call': Error: Remote runtime request limit reached; retry after pending requests finish."
   ])('normalizes unstructured connection failure: %s', (message) => {
     const error = toRemoteRuntimeClientErrorLike(new Error(message))
     expect(isRecoverableRemoteRuntimeConnectionError(error)).toBe(true)
   })
+
+  it.each([
+    'Could not connect to the remote Orca runtime.',
+    'Remote Orca runtime closed the connection.',
+    'Remote Orca runtime connection closed.',
+    'Remote Orca runtime is not connected.',
+    'Timed out waiting for the remote Orca runtime.'
+  ])('preserves recovery for older-host messages: %s', (message) => {
+    expect(isRecoverableRemoteRuntimeConnectionError({ message })).toBe(true)
+    expect(isRecoverableRemoteRuntimeConnectionError({ code: 'unauthorized', message })).toBe(false)
+  })
+
+  // Pins the list so a dropped or added code is a deliberate, reviewed change (round-2 S5).
+  it('pins the recoverable codes and message fragments', () => {
+    expect([...RECOVERABLE_CODES].toSorted()).toEqual([
+      'reconnecting',
+      'remote_runtime_busy',
+      'remote_runtime_unavailable',
+      'runtime_rpc_queue_overloaded',
+      'runtime_timeout',
+      'runtime_unavailable',
+      'timeout'
+    ])
+    expect(RECOVERABLE_MESSAGE_FRAGMENTS).toEqual([
+      'could not connect to the remote axiom runtime',
+      'remote axiom runtime closed the connection',
+      'remote axiom runtime connection closed',
+      'remote axiom runtime is not connected',
+      'remote runtime call queue is full',
+      'remote runtime connection closed',
+      'remote runtime connection wait limit reached',
+      'remote runtime request limit reached',
+      'remote runtime subscription limit reached',
+      'remote runtime subscription memory limit reached',
+      'remote runtime subscription closed before it started',
+      'remote terminal stream is not connected',
+      'timed out waiting for the remote axiom runtime'
+    ])
+  })
+
+  it.each([
+    'runtime_manually_disconnected',
+    'ssh_user_disconnected',
+    'remote_runtime_timeout',
+    'runtime_busy'
+  ])('does not treat client code %s as recoverable', (code) => {
+    expect(isRecoverableRemoteRuntimeConnectionError({ code, message: 'refused' })).toBe(false)
+  })
+
+  it.each(RECOVERABLE_MESSAGE_FRAGMENTS)(
+    'recovers a code-stripped message containing %s',
+    (fragment) => {
+      expect(
+        isRecoverableRemoteRuntimeConnectionError(
+          toRemoteRuntimeClientErrorLike(
+            new Error(`Error invoking remote method 'x': Error: ${fragment}.`)
+          )
+        )
+      ).toBe(true)
+    }
+  )
 })

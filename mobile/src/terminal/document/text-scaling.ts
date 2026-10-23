@@ -1,10 +1,10 @@
+import { getCellHeight, getCellWidth } from './cell-metrics'
 import { elementInRoot } from './document-host-seams'
 import { TERMINAL_TEXT_SCALES } from '../terminal-text-scales'
 import type { TerminalDocumentScope } from './document-scope'
 import { scheduleDocumentFrame } from './document-frame-registry'
-import { applyFitScale, getCellHeight, MIN_FIT_COLS } from './fit-scale'
-import { getCellWidth } from './viewport-transform'
-import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
+import { applyFitScale } from './fit-scale'
+import { fitDimensionsFromCell } from '../terminal-grid-fit'
 
 // Why: init() flips ready false on every re-init (live width reflow included)
 // while the old surface stays visible; a document-scoped latch drives the
@@ -50,7 +50,7 @@ export function isIOSWebView() {
 // Why: iOS WebKit does not reliably resolve "SF Mono" by CSS family name and can
 // fall to a non-monospace face; lead with the ui-monospace generic to avoid that.
 const TERMINAL_FONT_FALLBACKS =
-  '"Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", monospace'
+  '"Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", monospace'
 
 // Why: change the real font size, then resize the grid to fit the viewport at
 // the new cell metrics so the text shows at its true size immediately. RN's
@@ -64,6 +64,8 @@ export function applyTextScale(scope: TerminalDocumentScope, scale: number) {
   }
   const px = fontPxForScale(scale)
   if (scope.term.options.fontSize === px) {
+    // Why: a pinch moved the drawn pitch; the fit commit is the one site that reports it.
+    applyFitScale(scope, 'text-scale')
     return
   }
   scope.term.options.fontSize = px
@@ -76,22 +78,31 @@ export function applyTextScale(scope: TerminalDocumentScope, scale: number) {
     }
     const cellW = getCellWidth(scope)
     const cellH = getCellHeight(scope)
+    // Why: fit the frame React Native laid out, by the same formula; init and measure give it. Before
+    // either, the pre-ready terminal stays hidden until the first init, which applies the font and resizes.
+    const frame = scope.hostFrame
+    if (!frame) {
+      return
+    }
     if (cellW > 0 && cellH > 0) {
-      const cols = Math.floor(scope.viewportRect().width / cellW)
-      if (cols < MIN_FIT_COLS) {
-        // Why: hidden (0 wide) or too narrow; the next box must refit at the new cell size.
-        scope.fittedBox = null
+      const fit = fitDimensionsFromCell(
+        { cellWidth: cellW, cellHeight: cellH },
+        frame.width,
+        frame.height
+      )
+      if (!fit) {
+        // Why: too narrow to resize the grid, but the fit still tracks the new cell size; hidden hosts hold it.
+        applyFitScale(scope, 'text-scale')
         return
       }
-      const rows = Math.max(8, Math.floor(scope.viewportRect().height / cellH))
-      scope.term.resize(cols, rows)
-      emitKeyboardAvoidanceMetrics(scope)
+      scope.term.resize(fit.cols, fit.rows)
     }
     applyFitScale(scope, 'text-scale')
   })
 }
 
 export function startTextScaling(scope: TerminalDocumentScope) {
+  scope.currentTextScale = scope.start().textScale
   scope.scrollIndicator = elementInRoot(scope.root, 'scroll-indicator')
   scope.scrollThumb = elementInRoot(scope.root, 'scroll-thumb')
   scope.terminalFontFamily =

@@ -1,6 +1,6 @@
+import { archiveSummary } from './worker-terminal-resource-presentation'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import {
-  archiveSummary,
   completeWorkerTerminalRelease,
   type WorkerReleaseReceipt
 } from './worker-release-completion'

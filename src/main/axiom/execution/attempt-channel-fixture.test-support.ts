@@ -29,15 +29,24 @@ export function channelFixture(dbPath = ':memory:') {
   vi.spyOn(f.runtime, 'getTerminalProcessIncarnation').mockImplementation(
     (handle) => processes.get(handle) ?? null
   )
+  vi.spyOn(f.runtime, 'getLiveTerminalPaneKey').mockImplementation(
+    (handle) => panes.get(handle) ?? null
+  )
+  vi.spyOn(f.runtime, 'getTerminalHandleForPaneKey').mockImplementation(
+    (paneKey) => [...panes].find(([, pane]) => pane === paneKey)?.[0] ?? null
+  )
   const notify = vi.spyOn(f.runtime, 'notifyMessageArrived').mockImplementation(() => {})
-  function bind(proposalId: string) {
+  function bind(
+    proposalId: string,
+    identity?: { from: string; paneKey: string; processIncarnation: string }
+  ) {
     const task = f.store
       .listTaskStages({ missionId: mission.id })
       .find((t) => t.spec.id === proposalId)!
     const seq = f.store.nextAttemptSeq(task.taskId)
-    const from = `term_${proposalId}_${seq}`
-    const paneKey = `pane_${proposalId}_${seq}`
-    const processIncarnation = `process_${proposalId}_${seq}`
+    const from = identity?.from ?? `term_${proposalId}_${seq}`
+    const paneKey = identity?.paneKey ?? `pane_${proposalId}_${seq}`
+    const processIncarnation = identity?.processIncarnation ?? `process_${proposalId}_${seq}`
     panes.set(from, paneKey)
     processes.set(from, processIncarnation)
     const { dispatch } = f.db.createStartingWorkerDispatch({
@@ -46,7 +55,7 @@ export function channelFixture(dbPath = ':memory:') {
       maxDepth: 1,
       startOptions: { topology: 'current', agent: 'codex' }
     })
-    const capability = f.db.prepareStartingWorkerAuthority({
+    f.db.prepareStartingWorkerAuthority({
       dispatchId: dispatch.id,
       handle: from,
       paneKey,
@@ -78,8 +87,7 @@ export function channelFixture(dbPath = ':memory:') {
       attemptId: dispatch.id,
       from,
       paneKey,
-      processIncarnation,
-      capability
+      processIncarnation
     }
   }
   const snapshot = () =>

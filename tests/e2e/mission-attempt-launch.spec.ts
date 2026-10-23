@@ -112,7 +112,8 @@ function inspect(userData: string, missionId: string) {
 const Ledger = z.object({
   cwd: z.string(),
   attemptId: z.string(),
-  capability: z.string(),
+  terminalHandle: z.string().min(1),
+  paneKey: z.string().min(1),
   preambleSha256: z.string().regex(/^[a-f0-9]{64}$/),
   preambleBytes: z.number().positive()
 })
@@ -250,7 +251,7 @@ test('M2-05: launches three fixture Attempts and preserves identity without rela
       expect(bound.branch).toBe(`axiom/attempt/${bound.task_id}/1`)
       expect(git(['-C', clone, 'rev-parse', '--verify', `refs/heads/${bound.branch}`])).toBe(base)
       const entry = ledger.find((e) => e.attemptId === attempt.attemptId)!
-      expect(entry.capability).toMatch(/^dcap_/)
+      expect(entry.terminalHandle).toMatch(/^term_/)
       expect(git(['-C', entry.cwd, 'rev-parse', 'HEAD'])).toBe(base)
       expect(git(['-C', entry.cwd, 'symbolic-ref', '--short', 'HEAD'])).toBe(bound.branch)
     }

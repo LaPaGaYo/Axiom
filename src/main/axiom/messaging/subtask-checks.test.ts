@@ -31,16 +31,12 @@ it.each(checks)(
       ...(check === 'dependency' ? { dependsOn: ['foreign-task'] } : {})
     }
     expect(
-      await f.call(
-        'axiom.attempt.request-subtask',
-        {
-          from: worker.from,
-          attemptId: worker.attemptId,
-          summary: 'D50 matrix',
-          subtask: requested
-        },
-        { orchestrationCapability: worker.capability }
-      )
+      await f.call('axiom.attempt.request-subtask', {
+        from: worker.from,
+        attemptId: worker.attemptId,
+        summary: 'D50 matrix',
+        subtask: requested
+      })
     ).toMatchObject({ ok: true })
     const message = f.db.getUnreadRunMailbox(f.mission.runId)[0]!
     if (check === 'depth') {

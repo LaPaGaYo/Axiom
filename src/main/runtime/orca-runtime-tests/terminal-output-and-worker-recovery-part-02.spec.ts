@@ -1,5 +1,6 @@
 import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import {
   OrcaRuntimeService,
   getDefaultWorkspaceSession,
@@ -54,7 +55,7 @@ describe('OrcaRuntimeService', () => {
       tail: ['after restart']
     })
     await expect(
-      runtime.sendTerminal('term_exported', { text: 'still writable' })
+      runtime.sendTerminal('term_exported', { text: 'still writable' }, { inputKind: 'driving' })
     ).resolves.toMatchObject({
       handle: 'term_exported',
       accepted: true
@@ -179,7 +180,7 @@ describe('OrcaRuntimeService', () => {
     ])
     expect(getSession().terminalTopologyRevisionByRepoId?.[TEST_REPO_ID]).toBe(1)
 
-    await runtime.sendTerminal('term_agent', { text: 'input' })
+    await runtime.sendTerminal('term_agent', { text: 'input' }, { inputKind: 'driving' })
     await runtime.updateRemoteDesktopViewer('pty-agent', 'viewer', 'client', 132, 41)
     expect(writes).toEqual([['pty-agent', 'input']])
     expect(resize).toHaveBeenCalledWith('pty-agent', 132, 41)
@@ -207,12 +208,15 @@ describe('OrcaRuntimeService', () => {
       }))
     })
     expect(secondClient).toMatchObject({ adopted: false, topologyRevision: 1 })
-    expect(agentPty).toMatchObject({
-      tabId: 'tab-agent',
-      paneKey: makePaneKey('tab-agent', HEADLESS_LEAF_ID)
-    })
+    // Switch-on, main's layout holds the binding (listed below); the record copies are never written (L80).
+    if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+      expect(agentPty).toMatchObject({
+        tabId: 'tab-agent',
+        paneKey: makePaneKey('tab-agent', HEADLESS_LEAF_ID)
+      })
+    }
     expect(listProcesses).toHaveBeenCalledTimes(inventoryCount + 1)
-    expect(listProcesses).toHaveBeenLastCalledWith(null, LIST_PROVIDER_DEADLINE)
+    expect(listProcesses).toHaveBeenLastCalledWith('local', LIST_PROVIDER_DEADLINE)
     expect(
       (await runtime.listTerminals()).terminals.find((terminal) => terminal.ptyId === 'pty-agent')
     ).toMatchObject({
@@ -570,7 +574,12 @@ describe('OrcaRuntimeService', () => {
     expect(resolveLegacyWorkerTerminalRecovery).toHaveBeenCalledWith(workerPaneKey, 'adopted')
     expect(write).not.toHaveBeenCalled()
     expect(kill).not.toHaveBeenCalled()
-    const [terminal] = (await runtime.listTerminals()).terminals
+    const terminal = (await runtime.listTerminals()).terminals.find(
+      (candidate) => candidate.ptyId === 'pty-legacy'
+    )
+    if (!terminal) {
+      throw new Error('expected the legacy worker terminal')
+    }
     await expect(runtime.readTerminal(terminal.handle)).resolves.toMatchObject({
       tail: [' >_ OpenAI Codex (v0.131.0)', ' model:       gpt-5.5 high', ' directory:   /repo']
     })
@@ -609,7 +618,10 @@ describe('OrcaRuntimeService', () => {
       condition: 'tui-idle',
       timeoutMs: 50
     })
-    await vi.waitFor(() => expect(serializeProviderBuffer).toHaveBeenCalledTimes(4))
+    // The probe's read starts a microtask late; a 50 ms poll would race the wait's 50 ms timeout.
+    await vi.waitFor(() => expect(serializeProviderBuffer).toHaveBeenCalledTimes(4), {
+      interval: 1
+    })
     runtime.onPtyData('pty-legacy', '\x1b[H', Date.now())
     lateReadySnapshot.resolve({
       data: READY_SCREEN,

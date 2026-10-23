@@ -2,7 +2,8 @@ import { createElement, useEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
-import { HostProtocolGate, useHostProtocolGates } from './HostProtocolGate'
+import { HostProtocolGate } from './HostProtocolGate'
+import { useHostProtocolGates } from './host-protocol-gates-context'
 
 const nativeTestState = vi.hoisted(() => ({
   openUrl: vi.fn(),
@@ -34,9 +35,11 @@ vi.mock('expo-router', () => ({
 const hostClient = vi.hoisted(() => ({
   current: { client: null as RpcClient | null, state: 'disconnected' as string }
 }))
-vi.mock('../transport/client-context', () => ({
+vi.mock('../transport/host-client-hooks', () => ({
   useHostClient: () => hostClient.current
 }))
+// The wall's release offer: the native hook imports the update checker module.
+vi.mock('../app-update/use-wall-app-update', () => ({ useWallAppUpdate: () => null }))
 // Descriptor bookkeeping only; the real recorder reaches the native keychain through host-store.
 vi.mock('../transport/host-descriptor-recorder', () => ({
   recordHostDescriptorFromStatus: vi.fn()
@@ -105,7 +108,7 @@ describe('HostProtocolGate', () => {
     }
     renderer = await renderGate()
     const output = renderedText(renderer)
-    expect(output).toContain('Update Orca Mobile')
+    expect(output).toContain('Update Axiom Mobile')
     expect(output).toContain('Open App Store')
     expect(output).not.toContain('HostContent')
   })
@@ -119,8 +122,8 @@ describe('HostProtocolGate', () => {
     }
     renderer = await renderGate()
     const output = renderedText(renderer)
-    expect(output).toContain('Update Orca Mobile')
-    expect(output).toContain('Update Orca Mobile from GitHub Releases')
+    expect(output).toContain('Update Axiom Mobile')
+    expect(output).toContain('Update Axiom Mobile from GitHub Releases')
     expect(output).toContain('Open GitHub Releases')
     expect(output).not.toContain('mobile app store')
     expect(output).not.toContain('HostContent')
@@ -138,7 +141,7 @@ describe('HostProtocolGate', () => {
     }
     renderer = await renderGate()
     const output = renderedText(renderer)
-    expect(output).toContain('Update Orca on your computer')
+    expect(output).toContain('Update Axiom on your computer')
     expect(output).toContain('Open GitHub Releases')
     expect(output).not.toContain('HostContent')
   })
@@ -157,7 +160,7 @@ describe('HostProtocolGate', () => {
     const output = renderedText(renderer)
     expect(output).toContain('HostContent')
     expect(output).toContain('browser.screencast.v1')
-    expect(output).not.toContain('Update Orca')
+    expect(output).not.toContain('Update Axiom')
     expect(client.sendRequest).toHaveBeenCalledOnce()
   })
 
@@ -222,7 +225,7 @@ describe('HostProtocolGate', () => {
     })
 
     const output = renderedText(renderer)
-    expect(output).toContain('Update Orca Mobile')
+    expect(output).toContain('Update Axiom Mobile')
     expect(output).not.toContain('HostContent')
   })
 

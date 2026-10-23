@@ -42,7 +42,6 @@ export async function plannerFixture() {
   vi.spyOn(f.runtime, 'getTerminalPaneKey').mockReturnValue('planner-pane')
   vi.spyOn(f.runtime, 'getTerminalProcessIncarnation').mockReturnValue('planner-process')
   vi.spyOn(f.runtime, 'notifyMessageArrived').mockImplementation(() => {})
-  let capability = ''
   const from = 'term_planner'
   const startWorker = vi.fn(async (args: AttemptWorkerStartArgs) => {
     const { dispatch } = f.db.createStartingWorkerDispatch({
@@ -51,7 +50,7 @@ export async function plannerFixture() {
       maxDepth: 1,
       startOptions: { topology: 'current', agent: 'codex' }
     })
-    capability = f.db.prepareStartingWorkerAuthority({
+    f.db.prepareStartingWorkerAuthority({
       dispatchId: dispatch.id,
       handle: from,
       paneKey: 'planner-pane',
@@ -78,7 +77,6 @@ export async function plannerFixture() {
     createWorktree,
     startWorker,
     from,
-    capability: () => capability,
     deps: {
       runtime: f.runtime,
       db: f.db,

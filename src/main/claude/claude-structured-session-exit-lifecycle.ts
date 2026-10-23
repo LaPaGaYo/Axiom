@@ -1,9 +1,11 @@
+import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
+import { providerExitObserved } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import { settledClaudeTurnEndLeaf } from './claude-structured-resume-point'
+import { claudeHeldSends } from './claude-command-lifecycle'
 import {
   claudeRootExitObserved,
   settleClaudeExitedSession
 } from './claude-structured-session-close'
-import { failClaudeStartupGate } from './claude-structured-session-startup-gate'
 import type {
   ClaudeAcquisitionAttempt,
   ClaudeSession,
@@ -31,8 +33,9 @@ export function observeClaudeSessionExit(
   if (!session || session.connection !== attempt.connection) {
     return
   }
+  const observedAt = lifecycle.deps.now?.() ?? Date.now()
+  session.events?.observeExit?.(claudeHeldSends(session), observedAt)
   lifecycle.sessions.delete(sessionId)
-  failClaudeStartupGate(session, error)
   // Re-enter the provider's close ladder before publishing lifecycle recovery.
   // An exit callback is root evidence only; the retained tree proof must run
   // before the host releases and reacquires this exact child.
@@ -41,6 +44,7 @@ export function observeClaudeSessionExit(
     connection: session.connection,
     session,
     error,
+    observedAt,
     closePromise
   }
   lifecycle.exits.set(sessionId, exit)
@@ -85,11 +89,15 @@ export function settleClaudeUnexpectedExit(
       type: 'ended',
       sessionId,
       reason: exit.error.message,
+      // A start that never landed says why it failed. After it landed, only the child's own exit
+      // blames the provider; an Orca fault that closed it is Orca's.
+      failure: providerExitObserved(exit.error)
+        ? agentSessionFailureFact('providerExited', { detail: providerDiagnosticOf(exit.error) })
+        : agentSessionFailureFact('hostFault'),
       cause: 'unexpected-exit',
       fence: exit.session.fence,
       acquisitionGeneration: exit.session.acquisitionGeneration,
-      observedAt: deps.now?.() ?? Date.now(),
-      ...(exit.session.startup.state === 'proven' ? {} : { startupUnproven: true })
+      observedAt: exit.observedAt
     }
     try {
       lifecycle.emit(exit.session, ended)

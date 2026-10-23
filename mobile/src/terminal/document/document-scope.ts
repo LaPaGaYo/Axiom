@@ -1,3 +1,4 @@
+import type { TerminalLaidOutCellBox } from '../terminal-cell-box'
 import { DEFAULT_TERMINAL_THEME } from '../terminal-webview-html/theme'
 import {
   createEngineTerminal,
@@ -9,6 +10,7 @@ import {
   postToReactNativeWebView,
   windowCapturedEngineErrors,
   windowHasEngine,
+  windowStart,
   observeWindowViewport,
   windowViewportRect,
   type TerminalDocumentHost,
@@ -76,6 +78,8 @@ export type TerminalDocumentState = {
   lastEmittedModes: TerminalDocumentModes
   /** `terminal-init`: whether the terminal has ever reached ready. */
   everReady: boolean
+  /** `mouse-mode-decset-scan`: whether the encoding is proven (1006/1016 set or reset, RIS, or a live tracking enable). */
+  mouseEncodingKnown: boolean
   /** `mouse-mode-decset-scan`: the tail of the last chunk, in case a DECSET straddles two writes. */
   mouseModeScanTail: string
   /** `mouse-mode-decset-scan`: the mouse tracking mode the TUI last asked for. */
@@ -94,6 +98,8 @@ export type TerminalDocumentState = {
   terminalFontFamily: string
   /** `terminal-init`: whether the first live chunk since init is still pending. */
   firstDataPending: boolean
+  /** `laid-out-cell-box`: the box last reported or at ready, with the grid it was laid out at. */
+  reportedCellBox: TerminalLaidOutCellBox | null
   /** `terminal-init`: whether the replayed snapshot was an alternate screen. */
   activeAltScreenSnapshot: boolean
   /** `fit-scale`: the fit scale the document committed. */
@@ -150,12 +156,16 @@ export type TerminalDocumentState = {
   longPressOrigin: TerminalDocumentTouchOrigin | null
   /** `selection-overlay`: the touch that may still resolve as a tap. */
   tapCandidate: TerminalDocumentTapCandidate | null
+  /** `bottom-row-backdrop`: the fill last painted under the grid, so an unchanged one is not rewritten. */
+  bottomRowBackdrop: string
   /** `surface-swap`: the element xterm is currently mounted on. */
   surface: HTMLElement | null
   /** `surface-swap`: the terminal of a hidden replacement surface that has not committed. */
   pendingTerm: TerminalDocumentTerminal | null
   /** `surface-swap`: the terminal the committed surface is showing. */
   committedTerm: TerminalDocumentTerminal | null
+  /** `terminal-init`: the terminal built before ready, until the first init reuses it. */
+  provisionalTerm: TerminalDocumentTerminal | null
   /** `surface-swap`: the surface the committed terminal is mounted on. */
   committedSurface: HTMLElement | null
   /** `surface-swap`: the hidden replacement surface, until it commits. */
@@ -173,6 +183,8 @@ export type TerminalDocumentState = {
   uninstallErrorReporter: (() => void) | null
   /** `message-bridge`: undoes the host transport's install, or null before one. */
   uninstallHostTransport: (() => void) | null
+  /** `message-bridge`: cancels the bounded font wait and late repaint after disposal. */
+  cancelFontReadiness: (() => void) | null
   /** `fit-scale`: takes the viewport refit's listener off again, or null before one. */
   removeViewportRefit: (() => void) | null
   /** `tap-dispatch`: takes its four document listeners off again, or null before them. */
@@ -181,8 +193,10 @@ export type TerminalDocumentState = {
   removeWebglRecovery: (() => void) | null
   /** `fit-scale`: the generation of the retry loop; a bump abandons the one in flight. */
   fitRetryToken: number
-  /** `fit-scale`: the viewport box the last fit was committed for, or null before one. */
-  fittedBox: { width: number; height: number } | null
+  /** `host-message-router`: the terminal frame the app last sent with a grid, or null before one. */
+  hostFrame: { width: number; height: number } | null
+  /** `fit-scale`: the reason of a fit held while the host is hidden, or null when none is owed. */
+  fitPending: string | null
   /** `mouse-click-drag`: the mouse gesture in progress, or null. */
   mouseGesture: TerminalMouseGesture | null
   /** `tap-dispatch`: what the document-level dispatcher has latched onto. */
@@ -254,6 +268,7 @@ function createTerminalDocumentState(): TerminalDocumentState {
       sgrMousePixelsMode: false
     },
     everReady: false,
+    mouseEncodingKnown: false,
     mouseModeScanTail: '',
     trackedMouseTrackingMode: 'none',
     sgrMouseMode: false,
@@ -263,6 +278,7 @@ function createTerminalDocumentState(): TerminalDocumentState {
     currentTextScale: 1,
     terminalFontFamily: '',
     firstDataPending: false,
+    reportedCellBox: null,
     activeAltScreenSnapshot: false,
     currentScale: 1,
     userScale: 1,
@@ -292,9 +308,11 @@ function createTerminalDocumentState(): TerminalDocumentState {
     longPressOrigin: null,
     tapCandidate: null,
     wheelAccumDeltaY: 0,
+    bottomRowBackdrop: '',
     surface: null,
     pendingTerm: null,
     committedTerm: null,
+    provisionalTerm: null,
     committedSurface: null,
     pendingSurface: null,
     scrollIndicator: null,
@@ -304,11 +322,13 @@ function createTerminalDocumentState(): TerminalDocumentState {
     nonFatalErrorNotifies: 0,
     uninstallErrorReporter: null,
     uninstallHostTransport: null,
+    cancelFontReadiness: null,
     removeViewportRefit: null,
     removeTapDispatch: null,
     removeWebglRecovery: null,
     fitRetryToken: 0,
-    fittedBox: null,
+    hostFrame: null,
+    fitPending: null,
     mouseGesture: null,
     touchDispatch: {
       mode: 'idle',
@@ -346,6 +366,7 @@ function createTerminalDocumentHostSeams(): TerminalDocumentHostSeams {
     paintDocumentBackground: paintWindowDocumentBackground,
     installHostTransport: installWindowHostTransport,
     hasEngine: windowHasEngine,
+    start: windowStart,
     viewportRect: windowViewportRect,
     observeViewport: observeWindowViewport,
     root: null

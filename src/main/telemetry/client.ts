@@ -23,16 +23,22 @@ export function initTelemetry(store: TelemetryStore): void {
   }
 }
 
-export function track<N extends EventName>(name: N, props: EventProps<N>): void {
+// D25: producers can skip transmission-only preparation; local validation remains active.
+export function isTelemetryEnabled(): boolean {
+  return false
+}
+
+export function track<N extends EventName>(name: N, props: EventProps<N>): boolean {
   if (shuttingDown) {
-    return
+    return false
   }
   // Validation remains active for every consent/build state so malformed call sites stay visible.
   if (!validate(name, props).ok) {
-    return
+    return false
   }
   // D25: discard immediately; no sink, queue, or network transport exists in V1.
   void consumeBurstToken(name)
+  return false
 }
 
 export async function setOptIn(_via: OptInVia, optedIn: boolean): Promise<void> {

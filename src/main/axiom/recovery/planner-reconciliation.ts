@@ -102,10 +102,10 @@ export async function reconcilePlanner(
   if (db.getWorkerDispatch(dispatchId)?.state !== worker.state) {
     return entry
   }
-  const disposition = db.abandonWorkerDispatch(dispatchId).disposition
-  if (disposition === 'stale') {
+  if (db.getDispatchContext(binding.taskId)?.id !== dispatchId) {
     return { ...entry, action: 'stale' }
   }
+  const disposition = db.abandonWorkerDispatch(dispatchId, runtime.getRuntimeId(), 'RecoveryService').disposition
   auditAttempt(ctx, binding, 'planner.abandoned', {
     reason: 'unverifiable_tolerance_exceeded',
     disposition,

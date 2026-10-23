@@ -1,16 +1,10 @@
 import type { OrchestrationDb } from '../orchestration-db'
+import { AXIOM_INDEXES_AND_DELETE_TRIGGERS_SQL } from './create-axiom-tables-sql'
 
 export function migrateV44(this: OrchestrationDb, current: number): void {
   if (current >= 44) {
     return
   }
-  // Why: createTables supplies these columns on fresh databases before migrations run.
-  for (const [table, column] of [
-    ['agent_specs', 'spec'],
-    ['mission_policies', 'routing']
-  ]) {
-    if (!this.hasColumn(table, column)) {
-      this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT NOT NULL DEFAULT '{}'`)
-    }
-  }
+  // Why: createTables already supplies the side tables on every open, including v42 files.
+  this.db.exec(AXIOM_INDEXES_AND_DELETE_TRIGGERS_SQL)
 }

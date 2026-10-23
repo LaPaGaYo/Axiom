@@ -230,11 +230,11 @@ export async function reconcileAttempt(
   if (db.getWorkerDispatch(dispatchId)?.state !== worker?.state) {
     return reconcileAttempt(ctx, binding)
   }
-  const disposition = db.abandonWorkerDispatch(dispatchId).disposition
-  if (disposition === 'stale') {
+  if (db.getDispatchContext(binding.taskId)?.id !== dispatchId) {
     entry.action = 'stale'
     return entry
   }
+  const disposition = db.abandonWorkerDispatch(dispatchId, runtime.getRuntimeId(), 'RecoveryService').disposition
   store.transaction('recovery_abandon', () => {
     auditAttempt(ctx, binding, 'attempt.abandoned', {
       reason: 'unverifiable_tolerance_exceeded',
@@ -268,7 +268,7 @@ async function cancelAttempt(
       if (worker.state === 'stopping') {
         return 'stopping'
       }
-      const abandoned = ctx.db.abandonWorkerDispatch(dispatchId)
+      const abandoned = ctx.db.abandonWorkerDispatch(dispatchId, ctx.runtime.getRuntimeId(), 'RecoveryService')
       disposition = abandoned.disposition
       state = ctx.db.getWorkerDispatch(dispatchId)?.state
     }

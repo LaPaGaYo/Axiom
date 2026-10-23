@@ -114,7 +114,8 @@ const LedgerLine = z.object({
   kind: z.string().optional(),
   attemptId: z.string(),
   taskId: z.string().optional(),
-  capability: z.string().optional(),
+  terminalHandle: z.string().optional(),
+  paneKey: z.string().optional(),
   response: z.object({ ok: z.boolean() }).optional()
 })
 export function fixtureLedger(file: string) {

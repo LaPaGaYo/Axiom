@@ -14,7 +14,8 @@ export const providerActivationIdSchema = z.enum([
   'minimax',
   'grok',
   'antigravity',
-  'cursor'
+  'cursor',
+  'zcode'
 ])
 export const providerActivationsSchema = z.partialRecord(
   providerActivationIdSchema,

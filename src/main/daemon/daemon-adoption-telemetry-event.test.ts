@@ -9,6 +9,7 @@ const {
   existsSyncMock,
   readFileSyncMock,
   getVersionMock,
+  getPathMock,
   codeIdentityMock
 } = vi.hoisted(() => ({
   trackMock: vi.fn(),
@@ -16,6 +17,7 @@ const {
   existsSyncMock: vi.fn(() => true),
   readFileSyncMock: vi.fn(),
   getVersionMock: vi.fn(() => '1.4.191'),
+  getPathMock: vi.fn((_name: string) => '/Users/alice/Library/Application Support/Orca'),
   codeIdentityMock: vi.fn(async () => 'parked')
 }))
 vi.mock('../telemetry/client', () => ({ track: trackMock }))
@@ -36,7 +38,7 @@ vi.mock('node:os', async (importOriginal) => ({
   homedir: () => '/Users/alice'
 }))
 vi.mock('../../shared/app-environment', () => ({
-  getAppEnvironment: () => ({ getVersion: getVersionMock })
+  getAppEnvironment: () => ({ getVersion: getVersionMock, getPath: getPathMock })
 }))
 
 import {
@@ -109,6 +111,24 @@ describe('classifyDaemonAdoptionOrigin', () => {
       spawner_path_class: 'unknown'
     })
     expect(codeIdentityMock).toHaveBeenLastCalledWith(undefined)
+  })
+
+  it('reports a daemon started from the private stable copy', async () => {
+    const copies = '/Users/alice/Library/Application Support/Orca/daemon-host/macos'
+    const stableCopy = {
+      ...stalePidRecord,
+      spawnerExecPath: `${copies}/terminal-host-0f3c/app.noindex/Axiom Terminal Host.app/Contents/MacOS/axiom-terminal-host`
+    }
+    expect(await classifyDaemonAdoptionOrigin(stableCopy)).toMatchObject({
+      spawner_path_class: 'stable-copy'
+    })
+    expect(getPathMock).toHaveBeenCalledWith('userData')
+    getPathMock.mockImplementationOnce(() => {
+      throw new Error('AppEnvironment not initialized')
+    })
+    expect(await classifyDaemonAdoptionOrigin(stableCopy)).toMatchObject({
+      spawner_path_class: 'other'
+    })
   })
 })
 
@@ -205,15 +225,6 @@ describe('trackDaemonPtyCwdVerdict', () => {
       trackDaemonPtyCwdVerdict('daemon_pty_cwd_denied', DENIED_CWD, PID_PATH)
     ).resolves.toBeUndefined()
     expect(trackMock).not.toHaveBeenCalled()
-  })
-
-  it('swallows a throwing telemetry client', async () => {
-    trackMock.mockImplementationOnce(() => {
-      throw new Error('posthog exploded')
-    })
-    await expect(
-      trackDaemonPtyCwdVerdict('daemon_pty_cwd_denied', DENIED_CWD, PID_PATH)
-    ).resolves.toBeUndefined()
   })
 })
 

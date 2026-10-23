@@ -1,3 +1,5 @@
+import codebuddyUrl from '../../../shared/agent-icons/codebuddy.png?url'
+import qoderUrl from '../../../shared/agent-icons/qoder.png?url'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import grokUrl from '../../../shared/agent-icons/grok.png?url'
 import mimoCodeUrl from '../../../shared/agent-icons/mimo-code.png?url'
@@ -13,6 +15,7 @@ import crushUrl from '../../../shared/agent-icons/crush.png?url'
 import augUrl from '../../../shared/agent-icons/aug.png?url'
 import autohandUrl from '../../../shared/agent-icons/autohand.png?url'
 import clineUrl from '../../../shared/agent-icons/cline.png?url'
+import freebuffUrl from '../../../shared/agent-icons/freebuff.png?url'
 import codebuffUrl from '../../../shared/agent-icons/codebuff.png?url'
 import commandCodeUrl from '../../../shared/agent-icons/command-code.png?url'
 import continueUrl from '../../../shared/agent-icons/continue.png?url'
@@ -26,6 +29,8 @@ import devinUrl from '../../../shared/agent-icons/devin.png?url'
 import museUrl from '../../../shared/agent-icons/muse.png?url'
 import zcodeUrl from '../../../shared/agent-icons/zcode.png?url'
 import openclawUrl from '../../../shared/agent-icons/openclaw.png?url'
+import dshUrl from '../../../shared/agent-icons/dsh.png?url'
+import jcodeUrl from '../../../shared/agent-icons/jcode.png?url'
 
 // Why: these agents have no hand-authored SVG glyph, so previously their icons
 // loaded live from Google's favicon service. That service is unreachable in some
@@ -35,11 +40,14 @@ import openclawUrl from '../../../shared/agent-icons/openclaw.png?url'
 // The PNGs live in src/shared/agent-icons so mobile (Metro) can bundle the same
 // files; see mobile/src/components/mobile-agent-icon-assets.ts.
 export const AGENT_FAVICON_ASSETS: Partial<Record<TuiAgent, string>> = {
+  codebuddy: codebuddyUrl,
   grok: grokUrl,
   'mimo-code': mimoCodeUrl,
   ante: anteUrl,
   trae: traeUrl,
   'prime-agent': primeAgentUrl,
+  qoder: qoderUrl,
+  'qoder-cn': qoderUrl,
   gemini: geminiUrl,
   antigravity: antigravityUrl,
   goose: gooseUrl,
@@ -50,6 +58,7 @@ export const AGENT_FAVICON_ASSETS: Partial<Record<TuiAgent, string>> = {
   autohand: autohandUrl,
   cline: clineUrl,
   codebuff: codebuffUrl,
+  freebuff: freebuffUrl,
   'command-code': commandCodeUrl,
   continue: continueUrl,
   cursor: cursorUrl,
@@ -60,6 +69,8 @@ export const AGENT_FAVICON_ASSETS: Partial<Record<TuiAgent, string>> = {
   hermes: hermesUrl,
   devin: devinUrl,
   muse: museUrl,
+  dsh: dshUrl,
   zcode: zcodeUrl,
-  openclaw: openclawUrl
+  openclaw: openclawUrl,
+  jcode: jcodeUrl
 }

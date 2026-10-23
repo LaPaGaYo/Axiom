@@ -42,14 +42,10 @@ it.each([2000, 2001, 4000])(
   'stores a %i-character report summary and bounds SUBMISSION mail',
   async (length) => {
     const summary = 'x'.repeat(length)
-    const result = await f.call(
-      'axiom.attempt.submit',
-      {
-        ...f.params(),
-        report: { ...report, summary }
-      },
-      { orchestrationCapability: f.t01.capability }
-    )
+    const result = await f.call('axiom.attempt.submit', {
+      ...f.params(),
+      report: { ...report, summary }
+    })
     expect(result, JSON.stringify(result)).toMatchObject({ ok: true })
     expect(f.store.getSubmissionByDispatch(f.t01.attemptId)?.report.summary).toBe(summary)
     expect(f.store.listMessages({ missionId: f.mission.id })[0]?.summary).toBe(

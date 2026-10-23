@@ -23,9 +23,9 @@ let host: StructuredAgentSessionHost
 function modelAdapterLiveness(registerOnAcquire: boolean): void {
   const { acquire, dispatch } = hostTestState()
   const live = new Set<string>()
-  const spawn = acquire.getMockImplementation()!
+  const acquireChild = acquire.getMockImplementation()!
   acquire.mockImplementation(async (input) => {
-    const acquisition = await spawn(input)
+    const acquisition = await acquireChild(input)
     if (registerOnAcquire) {
       live.add(input.identity.sessionId)
     }
@@ -57,12 +57,19 @@ async function launchAndDeliver(): Promise<{
     text: 'fix the failing test'
   })
   const sent = await send.mock.results[0]!.value
-  return {
-    messageId,
-    dispatchState: sent.ok
-      ? sent.value.submission.dispatchState
-      : `refused:${sent.refusal.code}:${sent.refusal.message}`
+  if (!sent.ok) {
+    return { messageId, dispatchState: `refused:${sent.refusal.code}:${sent.refusal.message}` }
   }
+  // Accepted first; the delivery loop hands it over, and that outcome is what reached the agent.
+  let dispatchState = sent.value.submission.dispatchState
+  await vi.waitFor(async () => {
+    dispatchState =
+      (await host.journalSnapshot(created.value.sessionId)).submissions.find(
+        (entry) => entry.clientMessageId === sent.value.clientMessageId
+      )?.dispatchState ?? 'missing'
+    expect(dispatchState).not.toBe('pending')
+  })
+  return { messageId, dispatchState }
 }
 
 beforeEach(() => {

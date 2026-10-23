@@ -35,36 +35,30 @@ async function sendWorkerMessage(ctx: HandlerContext, verb: string) {
     throw new RuntimeClientError('invalid_argument', 'Choose --body or --body-file, not both.')
   }
   const dependsOn = repeated(flags, 'depends-on')
-  const orchestrationCapability = required(flags, 'dispatch-capability')
+
   const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
-  const result = await callOrchestrationMutation(
-    client,
-    flags,
-    `axiom.attempt.${verb}`,
-    {
-      attemptId: required(flags, 'attempt'),
-      from,
-      senderPaneKey: process.env.ORCA_PANE_KEY || undefined,
-      summary: required(flags, 'summary'),
-      body: bodyFile ? await readFile(path.resolve(cwd, bodyFile), 'utf8') : body,
-      artifactIds: repeated(flags, 'artifact'),
-      related: { taskIds: repeated(flags, 'related-task') },
-      ...(verb === 'request-subtask'
-        ? {
-            subtask: {
-              title: required(flags, 'title'),
-              objective: required(flags, 'objective'),
-              allowedPaths: repeated(flags, 'allowed-path'),
-              acceptanceCriteria: repeated(flags, 'acceptance'),
-              requiredEvidence: repeated(flags, 'evidence'),
-              risk: optional(flags, 'risk') ?? 'low',
-              ...(dependsOn.length ? { dependsOn } : {})
-            }
+  const result = await callOrchestrationMutation(client, flags, `axiom.attempt.${verb}`, {
+    attemptId: required(flags, 'attempt'),
+    from,
+    senderPaneKey: process.env.ORCA_PANE_KEY || undefined,
+    summary: required(flags, 'summary'),
+    body: bodyFile ? await readFile(path.resolve(cwd, bodyFile), 'utf8') : body,
+    artifactIds: repeated(flags, 'artifact'),
+    related: { taskIds: repeated(flags, 'related-task') },
+    ...(verb === 'request-subtask'
+      ? {
+          subtask: {
+            title: required(flags, 'title'),
+            objective: required(flags, 'objective'),
+            allowedPaths: repeated(flags, 'allowed-path'),
+            acceptanceCriteria: repeated(flags, 'acceptance'),
+            requiredEvidence: repeated(flags, 'evidence'),
+            risk: optional(flags, 'risk') ?? 'low',
+            ...(dependsOn.length ? { dependsOn } : {})
           }
-        : {})
-    },
-    { orchestrationCapability }
-  )
+        }
+      : {})
+  })
   printResult(
     result,
     json,
@@ -74,7 +68,6 @@ async function sendWorkerMessage(ctx: HandlerContext, verb: string) {
 
 export const AXIOM_ATTEMPT_HANDLERS: Record<string, CommandHandler> = {
   'attempt submit': async ({ flags, cwd, client, json }) => {
-    const orchestrationCapability = required(flags, 'dispatch-capability')
     const content = await readFile(path.resolve(cwd, required(flags, 'report')), 'utf8')
     let value: unknown
     try {
@@ -90,18 +83,12 @@ export const AXIOM_ATTEMPT_HANDLERS: Record<string, CommandHandler> = {
       )
     }
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
-    const result = await callOrchestrationMutation(
-      client,
-      flags,
-      'axiom.attempt.submit',
-      {
-        attemptId: required(flags, 'attempt'),
-        from,
-        senderPaneKey: process.env.ORCA_PANE_KEY || undefined,
-        report: report.data
-      },
-      { orchestrationCapability }
-    )
+    const result = await callOrchestrationMutation(client, flags, 'axiom.attempt.submit', {
+      attemptId: required(flags, 'attempt'),
+      from,
+      senderPaneKey: process.env.ORCA_PANE_KEY || undefined,
+      report: report.data
+    })
     printResult(
       result,
       json,
@@ -115,7 +102,6 @@ export const AXIOM_ATTEMPT_HANDLERS: Record<string, CommandHandler> = {
   'attempt handoff': (ctx) => sendWorkerMessage(ctx, 'handoff'),
   'attempt request-subtask': (ctx) => sendWorkerMessage(ctx, 'request-subtask'),
   'attempt check': async ({ flags, cwd, client, json }) => {
-    const orchestrationCapability = required(flags, 'dispatch-capability')
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
     const wait = flags.has('wait') ? true : undefined
     const timeoutMs = getOptionalNonNegativeIntegerFlag(flags, 'timeout-ms')
@@ -139,10 +125,7 @@ export const AXIOM_ATTEMPT_HANDLERS: Record<string, CommandHandler> = {
         timeoutMs,
         type: optional(flags, 'type')
       },
-      {
-        orchestrationCapability,
-        ...(transportTimeout !== undefined ? { timeoutMs: transportTimeout } : {})
-      }
+      transportTimeout !== undefined ? { timeoutMs: transportTimeout } : {}
     )
     printResult(
       result,

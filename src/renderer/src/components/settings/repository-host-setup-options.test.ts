@@ -21,8 +21,8 @@ function runtimeHost(
   return {
     id: 'runtime:env-1',
     kind: 'runtime',
-    label: 'Remote Orca',
-    detail: 'Orca server',
+    label: 'Remote Axiom',
+    detail: 'Axiom server',
     health: 'available',
     ...overrides
   } as ExecutionHostRegistryEntry
@@ -92,7 +92,7 @@ describe('buildSetupHostOptions', () => {
       })[0]
     ).toMatchObject({
       isAvailable: true,
-      detail: 'Orca server'
+      detail: 'Axiom server'
     })
   })
 

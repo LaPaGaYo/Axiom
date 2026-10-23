@@ -9,6 +9,7 @@ import { getAxiomControlPlane } from '../../../../axiom/control-plane'
 export const AXIOM_GOAL_METHODS = [
   defineMethod({
     name: 'axiom.goal.propose',
+    permission: 'workspace',
     params: GoalProposeParams,
     handler: (p, { runtime }) => ({
       goalRevision: getAxiomControlPlane(runtime).missions.proposeGoal(p)
@@ -16,6 +17,7 @@ export const AXIOM_GOAL_METHODS = [
   }),
   defineMethod({
     name: 'axiom.goal.activate',
+    permission: 'workspace',
     params: GoalActivateParams,
     handler: (p, { runtime }) => ({
       goalRevision: getAxiomControlPlane(runtime).missions.activateGoal(p)
@@ -23,6 +25,7 @@ export const AXIOM_GOAL_METHODS = [
   }),
   defineMethod({
     name: 'axiom.goal.show',
+    permission: 'workspace',
     params: GoalShowParams,
     handler: (p, { runtime }) => ({
       goalRevision: getAxiomControlPlane(runtime).missions.getGoal(p)

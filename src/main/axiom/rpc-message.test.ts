@@ -11,16 +11,12 @@ afterEach(() => {
 })
 it('lists pending REQUEST_SUBTASK messages and filters by type/Task/Attempt', async () => {
   expect(
-    await f.call(
-      'axiom.attempt.request-subtask',
-      {
-        from: f.t01.from,
-        attemptId: f.t01.attemptId,
-        summary: 'Please split',
-        subtask
-      },
-      { orchestrationCapability: f.t01.capability }
-    )
+    await f.call('axiom.attempt.request-subtask', {
+      from: f.t01.from,
+      attemptId: f.t01.attemptId,
+      summary: 'Please split',
+      subtask
+    })
   ).toMatchObject({ ok: true })
   const messages = f.db.getUnreadRunMailbox(f.mission.runId)
   const list = {

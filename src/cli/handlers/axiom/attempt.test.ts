@@ -49,7 +49,7 @@ describe('Worker channel CLI routing', () => {
     return { call, run }
   }
   it.each(['inform', 'request', 'blocked', 'handoff', 'request-subtask'])(
-    'routes %s with repeated references, caller identity, capability and retry id',
+    'routes %s with repeated references, caller identity and retry id',
     async (verb) => {
       const f = setup()
       const subtaskFlags =
@@ -75,8 +75,6 @@ describe('Worker channel CLI routing', () => {
         verb,
         '--attempt',
         'a',
-        '--dispatch-capability',
-        'dcap_fixture',
         '--summary',
         'Evidence',
         '--body',
@@ -117,26 +115,14 @@ describe('Worker channel CLI routing', () => {
             : {})
         },
         {
-          orchestrationCapability: 'dcap_fixture',
           orchestrationRequestId: '55cbf3b9-90ab-4ac0-a4e3-660c26727a1f'
         }
       )
     }
   )
-  it('routes check with capability and a transport budget longer than the inner wait', async () => {
+  it('routes check with caller identity and a transport budget longer than the inner wait', async () => {
     const f = setup()
-    await f.run([
-      'check',
-      '--attempt',
-      'a',
-      '--dispatch-capability',
-      'dcap_fixture',
-      '--wait',
-      '--timeout-ms',
-      '120000',
-      '--type',
-      'status'
-    ])
+    await f.run(['check', '--attempt', 'a', '--wait', '--timeout-ms', '120000', '--type', 'status'])
     expect(f.call).toHaveBeenCalledExactlyOnceWith(
       'axiom.attempt.check',
       {
@@ -147,7 +133,7 @@ describe('Worker channel CLI routing', () => {
         timeoutMs: 120000,
         type: 'status'
       },
-      { orchestrationCapability: 'dcap_fixture', timeoutMs: 130000 }
+      { timeoutMs: 130000 }
     )
   })
   it('reads body-file relative to cwd and refuses mutually exclusive body flags', async () => {
@@ -155,22 +141,11 @@ describe('Worker channel CLI routing', () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'axiom-channel-cli-'))
     try {
       await writeFile(path.join(dir, 'body.txt'), 'Detailed evidence')
-      const flags = [
-        'inform',
-        '--attempt',
-        'a',
-        '--dispatch-capability',
-        'dcap_fixture',
-        '--summary',
-        'Evidence',
-        '--body-file',
-        'body.txt'
-      ]
+      const flags = ['inform', '--attempt', 'a', '--summary', 'Evidence', '--body-file', 'body.txt']
       await f.run(flags, dir)
       expect(f.call).toHaveBeenCalledWith(
         'axiom.attempt.inform',
-        expect.objectContaining({ body: 'Detailed evidence' }),
-        { orchestrationCapability: 'dcap_fixture' }
+        expect.objectContaining({ body: 'Detailed evidence' })
       )
       f.call.mockClear()
       await expect(f.run([...flags, '--body', 'conflict'], dir)).rejects.toMatchObject({
@@ -198,8 +173,6 @@ describe('Worker channel CLI routing', () => {
       'submit',
       '--attempt',
       'a',
-      '--dispatch-capability',
-      'dcap_fixture',
       '--report',
       'report.json',
       '--retry-request',
@@ -217,7 +190,6 @@ describe('Worker channel CLI routing', () => {
           report
         },
         {
-          orchestrationCapability: 'dcap_fixture',
           orchestrationRequestId: '55cbf3b9-90ab-4ac0-a4e3-660c26727a1f'
         }
       )

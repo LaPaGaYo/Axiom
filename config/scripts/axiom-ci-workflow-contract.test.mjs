@@ -120,7 +120,6 @@ describe('Axiom hosted second signal (D41 / D45)', () => {
       .sort()
     expect(pushWorkflows).toEqual([
       'axiom-ci.yml',
-      'daemon-relocation-spike.yml',
       'win-update-e2e.yml',
       'win-update-survival-e2e.yml'
     ])

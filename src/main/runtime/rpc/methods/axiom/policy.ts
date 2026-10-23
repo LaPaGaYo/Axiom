@@ -18,6 +18,7 @@ function requirePolicy(store: AxiomStore, missionId: string) {
 export const AXIOM_POLICY_METHODS = [
   defineMethod({
     name: 'axiom.policy.show',
+    permission: 'workspace',
     params: PolicyShowParams,
     handler: (p, { runtime }) => ({
       policy: requirePolicy(getAxiomControlPlane(runtime).store, p.missionId)
@@ -25,6 +26,7 @@ export const AXIOM_POLICY_METHODS = [
   }),
   defineMethod({
     name: 'axiom.policy.update',
+    permission: 'workspace',
     params: PolicyUpdateParams,
     handler: (p, { runtime }) => {
       if (Object.hasOwn(p.patch, 'budget')) {

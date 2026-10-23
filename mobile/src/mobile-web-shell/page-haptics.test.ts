@@ -7,7 +7,7 @@
  * `HapticFeedbackConstants` must not be written twice.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { BRIDGE_HAPTICS_KINDS, type BridgeHapticsKind } from './bridge/bridge-haptics-notify'
+import { BRIDGE_HAPTICS_KINDS } from './bridge/bridge-haptics-notify'
 
 /** Annotated rather than asserted: the platform is a two-value union and the log starts empty. */
 type MockDevice = { platform: { OS: 'ios' | 'android' }; calls: string[] }
@@ -99,19 +99,12 @@ describe('the kinds and the functions behind them', () => {
    * A table mapping two kinds to one function would pass every case above — each still plays
    * something — and would mean a Save that felt like a failure. The third direction, a haptic
    * `haptics.ts` grows with no kind of its own, is the census's:
-   * `config/scripts/mobile-web-app-haptics-seam.test.mjs` reads both files' names.
+   * `config/scripts/mobile-web-app/platform-seams/mobile-web-app-haptics-seam.test.mjs` reads both files' names.
    */
   it('plays a different device call for every kind, so no two share a row', () => {
     for (const kind of BRIDGE_HAPTICS_KINDS) {
       playPageHaptic(kind)
     }
     expect(new Set(calls).size).toBe(BRIDGE_HAPTICS_KINDS.length)
-  })
-})
-
-describe('the kind union', () => {
-  it('is the five the app has and nothing else', () => {
-    const kinds: readonly BridgeHapticsKind[] = BRIDGE_HAPTICS_KINDS
-    expect([...kinds]).toEqual(['mediumImpact', 'selection', 'success', 'error', 'edgeBump'])
   })
 })

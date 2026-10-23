@@ -190,34 +190,23 @@ test('M2 exit: Planner, parallel Workers, crash retry and immutable submission f
       const candidate = settled.candidates.find((c) => c.id === submission.candidateId)!
       writeFileSync(reportPath, JSON.stringify(submission.report))
       const sender = settled.dispatches.find((d) => d.id === submission.attemptId)!
-      const capability = (id: string) => {
-        const value = ledger.find(
-          (entry) => entry.kind === undefined && entry.attemptId === id
-        )?.capability
-        if (!value) {
-          throw new Error('Missing fixture capability')
-        }
-        return value
-      }
       if (!sender.assignee_handle || !sender.assignee_pane_key) {
         throw new Error('Missing Worker sender')
       }
-      const submitArgs = (attemptId: string, token: string) => [
+      const submitArgs = (attemptId: string, from = sender.assignee_handle!) => [
         'attempt',
         'submit',
         '--attempt',
         attemptId,
         '--from',
-        sender.assignee_handle!,
-        '--dispatch-capability',
-        token,
+        from,
         '--report',
         reportPath
       ]
       const codes: Record<string, string> = {}
-      const reject = (kind: string, attemptId: string, token: string, code: string) => {
+      const reject = (kind: string, attemptId: string, from: string, code: string) => {
         const before = snapshot()
-        const response = invoke(userData, submitArgs(attemptId, token), {
+        const response = invoke(userData, submitArgs(attemptId, from), {
           paneKey: sender.assignee_pane_key!
         })
         expect(response.error).toBeUndefined()
@@ -227,10 +216,10 @@ test('M2 exit: Planner, parallel Workers, crash retry and immutable submission f
         expect(snapshot()).toBe(before)
         codes[kind] = code
       }
-      reject('forged', submission.attemptId, 'dcap_wrong', 'dispatch_capability_invalid')
+      reject('forged', submission.attemptId, 'term_forged', 'worker_identity_changed')
       const beforeDuplicate = snapshot()
       const duplicate = AttemptSubmitResponseSchema.parse(
-        cli(userData, submitArgs(submission.attemptId, capability(submission.attemptId)), {
+        cli(userData, submitArgs(submission.attemptId), {
           paneKey: sender.assignee_pane_key
         })
       )
@@ -238,13 +227,13 @@ test('M2 exit: Planner, parallel Workers, crash retry and immutable submission f
       expect(snapshot()).toBe(beforeDuplicate)
       codes.duplicate = 'duplicate:true'
       // Recovery has already revoked seq 1. The inactive check precedes the newer-seq check.
-      reject('stale', first.dispatch_id!, capability(first.dispatch_id!), 'inactive_dispatch')
+      reject('stale', first.dispatch_id!, sender.assignee_handle, 'inactive_dispatch')
       const other = settled.submissions.find((s) => s.attemptId !== submission.attemptId)!
       reject(
         'mismatched',
         submission.attemptId,
-        capability(other.attemptId),
-        'dispatch_capability_invalid'
+        settled.dispatches.find((d) => d.id === other.attemptId)!.assignee_handle!,
+        'worker_identity_changed'
       )
       expect(git(['-C', clone, 'rev-parse', baseRef])).toBe(base)
       expect(git(['-C', clone, 'rev-parse', 'refs/heads/main'])).toBe(base)

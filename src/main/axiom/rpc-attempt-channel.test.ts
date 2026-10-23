@@ -19,8 +19,8 @@ describe('axiom.attempt.submit authority and receipts', () => {
   })
   afterEach(() => s.db.close())
   it.each([
-    'missing',
-    'wrong',
+    'missing-process',
+    'other-process',
     'stale',
     'foreign',
     'process',
@@ -32,6 +32,12 @@ describe('axiom.attempt.submit authority and receipts', () => {
     'rejects %s without any domain, observation, resource, message, audit or receipt change',
     async (reason) => {
       const p = s.params()
+      if (reason === 'missing-process') {
+        s.processes.delete(s.t01.from)
+      }
+      if (reason === 'other-process') {
+        s.processes.set(s.t01.from, 'another-attempt-process')
+      }
       if (reason === 'stale') {
         s.store.insertAttemptBinding({
           ...s.store.getAttemptBinding(s.t01.taskId, 1)!,
@@ -47,7 +53,9 @@ describe('axiom.attempt.submit authority and receipts', () => {
         s.processes.set(s.t01.from, 'replacement')
       }
       if (reason === 'assignee') {
-        vi.spyOn(s.db, 'verifyDispatchCapability').mockReturnValue({ valid: true })
+        s.db.db
+          .prepare('UPDATE dispatch_contexts SET process_incarnation = NULL WHERE id = ?')
+          .run(s.t01.attemptId)
       }
       if (reason === 'inactive') {
         s.db.settleWorkerReport({
@@ -63,25 +71,24 @@ describe('axiom.attempt.submit authority and receipts', () => {
       if (reason === 'mismatch') {
         s.db.db
           .prepare('UPDATE attempt_bindings SET mission_id = ? WHERE dispatch_id = ?')
-          .run('wrong', p.attemptId)
+          .run('other-process', p.attemptId)
       }
       const before = s.snapshot()
       const codes = {
-        missing: 'dispatch_capability_invalid',
-        wrong: 'dispatch_capability_invalid',
+        'missing-process': 'worker_identity_changed',
+        'other-process': 'worker_identity_changed',
         stale: 'stale_dispatch',
-        foreign: 'dispatch_capability_invalid',
-        process: 'dispatch_capability_invalid',
+        foreign: 'worker_identity_changed',
+        process: 'worker_identity_changed',
         inactive: 'inactive_dispatch',
         unknown: 'unknown_dispatch',
         mismatch: 'task_dispatch_mismatch',
         assignee: 'sender_not_assignee'
       }
-      const capability =
-        reason === 'missing' ? undefined : reason === 'wrong' ? 'dcap_wrong' : s.t01.capability
-      expect(
-        await s.call('axiom.attempt.submit', p, { orchestrationCapability: capability })
-      ).toMatchObject({ ok: false, error: { code: codes[reason] } })
+      expect(await s.call('axiom.attempt.submit', p)).toMatchObject({
+        ok: false,
+        error: { code: codes[reason] }
+      })
       expect(s.snapshot()).toEqual(before)
       expect(s.db.db.prepare('SELECT request_id FROM mutation_receipts').all()).toEqual([])
       expect(s.snapshotGit).not.toHaveBeenCalled()
@@ -93,19 +100,15 @@ describe('axiom.attempt.submit authority and receipts', () => {
     { ...report, checksRun: [{ command: 'test', result: 'unknown' }] }
   ])('rejects an invalid report before snapshotting %#', async (invalid) => {
     const before = s.snapshot()
-    expect(
-      await s.call(
-        'axiom.attempt.submit',
-        { ...s.params(), report: invalid },
-        { orchestrationCapability: s.t01.capability }
-      )
-    ).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(await s.call('axiom.attempt.submit', { ...s.params(), report: invalid })).toMatchObject({
+      ok: false,
+      error: { code: 'invalid_argument' }
+    })
     expect(s.snapshot()).toEqual(before)
     expect(s.snapshotGit).not.toHaveBeenCalled()
   })
-  it('replays the recorded receipt after capability revocation and rejects changed intent', async () => {
+  it('replays the recorded receipt after settlement and rejects changed intent', async () => {
     const envelope = {
-      orchestrationCapability: s.t01.capability,
       orchestrationRequestId: 'submit-retry'
     }
     expect(await s.call('axiom.attempt.submit', s.params(), envelope)).toMatchObject({
@@ -131,9 +134,10 @@ describe('axiom.attempt.submit authority and receipts', () => {
     expect(await s.submit()).toMatchObject({ ok: true })
     s.panes.set(s.t01.from, 'forged-pane')
     const before = s.snapshot()
-    expect(
-      await s.call('axiom.attempt.submit', s.params(), { orchestrationCapability: 'dcap_wrong' })
-    ).toMatchObject({ ok: false, error: { code: 'dispatch_capability_invalid' } })
+    expect(await s.call('axiom.attempt.submit', s.params())).toMatchObject({
+      ok: false,
+      error: { code: 'worker_identity_changed' }
+    })
     expect(s.snapshot()).toEqual(before)
   })
 })
@@ -149,8 +153,7 @@ describe.each(workerVerbs)('axiom.attempt.%s', (verb) => {
     summary: `${verb} evidence`,
     ...(verb === 'request-subtask' ? { subtask } : {})
   })
-  const call = (capability: string | undefined = f.t01.capability) =>
-    f.call(`axiom.attempt.${verb}`, params(), { orchestrationCapability: capability })
+  const call = () => f.call(`axiom.attempt.${verb}`, params())
   it('persists exactly one typed Control Plane message and audits its recipients', async () => {
     const result = await call()
     expect(result).toMatchObject({ ok: true })
@@ -191,9 +194,15 @@ describe.each(workerVerbs)('axiom.attempt.%s', (verb) => {
     )
     expect(f.notify).toHaveBeenCalledWith(`run:${f.mission.runId}`, messages[0]!.type)
   })
-  it.each(['missing', 'wrong', 'stale', 'foreign', 'inactive'] as const)(
+  it.each(['missing-process', 'other-process', 'stale', 'foreign', 'inactive'] as const)(
     'rejects %s authority without messages, audit, stage or receipt changes',
     async (reason) => {
+      if (reason === 'missing-process') {
+        f.processes.delete(f.t01.from)
+      }
+      if (reason === 'other-process') {
+        f.processes.set(f.t01.from, 'another-attempt-process')
+      }
       if (reason === 'stale') {
         f.store.insertAttemptBinding({
           ...f.store.getAttemptBinding(f.t01.taskId, 1)!,
@@ -214,11 +223,7 @@ describe.each(workerVerbs)('axiom.attempt.%s', (verb) => {
         })
       }
       const before = f.snapshot()
-      const capability =
-        reason === 'missing' ? undefined : reason === 'wrong' ? 'dcap_wrong' : f.t01.capability
-      const result = await f.call(`axiom.attempt.${verb}`, params(), {
-        orchestrationCapability: capability
-      })
+      const result = await f.call(`axiom.attempt.${verb}`, params())
       expect(result).toMatchObject({
         ok: false,
         error: {
@@ -227,15 +232,17 @@ describe.each(workerVerbs)('axiom.attempt.%s', (verb) => {
               ? 'stale_dispatch'
               : reason === 'inactive'
                 ? 'inactive_dispatch'
-                : 'dispatch_capability_invalid'
+                : 'worker_identity_changed'
         }
       })
       expect(f.snapshot()).toEqual(before)
       expect(f.notify).not.toHaveBeenCalled()
     }
   )
-  it('rejects sender_not_assignee after a successful capability verifier (defense in depth)', async () => {
-    vi.spyOn(f.db, 'verifyDispatchCapability').mockReturnValue({ valid: true })
+  it('rejects sender_not_assignee without a recorded process incarnation', async () => {
+    f.db.db
+      .prepare('UPDATE dispatch_contexts SET process_incarnation = NULL WHERE id = ?')
+      .run(f.t01.attemptId)
     f.panes.set(f.t01.from, 'foreign-pane')
     const before = f.snapshot()
     expect(await call()).toMatchObject({ ok: false, error: { code: 'sender_not_assignee' } })
@@ -243,7 +250,6 @@ describe.each(workerVerbs)('axiom.attempt.%s', (verb) => {
   })
   it('replays a retry id once and refuses changed intent', async () => {
     const envelope = {
-      orchestrationCapability: f.t01.capability,
       orchestrationRequestId: `retry-${verb}`
     }
     const first = await f.call(`axiom.attempt.${verb}`, params(), envelope)

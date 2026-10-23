@@ -1,3 +1,4 @@
+import { formatOrcaSessionAddress } from '../../../shared/orca-session-address'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 import { WorkerStartParams } from '../../../shared/rpc-contract/orchestration-worker-start-params'
@@ -45,14 +46,14 @@ vi.mock('../../runtime/rpc/methods/orchestration-structured-worker-session', () 
     identity: { handle: 'term_worker', sessionId: 'session_worker' },
     host: {}
   })),
-  sendStructuredWorkerPreamble: vi.fn(async () => {}),
+  sendStructuredWorkerPreamble: vi.fn(async () => 'accepted'),
   releaseStructuredWorkerSession: vi.fn(),
   discardStructuredWorkerSession: vi.fn(async () => {})
 }))
 
 const sessionId = testOrcaSessionId('axiom-mission-worker-start-contract')
 const caller: OrchestrationSessionCaller = {
-  address: `session:${sessionId}`,
+  address: formatOrcaSessionAddress(sessionId),
   terminalHandle: null,
   paneKey: null,
   orcaSessionId: sessionId,
@@ -159,6 +160,7 @@ describe('D14 service-only Control Plane worker start', () => {
       creator,
       maxDepth: runtime.getNestedWorkerMaxDepth()
     })
+    expect(authority).toHaveReturnedWith(undefined)
     const started = create.mock.results[0]?.value
     const recorded = recordedCreatorIdentity(creator)
     expect(db.getDispatchContextById(started.dispatch.id)).toMatchObject({
@@ -179,11 +181,10 @@ describe('D14 service-only Control Plane worker start', () => {
         taskSpec: task.spec,
         coordinatorHandle: params.from,
         workerHandle: 'term_worker',
-        dispatchCapability: authority.mock.results[0]?.value,
         devMode: undefined,
         cliCommand: 'axiom'
       }),
-      dispatchPreambleSendOptions(started.dispatch.id)
+      { ...dispatchPreambleSendOptions(started.dispatch.id), beforeWrite: expect.any(Function) }
     )
     expect(observeWorkerTurnStart).toHaveBeenCalledOnce()
   })
@@ -303,7 +304,8 @@ describe('D14 service-only Control Plane worker start', () => {
           taskId: task.id,
           taskSpec: task.spec,
           coordinatorHandle: caller.address,
-          workerHandle: 'term_worker'
+          workerHandle:
+            mode.mode === 'structured' ? 'orca_session_id:session_worker' : 'term_worker'
         })
       )
       if (mode.mode === 'structured') {

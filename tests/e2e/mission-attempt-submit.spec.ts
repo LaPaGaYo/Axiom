@@ -220,15 +220,13 @@ test('M2-07: three fixture Workers submit immutable Candidates and reject a forg
         settled.bindings[0]!.dispatch_id,
         '--from',
         'term_forged',
-        '--dispatch-capability',
-        'dcap_wrong',
         '--report',
         forgedReport
       ])
       expect(forged.status).not.toBe(0)
       expect(JSON.parse(forged.stdout)).toMatchObject({
         ok: false,
-        error: { code: 'dispatch_capability_invalid' }
+        error: { code: 'worker_identity_changed' }
       })
       expect(inspect(userData, mission.id)).toEqual(settled)
       expect(git(['-C', clone, 'rev-parse', baseRef])).toBe(base)
@@ -270,7 +268,7 @@ test('M2-07: three fixture Workers submit immutable Candidates and reject a forg
       expect(recovered.candidates).toEqual(settled.candidates)
       expect(recovered.submissions).toEqual(settled.submissions)
       console.log(
-        `[M2-07] ${JSON.stringify({ missionId: mission.id, submitted: 3, activeCandidates: 3, submissions: 3, runningVerificationRuns: 3, requeuedAfterRestart: 3, completedDispatches: 3, candidateCommits: settled.candidates.map((c) => c.commitSha), integrationBaseUnchanged: base, forgedSubmit: 'dispatch_capability_invalid', totalMs: performance.now() - started })}`
+        `[M2-07] ${JSON.stringify({ missionId: mission.id, submitted: 3, activeCandidates: 3, submissions: 3, runningVerificationRuns: 3, requeuedAfterRestart: 3, completedDispatches: 3, candidateCommits: settled.candidates.map((c) => c.commitSha), integrationBaseUnchanged: base, forgedSubmit: 'worker_identity_changed', totalMs: performance.now() - started })}`
       )
     },
     { restart: true }

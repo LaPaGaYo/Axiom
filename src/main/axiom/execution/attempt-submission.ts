@@ -35,7 +35,7 @@ async function settleSubmission(input: z.infer<typeof AttemptSubmitParams>, ctx:
     store,
     ...input,
     orchestrationCaller: ctx.orchestrationCaller,
-    orchestrationCapability: ctx.orchestrationCapability,
+    orchestrationCompatibilityEvidence: ctx.orchestrationCompatibilityEvidence,
     allowSubmissionReplay: true
   }
   const { mission, task, binding, sender } = resolveAttemptSender(authorityInput)
@@ -121,7 +121,7 @@ async function settleSubmission(input: z.infer<typeof AttemptSubmitParams>, ctx:
     branch: binding.branch
   })
   const result = runLifecycleWriteTransaction(db.db, 'axiom_submit', () => {
-    // A new admission or capability mint during asynchronous Git work must fence this write.
+    // A new admission or worker identity during asynchronous Git work must fence this write.
     if (store.nextAttemptSeq(task.taskId) !== binding.seq + 1) {
       throw new OrchestrationError('stale_dispatch', 'A newer Attempt owns this Task.')
     }

@@ -10,13 +10,21 @@ import { isCohortExtendedEvent, isOnboardingEvent } from '../../shared/telemetry
 import type { EventName, EventProps } from '../../shared/telemetry-events'
 
 const MAIN_OWNED_TELEMETRY_EVENTS = new Set<EventName>([
+  'agent_token_usage',
   'app_starred_orca',
   'daemon_adopted',
   'daemon_audit_eligibility',
   'daemon_pty_cwd_denied',
   'daemon_pty_cwd_readable',
   'star_nag_outcome',
-  'feature_interaction_usage_bucket_reached'
+  'feature_interaction_usage_bucket_reached',
+  'ssh_remote_runtime_resolved',
+  'ssh_host_server_decided',
+  'ssh_host_server_conversion',
+  'ssh_host_server_deploy_failed',
+  'ssh_host_server_move',
+  'ssh_host_server_legacy_relay_bridge',
+  'wsl_usage_snapshot'
 ])
 
 // Keep the optional store parameter compatible with the existing core-handler registration.

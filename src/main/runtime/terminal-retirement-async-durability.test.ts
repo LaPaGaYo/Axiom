@@ -2,9 +2,15 @@ import { afterEach, expect, it, vi } from 'vitest'
 import {
   ACK_INCARNATION,
   ACK_LEAF,
+  ACK_SECOND_LEAF,
   ACK_TAB,
   createAcknowledgedTabRetirementFixture
 } from './acknowledged-terminal-tab-retirement-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+
+// The window's acknowledged close; a layout-owner build closes in main without one, and the twin
+// of that case is in acknowledged-terminal-tab-retirement-main-close.test.ts.
+const itSwitchOff = it.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)
 
 const fixtures: ReturnType<typeof createAcknowledgedTabRetirementFixture>[] = []
 afterEach(async () => {
@@ -18,7 +24,7 @@ function fixture() {
   return result
 }
 
-it('withholds the acknowledged close until its host retirement is durable', async () => {
+itSwitchOff('withholds the acknowledged close until its host retirement is durable', async () => {
   const f = fixture()
   let acknowledged = false
   const closing = f.close().then((result) => {
@@ -35,7 +41,7 @@ it('withholds the acknowledged close until its host retirement is durable', asyn
   expect(f.hasTab()).toBe(false)
 })
 
-it('publishes physical-exit retirement only after durability', async () => {
+it('publishes physical-exit retirement before its durable write completes', async () => {
   const f = fixture()
   await f.store.flushPendingOrThrowAsync()
   const published = vi.fn()
@@ -43,7 +49,8 @@ it('publishes physical-exit retirement only after durability', async () => {
   const gate = f.authority.pause()
   const exiting = f.runtime.onPtyExit('pty-a', 0, ACK_INCARNATION, { providerExitObserved: true })
   await gate.started.promise
-  expect(published).not.toHaveBeenCalled()
+  // Why: a client re-activating the exited pane in this window must already find it retired.
+  expect(published).toHaveBeenCalled()
   gate.finish.resolve()
   await exiting
   expect(published).toHaveBeenCalled()
@@ -53,7 +60,7 @@ it('publishes physical-exit retirement only after durability', async () => {
   unsubscribe()
 })
 
-it('does not publish a delayed exit over a newly admitted incarnation', async () => {
+it('publishes nothing when the exit write lands after a replacement is admitted', async () => {
   const f = fixture()
   await f.store.flushPendingOrThrowAsync()
   const published = vi.fn()
@@ -67,4 +74,59 @@ it('does not publish a delayed exit over a newly admitted incarnation', async ()
   await exiting
   expect(published).not.toHaveBeenCalled()
   unsubscribe()
+})
+
+async function exitWithFailedDurableWrite(f: ReturnType<typeof fixture>): Promise<void> {
+  await f.store.flushPendingOrThrowAsync()
+  const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  f.authority.failNextWrite()
+  await f.runtime.onPtyExit('pty-a', 0, ACK_INCARNATION, { providerExitObserved: true })
+  expect(errorSpy).toHaveBeenCalledWith(
+    '[runtime] terminal retirement is not yet durable:',
+    expect.any(Error)
+  )
+  errorSpy.mockRestore()
+  // The failed write left disk untouched, so a relaunch would still load the exited leaf.
+  expect(f.readDisk().workspaceSession.terminalLayoutsByTabId[ACK_TAB]?.ptyIdsByLeafId).toEqual({
+    [ACK_LEAF]: 'pty-a',
+    [ACK_SECOND_LEAF]: 'pty-b'
+  })
+}
+
+it('persists a failed exit retirement with the next unrelated profile write', async () => {
+  const f = fixture()
+  await exitWithFailedDurableWrite(f)
+  f.store.addRepo({
+    id: 'repo2',
+    path: '/tmp/other',
+    displayName: 'Other',
+    badgeColor: 'gray',
+    addedAt: 2
+  })
+  await f.store.flushPendingOrThrowAsync()
+  expect(f.readDisk().workspaceSession.terminalLayoutsByTabId[ACK_TAB]?.ptyIdsByLeafId).toEqual({
+    [ACK_SECOND_LEAF]: 'pty-b'
+  })
+})
+
+it('persists a failed exit retirement with the final quit flush', async () => {
+  const f = fixture()
+  await exitWithFailedDurableWrite(f)
+  await f.quit()
+  expect(f.readDisk().workspaceSession.terminalLayoutsByTabId[ACK_TAB]?.ptyIdsByLeafId).toEqual({
+    [ACK_SECOND_LEAF]: 'pty-b'
+  })
+})
+
+it('writes exits retired in the same tick once', async () => {
+  const f = fixture()
+  await f.store.flushPendingOrThrowAsync()
+  const writes = f.authority.captures.length
+  await Promise.all([
+    f.runtime.onPtyExit('pty-a', 0, ACK_INCARNATION, { providerExitObserved: true }),
+    f.runtime.onPtyExit('pty-b', 0, undefined, { providerExitObserved: true })
+  ])
+  // Why: the first write already carries both retirements; the second has nothing left to fence.
+  expect(f.authority.captures.length - writes).toBe(1)
+  expect(f.readDisk().workspaceSession.terminalLayoutsByTabId[ACK_TAB]).toBeUndefined()
 })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { buildRows } from './worktree-list/grouping/build-rows'
-import { getGroupKeyForWorktree } from './worktree-list/grouping/worktree-group-keys'
+import { buildRows } from './worktree-list/grouping/build-rows.test-fixture'
+import { getGroupKeyForWorktree } from '../../../../shared/sidebar-list/worktree-group-keys'
 import {
   LOCAL_HOST_LABEL,
   repo,
@@ -202,7 +202,7 @@ describe('buildRows with pinned worktrees', () => {
     ])
   })
 
-  it('shows distinct Orca server names when status grouping mixes runtime hosts', () => {
+  it('shows distinct Axiom server names when status grouping mixes runtime hosts', () => {
     const firstRepo: Repo = {
       ...repo,
       id: 'repo-runtime-a',
@@ -331,7 +331,6 @@ describe('buildRows with pinned worktrees', () => {
         remoteWorktree,
         new Map([[remoteRepo.id, remoteRepo]]),
         null,
-        undefined,
         undefined,
         {
           projects: [project],

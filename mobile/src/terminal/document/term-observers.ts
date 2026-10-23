@@ -1,9 +1,11 @@
 import { afterWritesDrained, disposeTermObservers } from './write-queue'
+import { paintBottomRowBackdrop } from './bottom-row-backdrop'
 import { updateScrollIndicator } from './viewport-transform'
 import type { TerminalDocumentScope } from './document-scope'
 import { logFeedAndEvict } from './selection-state-and-eviction'
 import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
 import { emitModesIfChanged } from './mode-mirroring'
+import { reportLaidOutCellBox } from './laid-out-cell-box'
 
 export function attachTermObservers(scope: TerminalDocumentScope) {
   if (!scope.term) {
@@ -21,6 +23,7 @@ export function attachTermObservers(scope: TerminalDocumentScope) {
     scope.termObserverDisposables.push(
       scope.term.onScroll!(function () {
         updateScrollIndicator(scope, false)
+        paintBottomRowBackdrop(scope)
       })
     )
   } catch {}
@@ -32,6 +35,18 @@ export function attachTermObservers(scope: TerminalDocumentScope) {
         scope.term.onWriteParsed(function () {
           emitModesIfChanged(scope)
           emitKeyboardAvoidanceMetrics(scope)
+          paintBottomRowBackdrop(scope)
+        })
+      )
+    }
+  } catch {}
+  // Why: onDimensionsChange skips a renderer swap and a DPR change; every one of them re-renders.
+  try {
+    if (scope.term.onRender) {
+      scope.termObserverDisposables.push(
+        scope.term.onRender(function () {
+          reportLaidOutCellBox(scope)
+          paintBottomRowBackdrop(scope)
         })
       )
     }

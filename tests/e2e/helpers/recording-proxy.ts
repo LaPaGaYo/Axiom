@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage } from 'node:http'
 import type { Socket } from 'node:net'
 import { redactString } from '../../../src/main/observability/redactor'
-import { runProcess } from '../../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 type Peer = Pick<Socket, 'remoteAddress' | 'remotePort' | 'localAddress' | 'localPort'>
 type SocketOwner = { pid: number; command: string | null }

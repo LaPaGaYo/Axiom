@@ -5,10 +5,9 @@ import {
   structuredAgentSessionTabId
 } from '../../shared/structured-agent-session-projection'
 import { selectExactWorkerProviderSession } from './orchestration/worker-provider-session'
-import { structuredWorkerChildIdentityEnv } from './structured-worker-child-identity-env'
+import { sealedChildEnv } from './structured-session-child-env.test-support'
 import {
   StructuredWorkerIdentityRegistry,
-  isStructuredWorkerHandle,
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
   sessionIdFromStructuredWorkerIncarnation,
@@ -18,6 +17,7 @@ import {
   structuredWorkerProcessIncarnation,
   structuredWorkerRecordIsCurrent
 } from './structured-worker-identity'
+import { isStructuredWorkerHandle } from '../../shared/structured-worker-handle'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { ExecutionHostId } from '../../shared/execution-host'
 
@@ -52,7 +52,6 @@ function record(overrides: {
       leaseDeadlineAt: 0,
       lastRenewedAt: 0,
       handoffOperationId: null,
-      journalCheckpoint: null,
       claimKeyId: 'k',
       claimStatus: overrides.claimStatus ?? 'live',
       unreconciled: false,
@@ -176,18 +175,24 @@ describe('structured worker identity', () => {
   it('keeps a recovered session current across a fence bump', () => {
     // The host bumps the fence on its own transparent crash recovery; fencing identity on it
     // would wedge the SAME worker as identity_unproven forever.
-    expect(structuredWorkerRecordIsCurrent(record({ runtimeFence: 1 }))).toBe(true)
-    expect(structuredWorkerRecordIsCurrent(record({ runtimeFence: 9 }))).toBe(true)
+    expect(structuredWorkerRecordIsCurrent(record({ runtimeFence: 1 }), false)).toBe(true)
+    expect(structuredWorkerRecordIsCurrent(record({ runtimeFence: 9 }), false)).toBe(true)
     expect(structuredWorkerProcessIncarnation(SESSION_ID)).toBe(
       structuredWorkerProcessIncarnation(SESSION_ID)
     )
   })
 
-  it('refuses a conflicted or released session', () => {
+  it('refuses a conflicted session, and a released one whose chat tab is gone', () => {
     // A terminal owner an older build recorded loads conflicted; it is not this worker.
-    expect(structuredWorkerRecordIsCurrent(record({ claimStatus: 'conflicted' }))).toBe(false)
-    expect(structuredWorkerRecordIsCurrent(record({ claimStatus: 'released' }))).toBe(false)
-    expect(structuredWorkerRecordIsCurrent(null)).toBe(false)
+    expect(structuredWorkerRecordIsCurrent(record({ claimStatus: 'conflicted' }), true)).toBe(false)
+    expect(structuredWorkerRecordIsCurrent(record({ claimStatus: 'released' }), false)).toBe(false)
+    expect(structuredWorkerRecordIsCurrent(null, true)).toBe(false)
+  })
+
+  it('keeps a released session with a listed tab: that worker is at rest, not gone', () => {
+    expect(structuredWorkerRecordIsCurrent(record({ claimStatus: 'released' }), true)).toBe(true)
+    // A live lease is owned whether or not a tab shows it.
+    expect(structuredWorkerRecordIsCurrent(record({ claimStatus: 'live' }), false)).toBe(true)
   })
 })
 
@@ -294,9 +299,9 @@ describe('structured workers stay outside the PTY-only fail-closed paths', () =>
       hostScope: { kind: 'local', hostId: 'local' }
     })
     try {
-      const env = structuredWorkerChildIdentityEnv(SESSION_ID, {})
-      // Registered, so this is a populated env — not the empty one an unregistered session gets,
-      // which would satisfy the pane-key assertion for the wrong reason.
+      const env = sealedChildEnv(SESSION_ID)
+      // Registered, so the worker's handle is present; without it the pane-key assertion would pass
+      // for the wrong reason.
       expect(env.ORCA_TERMINAL_HANDLE).toBe(handle)
       expect(Object.keys(env)).not.toContain('ORCA_PANE_KEY')
     } finally {

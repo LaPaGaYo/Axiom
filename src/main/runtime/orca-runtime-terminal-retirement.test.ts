@@ -152,7 +152,7 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
   it('releases each early-exit fence after its matching registration is rejected', async () => {
     const runtime = new OrcaRuntimeService()
     const internals = runtime as unknown as {
-      earlyExitedPtyIncarnations: Map<string, string | null>
+      pendingPtyRegistrationIncarnations: Map<string, string | null>
     }
 
     for (let index = 0; index < 1_000; index += 1) {
@@ -166,13 +166,12 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
       runtime.releaseRejectedPtyRegistrationFence(ptyId, incarnationId)
     }
 
-    expect(internals.earlyExitedPtyIncarnations.size).toBe(0)
+    expect(internals.pendingPtyRegistrationIncarnations.size).toBe(0)
   })
 
   it('does not retain fences for completed surface-less lifecycles', async () => {
     const runtime = new OrcaRuntimeService()
     const internals = runtime as unknown as {
-      earlyExitedPtyIncarnations: Map<string, string | null>
       pendingPtyRegistrationIncarnations: Map<string, string | null>
     }
 
@@ -183,7 +182,6 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
       await runtime.onPtyExit(`pty-headless-${index}`, 0, `incarnation-${index}`)
     }
 
-    expect(internals.earlyExitedPtyIncarnations.size).toBe(0)
     expect(internals.pendingPtyRegistrationIncarnations.size).toBe(0)
   })
 
@@ -205,10 +203,8 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
     ).toThrow('agent_session_exited_during_start')
     runtime.releaseRejectedPtyRegistrationFence('pty-left', 'incarnation-replacement')
     const internals = runtime as unknown as {
-      earlyExitedPtyIncarnations: Map<string, string | null>
       pendingPtyRegistrationIncarnations: Map<string, string | null>
     }
-    expect(internals.earlyExitedPtyIncarnations.size).toBe(0)
     expect(internals.pendingPtyRegistrationIncarnations.size).toBe(0)
   })
 
@@ -691,7 +687,7 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
     expect(flushOrThrow).toHaveBeenCalledOnce()
   })
 
-  it('does not publish absence when the durable retirement flush fails', async () => {
+  it('publishes absence and reports when the durable retirement flush fails', async () => {
     const session = makePersistedSplitSession()
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const runtime = new OrcaRuntimeService(
@@ -717,20 +713,20 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
 
     await runtime.onPtyExit('pty-left', 0, 'incarnation-a')
 
+    // Why: the process is gone either way; a failed write is reported, not reinstated.
     expect((await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)).tabs).toEqual([
-      expect.objectContaining({ id: 'tab::left' }),
       expect.objectContaining({ id: 'tab::right' })
     ])
-    expect(events).toEqual([])
+    expect(events).not.toEqual([])
     expect(errorSpy).toHaveBeenCalledWith(
-      '[runtime] failed to persist terminal retirement:',
+      '[runtime] terminal retirement is not yet durable:',
       expect.any(Error)
     )
     unsubscribe()
     errorSpy.mockRestore()
   })
 
-  it('rolls back an in-memory retirement when the durable flush fails', async () => {
+  it('keeps the in-memory retirement when the durable flush fails', async () => {
     let session = makePersistedSplitSession()
     const original = structuredClone(session)
     const setWorkspaceSession = vi.fn((next: WorkspaceSessionState) => {
@@ -755,10 +751,14 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
       incarnationId: 'incarnation-a'
     })
 
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
     await runtime.onPtyExit('pty-left', 0, 'incarnation-a')
 
-    expect(session).toEqual(original)
-    expect(setWorkspaceSession).toHaveBeenLastCalledWith(original, LOCAL_EXECUTION_HOST_ID)
-    expect(setWorkspaceSession).toHaveBeenCalledTimes(2)
+    // Why: the next profile write carries the staged retirement; nothing may reinstate the leaf.
+    expect(session).not.toEqual(original)
+    expect(session.terminalLayoutsByTabId.tab?.ptyIdsByLeafId).toEqual({ right: 'pty-right' })
+    expect(setWorkspaceSession).toHaveBeenCalledOnce()
+    errorSpy.mockRestore()
   })
 })

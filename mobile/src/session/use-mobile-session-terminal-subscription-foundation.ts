@@ -1,5 +1,4 @@
 import { useRef, useCallback } from 'react'
-import { measureTerminalViewportOnce } from './mobile-terminal-first-subscribe-viewport'
 import type { MobileSessionNativeChatDictationModel } from './use-mobile-session-native-chat-dictation'
 
 export function useMobileSessionTerminalSubscriptionFoundation(
@@ -9,8 +8,6 @@ export function useMobileSessionTerminalSubscriptionFoundation(
     setCoveredStreamRevision,
     setTerminalKeyboardMetrics,
     terminalCwdRef,
-    viewportRef,
-    viewportMeasuredRef,
     terminalRefs,
     terminalUnsubsRef,
     subscribingHandlesRef,
@@ -19,11 +16,9 @@ export function useMobileSessionTerminalSubscriptionFoundation(
     terminalDiagnosticsRef,
     viewportResubscribeBudgetRef,
     webReadyHandlesRef,
-    subscribedDocumentsRef,
     activeHandleRef,
     subscribeSeqRef,
     layoutSeqRef,
-    terminalFrameHeightRef,
     nativeChatInputLeaseReadyRef,
     clearNativeChatInputLease,
     showNativeChatRef
@@ -42,6 +37,8 @@ export function useMobileSessionTerminalSubscriptionFoundation(
       subscribeSeqRef.current.set(handle, (subscribeSeqRef.current.get(handle) ?? 0) + 1)
       // Why: reset the high-water mark so a fresh subscription's first scrollback isn't dropped as stale.
       layoutSeqRef.current.delete(handle)
+      // Why: a drawn snapshot belongs to this subscription; the next one must draw its own or live redraws land on a stale screen.
+      initializedHandlesRef.current.delete(handle)
       // Why compare against the RENDERED lease: `clear` reports the drop from its
       // synchronous mirror, so a `subscribed`+`end` pair applied in one render batch
       // reports "dropped" while React only ever sees false → the effect never re-runs
@@ -77,7 +74,6 @@ export function useMobileSessionTerminalSubscriptionFoundation(
     terminalDiagnosticsRef.current.clearTerminalCache()
     viewportResubscribeBudgetRef.current.clear()
     webReadyHandlesRef.current.clear()
-    subscribedDocumentsRef.current.clear()
     subscribeSeqRef.current.clear()
     layoutSeqRef.current.clear()
     terminalCwdRef.current.clear()
@@ -86,27 +82,11 @@ export function useMobileSessionTerminalSubscriptionFoundation(
       term.clear()
     }
   }, [clearNativeChatInputLease])
-
-  const measureViewportOnce = useCallback(
-    (handle: string) =>
-      measureTerminalViewportOnce({
-        handle,
-        ref: getTerminalRef(handle),
-        documentHasTerminal: initializedHandlesRef.current.has(handle),
-        viewportRef,
-        viewportMeasuredRef,
-        terminalFrameHeightRef,
-        onMeasured: (measuredHandle, dims, frameHeight) =>
-          terminalDiagnosticsRef.current.viewportMeasured(measuredHandle, dims, frameHeight)
-      }),
-    [getTerminalRef]
-  )
   return {
     getTerminalRef,
     unsubscribeTerminal,
     unsubscribeTerminalRef,
-    clearTerminalCache,
-    measureViewportOnce
+    clearTerminalCache
   }
 }
 

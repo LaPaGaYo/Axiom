@@ -1,19 +1,18 @@
 import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { writeFileAtomically } from './codex-accounts/fs-utils'
-import { getOrcaManagedCodexHomePath } from './codex/codex-home-paths'
 import { upsertProjectTrustLevel } from './codex/config-toml-trust'
 import { runExclusivelyForCodexTrustConfig } from './codex/codex-trust-config-mutation-queue'
+import type { TuiAgentConfig } from '../shared/tui-agent-config'
 
-export type AgentTrustPreset = 'cursor' | 'copilot' | 'codex' | 'antigravity'
+export type AgentTrustPreset = NonNullable<TuiAgentConfig['preflightTrust']>
 
 /**
  * Pre-mark a workspace as trusted for cursor-agent, GitHub Copilot CLI, or
  * Codex so the agent's "Do you trust this folder?" menu does not fire on
  * first launch.
  *
- * Why: Orca's "drop URL into agent input as a draft" flow injects the URL
+ * Why: Axiom's "drop URL into agent input as a draft" flow injects the URL
  * via bracketed-paste once the TUI is up. If the trust menu intercepts the
  * keystrokes (each menu reads a single character or numbered option), the
  * paste either selects an arbitrary option or quits the session. Pre-writing
@@ -37,13 +36,13 @@ export type AgentTrustPreset = 'cursor' | 'copilot' | 'codex' | 'antigravity'
  * (versions/2026.04.17-787b533/index.ts: `_=".workspace-trusted"`, slug
  * derived via the same util that resolves `~/.cursor/projects/<slug>`).
  */
-export function markCursorWorkspaceTrusted(workspacePath: string): void {
+export function markCursorWorkspaceTrusted(workspacePath: string, home: string): void {
   const absPath = canonicalize(workspacePath)
   const slug = cursorWorkspaceSlug(absPath)
   if (!slug) {
     return
   }
-  const trustDir = join(homedir(), '.cursor', 'projects', slug)
+  const trustDir = join(home, '.cursor', 'projects', slug)
   const trustFile = join(trustDir, '.workspace-trusted')
   if (existsSync(trustFile)) {
     return
@@ -67,9 +66,9 @@ export function markCursorWorkspaceTrusted(workspacePath: string): void {
  * We append to the array in-place so unrelated config keys (loggedInUsers,
  * copilotTokens, etc.) survive untouched.
  */
-export function markCopilotFolderTrusted(workspacePath: string): void {
+export function markCopilotFolderTrusted(workspacePath: string, home: string): void {
   const absPath = canonicalize(workspacePath)
-  const configDir = join(homedir(), '.copilot')
+  const configDir = join(home, '.copilot')
   const configPath = join(configDir, 'config.json')
   let config: Record<string, unknown> = {}
   try {
@@ -122,9 +121,9 @@ export function markCopilotFolderTrusted(workspacePath: string): void {
  * We append in-place so the sibling keys in the same file (model, permissions,
  * toolPermission, agentMode, …) survive untouched.
  */
-export function markAntigravityWorkspaceTrusted(workspacePath: string): void {
+export function markAntigravityWorkspaceTrusted(workspacePath: string, home: string): void {
   const absPath = canonicalize(workspacePath)
-  const configDir = join(homedir(), '.gemini', 'antigravity-cli')
+  const configDir = join(home, '.gemini', 'antigravity-cli')
   const configPath = join(configDir, 'settings.json')
   let config: Record<string, unknown> = {}
   try {
@@ -162,23 +161,28 @@ export function markAntigravityWorkspaceTrusted(workspacePath: string): void {
  *
  * Verified against codex-rs/tui/src/onboarding/trust_directory.rs and
  * codex-rs/core/src/config/config_tests.rs in the Codex CLI source.
+ *
+ * `configFiles` names every config.toml the launched Codex may read, in the
+ * hook installer's lock order (an Axiom-owned CODEX_HOME before the system one).
  */
-export function markCodexProjectTrusted(workspacePath: string): Promise<void> {
-  // Why: Codex checks its cwd first, regardless of Git layout; never widen trust to a main checkout.
+export function markCodexProjectTrusted(
+  workspacePath: string,
+  configFiles: readonly string[]
+): Promise<void> {
+  // Why: Codex checks the cwd's own entry before the repo root, so no git-layout logic is needed.
   const absPath = canonicalize(workspacePath)
-  const systemTomlPath = join(homedir(), '.codex', 'config.toml')
-  // Why: Orca-launched Codex runs with an Orca-owned CODEX_HOME, so the trust
-  // preset must also update the runtime config Codex will actually read.
-  const runtimeTomlPath = join(getOrcaManagedCodexHomePath(), 'config.toml')
-  // Why (#16441): hook installs now await a codex app-server grant, so an
-  // unqueued write here can land inside their capture->restore window and be
-  // reverted. Same runtime-before-system lock order the installer takes.
-  return runExclusivelyForCodexTrustConfig(runtimeTomlPath, () =>
-    runExclusivelyForCodexTrustConfig(systemTomlPath, async () => {
-      upsertProjectTrustLevel(systemTomlPath, absPath, 'trusted')
-      upsertProjectTrustLevel(runtimeTomlPath, absPath, 'trusted')
-    })
+  // Why (#16441): hook installs read and rewrite these files across awaits, so
+  // an unqueued write here could land between their read and their write and be
+  // lost. Same runtime-before-system lock order the installer takes.
+  const write = configFiles.reduceRight<() => Promise<void>>(
+    (inner, configFile) => () => runExclusivelyForCodexTrustConfig(configFile, inner),
+    async () => {
+      for (const configFile of configFiles) {
+        upsertProjectTrustLevel(configFile, absPath, 'trusted')
+      }
+    }
   )
+  return write()
 }
 
 function canonicalize(p: string): string {

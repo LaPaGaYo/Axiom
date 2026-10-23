@@ -7,9 +7,6 @@ type EnsureOrcaCliAvailableOptions = {
   registrationPromptDelayMs?: number
 }
 
-export const AGENT_SKILL_CLI_PREREQUISITE_NOTICE =
-  'Before opening setup, Axiom may show a system prompt to register the Axiom CLI command on PATH.'
-
 export const CLI_PREREQUISITE_REGISTRATION_TOAST = 'Axiom needs to register its CLI on PATH.'
 export const CLI_PREREQUISITE_REGISTRATION_TOAST_DESCRIPTION =
   'Approve the system prompt so skill setup can use the Axiom CLI command.'
@@ -131,7 +128,7 @@ function showCliPrerequisiteWarning(status: CliInstallStatus): void {
 
   if (status.pathConfigured === false) {
     // Why: the skill installer opens a real shell; agents only get the expected
-    // Orca affordances when that shell can resolve the Orca CLI command.
+    // Axiom affordances when that shell can resolve the Axiom CLI command.
     toast.warning(
       translate(
         'auto.lib.agent.skill.cli.prerequisite.79371593b0',

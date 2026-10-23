@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { AppWindow } from 'lucide-react'
 import {
   createPresetOpenInApplication,
   shouldCommitOpenInApplicationsDraft
@@ -35,10 +36,10 @@ describe('OpenInMenuSetting presets', () => {
     expect(isOpenInAppPresetAdded([{ command: ' cursor ' }], cursor)).toBe(true)
   })
 
-  it('keeps the Zed icon visible on dark menus', () => {
+  it('uses a theme-aware local glyph when Zed has no bundled icon', () => {
     const icon = OpenInApplicationIcon({ application: { command: 'zed' } })
 
-    expect(icon.props.className).toContain('dark:invert')
+    expect(icon.type).toBe(AppWindow)
   })
 })
 

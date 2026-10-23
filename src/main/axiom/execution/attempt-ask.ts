@@ -17,7 +17,7 @@ export async function askAttempt(p: z.infer<typeof AttemptAskParams>, ctx: RpcCo
     store,
     ...p,
     orchestrationCaller: ctx.orchestrationCaller,
-    orchestrationCapability: ctx.orchestrationCapability
+    orchestrationCompatibilityEvidence: ctx.orchestrationCompatibilityEvidence
   })
   let question = p.resume ? db.getQuestion(p.resume) : undefined
   let notification: MessageRow['type'] | undefined

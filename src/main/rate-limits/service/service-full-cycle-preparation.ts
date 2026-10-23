@@ -5,47 +5,17 @@ import { fetchGrokRateLimits } from '../grok-fetcher'
 import { readGrokAuthSession } from '../grok-auth'
 import { fetchCursorRateLimits } from '../cursor-fetcher'
 import { readCursorAuthSession } from '../cursor-auth'
+import { fetchZcodeRateLimits } from '../zcode-usage-fetcher'
+import { fetchAntigravityRateLimits } from '../antigravity-usage-fetcher'
+import { antigravityUsageDisabledSnapshot } from '../antigravity-usage-snapshot'
+import { ZCODE_PLAN_SITE_BASE_URLS } from '../../../shared/zcode-plan-sites'
 import { fetchMiniMaxRateLimits } from '../minimax/minimax-fetcher'
 import { createHash } from 'node:crypto'
 import { fetchOpenCodeGoUsage } from '../opencode-go-usage-source-selection'
 import { RateLimitServiceFetchPolicy } from './service-fetch-policy'
-import type { SettledProviderResult } from './service-sibling-provider-result'
-import type {
-  ClaudeRuntimeAuthPreparation,
-  InternalRateLimitState,
-  NormalizedClaudeAccountSelectionTarget,
-  NormalizedCodexAccountSelectionTarget,
-  ProviderRateLimits
-} from './service-types'
-
-export type FetchAllCyclePrepared = {
-  mayFetch: (provider: ProviderRateLimits['provider']) => boolean
-  claudeTarget: NormalizedClaudeAccountSelectionTarget
-  claudeGeneration: number
-  claudeAuthPreparation: ClaudeRuntimeAuthPreparation | undefined
-  claudeProvenance: string
-  codexTarget: NormalizedCodexAccountSelectionTarget
-  previousState: InternalRateLimitState
-  codexFetchGated: boolean
-  codexStateBeforeFetch: ProviderRateLimits | null
-  codexProvenance: string | null
-  codexGeneration: number
-  opencodeConfigChanged: boolean
-  opencodeGeneration: number
-  miniMaxConfigChanged: boolean
-  miniMaxGeneration: number
-  claudeFetchGated: boolean
-  results: [
-    PromiseSettledResult<ProviderRateLimits>,
-    PromiseSettledResult<ProviderRateLimits>,
-    PromiseSettledResult<ProviderRateLimits>,
-    PromiseSettledResult<ProviderRateLimits>,
-    PromiseSettledResult<ProviderRateLimits>,
-    PromiseSettledResult<ProviderRateLimits>
-  ]
-  grokResultPromise: Promise<SettledProviderResult>
-  cursorResultPromise: Promise<SettledProviderResult>
-}
+import type { ProviderRateLimits } from './service-types'
+import type { FetchAllCyclePrepared } from './service-full-cycle-types'
+export type { FetchAllCyclePrepared } from './service-full-cycle-types'
 
 export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServiceFetchPolicy {
   protected async prepareFetchAllCycle(
@@ -71,11 +41,13 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     }
     const claudeProvenance = claudeAuthPreparation?.provenance ?? 'system'
     const codexTarget = this.codexFetchTarget
+    // Why: capture before the resolver await; a reset during it bumps the generation and this cycle's result is stale.
+    const codexGeneration = this.codexFetchGeneration
     const previousState = this.state
     // Why: a skipped Codex poll must not stop the other providers' cycle, so gate
     // only the Codex slot instead of returning early (#STA-4422).
     const codexHome = mayFetch('codex')
-      ? this.resolveCodexHome(codexTarget)
+      ? await this.resolveCodexHome(codexTarget)
       : { skip: true, homePath: null }
     const codexFetchGated = codexHome.skip
     const codexHomePath = codexHome.homePath
@@ -84,11 +56,12 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const codexProvenance = codexFetchGated
       ? null
       : this.getCodexProvenance(codexTarget, codexHomePath)
-    const codexGeneration = this.codexFetchGeneration
-    const openCodeGoConfig = this.openCodeGoConfigResolver?.()
-    const cookie = openCodeGoConfig?.sessionCookie ?? ''
-    const workspaceIdOverride = openCodeGoConfig?.workspaceIdOverride ?? ''
-    const openCodeGoApiKey = openCodeGoConfig?.apiKey ?? ''
+    const openCodeGoConfig = this.resolveOpenCodeGoConfig()
+    const cookie = openCodeGoConfig.sessionCookie
+    const workspaceIdOverride = openCodeGoConfig.workspaceIdOverride
+    const openCodeGoApiKey = openCodeGoConfig.apiKey
+    const openCodeGoApiKeyError = openCodeGoConfig.apiKeyError
+    const openCodeGoApiKeyReadSkipped = openCodeGoConfig.apiKeyReadSkipped
     const miniMaxConfigResult = this.resolveMiniMaxConfig()
     const miniMaxCookie = miniMaxConfigResult.config.sessionCookie
     const miniMaxGroupId = miniMaxConfigResult.config.groupId
@@ -105,7 +78,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const apiKeyFingerprint = openCodeGoApiKey
       ? createHash('sha256').update(openCodeGoApiKey).digest('hex')
       : ''
-    const currentConfigHash = `${cookie}|${workspaceIdOverride}|${apiKeyFingerprint}`
+    const currentConfigHash = `${cookie}|${workspaceIdOverride}|${apiKeyFingerprint}|${openCodeGoApiKeyError ?? ''}`
     const opencodeConfigChanged = currentConfigHash !== this.lastOpencodeConfigHash
     if (opencodeConfigChanged) {
       this.lastOpencodeConfigHash = currentConfigHash
@@ -121,6 +94,27 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     }
     const miniMaxGeneration = this.minimaxFetchGeneration
 
+    const antigravityUsageEnabled = this.antigravityUsageEnabledResolver?.() ?? true
+
+    const zcodePlanConfigResult = this.resolveZcodePlanConfig()
+    const zcodePlanApiKey = zcodePlanConfigResult.config.apiKey
+    // Why digest, not the key: this string only has to change when the credential does.
+    const currentZcodeConfigHash = zcodePlanApiKey
+      ? `${zcodePlanConfigResult.config.site}|${createHash('sha256').update(zcodePlanApiKey).digest('hex')}`
+      : (zcodePlanConfigResult.error ?? '')
+    const zcodeConfigChanged = currentZcodeConfigHash !== this.lastZcodeConfigHash
+    if (zcodeConfigChanged) {
+      this.lastZcodeConfigHash = currentZcodeConfigHash
+      this.zcodeFetchGeneration += 1
+    }
+    const zcodeGeneration = this.zcodeFetchGeneration
+    const zcodePlanCredential = zcodePlanApiKey
+      ? {
+          apiKey: zcodePlanApiKey,
+          baseUrl: ZCODE_PLAN_SITE_BASE_URLS[zcodePlanConfigResult.config.site]
+        }
+      : null
+
     // Mark all providers fetching while keeping previous data visible (Codex is cleared separately on account change).
     const fetchingState = {
       ...previousState,
@@ -134,12 +128,17 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         ? this.withFetchingStatus(null, 'opencode-go')
         : this.withFetchingStatus(previousState.opencodeGo, 'opencode-go'),
       kimi: this.withFetchingStatus(previousState.kimi, 'kimi'),
-      antigravity: this.withFetchingStatus(previousState.antigravity, 'antigravity'),
+      antigravity: antigravityUsageEnabled
+        ? this.withFetchingStatus(previousState.antigravity, 'antigravity')
+        : (previousState.antigravity ?? antigravityUsageDisabledSnapshot()),
       minimax: miniMaxConfigChanged
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
       grok: this.withFetchingStatus(previousState.grok, 'grok'),
-      cursor: this.withFetchingStatus(previousState.cursor, 'cursor')
+      cursor: this.withFetchingStatus(previousState.cursor, 'cursor'),
+      zcode: zcodeConfigChanged
+        ? this.withFetchingStatus(null, 'zcode')
+        : this.withFetchingStatus(previousState.zcode, 'zcode')
     }
 
     this.updateState({
@@ -151,6 +150,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       minimax: mayFetch('minimax') ? fetchingState.minimax : previousState.minimax,
       grok: mayFetch('grok') ? fetchingState.grok : previousState.grok,
       cursor: mayFetch('cursor') ? fetchingState.cursor : previousState.cursor,
+      zcode: mayFetch('zcode') ? fetchingState.zcode : previousState.zcode,
       antigravity: mayFetch('antigravity') ? fetchingState.antigravity : previousState.antigravity
     })
 
@@ -161,6 +161,28 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         this.cursorAuthConfigured = authReadResult.status === 'ok'
         return fetchCursorRateLimits({ signal, authReadResult })
       })
+    ).then(
+      (value) => ({ status: 'fulfilled', value }) as const,
+      (reason) => ({ status: 'rejected', reason }) as const
+    )
+
+    const zcodeResultPromise = this.fetchActivatedProvider('zcode', options?.force, () =>
+      zcodePlanConfigResult.error
+        ? Promise.resolve(this.getZcodePlanCredentialError(zcodePlanConfigResult.error))
+        : fetchZcodeRateLimits({ signal, planCredential: zcodePlanCredential })
+    ).then(
+      (value) => ({ status: 'fulfilled', value }) as const,
+      (reason) => ({ status: 'rejected', reason }) as const
+    )
+
+    // Hidden meters avoid the CLI spawn; the separate promise keeps other providers responsive.
+    const antigravityResultPromise = this.fetchActivatedProvider(
+      'antigravity',
+      options?.force,
+      () =>
+        antigravityUsageEnabled
+          ? fetchAntigravityRateLimits({ signal })
+          : Promise.resolve(previousState.antigravity ?? antigravityUsageDisabledSnapshot())
     ).then(
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
@@ -199,7 +221,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
           : (missingWslCodexHome ??
             fetchCodexRateLimits({
               codexHomePath,
-              allowPtyFallback: this.shouldAllowCodexPtyFallback(),
+              networkProxySettings: this.networkProxySettingsResolver?.(),
               signal
             })),
         this.fetchActivatedProvider('gemini', options?.force, () =>
@@ -211,7 +233,13 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
             // Why here: the key can also come from the environment or OpenCode's
             // own store, so presence is only known once the fetch resolves it.
             onApiKeyResolved: (resolution) => {
-              this.openCodeGoApiKeyConfigured = resolution.status === 'found'
+              if (opencodeGeneration !== this.opencodeFetchGeneration) {
+                return
+              }
+              this.openCodeGoApiKeyConfigured =
+                resolution.status === 'found' ||
+                openCodeGoApiKeyError !== null ||
+                openCodeGoApiKeyReadSkipped
             },
             cookie,
             workspaceIdOverride: workspaceIdOverride || undefined,
@@ -236,6 +264,18 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     if (signal.aborted) {
       return null
     }
+    // Why: the decrypt error only replaces a result with no usage and no diagnosis of its own; a real cookie error stays visible.
+    if (
+      openCodeGoApiKeyError &&
+      opencodeGoResult.status === 'fulfilled' &&
+      opencodeGoResult.value.status === 'unavailable'
+    ) {
+      opencodeGoResult.value = {
+        ...opencodeGoResult.value,
+        error: openCodeGoApiKeyError,
+        status: 'error'
+      }
+    }
     return {
       mayFetch,
       claudeTarget,
@@ -252,6 +292,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       opencodeGeneration,
       miniMaxConfigChanged,
       miniMaxGeneration,
+      zcodeConfigChanged,
+      zcodeGeneration,
       claudeFetchGated,
       results: [
         claudeResult,
@@ -262,7 +304,9 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         miniMaxResult
       ],
       grokResultPromise,
-      cursorResultPromise
+      cursorResultPromise,
+      zcodeResultPromise,
+      antigravityResultPromise
     }
   }
 }

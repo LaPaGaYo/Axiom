@@ -7,6 +7,8 @@ export const RUNTIME_RPC_QUEUE_OVERLOAD_MESSAGE_FRAGMENT = 'remote runtime call 
 // code and its message disagree; see remote-runtime-transport-error-agreement.test.ts.
 export const RECOVERABLE_CODES: ReadonlySet<string> = new Set([
   'remote_runtime_unavailable',
+  // A client-side admission cap that frees as pending work settles; fatal would dead-end panes.
+  'remote_runtime_busy',
   RUNTIME_RPC_QUEUE_OVERLOAD_CODE,
   'runtime_timeout',
   'runtime_unavailable',
@@ -15,15 +17,20 @@ export const RECOVERABLE_CODES: ReadonlySet<string> = new Set([
 ])
 
 export const RECOVERABLE_MESSAGE_FRAGMENTS: readonly string[] = [
-  'could not connect to the remote orca runtime',
-  'remote orca runtime closed the connection',
-  'remote orca runtime connection closed',
-  'remote orca runtime is not connected',
+  'could not connect to the remote axiom runtime',
+  'remote axiom runtime closed the connection',
+  'remote axiom runtime connection closed',
+  'remote axiom runtime is not connected',
   RUNTIME_RPC_QUEUE_OVERLOAD_MESSAGE_FRAGMENT,
   'remote runtime connection closed',
+  // remote_runtime_busy wording, for when IPC strips the code.
+  'remote runtime connection wait limit reached',
+  'remote runtime request limit reached',
+  'remote runtime subscription limit reached',
+  'remote runtime subscription memory limit reached',
   'remote runtime subscription closed before it started',
   'remote terminal stream is not connected',
-  'timed out waiting for the remote orca runtime'
+  'timed out waiting for the remote axiom runtime'
 ]
 
 export function isRuntimeRpcQueueOverloadError(error: RemoteRuntimeClientErrorLike): boolean {
@@ -39,7 +46,10 @@ export function isRecoverableRemoteRuntimeConnectionError(
   if (error.code) {
     return RECOVERABLE_CODES.has(error.code)
   }
-  const message = error.message.toLowerCase()
+  // Older hosts and stored failures keep the upstream spelling.
+  const message = error.message
+    .toLowerCase()
+    .replaceAll('remote orca runtime', 'remote axiom runtime')
   return RECOVERABLE_MESSAGE_FRAGMENTS.some((fragment) => message.includes(fragment))
 }
 

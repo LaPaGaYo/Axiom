@@ -6,10 +6,9 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import { closeTestStores, createStore, testState } from '../../../persistence-test-harness'
 import { recordProviderActivation } from '../../../provider-activation/provider-activation'
 import { commitPtyIpcSpawn } from './spawn-commit'
-import { persistPtyIpcSpawnCommit } from './spawn-commit-persist'
+import { commitPtySpawn } from '../spawn-commit-assembly'
 import { createPtyIpcSpawnState } from './spawn-state'
 import type { PtySpawnIpcDeps } from './spawn-types'
-import { registerPersistedPtySpawn } from '../pane/spawn-registration'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -24,13 +23,8 @@ vi.mock('../host-env/codex-home', () => ({
 vi.mock('../pane/agent-session-owners', () => ({
   seedTerminalRestoreRecordsFromSpawnResult: vi.fn()
 }))
-vi.mock('../pane/spawn-registration', () => ({
-  admitPtyReattachOwnership: vi.fn(),
-  registerPersistedPtySpawn: vi.fn()
-}))
-vi.mock('./spawn-commit-persist', () => ({
-  persistPtyIpcSpawnCommit: vi.fn(async () => ({ cols: 80, rows: 24 })),
-  publishPtyIpcSpawnCommit: vi.fn()
+vi.mock('../spawn-commit-assembly', () => ({
+  commitPtySpawn: vi.fn(async () => ({ id: 'activation-test-pty', cols: 80, rows: 24 }))
 }))
 
 function spawnContext(launchAgent?: TuiAgent) {
@@ -40,9 +34,8 @@ function spawnContext(launchAgent?: TuiAgent) {
     store,
     getLocalPtyStartupPromise: vi.fn(),
     adoptStablePane: vi.fn(),
-    assertFolderWorkspacePtyPathUsable: vi.fn(),
     resolvePtySpawnStartupCwd: vi.fn(),
-    localStartupCwdDirectoryExists: vi.fn(),
+    assertWorkspaceAcceptsNewPty: vi.fn(),
     prepareCodexResumeHome: vi.fn(),
     noCodexResumeLaunch: vi.fn(),
     resolveCodexResumeLaunch: vi.fn(),
@@ -83,9 +76,9 @@ describe('PTY spawn provider activation', () => {
       expect(store.getSettings().providerActivations).toEqual({
         [agent]: { activatedAt: expect.any(String), source: 'agent-launch' }
       })
-      expect(registerPersistedPtySpawn).toHaveBeenCalledOnce()
+      expect(commitPtySpawn).toHaveBeenCalledOnce()
       expect(updateSettings.mock.invocationCallOrder[0]).toBeGreaterThan(
-        vi.mocked(registerPersistedPtySpawn).mock.invocationCallOrder[0]!
+        vi.mocked(commitPtySpawn).mock.invocationCallOrder[0]!
       )
     }
   )
@@ -121,17 +114,17 @@ describe('PTY spawn provider activation', () => {
 
   it('does not activate when persistence fails before admission', async () => {
     const { ctx, store } = spawnContext('claude')
-    vi.mocked(persistPtyIpcSpawnCommit).mockRejectedValueOnce(new Error('save failed'))
+    vi.mocked(commitPtySpawn).mockRejectedValueOnce(new Error('save failed'))
     await expect(commitPtyIpcSpawn(ctx)).rejects.toThrow('save failed')
     expect(store.updateSettings).not.toHaveBeenCalled()
   })
 
   it('does not activate when registration rejects an exited spawn', async () => {
     const { ctx, store } = spawnContext('claude')
-    vi.mocked(registerPersistedPtySpawn).mockReturnValueOnce(
+    vi.mocked(commitPtySpawn).mockReturnValueOnce(
       Promise.reject(new Error('agent_session_exited_during_start'))
     )
-    await commitPtyIpcSpawn(ctx)
+    await expect(commitPtyIpcSpawn(ctx)).rejects.toThrow('agent_session_exited_during_start')
     expect(store.updateSettings).not.toHaveBeenCalled()
   })
 })

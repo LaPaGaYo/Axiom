@@ -35,7 +35,7 @@ afterEach(async () => {
   vi.useRealTimers()
   await f.close()
 })
-function propose(envelope = { orchestrationCapability: f.capability() }) {
+function propose(envelope = {}) {
   const { provenance: _provenance, ...planRevision } = makeProposal()
   return f.call(
     'axiom.plan.propose',
@@ -52,6 +52,23 @@ function propose(envelope = { orchestrationCapability: f.capability() }) {
     envelope
   )
 }
+it('replays a bound Planner proposal once and refuses a replaced process before receipt lookup', async () => {
+  const envelope = { orchestrationRequestId: 'planner-retry' }
+  expect(await propose(envelope)).toMatchObject({ ok: true })
+  const plans = f.missions.listPlans(f.mission.id)
+  const audit = f.store.listAuditEvents({ missionId: f.mission.id })
+  expect(await propose(envelope)).toMatchObject({
+    ok: true,
+    result: { mutation: { replayed: true } }
+  })
+  vi.spyOn(f.runtime, 'getTerminalProcessIncarnation').mockReturnValue('another-process')
+  expect(await propose(envelope)).toMatchObject({
+    ok: false,
+    error: { code: 'worker_identity_changed' }
+  })
+  expect(f.missions.listPlans(f.mission.id)).toEqual(plans)
+  expect(f.store.listAuditEvents({ missionId: f.mission.id })).toEqual(audit)
+})
 it('rejects a dirty planner worktree before any Plan or Mission change', async () => {
   f.gitRun.mockResolvedValue({ stdout: ' M src/file.ts\n?? proposal.json\n', stderr: '' })
   expect(await propose()).toMatchObject({
@@ -160,15 +177,16 @@ it.each(['forged', 'inactive', 'non-planner'] as const)(
         .run('axiom/attempt/fake/1', attemptId)
     }
     const before = f.store.listAuditEvents({ missionId: f.mission.id })
-    const result = await propose({
-      orchestrationCapability: mode === 'forged' ? 'dcap_forged' : f.capability()
-    })
+    if (mode === 'forged') {
+      vi.spyOn(f.runtime, 'getTerminalProcessIncarnation').mockReturnValue('another-process')
+    }
+    const result = await propose()
     expect(result).toMatchObject({
       ok: false,
       error: {
         code:
           mode === 'forged'
-            ? 'dispatch_capability_invalid'
+            ? 'worker_identity_changed'
             : mode === 'inactive'
               ? 'inactive_dispatch'
               : 'task_dispatch_mismatch'
@@ -219,7 +237,8 @@ it('recovers a live planner with a committed proposal when the scheduled stop is
   vi.spyOn(observation, 'inspectWorkerTerminal').mockResolvedValue({
     status: 'live',
     exact: true,
-    terminal: null
+    terminal: null,
+    terminalHandle: null
   })
   const recovery = new RecoveryService(f.db, f.store, f.missions, {
     runtime: f.runtime,

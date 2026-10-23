@@ -1,10 +1,10 @@
 # SSH connection mode, including provisioned root
 
-Load this when the recipe connects over SSH instead of starting `orca serve`, and when the user has
+Load this when the recipe connects over SSH instead of starting `axiom serve`, and when the user has
 explicitly asked for `checkoutMode: provisioned-root`.
 
 SSH mode is a different shape, not the Axiom-server templates relabeled. `create` runs no
-`orca serve` and emits no `pairingCode`. Axiom connects over its SSH relay, brings up the git and
+`axiom serve` and emits no `pairingCode`. Axiom connects over its SSH relay, brings up the git and
 filesystem providers, and imports the repo. The script only readies the host and prints the SSH
 details Axiom dials.
 
@@ -33,7 +33,7 @@ network needs them.
 
 ## Which optional `target` fields to set
 
-These describe how the user's desktop reaches the box; there is no `orca serve` URL in SSH mode.
+These describe how the user's desktop reaches the box; there is no `axiom serve` URL in SSH mode.
 
 - A public IP or DNS name, or a Tailscale or VPN address, is the `host`; the SSH port is `port`,
   usually 22.
@@ -86,7 +86,7 @@ ssh_opts=(-p "$ssh_port" -o BatchMode=yes -o StrictHostKeyChecking=yes)
 [ -n "$jump_host" ] && ssh_opts+=(-J "$jump_host")
 [ -n "$proxy_command" ] && ssh_opts+=(-o "ProxyCommand=$proxy_command")
 
-# 1. ensure the repo is present and at the right commit on the host (NO orca serve here).
+# 1. ensure the repo is present and at the right commit on the host (NO axiom serve here).
 #    printf %q quotes every value for the remote shell, so a space or quote in a path or
 #    ref cannot break out of the command.
 remote_sync='set -euo pipefail
@@ -97,7 +97,7 @@ ssh "${ssh_opts[@]}" "$ssh_target" "$(printf \
   'project_root=%q repo_url=%q repo_ref=%q bash -lc %q' \
   "$project_root" "$repo_url" "$repo_ref" "$remote_sync")" >&2
 
-# 2. print the SSH connection block (NO pairingCode, NO orca serve). host/port/username tell Axiom's
+# 2. print the SSH connection block (NO pairingCode, NO axiom serve). host/port/username tell Axiom's
 #    relay how to dial in; identityFile/jumpHost/proxyCommand/portForwards are emitted when set.
 node -e 'const [host,port,user,idf,jh,pc,root]=process.argv.slice(1);
   const target={ label:"per-workspace-host", host, port:Number(port), username:user };
@@ -114,7 +114,7 @@ is separate from these scripts.
 If the SSH host is instead an ephemeral, snapshot-capable VM — the user's hypervisor, or a cloud VM
 with image support — keep the base-image model from `references/provider-vercel.md` for
 provisioning, but still emit the `connection.type:"ssh"` block above instead of starting
-`orca serve`.
+`axiom serve`.
 
 ## Provisioned root
 

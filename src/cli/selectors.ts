@@ -1,11 +1,6 @@
 import { resolve as resolvePath } from 'node:path'
-import type {
-  ComputerAppQuery,
-  RuntimeWorktreeListResult,
-  RuntimeWorktreeRecord
-} from '../shared/runtime-types'
+import type { ComputerAppQuery, RuntimeWorktreeListResult } from '../shared/runtime-types'
 import {
-  isPathInsideOrEqual,
   isWslUncPathForCallerLinuxPath,
   isWslUncPathForLinuxMountedPath
 } from '../shared/cross-platform-path'
@@ -13,6 +8,12 @@ import { parseWslUncPath } from '../shared/wsl-paths'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime/types'
 import { getOptionalStringFlag, getRequiredStringFlag } from './flags'
+import {
+  getCallerExecutionHostId,
+  resolveCallerPaneWorktreeSelector,
+  selectEnclosingWorktreeSelectionOnHost,
+  type HostScopedWorktreeSelection
+} from './caller-host-worktree-selection'
 
 export type BrowserCliTarget = {
   worktree?: string
@@ -105,38 +106,34 @@ export async function resolveCurrentWorktreeSelector(
   cwd: string,
   client: RuntimeClient
 ): Promise<string> {
+  return (await resolveCurrentWorktreeSelection(cwd, client)).selector
+}
+
+export async function resolveCurrentWorktreeSelection(
+  cwd: string,
+  client: RuntimeClient
+): Promise<HostScopedWorktreeSelection> {
   assertLocalCwdWorktreeSelector('current', client)
 
-  const currentPath = resolvePath(cwd)
   const worktrees = await client.call<RuntimeWorktreeListResult>('worktree.list', {
     limit: 10_000
   })
-  let enclosingWorktree: RuntimeWorktreeRecord | undefined
-  let enclosingPathLength = -1
-  for (const worktree of worktrees.result.worktrees) {
-    const worktreePath = resolvePath(worktree.path)
-    if (
-      !isPathInsideOrEqual(worktreePath, currentPath) ||
-      worktreePath.length <= enclosingPathLength
-    ) {
-      continue
-    }
-    enclosingWorktree = worktree
-    enclosingPathLength = worktreePath.length
-  }
-
-  if (!enclosingWorktree) {
-    throw new RuntimeClientError(
-      'selector_not_found',
-      `No Axiom-managed worktree contains the current directory: ${currentPath}`
-    )
-  }
-
   // Why: users expect "active/current" to mean the enclosing managed worktree
-  // even from nested subdirectories. Resolve to the concrete runtime id here:
+  // even from nested subdirectories. Resolve to the concrete runtime row here:
   // duplicate repo registrations can expose the same Git worktree path, and a
   // path selector would throw selector_ambiguous after losing the repo id.
-  return `id:${enclosingWorktree.id}`
+  const selection = selectEnclosingWorktreeSelectionOnHost(
+    worktrees.result.worktrees,
+    cwd,
+    getCallerExecutionHostId()
+  )
+  if (!selection) {
+    throw new RuntimeClientError(
+      'selector_not_found',
+      `No Axiom-managed worktree contains the current directory: ${resolvePath(cwd)}`
+    )
+  }
+  return selection
 }
 
 export async function getOptionalWorktreeSelector(
@@ -202,7 +199,7 @@ export async function getBrowserWorktreeSelector(
 
 // Why: mirrors browser's implicit active-tab targeting. When --terminal is
 // omitted, resolve the active terminal in the current worktree so commands
-// like `orca terminal send --text "hello" --enter` Just Work.
+// like `axiom terminal send --text "hello" --enter` Just Work.
 export async function getTerminalHandle(
   flags: Map<string, string | boolean>,
   cwd: string,
@@ -277,7 +274,7 @@ export async function getComputerCommandTarget(
 export type EmulatorCliTarget = {
   worktree?: string
   device?: string
-  emulator?: string // Orca id from list
+  emulator?: string // Axiom id from list
 }
 
 export async function getEmulatorWorktreeSelector(
@@ -301,7 +298,10 @@ export async function getEmulatorWorktreeSelector(
   }
   const terminalWorktreeId = process.env.ORCA_WORKTREE_ID
   if (terminalWorktreeId?.trim()) {
-    return terminalWorktreeId
+    const scoped = await resolveCallerPaneWorktreeSelector(terminalWorktreeId, client)
+    if (scoped) {
+      return scoped
+    }
   }
   const folderWorkspaceId = process.env.ORCA_WORKSPACE_ID?.trim()
   if (folderWorkspaceId?.startsWith('folder:')) {
@@ -323,7 +323,11 @@ export async function getEmulatorCommandTarget(
   const emulator = getOptionalStringFlag(flags, 'emulator')
   const worktree = await getEmulatorWorktreeSelector(flags, cwd, client)
   if (device || emulator) {
-    return { device: device || undefined, emulator: emulator || undefined, worktree }
+    return {
+      device: device || undefined,
+      emulator: emulator || undefined,
+      worktree
+    }
   }
   return { worktree }
 }

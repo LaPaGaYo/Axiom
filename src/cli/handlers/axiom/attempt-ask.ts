@@ -14,7 +14,7 @@ import { resolveOrchestrationTerminalHandle } from '../orchestration/terminal-id
 export async function askAttempt(ctx: HandlerContext) {
   const { flags, cwd, client, json } = ctx
   const timeoutMs = getOptionalNonNegativeIntegerFlag(flags, 'timeout-ms')
-  const orchestrationCapability = required(flags, 'dispatch-capability')
+
   const result = await callOrchestrationMutation(
     client,
     flags,
@@ -28,7 +28,7 @@ export async function askAttempt(ctx: HandlerContext) {
       timeoutMs,
       resume: optional(flags, 'resume')
     },
-    { orchestrationCapability, timeoutMs: resolveOrchestrationAskClientTimeoutMs(timeoutMs) }
+    { timeoutMs: resolveOrchestrationAskClientTimeoutMs(timeoutMs) }
   )
   printResult(result, json, (value) => {
     const answer = AttemptAskResponseSchema.parse(value)

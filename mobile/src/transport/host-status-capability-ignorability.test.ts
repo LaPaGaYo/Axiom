@@ -11,8 +11,8 @@ import { supportsMobileQuickCommands } from '../terminal/quick-commands'
 import { useHostStatusGates, type HostStatusGates } from './host-status-gates'
 import {
   hostAnsweredStatusProbe,
-  readHostStatusGates,
-  readProbedHostCapabilities
+  readProbedHostCapabilities,
+  readProbedHostStatus
 } from './host-status-probe-operations'
 import type { HostStatusReply } from './host-status-reply-schema'
 import type { RpcClient } from './rpc-client'
@@ -97,7 +97,7 @@ type ClientVisibleOutcome = {
   probedCapabilities: readonly string[] | null
   answeredProbe: boolean
   quickCommandsSupported: boolean
-  worktreeCreateSupport: NewWorktreeRuntimeCapabilities
+  worktreeCreateSupport: NewWorktreeRuntimeCapabilities | null
 }
 
 /** Every released path that reads status.get, plus the states derived from what it published. */
@@ -107,7 +107,7 @@ async function readEverything(capabilities: readonly string[]): Promise<ClientVi
   const gates = await renderGates(client)
   return {
     gates,
-    gateStatus: readHostStatusGates(reply),
+    gateStatus: readProbedHostStatus(reply)?.status ?? null,
     probedCapabilities: readProbedHostCapabilities(reply),
     answeredProbe: hostAnsweredStatusProbe(reply),
     quickCommandsSupported: supportsMobileQuickCommands(gates.hostCapabilities),
@@ -160,8 +160,8 @@ describe('mobileWeb.bundle.v1 on a released client', () => {
     expect(advertised.gateStatus).not.toBeNull()
     expect(advertised.probedCapabilities).toContain(MOBILE_WEB_BUNDLE_CAPABILITY)
     expect(advertised.quickCommandsSupported).toBe(true)
-    expect(advertised.worktreeCreateSupport.tasksSupported).toBe(true)
-    expect(advertised.worktreeCreateSupport.worktreeCreateIdempotency).not.toBe(false)
+    expect(advertised.worktreeCreateSupport?.tasksSupported).toBe(true)
+    expect(advertised.worktreeCreateSupport?.worktreeCreateIdempotency).not.toBe(false)
     expect(oldDesktop.gates.hostCapabilities).not.toContain(MOBILE_WEB_BUNDLE_CAPABILITY)
 
     expect(asIfNeverAdvertised(advertised)).toEqual(oldDesktop)
