@@ -227,3 +227,38 @@ Sandbox commands from the attempt-2 addendum; say which runner you used.
 ### Submission (attempt 5)
 
 Write `.axiom-work/reports/UPSTREAM-3-5.md`: for each cause group, the files changed and why; each investigated test and its cause; the persisted or parsed literals found and what you did with them; what rendered the favicon; self-check results; anything left.
+
+## Attempt 6 addendum (verifier, 2026-10-23) — fix-up from main after the first complete full suite
+
+UPSTREAM-3 is integrated on the local main (merge `ccfc02a65c` of `393c083ebd` and `41661e3312`; tree = attempt 5 plus the verifier fixes; not pushed). verify-main and the first complete full-suite run found failures the earlier runs never reached: those runs ended where vitest stopped at the cross-version harness's unserializable error (Axiom fetches upstream with `--no-tags`, so the harness has no release tags), and about 5,900 of 13,601 unit-test files never ran. Local `pnpm test` applies the CI exclusions only with `ORCA_BALANCE_UNIT_SHARDS=1`; the complete run used it. This attempt starts from main (`--base main`). Attempts 1–5 are done; keep them done. The environment rules of the attempt-3 addendum and the rules of the attempt-5 addendum (D32 copy; persisted or parsed strings keep upstream's bytes; Axiom seams in upstream fixtures are fixed in the test double; deliberate M0 / D37 behavior is expressed, not weakened) still apply.
+
+### What the verifier established
+
+- Complete run on main `4b80a093e8`: 13,524 files, 49 failed. The 25 `mobile-web-app` render suites fail at launch (no Playwright browser build for the merged Playwright on this host; D75) — not yours. The other 24 files, re-run alone and run on pristine `41661e3312`: 31 tests environmental (identical upstream, incl. `src/main/orcad/orcad-forked-child-paths.test.ts`), **52 merge-caused** — every test with its first error line in `.axiom-work/reports/UPSTREAM-3-main-classification.md`. The three `MobilePage` Relay cases among them stay deferred to D75 hygiene.
+- One unhandled rejection during the run: `src/main/startup/main-process-ready-duplicate-pty-repair.test.ts` drives desktop startup into `startAxiomControlPlane`, whose `runtime.getOrchestrationDb` its runtime double lacks — the same seam attempt 5 fixed for the orcad PTY-repair test.
+- verify-main (`verify-merged-2d2780b311-20261023-094352.log`):
+  - changed-code quality against the upstream base (`ORCA_CODE_QUALITY_BASE=41661e3312`): 7 `typescript(consistent-type-assertions)` findings in changed test code — `src/cli/orchestration-mutation-recovery.test.ts:12,54,73,91,107,177` and `src/renderer/src/components/settings/repository-host-setup-options.test.ts:21`;
+  - `pnpm run typecheck:e2e`: 228 errors on main, 252 on pristine upstream. Only one file has more errors than upstream: Axiom's `tests/e2e/mission-plan-real-codex.smoke.spec.ts:580–581` reads `openAgentTabsInChatByDefault` and `experimentalStructuredNativeChat`, which upstream #22933 (`22974c5809`, "Default experimental native chat to structured chat") removed.
+  - `src/main/ipc/runtime-environments/runtime-environment-preference.test.ts` failed once under the union run and passed in the complete run — load-timing; not in scope.
+
+### Objective (attempt 6)
+
+1. **The 49 merge-caused tests outside `MobilePage` pass**, by the attempt-5 rules. Pointers, not answers — find each cause:
+   - copy (D32): `WorktreeOpenInMenu`, `browser-cookie-import-toast`, `system-tray` (ja catalog), `register-app-menu` (the darwin menu still produces "Quit Orca" — a product string, fix the producer), `palette-results` (the Cmd+J search term for the CLI settings entry), `cli-command-privileged-transaction` (copy, and its fixtures still name the command `orca` — keep the refusal logic exactly as strict), `tests/tools/win-update-e2e/app-driver.test.mjs` (driver and test disagree on the overlay text);
+   - skill freshness (`SkillFreshnessNudge`, `SkillFreshnessStatusPill`, `skill-freshness-display-status`): the same official-source fixture cause attempt 5 fixed in four other files;
+   - `feedback-request-ownership`: feedback submission is disabled by product policy (`FEEDBACK_API_URL` = `PRODUCT_EGRESS_POLICY.feedbackApiUrl` = null); give the test a configured endpoint the way attempt 5 did for skill sharing, so it still checks request ownership;
+   - `updater-agent-state-rules-release`: the app updater under Axiom's update policy; express Axiom's feed / automatic-check behavior and keep what the test protects (agent-state-rules release tags never shadow app release tags);
+   - `structured-session-child-env`: which CLI path a structured session's child gets on packaged Linux / Windows / macOS — the tests and the producer disagree in both directions. Settle it against what Axiom actually packages (D21; `config/electron-builder.config.cjs`: `axiom-ide`, the bundled `resources/bin` CLI, the Linux shim) and say in the report what each platform gets;
+   - `shell-wrapper-generated-file-snapshot` (daemon and local PTY wrappers): read the snapshot diff. Copy changes regenerate the snapshot; markers, OSC sequences, function and variable names in the wrappers stay upstream's bytes (D32 identifiers) — if the diff touches those, fix the producer instead.
+2. **The unhandled rejection**: `main-process-ready-duplicate-pty-repair.test.ts` stubs the Axiom boot at the seam (`vi.mock` of `src/main/axiom/control-plane-boot`), as in `orcad-duplicate-pty-repair-startup.test.ts`. Check the other startup tests that call `initializeReadyRuntimeServices` / `configureRuntimeServices` the same way.
+3. **The seven type assertions go**: build typed values instead (the repository's typed builders or helpers, `satisfies`, a narrowing guard); no `as`, no `@ts-expect-error`, no new `SAFETY:` cast.
+4. **e2e typecheck**: the smoke spec stops reading the removed settings (record what the settings snapshot should contain now that upstream defaults native chat to structured chat). Afterwards `tests/e2e/mission-plan-real-codex.smoke.spec.ts` has 0 errors and the total is ≤ 226.
+5. **Not in scope**: the environmental tests; the cross-version harness; the D75 `MobilePage` cases and the pairing UI; the `mobile-web-app` suites; `runtime-environment-preference`; dependencies, patches, lockfiles; `config/vendor-egress-baseline.txt`.
+
+### Self-checks (attempt 6)
+
+Sandbox commands from the attempt-2 addendum; say which runner you used. `tc:node` / `tc:cli` / `tc:web`: 0 errors. The sidecar targets green (they now cover every file in the classification except `MobilePage`). `ORCA_CODE_QUALITY_BASE=41661e3312 node config/scripts/check-changed-code-quality.mjs`: 0 findings. `node config/scripts/run-e2e-typecheck.mjs` (after the package build): ≤ 226 errors, none in the smoke spec. Seam check 0 dropped; ratchet passes; `pnpm lint` (or its parts) passes. Tests the sandbox cannot run (sockets, process inspection, Electron) are listed with the error, as in attempt 5.
+
+### Submission (attempt 6)
+
+Write `.axiom-work/reports/UPSTREAM-3-6.md`: per file, the cause and the change; the assertions removed and what replaced them; what each packaged platform's structured-session child gets as its CLI; the shell-wrapper snapshot diff and why it is copy; the e2e typecheck count; self-check results; anything left.
