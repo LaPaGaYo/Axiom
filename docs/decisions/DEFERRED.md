@@ -109,3 +109,7 @@ D75 加修订行：只关配对入口（一个开关 `MOBILE_PAIRING_AVAILABLE`�
 ## 2026-10-23 D68 批准（Henry："批准D68，可以按照计划继续"）
 
 D68 ACCEPTED（环境性失败与工作性失败分离：验证侧 `environmental` / `INCONCLUSIVE(environment)` / `retryOnce` / `knownFlaky` 随 M3-02，Attempt 侧 `interrupted` 随 M3-06 与 M2-08 结算路径）；加批准行。
+
+## 2026-10-24 M3-02 brief 定稿
+
+DEF-21 ⑥（相同候选拒绝）在 M3-02 实现：新 Attempt 的候选树与该 Task 当前 ACTIVE 候选相同 → `candidate_unchanged` 拒收，什么都不写。D62 加修订行（token 用量移到 M3-08；进程树门与 transcript 归档拆成 M3-02b），D65 加修订行（`retryOnce` / `knownFlaky` 键与完整 verdict 规则）。

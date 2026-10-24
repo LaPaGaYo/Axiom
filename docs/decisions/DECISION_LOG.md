@@ -656,6 +656,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 
 **修订（2026-10-20，Henry 同意登记）**：按外部项目评估更新计划——M3-00 加入 F3 首个假设与 A′（ACP）备选；M3-07 以 Ekko Studio 的 JEV 纪律清单为参考；M3-10 hygiene 加 import 边界门禁；新增 DEF-12（投递事实 + 注入中和 + 合并）、DEF-13（harness 原生入口探测与 `axiom doctor`）、DEF-14（可视化回放 + 任务卡 / 手机审批）。
 
+**修订（2026-10-24，M3-02 brief 定稿时）**：M3-02 只做 verdict 路径——检查运行器、verdict、NEEDS_FIX 结算、D65 的键与 D68 的验证侧、DEF-21 ⑥ 的 `candidate_unchanged`。两个钩子移走：provider token 用量（`thread/tokenUsage/updated` 只在通道 B 上有）随 M3-08 把通道 B 接到 Mission Attempt 时一起做；SUBMISSION 的进程树门（Worker 仍有活着的子 agent / 子进程时 `children_active` 拒收，或先停进程树再做 D4 快照）与 Attempt transcript 归档拆成 **M3-02b**，排在 M3-03 之后、M3-04 之前（M3-04 注入失败证据时可以引用归档的 transcript）。
+
 ## D64 · 修复 Attempt 的分支基线与验证 worktree 生命周期 — ACCEPTED（Henry 2026-10-20："先把手上需要开发的做完"，验证者 2026-10-20 提议）
 
 **决定**：① NEEDS_FIX 之后的 seq N+1（`kind: fix` 或验证失败后的重试）从**上一 Candidate commit** 建分支 `axiom/attempt/<taskId>/<N+1>`，preamble 明示"继续上一候选树"（fixture S4 的语义）；FAILED / ABANDONED / launch 失败的重试仍从集成基线重来（既有行为）。② 验证 worktree 由 Control Plane 经 Orca worktree service 创建，detached 检出 Candidate commit，路径 `<userData>/axiom/verification/<runId>`，带 Axiom 标记不进 renderer 的 worktree 列表，验证结束（任何 verdict）即回收；重启时孤立的验证 worktree 按 runId 回收。③ Candidate diff 的比较基线 = 该 Attempt 的分支基线（集成基线或上一 Candidate），记录在 verdictDetail。
@@ -676,6 +678,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **取代规则**：以修订行记录新增键。
 
 **修订（2026-10-21，端到端流程复审，Henry："都记下来"）**：① **内置 secret scan 为不可关闭的出厂门禁**——候选快照会把 Worker 工作区里 `.gitignore` 之外的新文件（`.env` 副本、日志、下载物）一并收进候选，而 `dangerousPathPatterns` 只看路径不看内容；M3-03 在 scope 检查之后对候选 diff 跑内置的 secret 模式扫描（复用 M2-02 ContextBuilder 的脱敏模式：PRIVATE KEY 块、provider token 前缀、AKIA 等；policy `secretPatterns` 只能追加、不能移除），命中 → `FAIL(secret_detected)`，证据只记路径与模式名、不记内容。② 新增键 `setupCommands: string[]`——验证 worktree 在 `requiredEvidence` 之前运行的环境准备命令（如 `pnpm install --frozen-lockfile`；fixture 默认 `[]`）；失败按 D68 记 `environmental` → `INCONCLUSIVE(environment)`，不是 FAIL。完整的仓库 environment profile（服务、env 文件物化、端口 / 数据库名分配）见 DEF-20 ③。
+
+**修订（2026-10-24，D68 批准后，M3-02 brief 定稿时）**：新增键 `retryOnce: string[]`（命令前缀：命令等于前缀，或以"前缀 + 空格"、"前缀 + 冒号"开头即命中；默认覆盖常见测试命令 `pnpm test`、`pnpm run test`、`npm test`、`npm run test`、`yarn test`、`yarn run test`、`bun test`、`bun run test`、`npx vitest`、`vitest`、`npx jest`、`jest`、`pytest`、`python -m pytest`、`go test`、`cargo test`，lint / typecheck / build 不在内）与 `knownFlaky: string[]`（与抽取出的失败名 `<文件> > <测试路径>` 匹配，`*` 为通配）。check 结果加 `environmental`（D68）。verdict 规则补全：任一 `fail` → `FAIL`；否则任一 `environmental` → `INCONCLUSIVE(environment)`（直接交人）；否则任一 `inconclusive`（`flaky` / `known_flaky`）→ `INCONCLUSIVE`（按 `inconclusiveRouting`）；否则全部 `pass` → `PASS`；没有任何命令 → `INCONCLUSIVE(no_checks)`（按 `nonCodeTasks`）。`axiom.policy.update` 增加可选的 `verificationRules` 补丁，未知键拒绝；已存的 JSON 照旧可读，运行器读到不合 schema 的值 → `INCONCLUSIVE(policy_invalid)`，交人。
 
 ## D66 · Reviewer 角色契约（只读 AgentSpec + `ReviewProposal` + 只作用于 INCONCLUSIVE）— ACCEPTED（Henry 2026-10-20："先把手上需要开发的做完"，验证者 2026-10-20 提议）
 
