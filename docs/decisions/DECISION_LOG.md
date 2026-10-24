@@ -662,6 +662,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 
 **修订（2026-10-24，M3-02 brief 定稿时）**：M3-02 只做 verdict 路径——检查运行器、verdict、NEEDS_FIX 结算、D65 的键与 D68 的验证侧、DEF-21 ⑥ 的 `candidate_unchanged`。两个钩子移走：provider token 用量（`thread/tokenUsage/updated` 只在通道 B 上有）随 M3-08 把通道 B 接到 Mission Attempt 时一起做；SUBMISSION 的进程树门（Worker 仍有活着的子 agent / 子进程时 `children_active` 拒收，或先停进程树再做 D4 快照）与 Attempt transcript 归档拆成 **M3-02b**，排在 M3-03 之后、M3-04 之前（M3-04 注入失败证据时可以引用归档的 transcript）。
 
+**修订（2026-10-24，M3-02b brief 定稿时，Henry 选"提交后关闭终端（推荐）"）**：M3-02b 的二选一按 D76 改为"SUBMISSION 结算后存档 transcript 并关闭 Worker 终端"——不做 `children_active` 拒收，也不在 D4 快照前停进程树（两者查实后都不可行，理由见 D76）。
+
 ## D64 · 修复 Attempt 的分支基线与验证 worktree 生命周期 — ACCEPTED（Henry 2026-10-20："先把手上需要开发的做完"，验证者 2026-10-20 提议）
 
 **决定**：① NEEDS_FIX 之后的 seq N+1（`kind: fix` 或验证失败后的重试）从**上一 Candidate commit** 建分支 `axiom/attempt/<taskId>/<N+1>`，preamble 明示"继续上一候选树"（fixture S4 的语义）；FAILED / ABANDONED / launch 失败的重试仍从集成基线重来（既有行为）。② 验证 worktree 由 Control Plane 经 Orca worktree service 创建，detached 检出 Candidate commit，路径 `<userData>/axiom/verification/<runId>`，带 Axiom 标记不进 renderer 的 worktree 列表，验证结束（任何 verdict）即回收；重启时孤立的验证 worktree 按 runId 回收。③ Candidate diff 的比较基线 = 该 Attempt 的分支基线（集成基线或上一 Candidate），记录在 verdictDetail。
@@ -857,3 +859,11 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **取代规则**：恢复手机功能需新 Decision（DEF-26 触发时）。
 - **修订（2026-10-22，Henry："哪怕做 app 也要等到 V3 之后等 desktop 这边都跑通了之后才能开始"）**：手机端开工时间由"V1 之后"改为 V3 之后、desktop 全部跑通之后；方向默认复用 Orca 的 App 代码（`mobile/`），relay / push 服务端自建，届时再评估是否在仓库里 fork 裁剪。DEF-26 相应改写。
 - **修订（2026-10-23，D75 收尾范围，Henry："只关入口"）**：实施前查明 mobile web bundle 不止装进桌面应用（`out/mobile-web`，app.asar 解包），也装在 orcad 服务端模板里（模板随桌面打包、装到每台 SSH 主机），orcad 产物清单（`src/shared/orcad-artifacts.ts`）把它列为必需文件；按 ①③ 原文不打包、不构建，就要改 orcad 的产物契约、artifact identity 与构建脚本，正是第 2 条要避免的上游改动。改为：**① 只关入口**——所有手机配对入口（侧边栏 Axiom Mobile 按钮、View 菜单与外观设置里的显示开关及其搜索项、设置 › Mobile、启动时恢复出来的 Mobile 视图、`axiom serve` / 桌面 serve 模式 / orcad 的 `--mobile-pairing`）统一看一个开关 `MOBILE_PAIRING_AVAILABLE`（`src/shared/mobile-pairing-availability.ts`，值为 `false`）；mobile web bundle 继续随包（约 10 MB，两份），没有配对入口就没有已配对的手机，用不到它；局域网配对随入口停用。**③ 推迟**——`mobile/` 照旧构建、留在 vendor-egress 棘轮里（它仍随包交付，D33a 的理由仍成立）；不打包与棘轮排除放到下次基线重置或 DEF-26 时再做。第 2、4 条不变。实施 Task：D75-HYG。
+
+## D76 · SUBMISSION 结算后：transcript 存档，回执之后关闭 Worker 终端（进程树随之结束）— ACCEPTED（Henry 2026-10-24 选"提交后关闭终端（推荐）"；验证者 M3-02b brief 定稿时提议）
+
+**背景**：M3-02b 原计划二选一——Worker 仍有活着的子 agent / 子进程时拒收（`children_active`），或先停进程树再做 D4 快照。写 brief 时查实：① `axiom attempt submit` 的 CLI 本身是 agent 进程的后代，提交途中停进程树会把它一起杀掉；Orca 的 `stopLocalWorker` 还会把 dispatch 结算为 failed，提交随之被拒。② 拒收法要 CLI 上报自己的进程号（RPC 调用方身份里没有），只在 macOS / Linux 本机可用；Codex / Claude 常驻的 MCP 服务器等也是 agent 的子进程，配了 MCP 就永远交不上。③ 现状结算后 `retainWorkerTerminalResource` 保留终端，之后没有任何路径关闭它（Orca 的 worker release / retain RPC 对 Mission 管理的 Worker 一律拒绝），agent 与它启动的后台进程一直留着；agent 自己的会话文件会轮转，做过什么也留不住。
+**决定**：① SUBMISSION 结算事务提交后、回执之前，Control Plane 用 Orca 的只读 `captureWorkerOutputArchive` 读取 Worker 输出（structured journal → hook 报告的 provider transcript → 终端尾部，按 Orca 的上限截取），逐个字符串再过 Axiom 的 `redactContext`，连同提交时 Worker 终端下仍存活的进程（只记可执行文件名与数量，读不到记 `unverifiable`）存为 Artifact（kind `log`、`application/json`，related = Task / Attempt / Submission，内容带这些 id）；`attempt show` 给出 `transcriptArtifactId`。存档失败只记审计，已结算的提交不受影响。② 回执交给 CLI 约 2 秒后，经 Orca 的 `releaseLocalWorker`（自身输出存档 + 关闭 agent 终端，agent 会话以 descendant sweep 结束整个进程树）释放终端，取代 M2-07 的 retain；计时器丢失（崩溃、重启）由 Attempt reconcile 对满 60 秒的 Submission 补做，缺存档时先补存档。③ 提交之后才结束的子 agent / 后台进程的未完成工作不进候选（候选 = D4 快照），由验证判定候选本身。
+**理由**：存档 + 释放都复用 Orca 现成的 worker release 管线，不新增进程检查或 daemon RPC；先存档后关闭保证证据在；推迟 2 秒的做法与 Planner 停止相同（`planner-proposal.ts`）。
+**后果**：提交后看不到活的 Worker 终端，只能看存档；M2-07 / M2-08 的 retain 语义、相关测试与 control-plane.md 改写；E2E 加暂停释放的接缝（`AXIOM_E2E_HOLD_WORKER_RELEASE`，只在 E2E 模式读取），已有 spec 默认暂停、专门的 spec 打开；结构化通道（M3-08）的 Worker 走同一 release。实施：M3-02b。
+**取代规则**：以修订行记录。
