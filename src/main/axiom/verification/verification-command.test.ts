@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import childProcess from 'node:child_process'
+import { spawnLocalShellCommand } from '../../automations/precheck-runner'
 import { runVerificationCommand } from './verification-command'
 
 let cwd: string
@@ -13,8 +14,14 @@ afterEach(async () => {
   vi.restoreAllMocks()
   await rm(cwd, { recursive: true, force: true })
 })
-const run = (command: string, deadline = Date.now() + 10_000, signal?: AbortSignal) =>
-  runVerificationCommand({ command, cwd, deadline, signal })
+const run = (
+  command: string,
+  options: {
+    deadline?: number
+    signal?: AbortSignal
+    spawnCommand?: typeof spawnLocalShellCommand
+  } = {}
+) => runVerificationCommand({ command, cwd, deadline: Date.now() + 10_000, ...options })
 
 function unspawnedChild() {
   const child = new childProcess.ChildProcess()
@@ -23,8 +30,7 @@ function unspawnedChild() {
   return child
 }
 
-it('records actual process exits, streams and shell options', async () => {
-  const spy = vi.spyOn(childProcess, 'spawn')
+it('records actual process exits and streams', async () => {
   const result = await run('node -e "console.log(123); console.error(456)"')
   expect(result).toMatchObject({
     result: 'pass',
@@ -33,20 +39,13 @@ it('records actual process exits, streams and shell options', async () => {
     stdout: { content: '123\n' },
     stderr: { content: '456\n' }
   })
-  expect(spy).toHaveBeenCalledWith(expect.any(String), {
-    cwd,
-    shell: true,
-    env: process.env,
-    detached: process.platform !== 'win32',
-    windowsHide: true
-  })
   expect(await run('node -e "process.exit(2)"')).toMatchObject({ result: 'fail', exitCode: 2 })
 })
 it.each(['ENOENT', 'EACCES'])('classifies spawn %s as tool_missing', async (code) => {
-  vi.spyOn(childProcess, 'spawn').mockImplementationOnce(() => {
+  const spawnCommand = vi.fn(() => {
     throw Object.assign(new Error('missing'), { code })
   })
-  expect(await run('node -e ""')).toMatchObject({
+  expect(await run('node -e ""', { spawnCommand })).toMatchObject({
     result: 'environmental',
     reason: 'tool_missing',
     exitCode: null
@@ -68,12 +67,12 @@ it.each([
 ])(
   'classifies close $code / $signal without platform assumptions',
   async ({ code, signal, reason }) => {
-    vi.spyOn(childProcess, 'spawn').mockImplementationOnce(() => {
+    const spawnCommand = vi.fn(() => {
       const child = unspawnedChild()
       queueMicrotask(() => child.emit('close', code, signal))
       return child
     })
-    expect(await run('check')).toMatchObject({
+    expect(await run('check', { spawnCommand })).toMatchObject({
       result: 'environmental',
       reason,
       exitCode: code,
@@ -82,7 +81,7 @@ it.each([
   }
 )
 it('handles asynchronous spawn errors without hanging', async () => {
-  vi.spyOn(childProcess, 'spawn').mockImplementationOnce(() => {
+  const spawnCommand = vi.fn(() => {
     const child = unspawnedChild()
     queueMicrotask(() => {
       child.emit('error', Object.assign(new Error('not executable'), { code: 'EACCES' }))
@@ -90,23 +89,32 @@ it('handles asynchronous spawn errors without hanging', async () => {
     })
     return child
   })
-  expect(await run('check')).toMatchObject({ result: 'environmental', reason: 'tool_missing' })
+  expect(await run('check', { spawnCommand })).toMatchObject({
+    result: 'environmental',
+    reason: 'tool_missing',
+    exitCode: null
+  })
+  expect(spawnCommand).toHaveBeenCalledWith('check', cwd)
 })
 it('kills a timed-out command tree and never starts an exhausted command', async () => {
-  expect(await run('node -e "setInterval(() => {}, 100)"', Date.now() + 100)).toMatchObject({
+  expect(
+    await run('node -e "setInterval(() => {}, 100)"', { deadline: Date.now() + 100 })
+  ).toMatchObject({
     result: 'environmental',
     reason: 'timeout'
   })
-  const spy = vi.spyOn(childProcess, 'spawn')
-  expect(await run('node -e "process.exit(1)"', Date.now() - 1)).toMatchObject({
+  const spawnCommand = vi.fn(spawnLocalShellCommand)
+  expect(
+    await run('node -e "process.exit(1)"', { deadline: Date.now() - 1, spawnCommand })
+  ).toMatchObject({
     result: 'skipped',
     reason: 'time_budget_exhausted'
   })
-  expect(spy).not.toHaveBeenCalled()
+  expect(spawnCommand).not.toHaveBeenCalled()
 })
 it('stops a running command when the plane aborts', async () => {
   const abort = new AbortController()
-  const result = run('node -e "setInterval(() => {}, 100)"', Date.now() + 10_000, abort.signal)
+  const result = run('node -e "setInterval(() => {}, 100)"', { signal: abort.signal })
   abort.abort()
   expect(await result).toMatchObject({ result: 'environmental', reason: 'killed' })
 })

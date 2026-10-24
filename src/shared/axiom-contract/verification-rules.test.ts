@@ -101,3 +101,23 @@ it('resolves setup then unique evidence then additional risk gates in declaratio
     )
   ).toEqual([])
 })
+
+it('trims required evidence and skips empty items before de-duplicating', () => {
+  const rules = VerificationRulesSchema.parse({ repositoryGates: { low: ['test', 'gate'] } })
+  expect(
+    resolveVerificationPlan(
+      { risk: 'low', requiredEvidence: [' ', '\n\t', ' test ', 'test', ' check ', '\r\n'] },
+      rules
+    )
+  ).toEqual([
+    { source: 'evidence', command: 'test' },
+    { source: 'evidence', command: 'check' },
+    { source: 'gate', command: 'gate' }
+  ])
+  expect(
+    resolveVerificationPlan(
+      { risk: 'low', requiredEvidence: [' ', '\n\t'] },
+      VerificationRulesSchema.parse({})
+    )
+  ).toEqual([])
+})

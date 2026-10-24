@@ -83,10 +83,12 @@ export async function mandatorySections(store: AxiomStore, missionId: string, ta
   }
   const { title, objective, scope, acceptanceCriteria, requiredEvidence, risk, retryPolicy } =
     task.spec
-  const commands = resolveVerificationPlan(
-    task.spec,
-    VerificationRulesSchema.parse(policy.verificationRules)
-  ).map(({ command }) => command)
+  const rules = VerificationRulesSchema.safeParse(policy.verificationRules)
+  const verificationCommands = rules.success
+    ? resolveVerificationPlan(task.spec, rules.data)
+        .map(({ command }) => command)
+        .join('\n') || 'none configured'
+    : 'Verification rules are invalid (policy_invalid); the independent verifier will escalate to a human.'
   const decisions = store.listDecisions({ missionId, status: 'ACCEPTED' })
   const protocol = workerProtocol(missionId, taskId)
   const entries = [
@@ -162,7 +164,7 @@ export async function mandatorySections(store: AxiomStore, missionId: string, ta
     {
       section: 'Required verification commands',
       source: `verification:${missionId}`,
-      content: commands.length ? commands.join('\n') : 'none configured'
+      content: verificationCommands
     },
     {
       section: 'Previous-Attempt failure evidence',

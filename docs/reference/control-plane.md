@@ -338,7 +338,7 @@ phase 词汇为 `claimed | prepared | checking | verdict | prepare_failed | requ
 
 **M3-02：确定性检查与结算（D65 / D68 验证侧）**
 
-`verification-rules.ts` 的严格 schema 用于 `axiom.policy.update.patch.verificationRules` 的写入校验，以及运行器读策略；未知键（含旧占位键 commands）或类型错误拒绝写入，RPC 返回 invalid_argument。patch 替换整份 verificationRules，不是深合并。PolicySchema 的存储契约仍为 JSON record，旧行仍可加载；运行器遇到不符合 schema 的旧值直接 INCONCLUSIVE(policy_invalid)、escalation=human，不执行命令。CLI 为 `axiom mission policy update --mission <id> --verification-rules-file <json>`，沿用 envelope、收据与 policy.updated 审计。
+`verification-rules.ts` 的严格 schema 用于 `axiom.policy.update.patch.verificationRules` 的写入校验，以及运行器读策略；未知键（含旧占位键 commands）或类型错误拒绝写入，RPC 返回 invalid_argument。patch 替换整份 verificationRules，不是深合并。PolicySchema 的存储契约仍为 JSON record，旧行仍可加载；运行器遇到不符合 schema 的旧值直接 INCONCLUSIVE(policy_invalid)、escalation=human，不执行命令。ContextBuilder 用 safeParse 读取同一存储值，非法时仍可构建 ContextPackage，并以固定行 `Verification rules are invalid (policy_invalid); the independent verifier will escalate to a human.` 代替命令列表。CLI 为 `axiom mission policy update --mission <id> --verification-rules-file <json>`，沿用 envelope、收据与 policy.updated 审计。
 
 | 策略键                | 默认值 / 含义                                                                                                                              |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -351,7 +351,7 @@ phase 词汇为 `claimed | prepared | checking | verdict | prepare_failed | requ
 | retryOnce             | 常见测试前缀：pnpm / npm / yarn / bun 的 test、run test；npx vitest、vitest、npx jest、jest、pytest、python -m pytest、go test、cargo test |
 | knownFlaky            | `[]`；人工维护的失败名模式，只有 `*` 是通配符                                                                                              |
 
-命令去首尾空白且不得为空。`resolveVerificationPlan(taskSpec, rules)` 同时供 ContextBuilder 和运行器使用：setupCommands 原顺序（不去重），requiredEvidence 去重且保留声明顺序，最后追加 task.risk 对应的 repositoryGates（去掉已经列出的命令）。每项带 source=setup/evidence/gate。Worker 的 checksRun 从不参与验证判定；报告声称全绿也不能抵消实际失败。
+策略中的命令去首尾空白且不得为空。`resolveVerificationPlan(taskSpec, rules)` 同时供 ContextBuilder 和运行器使用：setupCommands 原顺序（不去重），Task 的 requiredEvidence 逐项去首尾空白、跳过空项，再去重且保留声明顺序（不对合法但未 trim 的 Task 数据抛错），最后追加 task.risk 对应的 repositoryGates（去掉已经列出的命令）。每项带 source=setup/evidence/gate。Worker 的 checksRun 从不参与验证判定；报告声称全绿也不能抵消实际失败。
 
 `verification-checks.ts` 在 prepare 成功后、同一全局串行 drain 中先写 phase=checking，再在 `splitWorktreeIdForFilesystem(worktreeId).worktreePath` 执行。只支持本地 repository；connectionId 非空或 executionHostId 非 local 的 repository 在建 worktree 之前交给运行器，得到 INCONCLUSIVE(environment)、detail=remote_repository_unsupported、escalation=human。进程选项沿用 automation precheck：shell=true、cwd、process.env、POSIX detached、windowsHide；超时和 shutdown 都复用其 killLocalPrecheckProcessTree，不新增 tree-kill。POSIX 停止时保留 helper 的延迟 SIGKILL，并等它执行后才允许回收。
 

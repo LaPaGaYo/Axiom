@@ -231,7 +231,7 @@ M3-01 的 verification-params.ts 在 shared 定义 run/view/params/response；me
 
 M3-02：`axiom.policy.update.patch.verificationRules` 是可选的 additive 字段；CLI `mission policy update --verification-rules-file <json>` 与 routing-file 并列，读取严格 `verification-rules.ts` schema，沿用 policy.updated、envelope 与 mutation_receipts。PolicySchema 仍读取旧 JSON record；运行器把非法旧策略结算为 INCONCLUSIVE(policy_invalid)，交人。既有 verification_runs.commands / tool_versions 列通过带 claim fence 的 updateVerificationRun 写入，无 migration；状态转换守卫禁止 FAIL → PASS。
 
-检查执行复用 `src/main/automations/precheck-runner.ts` 的本地 shell 选项与导出的 `killLocalPrecheckProcessTree`（timeout / shutdown），没有改 automation 或 orchestration 内核。worktree 仍只由 runtime.createManagedWorktree / removeManagedWorktree 管理；非本地 repository 不执行本地命令。日志/判定走既有 ArtifactStore，Task 结算走 missions.transitionTaskStage，FAIL 重试共用 Axiom 侧 settleVerificationFailure。DEF-21 ⑥ 的 candidate_unchanged 守卫位于 Axiom 的 axiom_submit 事务、insertCandidate 前，按上一 ACTIVE Candidate 的 treeSha 拒绝相同树；不改变内核 worker_done 结算。
+检查执行复用 `src/main/automations/precheck-runner.ts` 导出的 `spawnLocalShellCommand(command, cwd)`：runLocalPrecheck 与验证运行器共享这一个既有 shell spawn 点，选项不变，Axiom 不新增 child_process 直接导入。timeout / shutdown 仍复用导出的 `killLocalPrecheckProcessTree`；没有改 orchestration 内核。worktree 仍只由 runtime.createManagedWorktree / removeManagedWorktree 管理；非本地 repository 经 isRepoOnCatalogHost 判定，不执行本地命令。日志/判定走既有 ArtifactStore，Task 结算走 missions.transitionTaskStage，FAIL 重试共用 Axiom 侧 settleVerificationFailure。DEF-21 ⑥ 的 candidate_unchanged 守卫位于 Axiom 的 axiom_submit 事务、insertCandidate 前，按上一 ACTIVE Candidate 的 treeSha 拒绝相同树；不改变内核 worker_done 结算。
 
 ### 4d. 现有命名冲突清单（`rg` 于 `src/main/runtime/rpc/methods/` 与 `src/main/startup/cli-command-names.ts` 核实）
 

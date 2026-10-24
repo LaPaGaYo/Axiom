@@ -79,7 +79,9 @@ export function resolveVerificationPlan(
     source: 'setup',
     command
   }))
-  const evidence = [...new Set(task.requiredEvidence.map((command) => Command.parse(command)))]
+  const evidence = [
+    ...new Set(task.requiredEvidence.map((command) => command.trim()).filter(Boolean))
+  ]
   plan.push(...evidence.map((command) => ({ source: 'evidence' as const, command })))
   const listed = new Set(plan.map(({ command }) => command))
   for (const command of rules.repositoryGates[task.risk] ?? []) {

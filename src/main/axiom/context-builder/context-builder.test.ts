@@ -123,6 +123,16 @@ describe('ContextBuilder', () => {
       `## Required verification commands\n\n${['setup', ...new Set(task.spec.requiredEvidence), 'gate'].join('\n')}`
     )
   })
+  it('builds context with a human-escalation notice for invalid stored verification rules', async () => {
+    store.upsertPolicy(missionId, {
+      ...store.getPolicy(missionId)!,
+      verificationRules: { commands: ['pnpm test', 'pnpm tc'] }
+    })
+    const { renderTemplate } = await builder.build({ missionId, taskId })
+    expect(renderTemplate).toContain(
+      '## Required verification commands\n\nVerification rules are invalid (policy_invalid); the independent verifier will escalate to a human.'
+    )
+  })
   it('pins the T04 manifest identity and reproduces without writes', async () => {
     await put('Sprint validation handoff.', [upstream[0]])
     await put('CSV interchange report.', [upstream[1]], 'worker_report')
@@ -255,7 +265,11 @@ describe('ContextBuilder', () => {
     db.db
       .prepare('UPDATE mission_policies SET verification_rules = ? WHERE mission_id = ?')
       .run('{"commands":"invalid"}', missionId)
-    await expect(builder.build({ missionId, taskId })).rejects.toThrow()
+    const legacy = await builder.build({ missionId, taskId })
+    expect(legacy.manifest.tokenBudget).toBe(42)
+    expect(legacy.renderTemplate).toContain(
+      'Verification rules are invalid (policy_invalid); the independent verifier will escalate to a human.'
+    )
   })
 
   it('rejects cross-Mission Tasks and propagates corrupt candidate evidence', async () => {

@@ -1,10 +1,10 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { EventEmitter } from 'node:events'
+import { EventEmitter, once } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { runAutomationPrecheck } from './precheck-runner'
+import { runAutomationPrecheck, spawnLocalShellCommand } from './precheck-runner'
 
 const sshManagerState = vi.hoisted(() => ({
   manager: null as null | {
@@ -32,6 +32,16 @@ describe('runAutomationPrecheck', () => {
 
   afterEach(() => {
     rmSync(cwd, { recursive: true, force: true })
+  })
+
+  it('spawnLocalShellCommand runs in the given cwd and preserves the exit code', async () => {
+    const child = spawnLocalShellCommand(
+      nodeCommand("require('node:fs').writeFileSync('shared-spawn.txt', 'done'); process.exit(9)"),
+      cwd
+    )
+    const [exitCode] = await once(child, 'close')
+    expect(exitCode).toBe(9)
+    expect(readFileSync(join(cwd, 'shared-spawn.txt'), 'utf8')).toBe('done')
   })
 
   it('captures exit code and output for a non-zero local precheck', async () => {

@@ -1,5 +1,7 @@
-import childProcess, { type ChildProcess } from 'node:child_process'
-import { killLocalPrecheckProcessTree } from '../../automations/precheck-runner'
+import {
+  killLocalPrecheckProcessTree,
+  spawnLocalShellCommand
+} from '../../automations/precheck-runner'
 import { VerificationOutput } from './verification-output'
 import type { CheckOutcome } from './verification-verdict'
 
@@ -33,6 +35,7 @@ export async function runVerificationCommand(input: {
   cwd: string
   deadline: number
   signal?: AbortSignal
+  spawnCommand?: typeof spawnLocalShellCommand
 }): Promise<CommandResult> {
   if (Date.now() >= input.deadline) {
     return skippedVerificationCommand('time_budget_exhausted')
@@ -47,7 +50,7 @@ export async function runVerificationCommand(input: {
   let stopped = false
   let spawnCode: string | undefined
   let killBarrier: Promise<void> | undefined
-  let child: ChildProcess
+  let child: ReturnType<typeof spawnLocalShellCommand>
   const result = (exitCode: number | null, signal: string | null): CommandResult => {
     let outcome: CheckOutcome
     if (timedOut) {
@@ -75,14 +78,7 @@ export async function runVerificationCommand(input: {
     }
   }
   try {
-    // D65 explicitly uses automation precheck's shell-command semantics and tree-kill helper.
-    child = childProcess.spawn(input.command, {
-      shell: true,
-      cwd: input.cwd,
-      env: process.env,
-      detached: process.platform !== 'win32',
-      windowsHide: true
-    })
+    child = (input.spawnCommand ?? spawnLocalShellCommand)(input.command, input.cwd)
   } catch (error) {
     spawnCode = error instanceof Error && 'code' in error ? String(error.code) : 'spawn_failed'
     return result(null, null)

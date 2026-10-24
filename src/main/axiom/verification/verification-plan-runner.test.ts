@@ -2,7 +2,7 @@ import { mkdtemp, rm, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import childProcess from 'node:child_process'
+import { spawnLocalShellCommand } from '../../automations/precheck-runner'
 import { verificationFixture } from './verification-fixture.test-support'
 import {
   VerificationRulesSchema,
@@ -22,13 +22,19 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 const node = (script: string) => `node -e "${script}"`
-async function run(commands: string[], policy: unknown = {}, deadline = Date.now() + 30_000) {
+async function run(
+  commands: string[],
+  policy: unknown = {},
+  deadline = Date.now() + 30_000,
+  spawnCommand?: typeof spawnLocalShellCommand
+) {
   const rules = VerificationRulesSchema.parse(policy)
   return executeVerificationPlan({
     artifacts: f.artifacts,
     run: f.run,
     cwd: root,
     deadline,
+    spawnCommand,
     rules,
     plan: resolveVerificationPlan({ risk: 'low', requiredEvidence: commands }, rules),
     assertCurrent: () => {}
@@ -115,14 +121,13 @@ it('caps all check excerpts together at 32 KiB', async () => {
   expect(excerpts.at(-1)).toBe('')
 })
 it('records unavailable version probes without changing passing checks', async () => {
-  const spawn = childProcess.spawn
-  vi.spyOn(childProcess, 'spawn').mockImplementation((command, options) => {
+  const spawnCommand: typeof spawnLocalShellCommand = (command, cwd) => {
     if (command === 'pnpm --version') {
       throw Object.assign(new Error('missing'), { code: 'ENOENT' })
     }
-    return spawn(command, options)
-  })
-  const result = await run([node('process.exit(0)')])
+    return spawnLocalShellCommand(command, cwd)
+  }
+  const result = await run([node('process.exit(0)')], {}, undefined, spawnCommand)
   expect(result.checks[0].result).toBe('pass')
   expect(result.toolVersions).toMatchObject({
     node: expect.stringMatching(/^v/),

@@ -7,6 +7,7 @@ import {
   type VerificationRules
 } from '../../../shared/axiom-contract/verification-rules'
 import { redactContext } from '../context-builder/redaction'
+import type { spawnLocalShellCommand } from '../../automations/precheck-runner'
 import { runVerificationCommand, skippedVerificationCommand } from './verification-command'
 import { recordCommandEvidence, type CheckAttempt } from './verification-evidence'
 import { boundVerificationText, verificationExcerpt } from './verification-output'
@@ -21,6 +22,7 @@ type PlanInput = {
   cwd: string
   deadline: number
   signal?: AbortSignal
+  spawnCommand?: typeof spawnLocalShellCommand
   assertCurrent: () => void
 }
 
@@ -34,7 +36,8 @@ export async function executeVerificationPlan(input: PlanInput) {
       command,
       cwd: input.cwd,
       deadline,
-      signal: input.signal
+      signal: input.signal,
+      spawnCommand: input.spawnCommand
     })
     input.assertCurrent()
     return recordCommandEvidence(input, result)

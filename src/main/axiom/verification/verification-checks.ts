@@ -1,4 +1,5 @@
 import type { Repo } from '../../../shared/repo-types'
+import { isRepoOnCatalogHost } from '../../../shared/execution-host'
 import type { VerificationRunStatus } from '../../../shared/axiom-contract/lifecycle'
 import type { VerificationRun } from '../../../shared/axiom-contract/verification-params'
 import {
@@ -19,7 +20,7 @@ class VerificationInterrupted extends Error {}
 export function isLocalVerificationRepository(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'>
 ): boolean {
-  return !repo.connectionId && (!repo.executionHostId || repo.executionHostId === 'local')
+  return isRepoOnCatalogHost(repo)
 }
 
 async function cleanupVerification(
