@@ -267,7 +267,8 @@ it.each(['scope-violation', 'secret-line'])(
     expect(files.has('/fixture/REPORT.md')).toBe(false)
     expect(written.has('/fixture/REPORT.md')).toBe(false)
     if (scenario === 'secret-line') {
-      expect(files.get('/fixture/src/services/csv.ts')).toContain(`${'gh' + 'p_'}${'Z'.repeat(36)}`)
+      const token = `${'gh' + 'p_'}${'Z'.repeat(36)}`
+      expect(files.get('/fixture/src/services/csv.ts')).toBe(`// axiom e2e probe ${token}\n`)
     } else {
       expect(files.get('/fixture/README.md')).toBe('\n<!-- axiom e2e scope probe -->\n')
     }

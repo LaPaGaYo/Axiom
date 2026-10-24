@@ -25,6 +25,7 @@ it.each([
   ['README.md', 'readme.md', false],
   ['a/b/c/end/file', 'a/**/end', true],
   ['a/end', 'a/**/end', true],
+  ['README.md', '', false],
   ['etc/x', '/etc/x', false],
   ['a/b', 'a/../b', false]
 ])('matches %s against %s: %s', (file, pattern, expected) => {
@@ -35,7 +36,7 @@ it.each([
   ['./src//a/', 'src/a'],
   ['.\\src\\a\\', 'src/a'],
   ['././src/', 'src'],
-  ['', '.'],
+  ['', null],
   ['./', '.'],
   ['.', '.'],
   ['/etc/x', null],
@@ -71,5 +72,17 @@ it('bounds globstar recursion even for a deep unsuccessful match', () => {
   const start = performance.now()
   expect(matchesPathPattern(file, pattern)).toBe(false)
   expect(matchesPathPattern(file, Array(30).fill('**').join('/'))).toBe(true)
+  expect(performance.now() - start).toBeLessThan(1000)
+})
+
+it('matches wildcard characters by code point', () => {
+  expect(matchesPathPattern('src/\u{1f600}.ts', 'src/?.ts')).toBe(true)
+  expect(matchesPathPattern('src/\u{1f600}.ts', 'src/??.ts')).toBe(false)
+  expect(matchesPathPattern('src/a\u{1f600}b.ts', 'src/*\u{1f600}?.ts')).toBe(true)
+})
+
+it('bounds repeated stars within a segment on an unsuccessful match', () => {
+  const start = performance.now()
+  expect(matchesPathPattern('a'.repeat(250), '*a*a*a*a*a*a*a*a*a*a*a*a*b')).toBe(false)
   expect(performance.now() - start).toBeLessThan(1000)
 })

@@ -51,7 +51,7 @@ async function submitFixture(attemptId, missionId, taskId) {
         appendFileSync(path.join(process.cwd(), 'README.md'), '\\n<!-- axiom e2e scope probe -->\\n')
       } else {
         const token = 'gh' + 'p_' + 'Z'.repeat(36)
-        appendFileSync(path.join(process.cwd(), 'src', 'services', 'csv.ts'), "export const AXIOM_E2E_PROBE = '" + token + "'\\n")
+        appendFileSync(path.join(process.cwd(), 'src', 'services', 'csv.ts'), '// axiom e2e probe ' + token + '\\n')
       }
       reportText = 'Provider diff-gate probe: ' + scenario + '\\n'
     } else {

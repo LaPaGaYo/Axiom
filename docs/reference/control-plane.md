@@ -386,11 +386,11 @@ verdict 文档为单个 application/json、kind=evidence Artifact，createdBy=Ve
 
 D64 的 2026-10-24 批准修订采用三点 diff。验证 worktree 检出不可变 Candidate 后、写 phase=checking 后、执行任何 setup / evidence / repository gate 命令前，先解析 `refs/heads/axiom/integration/<missionId>^{commit}` 为集成基线 SHA，再计算 `git merge-base <baseSha> <candidateCommitSha>`，比较 merge-base 到 Candidate。后续 Git 调用只用 SHA；修复 Attempt 合入新集成基线后，已集成的其他 Task 文件不再算该候选的 scope 改动。上一 Candidate 仅用于修复证据展示，不作 scope 基线。
 
-所有 Git 调用经 git runner 与 `gitOptionsForWorktree`。两个 diff 共用 `--no-color --no-ext-diff --no-textconv --no-renames`：重命名视作删除加新增，因此越界源路径不能躲在新路径后面。先用 `--name-status -z` 读取 status/path 对（包括删除、二进制、空文件和 mode 变更），再流式读取 `--submodule=short -U0` patch。patch 的每个 `diff --git ` section 按次序绑定一个 name-status 条目，不解析可能被 Git 引号转义的 header 路径；section 数不符即 diff_unavailable。仅扫描首个 `@@` 之后以 `+` 开头的新增行（去掉一个 `+`，逐文件以换行连接）；二进制无 hunk，只记录 binary。
+所有 Git 调用经 git runner 与 `gitOptionsForWorktree`。两个 diff 共用 `--no-color --no-ext-diff --no-textconv --no-renames --ignore-submodules=none`：重命名视作删除加新增，因此越界源路径不能躲在新路径后面；即使仓库配置 `diff.ignoreSubmodules=all`，也必须列出 submodule 的 gitlink 改动。先用 `--name-status -z` 读取 status/path 对（包括删除、二进制、空文件和 mode 变更），再流式读取 `--submodule=short -U0` patch。patch 的 `diff --git ` sections 按次序绑定 name-status 条目：普通条目占一个 section，类型变更 `T`（例如文件替换为 symlink）占连续两个 section（删除后创建），两者都归该路径；预期 section 总数为条目数加 `T` 条目数，其余数量不符即 diff_unavailable。不解析可能被 Git 引号转义的 header 路径。每个 section 独立从首个 `@@` 开始扫描以 `+` 开头的新增行（去掉一个 `+`，同一路径的所有新增行以换行连接）；二进制 section 无 hunk，只记录 binary。
 
 patch 默认最多 32 MiB；超限停止子进程，保留路径清单，丢弃全部新增文本，patchComplete=false，不以部分扫描证明安全。集成 ref 读取失败记 integration_base_unavailable，无公共祖先记 merge_base_unavailable，其余 Git / 解析失败记 diff_unavailable。失败证据保留已解析的分支、SHA、merge-base，不保存或记录原始 Git 输出。
 
-`scope.allowedPaths` 与 dangerousPathPatterns 共用 path-patterns.ts：反斜杠转 `/`、合并重复 `/`、去前导 `./` 与尾 `/`；空条目归一为 `.`。绝对路径（含 Windows drive）或任何 `..` 段无效、不授权，原条目记 ignoredScopeEntries。条目覆盖匹配的完整路径及其所有后代；`*` / `?` 只匹配段内任意字符 / 单字符，独立的 `**` 段可匹配零到多段；`.` 覆盖整个仓库。区分大小写、点文件不特殊，括号等其余字符都是字面量（例如 `app/[id]/page.tsx`）。实现对段索引做 memoisation 并合并连续 `**`。
+`scope.allowedPaths` 与 dangerousPathPatterns 共用 path-patterns.ts：归一化前为空字符串的条目无效；其余条目将反斜杠转 `/`、合并重复 `/`、去前导 `./` 与尾 `/`，`./` 与 `.` 仍归一为 `.`。绝对路径（含 Windows drive）或任何 `..` 段也无效、不授权，无效 scope 原条目记 ignoredScopeEntries。条目覆盖匹配的完整路径及其所有后代；`*` / `?` 只匹配段内任意字符 / 单个 Unicode 码点，独立的 `**` 段可匹配零到多段；`.` 覆盖整个仓库。区分大小写、点文件不特殊，括号等其余字符都是字面量（例如 `app/[id]/page.tsx`）。实现对段索引做 memoisation 并合并连续 `**`；段内使用双索引通配匹配器，只重试最近一个 `*`，不编译正则表达式，避免多个星号的组合回溯。
 
 “明确命名”的确定性规则：一个有效 allowedPaths 条目 e 同时覆盖改动路径，并且 e 自身作为字面路径也匹配该危险模式。对默认清单，`.`、`src/`、`**` 不够；`package.json`、`**/package.json`、`src/storage/AGENTS.md`、`.github/workflows/` 则明确覆盖对应路径。越界路径已属 scopeViolations，不重复记 dangerous；每个 in-scope 路径只记首个未被明确授权的危险模式。
 

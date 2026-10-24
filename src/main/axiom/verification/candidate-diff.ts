@@ -19,10 +19,17 @@ export type CandidateDiff =
       mergeBase?: string
     }
 
-const DIFF_FLAGS = ['diff', '--no-color', '--no-ext-diff', '--no-textconv', '--no-renames']
+const DIFF_FLAGS = [
+  'diff',
+  '--no-color',
+  '--no-ext-diff',
+  '--no-textconv',
+  '--no-renames',
+  '--ignore-submodules=none'
+]
 const PATCH_BYTE_LIMIT = 32 * 1024 * 1024
 
-function parsePatch(patch: string, changes: { path: string }[]) {
+function parsePatch(patch: string, changes: { status: string; path: string }[]) {
   const sections: string[][] = []
   for (const line of patch.split('\n')) {
     if (line.startsWith('diff --git ')) {
@@ -31,32 +38,43 @@ function parsePatch(patch: string, changes: { path: string }[]) {
       sections.at(-1)?.push(line)
     }
   }
-  if (sections.length !== changes.length) {
+  const expectedSections = changes.reduce(
+    (count, change) => count + (change.status === 'T' ? 2 : 1),
+    0
+  )
+  if (sections.length !== expectedSections) {
     return null
   }
   const addedText = new Map<string, string>()
   const binary: string[] = []
-  for (const [index, lines] of sections.entries()) {
-    let inHunk = false
-    let isBinary = false
+  let sectionIndex = 0
+  for (const change of changes) {
+    // Git emits a deletion and creation for a type change, both for the same path.
+    const count = change.status === 'T' ? 2 : 1
+    let hasBinarySection = false
     const added: string[] = []
-    for (const line of lines) {
-      if (line.startsWith('@@')) {
-        inHunk = true
+    for (const lines of sections.slice(sectionIndex, sectionIndex + count)) {
+      let inHunk = false
+      let isBinary = false
+      for (const line of lines) {
+        if (line.startsWith('@@')) {
+          inHunk = true
+        }
+        if (!inHunk && line.startsWith('Binary files ')) {
+          isBinary = true
+        }
+        if (inHunk && line.startsWith('+')) {
+          added.push(line.slice(1))
+        }
       }
-      if (!inHunk && line.startsWith('Binary files ')) {
-        isBinary = true
-      }
-      if (inHunk && line.startsWith('+')) {
-        added.push(line.slice(1))
-      }
+      hasBinarySection ||= isBinary && !inHunk
     }
-    const file = changes[index].path
-    if (isBinary && !inHunk) {
-      binary.push(file)
+    sectionIndex += count
+    if (hasBinarySection) {
+      binary.push(change.path)
     }
     if (added.length) {
-      addedText.set(file, added.join('\n'))
+      addedText.set(change.path, added.join('\n'))
     }
   }
   return { addedText, binary }

@@ -1,10 +1,12 @@
-import { mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import * as runner from '../../git/runner'
 import { gitOptionsForWorktree } from '../../git/git-runtime-options'
 import { readCandidateDiff } from './candidate-diff'
+import { evaluateDiffGate } from './diff-gate'
+import { VerificationRulesSchema } from '../../../shared/axiom-contract/verification-rules'
 
 let cwd: string
 let base: string
@@ -98,6 +100,81 @@ it('reports missing integration refs without throwing raw Git output', async () 
   await git('branch', '-D', branch)
   expect(await read()).toMatchObject({ ok: false, reason: 'integration_base_unavailable' })
 })
+
+it.skipIf(process.platform === 'win32')(
+  'pairs both patch sections for a file replaced by a symlink',
+  async () => {
+    await rm(path.join(cwd, 'keep.txt'))
+    await symlink('gone.txt', path.join(cwd, 'keep.txt'))
+    await commit()
+    expect(await read()).toMatchObject({
+      ok: true,
+      changes: [{ status: 'T', path: 'keep.txt' }],
+      addedText: new Map([['keep.txt', 'gone.txt']]),
+      binary: [],
+      patchComplete: true
+    })
+  }
+)
+
+it.skipIf(process.platform === 'win32')(
+  'keeps ordinary changes aligned between type changes',
+  async () => {
+    for (const file of ['keep.txt', 'old.txt']) {
+      await rm(path.join(cwd, file))
+      await symlink('gone.txt', path.join(cwd, file))
+    }
+    await put('mode.txt', '++ between type changes\n')
+    await commit()
+    expect(await read()).toMatchObject({
+      ok: true,
+      changes: [
+        { status: 'T', path: 'keep.txt' },
+        { status: 'M', path: 'mode.txt' },
+        { status: 'T', path: 'old.txt' }
+      ],
+      addedText: new Map([
+        ['keep.txt', 'gone.txt'],
+        ['mode.txt', '++ between type changes'],
+        ['old.txt', 'gone.txt']
+      ]),
+      patchComplete: true
+    })
+  }
+)
+
+it.each(['addition', 'pointer change'])(
+  'includes a gitlink %s despite diff.ignoreSubmodules=all',
+  async (kind) => {
+    if (kind === 'pointer change') {
+      await git('update-index', '--add', '--cacheinfo', `160000,${base},vendor/sub`)
+      await git('commit', '--no-gpg-sign', '-qm', 'initial submodule')
+      await git('update-ref', `refs/heads/${branch}`, await git('rev-parse', 'HEAD'))
+    }
+    await git('config', 'diff.ignoreSubmodules', 'all')
+    const target = await git('rev-parse', 'HEAD')
+    await git('update-index', '--add', '--cacheinfo', `160000,${target},vendor/sub`)
+    await git('commit', '--no-gpg-sign', '-qm', 'submodule candidate')
+    const diff = await read()
+    expect(diff).toMatchObject({
+      ok: true,
+      changes: [{ status: kind === 'addition' ? 'A' : 'M', path: 'vendor/sub' }],
+      addedText: new Map([['vendor/sub', `Subproject commit ${target}`]]),
+      patchComplete: true
+    })
+    expect(
+      evaluateDiffGate({
+        diff,
+        allowedPaths: ['keep.txt'],
+        rules: VerificationRulesSchema.parse({})
+      })
+    ).toMatchObject({
+      outcome: 'fail',
+      reason: 'scope_violation',
+      scopeViolations: ['vendor/sub']
+    })
+  }
+)
 
 it('reports unrelated histories and preserves the resolved integration identity', async () => {
   const tree = await git('rev-parse', 'HEAD^{tree}')
