@@ -6,7 +6,7 @@ export function extractFailureNames(output: string): string[] {
   let jestFile: string | undefined
   for (const line of stripVTControlCharacters(output).split(/\r?\n/)) {
     const header = line.match(/^\s*FAIL\s+(.+?)(?:\s+>\s+(.+))?$/)
-    const bullet = line.match(/^\s*●\s+(.+)$/)
+    const bullet = line.match(/^\s*\u25cf\s+(.+)$/)
     let failure: string | undefined
     if (header) {
       // Vitest may insert a project column before the file; file is the last column.
@@ -21,7 +21,7 @@ export function extractFailureNames(output: string): string[] {
         jestFile = file
       }
     } else if (bullet) {
-      failure = `${jestFile ? `${jestFile} > ` : ''}${bullet[1].replace(/\s*›\s*/g, ' > ')}`
+      failure = `${jestFile ? `${jestFile} > ` : ''}${bullet[1].replace(/\s*\u203a\s*/g, ' > ')}`
     } else {
       // The first ': ' after ' > ' ends the name, even when it occurs inside the test name.
       failure = line.match(
