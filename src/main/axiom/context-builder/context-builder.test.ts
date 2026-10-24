@@ -108,13 +108,38 @@ function put(
 }
 
 describe('ContextBuilder', () => {
+  it('renders the same ordered plan as independent verification', async () => {
+    const task = store.getTaskStage(taskId)!
+    const policy = store.getPolicy(missionId)!
+    store.upsertPolicy(missionId, {
+      ...policy,
+      verificationRules: {
+        setupCommands: ['setup'],
+        repositoryGates: { [task.spec.risk]: [...task.spec.requiredEvidence, 'gate'] }
+      }
+    })
+    const { renderTemplate } = await builder.build({ missionId, taskId })
+    expect(renderTemplate).toContain(
+      `## Required verification commands\n\n${['setup', ...new Set(task.spec.requiredEvidence), 'gate'].join('\n')}`
+    )
+  })
+  it('builds context with a human-escalation notice for invalid stored verification rules', async () => {
+    store.upsertPolicy(missionId, {
+      ...store.getPolicy(missionId)!,
+      verificationRules: { commands: ['pnpm test', 'pnpm tc'] }
+    })
+    const { renderTemplate } = await builder.build({ missionId, taskId })
+    expect(renderTemplate).toContain(
+      '## Required verification commands\n\nVerification rules are invalid (policy_invalid); the independent verifier will escalate to a human.'
+    )
+  })
   it('pins the T04 manifest identity and reproduces without writes', async () => {
     await put('Sprint validation handoff.', [upstream[0]])
     await put('CSV interchange report.', [upstream[1]], 'worker_report')
     const first = await builder.build({ missionId, taskId })
     expect(upstream).toHaveLength(2)
     expect(first.packageId).toBe(
-      'ctx_3599d3b3f9a5714e93da101687b40d125c6eabb438d692c02cb594d2ca312aff'
+      'ctx_5c6e0f74f9207d1dcfd083dc9fcd363304e4caf038b98fb6de9efd26437c319b'
     )
     expect(first.manifest.mandatory.map((entry) => entry.section)).toEqual(sections)
     expect(first.packageId).toBe(`ctx_${sha256(canonicalContextManifest(first.manifest))}`)
@@ -163,7 +188,7 @@ describe('ContextBuilder', () => {
     const { renderTemplate } = await builder.build({ missionId, taskId })
     expect(renderTemplate).toContain('Target branch rules: keep tests.')
     expect(renderTemplate).not.toMatch(/Uncommitted|Untracked|Never read this/)
-    expect(renderTemplate).toContain('none configured')
+    expect(renderTemplate).toContain('## Required verification commands\n\nTest report')
   })
 
   it('redacts candidate credentials and a target-branch private key before hashing/rendering', async () => {
@@ -233,14 +258,18 @@ describe('ContextBuilder', () => {
       .prepare(
         'UPDATE mission_policies SET budget = ?, verification_rules = ? WHERE mission_id = ?'
       )
-      .run('{"contextTokens":42}', '{"commands":["pnpm test","pnpm tc"]}', missionId)
+      .run('{"contextTokens":42}', '{"repositoryGates":{"low":["pnpm test","pnpm tc"]}}', missionId)
     const result = await builder.build({ missionId, taskId })
     expect(result.manifest.tokenBudget).toBe(42)
     expect(result.renderTemplate).toContain('pnpm tc')
     db.db
       .prepare('UPDATE mission_policies SET verification_rules = ? WHERE mission_id = ?')
       .run('{"commands":"invalid"}', missionId)
-    await expect(builder.build({ missionId, taskId })).rejects.toThrow()
+    const legacy = await builder.build({ missionId, taskId })
+    expect(legacy.manifest.tokenBudget).toBe(42)
+    expect(legacy.renderTemplate).toContain(
+      'Verification rules are invalid (policy_invalid); the independent verifier will escalate to a human.'
+    )
   })
 
   it('rejects cross-Mission Tasks and propagates corrupt candidate evidence', async () => {

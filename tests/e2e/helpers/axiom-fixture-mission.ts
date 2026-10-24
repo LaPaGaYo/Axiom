@@ -84,7 +84,13 @@ export async function withFixtureMission(
     releaseWorkers: () => void
     restart?: () => Promise<Page>
   }) => Promise<void>,
-  options: { planner?: boolean; holdWorkers?: boolean; restart?: boolean } = {}
+  options: {
+    planner?: boolean
+    holdWorkers?: boolean
+    restart?: boolean
+    runVerification?: boolean
+    maxAttempts?: number
+  } = {}
 ) {
   const temp = mkdtempSync(path.join(os.tmpdir(), 'axiom-fixture-mission-'))
   const executable = path.join(temp, process.platform === 'win32' ? 'codex.cmd' : 'codex')
@@ -120,6 +126,7 @@ process.exit(result.status ?? 1)
     ORCA_BACKGROUND_LAUNCH: '1',
     PATH: `${temp}${path.delimiter}${process.env.PATH ?? ''}`,
     AXIOM_E2E_LEDGER: ledgerPath,
+    ...(options.runVerification ? {} : { AXIOM_E2E_HOLD_VERIFICATION: '1' }),
     ORCA_E2E_CLI_ENTRY: cliEntry
   })
   let app: ElectronApplication | undefined
@@ -173,6 +180,11 @@ process.exit(result.status ?? 1)
       JSON.parse(readFileSync(path.join(clone, 'scenarios', 'goal', 'decomposition.json'), 'utf8')),
       mission.activeGoalRevisionId
     )
+    if (options.maxAttempts !== undefined) {
+      for (const task of proposal.tasks) {
+        task.retryPolicy.maxAttempts = options.maxAttempts
+      }
+    }
     let planRevision
     if (options.planner) {
       const { attempt } = MissionPlanResponseSchema.parse(

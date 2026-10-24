@@ -130,6 +130,17 @@ export function killLocalPrecheckProcessTree(
   return forceKillTimer
 }
 
+export function spawnLocalShellCommand(command: string, cwd: string): ChildProcess {
+  // Why: automation prechecks and Axiom verification (D65) share this one legacy spawn site.
+  return spawn(command, {
+    cwd,
+    detached: process.platform !== 'win32',
+    env: process.env,
+    shell: true,
+    windowsHide: true
+  })
+}
+
 function runLocalPrecheck(
   precheck: AutomationPrecheck,
   target: Extract<AutomationPrecheckExecutionTarget, { type: 'local' }>
@@ -144,13 +155,7 @@ function runLocalPrecheck(
     let timeout: ReturnType<typeof setTimeout> | null = null
     let forceKillTimer: ReturnType<typeof setTimeout> | null = null
 
-    const child = spawn(precheck.command, {
-      cwd: target.cwd,
-      detached: process.platform !== 'win32',
-      env: process.env,
-      shell: true,
-      windowsHide: true
-    })
+    const child = spawnLocalShellCommand(precheck.command, target.cwd)
 
     const settle = (exitCode: number | null, error: string | null): void => {
       if (settled) {

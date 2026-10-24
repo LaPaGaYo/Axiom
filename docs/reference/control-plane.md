@@ -7,7 +7,7 @@
 
 Control Plane 决定并持久化 Mission、版本化 Goal/Plan、Task stage 与依赖 readiness；模型只提出建议，renderer 只展示投影。顶层对象与 RPC 使用 Mission / `axiom.*`（D1）。用户代码所在对象称 repository；Orca `Project` 仍是仓库/provider 身份类型。
 
-M2 已提供 Planner 提案、人工审批、Scheduler admission、Worker 通道、Candidate/Submission 结算、Attempt 恢复与 UI 投影；M3-01 接入 VerificationService，Submission 后 Task 推进到 `VERIFYING`，VerificationRun 为 `RUNNING / prepared`（尚无 verdict）。`mission start` 创建集成基线并经 Scheduler admission 启动 Worker；M1 出口测试通过禁止全部 provider 保留 Attempt-free 语义。它不是 LLM coordinator、第二个终端/worktree 管理器，也不复活退役的 `coordinator.ts`。
+M2 已提供 Planner 提案、人工审批、Scheduler admission、Worker 通道、Candidate/Submission 结算、Attempt 恢复与 UI 投影；M3-01 接入 VerificationService，Submission 后 Task 推进到 `VERIFYING`，M3-02 在独立 worktree 执行检查并结算 PASS / FAIL / INCONCLUSIVE。`mission start` 创建集成基线并经 Scheduler admission 启动 Worker；M1 出口测试通过禁止全部 provider 保留 Attempt-free 语义。它不是 LLM coordinator、第二个终端/worktree 管理器，也不复活退役的 `coordinator.ts`。
 
 Execution Kernel 继续拥有 Run、Orca Task、dispatch、PTY、进程、worktree、消息投递和收据。Axiom 经 `OrchestrationDb` 与现有 service/RPC 边界复用这些原语。权威 Mission 状态在 `missions.status`；权威 Task stage 在 `task_stages.stage`（D2）；`tasks.status` 只是执行投影。Mission 的 DAG 在 `mission_task_edges`，Orca `tasks.deps=[]`（D10）。
 
@@ -306,7 +306,7 @@ axiom attempt submit --attempt <attemptId> --report <path.json> --json
 
 结算之后，重复 submit 仅允许读取既有 Submission：只接受同一 pane、同一进程代次的调用方（D73），并校验最新 binding 与 hasLifecycleAuthority，不恢复任何权限；其他 pane 或进程代次 → `worker_identity_changed`。不同请求丢失了提交后的消息时，可用认证后的重复 submit 补写一条；已有消息不重复插入。Git 在事务外，事务失败可能留下快照 commit；重试采用 clean HEAD，禁止 reset/clean/checkout 撤销证据。
 
-Candidate id 为 `cand_` + sha256(taskId + ':' + commit)。后续 Attempt 采用同一 Task 的相同 commit 返回 `invalid_argument: candidate_exists`，不得把旧 Candidate 改绑。唯一键是 commit，不是 tree；不同 commit 的同一 tree 不触发该唯一键。候选快照只允许在绑定的 `axiom/attempt/<taskId>/<seq>` 分支，不前进集成基线/目标分支。通用 stage API 对非 AttemptSettlement 的 RUNNING → SUBMITTED 返回 illegal_transition（reason=submission_required）。
+Candidate id 为 `cand_` + sha256(taskId + ':' + commit)。M3-02 / DEF-21 ⑥ 在 `axiom_submit` 事务内、insertCandidate 之前比较该 Task 上一 Attempt 的 ACTIVE Candidate：treeSha 相同即 `invalid_argument: candidate_unchanged`（即使 commit 不同），不写 Candidate / Submission / VerificationRun，Attempt 保持 RUNNING，可以修改后再提交。首个 Candidate 不受此限制；新树正常接受并 supersede 旧候选。数据库的 Task/commit 唯一键仍拒绝其它重复身份（candidate_exists），不得把旧 Candidate 改绑。环境修复后的同一 Candidate 重跑留给 M3-05 的显式路径。候选快照只允许在绑定的 `axiom/attempt/<taskId>/<seq>` 分支，不前进集成基线/目标分支。通用 stage API 对非 AttemptSettlement 的 RUNNING → SUBMITTED 返回 illegal_transition（reason=submission_required）。
 
 **Attempt 2 addendum（2026-10-19）**：retention 属于终端资源维护，移至结算提交后、SUBMISSION 消息之前；内核方法自行拥有事务，保持不变。成功以独立事务记录 `attempt.terminal_retained` 与 retainDisposition（含 already_released / no_owned_resource，均非错误）；异常只记录 `attempt.terminal_retain_failed`，不回滚 Submission/Candidate/stage/VerificationRun，也不阻止发信。若在 commit 与 retain 之间崩溃，已结算 dispatch 与 not_requested 资源保留，M2-08 RecoveryService 已实现补 retain；重复 submit 不重跑 retention。
 
@@ -314,9 +314,9 @@ Submission 的 summary 仍完整保存（≤4,000）；SUBMISSION 邮件沿用 M
 
 M2-07 宿主 spec 为 `tests/e2e/mission-attempt-submit.spec.ts`（需要 AXIOM_FIXTURE_REPO），D49 provider 解析既有 Artifact 配方取得 Mission/Task id；先记录 preamble ledger，再跑冻结 retry/attempt-1/succeed stub；在 REPORT.md 副本尾部追加 Mission/Task/Attempt 归属后上传、submit。冻结 stub 的报告内容原本完全相同，归属附记防止内容去重命中另一 Task 的 related 元数据；不改变 fixture patch 或场景。设置 ORCA_E2E_CLI_ENTRY 的 fixture helper 启用该后半段；旧 launch spec 不设置它，仍测试 RUNNING 与重启，原有断言不放宽。M2-11 仅对新 exit flow 设置一次性 crash marker；已有两条 spec 的宿主通过记录见 `.axiom-work/verifications/M2-10-1.md`，本次仍需回归。
 
-M3-01 在结算事务返回后触发 verification.kick(missionId)，拒绝/重复提交不触发；M3-02 才执行检查、记录 verdict；M4 才集成/释放 Candidate。D49 提交不构成真实 provider 认证。
+M3-01 在结算事务返回后触发 verification.kick(missionId)，拒绝/重复提交不触发；M3-02 在同一 drain 执行检查、记录 verdict；M4 才集成/释放 Candidate。D49 提交不构成真实 provider 认证。
 
-### Verification（M3-01）
+### Verification（M3-01 / M3-02）
 
 `verification/verification-service.ts` 是确定性的独立消费者；不启动模型、不采信 Worker 的 checksRun。`kick(missionId?)` 在整个 Control Plane 内合并为一个串行 drain；Mission 参数是触发提示，队列从 DB 读取，直到没有可领取的 run。三个入口：Submission 的 `axiom_submit` 事务返回后（拒绝/重复不触发）、启动恢复完成后、既有 60 s Attempt reconcile closure。没有新的 timer 或队列表。
 
@@ -328,13 +328,53 @@ M3-01 在结算事务返回后触发 verification.kick(missionId)，拒绝/重�
 
 每个 plane 的 runtimeEpoch=`epoch_<UUID>`。`startAxiomControlPlane` 在同步 Mission recovery 后 await `verification.recoverAtBoot()`，之后才 kick；即使 recovery 拒绝也仅 console.warn，继续安装 reconcile timer、同步消费者并调度 resume，保留 bootGeneration 的停止/重启栅栏。旧 epoch 的 RUNNING run（新进程中的所有 RUNNING）先 removeManagedWorktree(`id:<recordedId>`,{force:true})，只容忍明确的 already-gone，再 CAS 为 QUEUED，清空 worktree_id/runtime_epoch，写 `{phase:'requeued',reason:'restart',previousClaim}` 与 `verification.requeued`；历史 Artifact/audit 保留。
 
-恢复逐项隔离失败：worktree 删除失败的 run 保持 RUNNING、旧 runtimeEpoch 与 worktree_id，保留原 phase 数据并设 cleanupPending=true；同一 boot generation 每个 run 只写一次 `verification.recovery_failed {worktreeId,reason:'worktree_removal_failed'}`，不记录原始 Git/runtime 输出。只有审计去重集合在进程内，重试资格与 worktree 归属均由 DB 决定。每次 kick 在 drain QUEUED 前经两次带 status 索引的查询重试旧 epoch RUNNING 与 cleanupPending 的 INCONCLUSIVE；后者成功只清空 worktree_id/cleanupPending，不重排队或改变 verdict。既有 60 s tick 因而可修复临时删除失败，无需重启。`recoverVerifications` 返回 `{requeued,cleaned,failed}`（重排队 run 数、清理的 INCONCLUSIVE/orphan worktree 数、失败项数），有失败时记录计数警告，其他项继续。
+恢复逐项隔离失败：worktree 删除失败的 run 保持原 status、runtimeEpoch 与 worktree_id，保留原 phase 数据并设 cleanupPending=true；同一 boot generation 每个 run 只写一次 `verification.recovery_failed {worktreeId,reason:'worktree_removal_failed'}`，不记录原始 Git/runtime 输出。只有审计去重集合在进程内，重试资格与 worktree 归属均由 DB 决定。每次 kick 在 drain QUEUED 前经带 status 索引的查询重试旧 epoch RUNNING，以及 cleanupPending 的 PASS / FAIL / INCONCLUSIVE / SPECIALIST_REVIEW / HUMAN_REVIEW / CANCELED；后者成功只清空 worktree_id/cleanupPending，不重排队或改变 verdict。既有 60 s tick 因而可修复临时删除失败，无需重启。`recoverVerifications` 返回 `{requeued,cleaned,failed}`（重排队 run 数、清理的已结算/orphan worktree 数、失败项数），有失败时记录计数警告，其他项继续。
 
 仅启动时通过 runtime.listManagedWorktrees 回收 `axiom/verify/` 分支孤立条目（不用文件系统扫描，不强制删除未记录的 orphan）。创建到记录 id 之间的崩溃由该扫描覆盖；detached 之前已记录 id。单个 orphan 删除失败只警告并继续；关联已知 run 时写同一 recovery_failed 审计，不将旧 claim 的 orphan 标记为当前 worktree 的 cleanupPending。已在本轮按持久 id 处理的 worktree 不重复扫；本 epoch 正在运行的 worktree 不被回收。成功恢复后再次执行不写新审计。
 
 读入口 `axiom.verification.show {runId}` / `list {missionId,taskId?,candidateId?,status?}` 返回全部 VerificationRun 字段加 Candidate commit/tree 与 `phase=verdictDetail.phase??null`，缺失 run 或 Candidate 返回 not_found，不伪造 hash。CLI 对应 `axiom verification show --run` / `list --mission [--task] [--candidate] [--status]`，均支持 --json。
 
-phase 词汇为 `claimed | prepared | prepare_failed | requeued | canceled`，不是新的状态机。M3-02 消费 RUNNING/prepared 并运行/记录 deterministic checks 与 verdict、结束时回收 worktree；M3-05 接 INCONCLUSIVE 升级；M3-09 根据 lineage 过滤 renderer worktree 列表（本阶段仍可见）。
+phase 词汇为 `claimed | prepared | checking | verdict | prepare_failed | requeued | canceled`，不是新的状态机。M3-02 消费 RUNNING/prepared 并运行/记录 deterministic checks 与 verdict、结束时回收 worktree；M3-05 接 INCONCLUSIVE 升级；M3-09 根据 lineage 过滤 renderer worktree 列表（本阶段仍可见）。
+
+**M3-02：确定性检查与结算（D65 / D68 验证侧）**
+
+`verification-rules.ts` 的严格 schema 用于 `axiom.policy.update.patch.verificationRules` 的写入校验，以及运行器读策略；未知键（含旧占位键 commands）或类型错误拒绝写入，RPC 返回 invalid_argument。patch 替换整份 verificationRules，不是深合并。PolicySchema 的存储契约仍为 JSON record，旧行仍可加载；运行器遇到不符合 schema 的旧值直接 INCONCLUSIVE(policy_invalid)、escalation=human，不执行命令。ContextBuilder 用 safeParse 读取同一存储值，非法时仍可构建 ContextPackage，并以固定行 `Verification rules are invalid (policy_invalid); the independent verifier will escalate to a human.` 代替命令列表。CLI 为 `axiom mission policy update --mission <id> --verification-rules-file <json>`，沿用 envelope、收据与 policy.updated 审计。
+
+| 策略键                | 默认值 / 含义                                                                                                                              |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| repositoryGates       | `{}`；low / medium / high 的可选命令数组                                                                                                   |
+| timeBudgetMinutes     | 30，正整数；一次运行共用的 deadline                                                                                                        |
+| inconclusiveRouting   | specialist；可选 human                                                                                                                     |
+| nonCodeTasks          | human_confirm；可选 artifact_only                                                                                                          |
+| dangerousPathPatterns | `.github/workflows/**`、pnpm-lock.yaml、package-lock.json、yarn.lock、package.json、`.axiom-work/**`；仅解析，M3-03 使用                   |
+| setupCommands         | `[]`                                                                                                                                       |
+| retryOnce             | 常见测试前缀：pnpm / npm / yarn / bun 的 test、run test；npx vitest、vitest、npx jest、jest、pytest、python -m pytest、go test、cargo test |
+| knownFlaky            | `[]`；人工维护的失败名模式，只有 `*` 是通配符                                                                                              |
+
+策略中的命令去首尾空白且不得为空。`resolveVerificationPlan(taskSpec, rules)` 同时供 ContextBuilder 和运行器使用：setupCommands 原顺序（不去重），Task 的 requiredEvidence 逐项去首尾空白、跳过空项，再去重且保留声明顺序（不对合法但未 trim 的 Task 数据抛错），最后追加 task.risk 对应的 repositoryGates（去掉已经列出的命令）。每项带 source=setup/evidence/gate。Worker 的 checksRun 从不参与验证判定；报告声称全绿也不能抵消实际失败。
+
+`verification-checks.ts` 在 prepare 成功后、同一全局串行 drain 中先写 phase=checking，再在 `splitWorktreeIdForFilesystem(worktreeId).worktreePath` 执行。只支持本地 repository；connectionId 非空或 executionHostId 非 local 的 repository 在建 worktree 之前交给运行器，得到 INCONCLUSIVE(environment)、detail=remote_repository_unsupported、escalation=human。进程选项沿用 automation precheck：shell=true、cwd、process.env、POSIX detached、windowsHide；超时和 shutdown 都复用其 killLocalPrecheckProcessTree，不新增 tree-kill。POSIX 停止时保留 helper 的延迟 SIGKILL，并等它执行后才允许回收。
+
+deadline 从检查阶段开始（prepare 不计入），每条命令只得到剩余时间。退出 0=pass；ENOENT/EACCES、退出 127/9009=environmental(tool_missing)；deadline kill=environmental(timeout)；非本方发送的 signal=environmental(killed)；其它非零=fail；其它 spawn 错误=environmental(spawn_failed)。deadline 已过而尚未启动的命令=skipped(time_budget_exhausted)。setup 第一条非 pass 的已执行命令归 environmental(setup_failed)，余下 setup/evidence/gate 全部 skipped(setup_failed)。evidence/gate 的 fail 不短路后续检查。
+
+retryOnce 对命令与前缀规范化空白，只允许相等、前缀后接空格或冒号；`pnpm run test:unit` 命中，fixture 的 `pnpm run verify:full` 不命中。匹配的 fail 在同一 worktree 最多重跑一次；两个 Attempt 的日志均保留，第二次 pass 使该 check 为 inconclusive(flaky)，第二次 fail 保持 fail。重试环境失败或预算耗尽不抹除第一次 deterministic fail。仍为 fail 且抽取出的失败名非空、全部匹配 knownFlaky（并无环境失败的重试）时变 inconclusive(known_flaky)，结算事务写一次 `verification.known_flaky {checkIndex, failures}`；系统不增加隔离名单。
+
+| Check 集合（按优先顺序）    | Verdict / reason                                  | escalation / Task                               |
+| --------------------------- | ------------------------------------------------- | ----------------------------------------------- |
+| 任一 fail                   | FAIL / checks_failed                              | VERIFYING → NEEDS_FIX → READY 或 BLOCKED        |
+| 无 fail，任一 environmental | INCONCLUSIVE / environment                        | human；保持 VERIFYING                           |
+| 无以上，任一 inconclusive   | INCONCLUSIVE / flaky（有 flaky 时）或 known_flaky | inconclusiveRouting；保持 VERIFYING             |
+| 无命令                      | INCONCLUSIVE / no_checks                          | human_confirm → human，否则 inconclusiveRouting |
+| 无以上，仍有 skipped        | INCONCLUSIVE / environment                        | human；不会把未执行的命令当成通过               |
+| 全部 pass                   | PASS / checks_passed                              | VERIFYING → VERIFIED                            |
+
+每个 verdict 的事务都带 id、expectedStatus=RUNNING、expectedRuntimeEpoch、expectedClaimCount，且要求 Task 仍 VERIFYING、Candidate 仍是该 Task 的 ACTIVE Candidate。CAS 丢失不写 verdict / stage / audit，仍回收本次 worktree。PASS 的 stage actor=VerificationService、reason=verification_passed，审计 verification.passed。FAIL 经 execution/attempt-settlement.ts 的 settleVerificationFailure，同事务先 NEEDS_FIX(verification_failed)，再按 attemptCount < retryPolicy.maxAttempts 进入 READY(retry) 或 BLOCKED(retry_budget_exhausted)，审计 verification.failed {failures}。INCONCLUSIVE 只结算 run 与 verification.inconclusive {reason, escalation}，M3-05 才接审查。updateVerificationRun 根据术语表 §4.8 的完整转换表拒绝非法变化，FAIL/PASS/CANCELED 终态不可再改判；无 status 的元数据更新仍合法。
+
+证据先写、后回收 worktree：每条执行（含重跑与版本探针）的 stdout/stderr 各为 text/plain、kind=log Artifact，先脱敏再持久化；每流上限 MAX_ARTIFACT_BYTES（8 MiB），超限保留最前 1 MiB 与最新尾部，中间一行 `[axiom: <n> bytes omitted]`，记录 truncated 与原始字节数。失败名支持 Vitest `FAIL <file> > <name>`（可带 project 列）、Jest `● <suite> › <name>`（使用前面的 FAIL 文件头）和 fixture 的 deterministic reporter `<test-file> > <test fullName>: <message>`（在首个 ` > ` 后的首个 `: ` 处截断），每项最多 20 个、每名最多 300 字符。未知格式不猜测。失败/环境/不确定 check 的摘录围绕 FAIL、×、✗、Error、AssertionError、ERR_、failed、not found；无标记取末尾，单项 ≤40 行 / 4 KiB，总计 ≤32 KiB；摘录脱敏。
+
+verdict 文档为单个 application/json、kind=evidence Artifact，createdBy=VerificationService、related=[runId,taskId,candidateId]。包含 verdict/reason/escalation、checks（index/source/command/result/reason、exitCode/signal/durationMs、attempts、failures/excerpt、stdoutArtifactId/stderrArtifactId、truncated、每流原始字节数与截断标记）、工具探针记录、toolVersions、deadline 与时间戳。版本命令 node/pnpm/git --version 在检查之后运行，每个最多 10 秒且仍在同一预算内；缺失或未能取得版本记 unavailable，不影响 verdict。resolved commands 与 toolVersions 写到既有列；verdictDetail 仅存 phase=verdict、verdict/reason/escalation、verdictArtifactId、保留 prepare 证据的 evidenceArtifactIds，以及 check 的 index/source/command/result/reason/exitCode/durationMs/failures 摘要。日志和摘录不放 SQLite；verification show 因而能列出失败测试。重复内容沿用 ArtifactStore 的内容去重；verdict 文档的引用固定本次运行的关联。
+
+回收失败保留 worktreeId 与 cleanupPending=true；周期恢复现覆盖 PASS、FAIL、INCONCLUSIVE、两类 review 与 CANCELED 的待清理行，清理只更新元数据，不改变 verdict。shutdown 中 VerificationService.stop 中止运行中的进程树、停止 drain；RUNNING 保留，下一 boot 回收并重新 QUEUED。同一 plane 的 stop/start 也先等待旧 drain 退出，再换 epoch 恢复。E2E 唯一 hold seam：getMainE2EConfig().enabled 且 AXIOM_E2E_HOLD_VERIFICATION=1 时停在 prepared；非 E2E 模式不读取此变量。withFixtureMission 默认设置 hold，runVerification=true 时省略；新的 mission-verification.spec.ts 用 per-Task scenario marker 驱动三个冻结场景，并在批准的测试计划设 maxAttempts=1，阻止后续 Attempt 抢跑断言。
 
 ### Questions 与 D50 待决项处置（M2-06b）
 

@@ -40,6 +40,9 @@ export const AXIOM_POLICY_METHODS = [
         const policy = {
           ...before,
           ...(p.patch.routing === undefined ? {} : { routing: p.patch.routing }),
+          ...(p.patch.verificationRules === undefined
+            ? {}
+            : { verificationRules: p.patch.verificationRules }),
           ...(p.patch.concurrencyLimit === undefined
             ? {}
             : { concurrencyLimit: p.patch.concurrencyLimit })

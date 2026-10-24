@@ -36,6 +36,29 @@ async function command(args: string[]) {
 }
 
 describe('mission policy CLI', () => {
+  it('reads and validates --verification-rules-file', async () => {
+    const file = path.join(root, 'verification.json')
+    await writeFile(file, JSON.stringify({ setupCommands: [' node --version '] }))
+    expect(await command(['update', '--verification-rules-file', file])).toHaveBeenCalledWith(
+      'axiom.policy.update',
+      {
+        missionId: 'm',
+        patch: {
+          verificationRules: expect.objectContaining({
+            setupCommands: ['node --version'],
+            timeBudgetMinutes: 30
+          })
+        }
+      },
+      { orchestrationRequestId: undefined }
+    )
+    for (const value of [{ commands: [] }, { timeBudgetMinutes: '30' }]) {
+      await writeFile(file, JSON.stringify(value))
+      await expect(command(['update', '--verification-rules-file', file])).rejects.toMatchObject({
+        code: 'invalid_argument'
+      })
+    }
+  })
   it('routes show through the registered subgroup', async () => {
     expect(await command(['show'])).toHaveBeenCalledExactlyOnceWith(
       'axiom.policy.show',

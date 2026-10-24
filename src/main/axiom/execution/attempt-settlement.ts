@@ -1,6 +1,38 @@
 import type { AxiomStore } from '../db/axiom-store'
 import type { MissionController } from '../mission-controller/mission-controller'
 
+export function settleVerificationFailure(
+  ctx: { store: AxiomStore; missions: MissionController },
+  input: { taskId: string; candidateId: string }
+): { settled: boolean } {
+  return ctx.store.transaction('settle_verification_failure', () => {
+    const task = ctx.store.getTaskStage(input.taskId)
+    const candidate = ctx.store.getCandidate(input.candidateId)
+    if (
+      task?.stage !== 'VERIFYING' ||
+      candidate?.status !== 'ACTIVE' ||
+      candidate.taskId !== task.taskId ||
+      candidate.missionId !== task.missionId
+    ) {
+      return { settled: false }
+    }
+    ctx.missions.transitionTaskStage({
+      taskId: task.taskId,
+      to: 'NEEDS_FIX',
+      actor: 'VerificationService',
+      reason: 'verification_failed'
+    })
+    const retry = task.attemptCount < task.retryPolicy.maxAttempts
+    ctx.missions.transitionTaskStage({
+      taskId: task.taskId,
+      to: retry ? 'READY' : 'BLOCKED',
+      actor: 'VerificationService',
+      reason: retry ? 'retry' : 'retry_budget_exhausted'
+    })
+    return { settled: true }
+  })
+}
+
 export function settleAttemptWithoutSubmission(
   ctx: { store: AxiomStore; missions: MissionController },
   input: { taskId: string; seq: number; dispatchId: string | null; reason: string; actor: string }

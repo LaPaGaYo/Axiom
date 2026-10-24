@@ -136,6 +136,19 @@ RUNNING → QUEUED（应用启动时由 VerificationService 重排队，D64 修�
 ```
 Review 只能收敛 `INCONCLUSIVE`，**不能**推翻 deterministic `FAIL`。
 
+M3-02（D65 / D68）完整转换表：
+
+| 当前状态 | 可转入 |
+| -------------------- | ------------------------------------------ |
+| QUEUED | RUNNING、CANCELED |
+| RUNNING | PASS、FAIL、INCONCLUSIVE、QUEUED、CANCELED |
+| INCONCLUSIVE | SPECIALIST_REVIEW、HUMAN_REVIEW、CANCELED |
+| SPECIALIST_REVIEW | PASS、FAIL、HUMAN_REVIEW、CANCELED |
+| HUMAN_REVIEW | PASS、FAIL、CANCELED |
+| PASS、FAIL、CANCELED | 无（终态；仍可更新 cleanupPending 元数据） |
+
+M3-02 新增 phase `checking`（确定性命令执行中）与 `verdict`（证据已持久化、判定已结算）。verdict reason：`checks_failed`（FAIL）、`environment`（环境失败，直接交人）、`flaky`（重跑通过）、`known_flaky`（人工隔离名单）、`no_checks`（无命令）、`policy_invalid`（旧策略不符合严格 schema，直接交人）；PASS 的 reason 为 `checks_passed`。INCONCLUSIVE 保持 Task VERIFYING，后续 M3-05 才路由审查。verdictDetail 只存摘要与 Artifact 引用；完整命令输出及摘录在内容寻址的证据中。
+
 M3-01 的 `verdictDetail.phase`：`claimed`（事务领取）、`prepared`（独立 worktree 已 detached 检出并核验 Candidate commit/tree）、`prepare_failed`（准备失败，INCONCLUSIVE）、`requeued`（重启回收后重排队）、`canceled`（Candidate SUPERSEDED、Candidate 行缺失 `candidate_missing` 或 Task stage 已改变）。`prepared` 仍是 RUNNING，不代表验证通过；M3-02 才执行检查并产生 verdict。重启重排队的 run 可续接已 `VERIFYING` 的 Task，不回退 stage；普通 QUEUED 仍要求 SUBMITTED。每次领取递增 `claimCount`，记录 `runtimeEpoch / worktreeId / startedAt / finishedAt`；VerificationService 在启动时先回收旧 worktree 再重排队，保留旧审计与 Artifact。回收失败的 run 保持 RUNNING 与旧 epoch，标记 cleanupPending，由后续 kick / 60 s tick 重试；不阻止其他 run 或 Control Plane 启动。
 
 ### 4.9 IntegrationBatch
@@ -162,7 +175,7 @@ APPLYING / TESTING → QUEUED（应用重启时由 RecoveryService 丢弃临时�
 - Liveness verdict：`live / unverifiable / exited`（执行宿主拥有执行真相）。
 - Replan 分级：`NO_REPLAN / MINOR_ADJUSTMENT / MAJOR_REPLAN`。
 - 风险等级：`low / medium / high`；`high` 默认需要 Approval。
-- Verification check 结果：`pass / fail / inconclusive / skipped`（`skipped` 需给出策略依据）。
+- Verification check 结果：`pass / fail / environmental / inconclusive / skipped`（D68；`environmental` 包括 `tool_missing / timeout / killed / setup_failed`；`skipped` 需给出 `time_budget_exhausted / setup_failed` 等策略依据）。
 
 | 词汇 | 值与含义 |
 |---|---|

@@ -1,4 +1,7 @@
-import { z } from 'zod'
+import {
+  VerificationRulesSchema,
+  resolveVerificationPlan
+} from '../../../shared/axiom-contract/verification-rules'
 import type { AxiomStore } from '../db/axiom-store'
 import { readRepositoryRules } from './repository-rules'
 import { redactContext } from './redaction'
@@ -80,7 +83,12 @@ export async function mandatorySections(store: AxiomStore, missionId: string, ta
   }
   const { title, objective, scope, acceptanceCriteria, requiredEvidence, risk, retryPolicy } =
     task.spec
-  const commands = z.array(z.string()).parse(policy.verificationRules.commands ?? [])
+  const rules = VerificationRulesSchema.safeParse(policy.verificationRules)
+  const verificationCommands = rules.success
+    ? resolveVerificationPlan(task.spec, rules.data)
+        .map(({ command }) => command)
+        .join('\n') || 'none configured'
+    : 'Verification rules are invalid (policy_invalid); the independent verifier will escalate to a human.'
   const decisions = store.listDecisions({ missionId, status: 'ACCEPTED' })
   const protocol = workerProtocol(missionId, taskId)
   const entries = [
@@ -156,7 +164,7 @@ export async function mandatorySections(store: AxiomStore, missionId: string, ta
     {
       section: 'Required verification commands',
       source: `verification:${missionId}`,
-      content: commands.length ? commands.join('\n') : 'none configured'
+      content: verificationCommands
     },
     {
       section: 'Previous-Attempt failure evidence',

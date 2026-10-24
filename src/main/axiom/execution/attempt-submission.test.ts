@@ -122,7 +122,7 @@ describe('Attempt submission settlement', () => {
     const before = f.snapshot()
     expect(await f.submit(worker)).toMatchObject({
       ok: false,
-      error: { code: 'invalid_argument', message: 'candidate_exists' }
+      error: { code: 'invalid_argument', message: 'candidate_unchanged' }
     })
     expect(f.snapshot()).toEqual(before)
   })

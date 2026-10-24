@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { GoalBodySchema, RoutingPolicySchema } from '../../../shared/axiom-contract/mission-objects'
 import { PlanProposalSchema } from '../../../shared/axiom-contract/plan-proposal'
 import { RuntimeClientError } from '../../runtime/types'
+import { VerificationRulesSchema } from '../../../shared/axiom-contract/verification-rules'
 
 async function readInput<T>(
   cwd: string,
@@ -56,6 +57,10 @@ export function readPlannerPlanFile(cwd: string, file: string) {
 
 export function readRoutingFile(cwd: string, file: string) {
   return readInput(cwd, file, (text) => RoutingPolicySchema.parse(JSON.parse(text)))
+}
+
+export function readVerificationRulesFile(cwd: string, file: string) {
+  return readInput(cwd, file, (text) => VerificationRulesSchema.parse(JSON.parse(text)))
 }
 
 export function readTaskFile(cwd: string, file: string) {

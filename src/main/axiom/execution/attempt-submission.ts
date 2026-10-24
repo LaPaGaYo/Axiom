@@ -129,6 +129,12 @@ async function settleSubmission(input: z.infer<typeof AttemptSubmitParams>, ctx:
       resolveAttemptSender(authorityInput)
     }
     validateArtifacts()
+    const active = store
+      .listCandidates(mission.id)
+      .find((candidate) => candidate.taskId === task.taskId && candidate.status === 'ACTIVE')
+    if (active && active.attemptId !== attemptId && active.treeSha === snapshot.treeSha) {
+      throw new OrchestrationError('invalid_argument', 'candidate_unchanged')
+    }
     const candidate = store.insertCandidate({
       id: `cand_${sha256(`${task.taskId}:${snapshot.commitSha}`)}`,
       missionId: mission.id,

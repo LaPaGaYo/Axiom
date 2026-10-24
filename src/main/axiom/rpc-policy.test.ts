@@ -24,6 +24,36 @@ const updates = () =>
   f.store.listAuditEvents({ missionId }).filter((row) => row.event === 'policy.updated')
 
 describe('Mission policy RPC', () => {
+  it('replaces verification rules atomically and rejects unknown keys and bad types', async () => {
+    expect(
+      await f.call('axiom.policy.update', {
+        missionId,
+        patch: { verificationRules: { setupCommands: ['node --version'] } }
+      })
+    ).toMatchObject({
+      ok: true,
+      result: {
+        policy: { verificationRules: { setupCommands: ['node --version'], timeBudgetMinutes: 30 } }
+      }
+    })
+    expect(
+      await f.call('axiom.policy.update', {
+        missionId,
+        patch: { verificationRules: { timeBudgetMinutes: 1 } }
+      })
+    ).toMatchObject({
+      ok: true,
+      result: { policy: { verificationRules: { setupCommands: [], timeBudgetMinutes: 1 } } }
+    })
+    const before = f.store.getPolicy(missionId)
+    for (const verificationRules of [{ commands: [] }, { setupCommands: 4 }]) {
+      expect(
+        await f.call('axiom.policy.update', { missionId, patch: { verificationRules } })
+      ).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    }
+    expect(f.store.getPolicy(missionId)).toEqual(before)
+    expect(updates()).toHaveLength(2)
+  })
   it('shows defaults and preserves contextTokens set at mission create', async () => {
     expect(
       await f.call('axiom.policy.show', { missionId }, { orchestrationContractVersion: undefined })

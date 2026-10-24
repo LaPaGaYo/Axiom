@@ -1,12 +1,18 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { fixture } from '../mission-controller/controller-fixture.test-support'
 import { ArtifactStore } from '../artifacts/artifact-store'
 import { VerificationService } from './verification-service'
 import { verificationFixture, verificationRuntime } from './verification-fixture.test-support'
 import * as pin from './verification-worktree'
+
+beforeEach(() => {
+  vi.stubEnv('ORCA_E2E_HEADLESS', '1')
+  vi.stubEnv('AXIOM_E2E_HOLD_VERIFICATION', '1')
+})
+afterEach(() => vi.unstubAllEnvs())
 
 it('reopens a file DB, recycles a prepared worktree, preserves evidence and reclaims exactly once', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'axiom-verification-restart-'))

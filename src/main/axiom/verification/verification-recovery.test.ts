@@ -15,6 +15,8 @@ let root: string
 let f: ReturnType<typeof verificationFixture>
 let runtime: ReturnType<typeof verificationRuntime>
 beforeEach(async () => {
+  vi.stubEnv('ORCA_E2E_HEADLESS', '1')
+  vi.stubEnv('AXIOM_E2E_HOLD_VERIFICATION', '1')
   root = await mkdtemp(path.join(tmpdir(), 'axiom-verification-recovery-'))
   f = verificationFixture(root)
   runtime = verificationRuntime()
@@ -22,6 +24,7 @@ beforeEach(async () => {
   vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
 afterEach(async () => {
+  vi.unstubAllEnvs()
   vi.restoreAllMocks()
   f.db.close()
   await rm(root, { recursive: true, force: true })
