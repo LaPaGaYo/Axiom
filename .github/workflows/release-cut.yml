@@ -1229,7 +1229,6 @@ jobs:
     uses: ./.github/workflows/release-javascript.yml
     with:
       ref: refs/tags/${{ needs.cut.outputs.tag }}
-    secrets:
 
   build:
     needs:
