@@ -1,6 +1,6 @@
 import { stripVTControlCharacters } from 'node:util'
 
-// ponytail: only Vitest FAIL headers and Jest bullet paths are understood in V1.
+// ponytail: only Vitest FAIL headers, Jest bullets and fixture reporter lines are understood in V1.
 export function extractFailureNames(output: string): string[] {
   const failures = new Set<string>()
   let jestFile: string | undefined
@@ -22,6 +22,11 @@ export function extractFailureNames(output: string): string[] {
       }
     } else if (bullet) {
       failure = `${jestFile ? `${jestFile} > ` : ''}${bullet[1].replace(/\s*›\s*/g, ' > ')}`
+    } else {
+      // The first ': ' after ' > ' ends the name, even when it occurs inside the test name.
+      failure = line.match(
+        /^\s*(\S+\.(?:test|spec)\.(?:ts|tsx|js|jsx|mjs|cjs|mts|cts) > .+?): /
+      )?.[1]
     }
     if (failure) {
       failures.add(failure.trim().slice(0, 300))
