@@ -11,12 +11,15 @@ import { SettingsSection } from './SettingsSection'
 import { translate } from '@/i18n/i18n'
 import type { SettingsRenderContext } from './settings-render-context'
 import { MOBILE_PAIRING_AVAILABLE } from '../../../../shared/mobile-pairing-availability'
+import { CLOUD_ACCOUNT_AVAILABLE } from '../../../../shared/cloud-account-availability'
 
-export function renderOrcaAccountSettingsSection(
-  context: SettingsRenderContext
-): React.JSX.Element | null {
+export function renderOrcaAccountSettingsSection(context: {
+  model: Pick<SettingsRenderContext['model'], 'showDesktopOnlySettings'>
+  navigation: Pick<SettingsRenderContext['navigation'], 'getSectionSearchEntries'>
+  view: Pick<SettingsRenderContext['view'], 'isSectionMounted'>
+}): React.JSX.Element | null {
   const { model, navigation, view } = context
-  return model.showDesktopOnlySettings ? (
+  return model.showDesktopOnlySettings && CLOUD_ACCOUNT_AVAILABLE ? (
     <SettingsSection
       id="orca-account"
       title={translate('auto.components.settings.orcaAccount.title', 'Axiom Account')}

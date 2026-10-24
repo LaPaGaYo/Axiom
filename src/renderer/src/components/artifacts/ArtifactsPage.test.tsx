@@ -128,6 +128,22 @@ describe('ArtifactsPage', () => {
 
   afterEach(cleanup)
 
+  it('keeps the unconfigured copy without an account settings button in this build', () => {
+    mocks.authStatus = {
+      activeProfileId: 'profile-a',
+      configured: false,
+      state: 'unconfigured',
+      persistence: 'encrypted'
+    } satisfies OrcaProfileAuthStatus
+    render(<ArtifactsPage />)
+
+    expect(screen.getByRole('heading', { name: 'Sign in to Axiom' })).toBeInTheDocument()
+    expect(
+      screen.getByText('Axiom account sign-in is not configured on this machine yet.')
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Open account settings' })).not.toBeInTheDocument()
+  })
+
   it('renders the selected artifact in a right drawer with copy link as the primary action', async () => {
     render(<ArtifactsPage />)
 
