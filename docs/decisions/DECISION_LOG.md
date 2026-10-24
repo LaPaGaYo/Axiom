@@ -735,10 +735,10 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **后果**：M3-10 / M4 / M5 的出口 e2e 只在 macOS 宿主 + Linux CI 上要求证据；`docs/PROJECT_CHARTER.md` §9 与 `docs/ARCHITECTURE.md` §20 在 V1 出口 Decision 时一并修订（本条先以 Decision 记录，不单独改章程）。
 **取代规则**：V1.x 计划的 Decision 取代第 2 条的触发点。
 
-## D68 · 环境性失败与工作性失败分离：Attempt 的 `interrupted` 结算类别、验证的 `environmental` 分类、flaky 重跑规则 — PROPOSED（验证者 2026-10-21，端到端流程复审缺口 1；Henry："都记下来"，待 M3-02 / M3-06 brief 定稿前批准）
+## D68 · 环境性失败与工作性失败分离：Attempt 的 `interrupted` 结算类别、验证的 `environmental` 分类、flaky 重跑规则 — ACCEPTED（Henry 2026-10-23："批准D68，可以按照计划继续"；验证者 2026-10-21 提出，端到端流程复审缺口 1）
 
 **背景**：现在 Attempt 没有 Submission 就退出一律 FAILED / STOPPED → NEEDS_FIX（消耗 `retryPolicy.maxAttempts`，耗尽 → BLOCKED + replan 分级）；验证里任何非零 exit 都是 `fail` → `FAIL` → NEEDS_FIX。真实世界里相当一部分失败与候选无关：订阅配额窗口耗尽（lane B 的 app-server 推送 `account/rateLimits/updated`）、登录过期、应用退出 / 机器休眠带走子进程、harness 在首轮之前崩溃、`axiom` CLI socket 不可达、验证工具缺失、flaky 测试。流水线自己用 `.axiom-work/jev/known-environmental.txt` 处理的就是这类问题，产品里没有对应物。
-**决定（提议）**：
+**决定**：
 1. **Attempt 侧**：结算增加类别 `interrupted`（与 FAILED / STOPPED / ABANDONED 并列；投影到 Orca 既有 outcome，不改内核枚举，Axiom 侧在 `attempt_bindings` / 审计记 `settlement.kind`）。判定规则确定性，满足任一即是：内核 `exited` 且退出发生在首个 Worker 输出或首条 `axiom attempt` 动词之前；退出原因是应用自身退出或 runtime epoch 变化（重启恢复路径）；harness 的结构化事件给出配额 / 认证类错误（lane B：`account/rateLimits/updated` 的耗尽状态、认证失败通知；TUI 通道：RulesEngine 对尾部输出的有界匹配）。`interrupted` 不计入 `maxAttempts`，不触发 NEEDS_FIX / replan 分级；按退避重排（默认 1 / 5 / 15 分钟，配额类按 harness 给出的重置时间）；同一 Task 连续 `interrupted` ≥ N（默认 3）→ 待处理项 + Task `BLOCKED(environment)`（可人工恢复）。Supervisor（D60）的分类只是输入，仍只建议。
 2. **验证侧**：每项 check 的结果枚举增加 `environmental`（工具缺失、`setupCommands` 失败、超时、服务 / 容器不可达、配额）；verdict 规则：有 `environmental` 且无 `fail` → `INCONCLUSIVE(environment)`，直接路由到人（不进 Reviewer——Reviewer 无法判断环境），修好后同一 Candidate 重跑（新 VerificationRun，claimCount 递增，旧证据保留）。
 3. **flaky 规则**：`fail` 的 check 若命中 policy `verificationRules.retryOnce`（默认对测试类命令开启、对 lint / typecheck / build 关闭）→ 同一 worktree 确定性重跑一次；两次结果都写进 verdictDetail；二次 `pass` → 该 check 记 `inconclusive(flaky)`，整体按 D65 规则走 INCONCLUSIVE 而非 FAIL；仍 `fail` → `fail`。隔离名单由人经 policy 维护（`knownFlaky: string[]` 模式，命中即 `inconclusive(known_flaky)` 并审计），系统不自动加名单；flaky 事实进记分卡（DEF-9）与 Lesson 候选（DEF-17）。
@@ -746,6 +746,7 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **理由**：把环境噪声从候选质量里分离，重试预算与 replan 分级才有意义；流水线的 known-environmental 经验证明这类失败频繁且与候选无关。
 **后果**：M3-02（check 结果枚举、verdict 规则、`retryOnce` / `knownFlaky` 键 → D65 修订）、M3-06（分类输入）、M2-08 reconcile 的结算路径（`interrupted` 与退避）、术语表 §4.6 / §4.8 新枚举、记分卡指标加 `interrupted` 与 flaky 率；DEF-20 ①（等人停表）以本条的 `interrupted` 为可选形态之一。
 **取代规则**：批准后以修订行记录；若内核枚举需要改动，另起内核 Decision（D56 流程）。
+- **批准（2026-10-23，Henry："批准D68，可以按照计划继续"）**：按上文生效，不改内核枚举。验证侧（第 2、3 条：check 结果 `environmental`、`INCONCLUSIVE(environment)` 直接路由到人、`retryOnce` / `knownFlaky`）随 M3-02 实施；Attempt 侧（第 1 条：`interrupted` 结算类别与退避）随 M3-06 与 M2-08 的结算路径实施；术语表 §4.6 / §4.8 的新枚举随各自的 Task 更新。
 
 ## D69 · 依赖阈值 `VERIFIED` 的下游基线与失效规则 — PROPOSED（验证者 2026-10-21，端到端流程复审 L1；Henry："都记下来"，M3-04 brief 定稿前批准过渡规则、M4 批准完整规则）
 

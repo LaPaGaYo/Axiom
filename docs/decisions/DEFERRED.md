@@ -105,3 +105,7 @@ DEF-26 改写：方向为复用 Orca 的 App 代码、服务端 relay / push 自
 ## 2026-10-23 D75 收尾范围（Henry："只关入口"）
 
 D75 加修订行：只关配对入口（一个开关 `MOBILE_PAIRING_AVAILABLE`），不打包与棘轮排除推迟（orcad 模板也带 mobile web bundle，改它要动 orcad 产物契约）；D33a 修订行补注；DEF-26 改写恢复方式。实施 Task D75-HYG。
+
+## 2026-10-23 D68 批准（Henry："批准D68，可以按照计划继续"）
+
+D68 ACCEPTED（环境性失败与工作性失败分离：验证侧 `environmental` / `INCONCLUSIVE(environment)` / `retryOnce` / `knownFlaky` 随 M3-02，Attempt 侧 `interrupted` 随 M3-06 与 M2-08 结算路径）；加批准行。

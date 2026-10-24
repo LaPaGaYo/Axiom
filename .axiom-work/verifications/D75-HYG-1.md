@@ -39,3 +39,8 @@
 
 ## Verdict
 PASS — merged as `ba53ed8e3b`. verify-main on the merged tree follows (D75-HYG added to `verify-main.target`).
+
+## Merged tree (main `0288b4df23`) and push
+- verify-main (`verify-merged-0288b4df23-20261023-214451.log`, union of 32 sidecars M1-01 … UPSTREAM-3 + D75-HYG): 550 checks — ratchet, clean-cache `tc:node` / `tc:cli` / `tc:web`, changed-code quality, **543 / 543 extras**, full lint PASS; unit step 30 failing files = the 25 mobile-web-app render suites + the 5 environmental files from the host classification (`ci-managed-ssh-execution`, `dependency-security-release`, `pr-auxiliary-preflight-admission`, `process-host-dev-rebuild`, `pty-pane-materialization-race`); vendor-egress baseline unchanged (455).
+- Pushed by the guarded launcher (`launchers/d75-hyg-verify-main-push.command`: non-unit checks all rc=0 and no unexpected unit failure): `1f5dc70c1b..0288b4df23`. Axiom CI on `0288b4df23`: success.
+- The same push surfaced a 0 s failed `.github/workflows/release-cut.yml` run: UPSTREAM-3's M0 pass had removed the only secret passed to `release-javascript.yml` (declared `required: false`) and left `secrets:` empty, which GitHub rejects for the whole file (the previous push landed while the fork's workflows were disabled). Fixed in `51255450e4` (one line); the next push produced no failed run.
