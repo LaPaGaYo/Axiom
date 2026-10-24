@@ -24,6 +24,7 @@ import {
   UserCog
 } from 'lucide-react'
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
+import { MOBILE_PAIRING_AVAILABLE } from '../../../shared/mobile-pairing-availability'
 
 export function buildCapabilitySettingsSections({
   isLocalWindowsHost,
@@ -198,7 +199,7 @@ export function buildSetupSettingsSections({
       searchEntries: getIntegrationsPaneSearchEntries(),
       group: 'setup'
     },
-    ...(showDesktopOnlySettings
+    ...(showDesktopOnlySettings && MOBILE_PAIRING_AVAILABLE
       ? [
           {
             id: 'mobile',

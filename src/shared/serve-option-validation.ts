@@ -1,4 +1,5 @@
 import { levenshtein } from './edit-distance'
+import { MOBILE_PAIRING_AVAILABLE } from './mobile-pairing-availability'
 
 export type ServeOptionValidationInput = {
   noPairing: boolean
@@ -23,6 +24,9 @@ export function getServeOptionValidationError(options: ServeOptionValidationInpu
   }
   if (options.recipeJson && !options.projectRoot) {
     return 'Recipe JSON output requires --project-root.'
+  }
+  if (options.mobilePairing && !MOBILE_PAIRING_AVAILABLE) {
+    return 'Mobile pairing is not available in this version of Axiom.'
   }
   return null
 }

@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+// D75: these cases exercise the dormant mobile companion.
+const mobilePairing = vi.hoisted(() => ({ available: true }))
+vi.mock('../../shared/mobile-pairing-availability', () => ({
+  get MOBILE_PAIRING_AVAILABLE() {
+    return mobilePairing.available
+  }
+}))
+
 const {
   buildFromTemplateMock,
   setApplicationMenuMock,
@@ -111,6 +119,7 @@ describe('registerAppMenu', () => {
   })
 
   beforeEach(() => {
+    mobilePairing.available = true
     buildFromTemplateMock.mockReset()
     setApplicationMenuMock.mockReset()
     getFocusedWindowMock.mockReset()
@@ -548,6 +557,17 @@ describe('registerAppMenu', () => {
 
     expect(options.onOpenCrashReport).toHaveBeenCalledTimes(1)
     expect(options.onOpenCrashReport).toHaveBeenCalledWith(targetWindow)
+  })
+
+  it('omits the Mobile checkbox while dormant and preserves the other appearance items', () => {
+    mobilePairing.available = false
+    registerAppMenu(buildMenuOptions())
+
+    const appearance = getSubmenu(getSubmenu(getTemplate(), 'View'), 'Appearance')
+    expect(appearance.some((item) => item.label === 'Show Axiom Mobile Button')).toBe(false)
+    expect(appearance.filter((item) => item.type === 'checkbox').map((item) => item.label)).toEqual(
+      ['Show Status Bar', 'Show Tasks Button', 'Show Automations Button', 'Show Titlebar App Name']
+    )
   })
 
   it('exposes an Appearance submenu under View with checkbox items reflecting state', () => {

@@ -1,9 +1,21 @@
 import { buildCmdJSettingsResults } from '../components/cmd-j/palette-results'
 import { matchesSettingsSearch } from '../components/settings/settings-search'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildSettingsNavigationMetadata } from './useSettingsNavigationMetadata'
 import type { Repo } from '../../../shared/repo-types'
 import { getCodexTerminalServerIsolationTitle } from '../components/settings/codex-terminal-server-isolation-copy'
+
+// D75: these cases exercise the dormant mobile companion.
+const mobilePairing = vi.hoisted(() => ({ available: true }))
+vi.mock('../../../shared/mobile-pairing-availability', () => ({
+  get MOBILE_PAIRING_AVAILABLE() {
+    return mobilePairing.available
+  }
+}))
+
+beforeEach(() => {
+  mobilePairing.available = true
+})
 
 const repo = {
   id: 'repo-1',
@@ -33,6 +45,21 @@ function ids(
 }
 
 describe('settings navigation metadata', () => {
+  it('omits Mobile navigation and palette results while the mobile companion is dormant', () => {
+    mobilePairing.available = false
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo]
+    })
+
+    expect(sections.some((section) => section.id === 'mobile')).toBe(false)
+    expect(buildCmdJSettingsResults(sections).some((result) => result.sectionId === 'mobile')).toBe(
+      false
+    )
+  })
+
   it.each([false, undefined])(
     'omits Chat navigation and search when the opt-in is %s',
     (enabled) => {

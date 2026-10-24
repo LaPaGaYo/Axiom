@@ -19,9 +19,8 @@ Options:
                            from the bind address (for example, a public hostname).
   --json                   Print the one-line server readiness JSON to stdout.
   --no-pairing             Do not create a client pairing offer at startup.
-  --mobile-pairing         Create a mobile-scoped pairing offer with a QR code.
   --grant-desktop-control  Allow desktop control in the default runtime offer;
-                           cannot combine with --no-pairing or --mobile-pairing.
+                           cannot combine with --no-pairing.
   --recipe-json            Print only the VM recipe line; requires --project-root.
   --project-root <dir>     Existing absolute project directory for --recipe-json.
   --web-client-root <dir>  Serve the browser client from this directory (holds web-index.html).

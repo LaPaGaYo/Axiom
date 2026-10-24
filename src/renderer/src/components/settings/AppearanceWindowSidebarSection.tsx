@@ -3,6 +3,7 @@ import type React from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { StatusBarItem } from '../../../../shared/ui-chrome-types'
 import type { FeatureInteractionId } from '../../../../shared/feature-interaction-catalog'
+import { MOBILE_PAIRING_AVAILABLE } from '../../../../shared/mobile-pairing-availability'
 import { SearchableSetting } from './SearchableSetting'
 import { AppearanceAdvancedDisclosure } from './AppearanceAdvancedDisclosure'
 import { useAppStore } from '../../store'
@@ -286,31 +287,35 @@ export function AppearanceWindowSidebarSection({
                     />
                   </SearchableSetting>
 
-                  <SearchableSetting
-                    title={translate(
-                      'auto.components.settings.AppearancePane.9da1020447',
-                      'Show Axiom Mobile Button'
-                    )}
-                    description={sidebarEntries[2]?.description}
-                    keywords={sidebarEntries[2]?.keywords ?? ['mobile', 'phone', 'sidebar']}
-                  >
-                    <SettingsSwitchRow
-                      label={translate(
+                  {MOBILE_PAIRING_AVAILABLE ? (
+                    <SearchableSetting
+                      title={translate(
                         'auto.components.settings.AppearancePane.9da1020447',
                         'Show Axiom Mobile Button'
                       )}
-                      // Why: clarify where the shortcut still lives after hiding it, so users
-                      // don't think the feature is gone.
-                      description={translate(
-                        'auto.components.settings.AppearancePane.61d842eca0',
-                        'Show the Axiom Mobile shortcut in the sidebar. It remains available from Toolbox.'
-                      )}
-                      checked={settings.showMobileButton !== false}
-                      onChange={() =>
-                        updateSettings({ showMobileButton: !(settings.showMobileButton !== false) })
-                      }
-                    />
-                  </SearchableSetting>
+                      description={sidebarEntries[2]?.description}
+                      keywords={sidebarEntries[2]?.keywords ?? ['mobile', 'phone', 'sidebar']}
+                    >
+                      <SettingsSwitchRow
+                        label={translate(
+                          'auto.components.settings.AppearancePane.9da1020447',
+                          'Show Axiom Mobile Button'
+                        )}
+                        // Why: clarify where the shortcut still lives after hiding it, so users
+                        // don't think the feature is gone.
+                        description={translate(
+                          'auto.components.settings.AppearancePane.61d842eca0',
+                          'Show the Axiom Mobile shortcut in the sidebar. It remains available from Toolbox.'
+                        )}
+                        checked={settings.showMobileButton !== false}
+                        onChange={() =>
+                          updateSettings({
+                            showMobileButton: !(settings.showMobileButton !== false)
+                          })
+                        }
+                      />
+                    </SearchableSetting>
+                  ) : null}
 
                   <SearchableSetting
                     title={getShowPinnedWorktreesInGroupsEntry().title}

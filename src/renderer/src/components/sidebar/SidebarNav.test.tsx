@@ -11,6 +11,14 @@ import type { Repo } from '../../../../shared/repo-types'
 import { i18n } from '../../i18n/i18n'
 import { PSEUDO_LOCALIZATION_LOCALE } from '../../i18n/pseudo-localization'
 
+// D75: these cases exercise the dormant mobile companion.
+const mobilePairing = vi.hoisted(() => ({ available: true }))
+vi.mock('../../../../shared/mobile-pairing-availability', () => ({
+  get MOBILE_PAIRING_AVAILABLE() {
+    return mobilePairing.available
+  }
+}))
+
 const mocks = vi.hoisted(() => ({
   state: {} as Record<string, unknown>,
   openTaskPage: vi.fn(),
@@ -209,6 +217,7 @@ describe('SidebarNav', () => {
   })
 
   beforeEach(async () => {
+    mobilePairing.available = true
     vi.clearAllMocks()
     await i18n.changeLanguage('en')
     mocks.hasPairedMobileDevice = false
@@ -266,6 +275,18 @@ describe('SidebarNav', () => {
   it('shows the Mobile entry by default for older settings', () => {
     expect(shouldShowMobileButton(null)).toBe(true)
     expect(shouldShowMobileButton({})).toBe(true)
+  })
+
+  it('omits Mobile while the mobile companion is dormant even when the setting is on', async () => {
+    mobilePairing.available = false
+    mocks.hasPairedMobileDevice = true
+    setSidebarState({ settings: { ...getDefaultSettings('/tmp'), showMobileButton: true } })
+
+    const container = await renderSidebarNav()
+
+    expect(shouldShowMobileButton({ showMobileButton: true })).toBe(false)
+    expect(queryButtonByText(container, 'Axiom Mobile')).toBeNull()
+    expect(container.querySelector('button[aria-label="Hide from sidebar"]')).toBeNull()
   })
 
   it('hides the Artifacts entry by default for older settings', () => {

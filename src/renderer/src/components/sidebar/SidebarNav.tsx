@@ -15,11 +15,12 @@ import { HideSidebarMenu } from './sidebar-nav-controls'
 import { translate } from '@/i18n/i18n'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { MOBILE_PAIRING_AVAILABLE } from '../../../../shared/mobile-pairing-availability'
 
 export function shouldShowMobileButton(
   settings: Partial<Pick<GlobalSettings, 'showMobileButton'>> | null | undefined
 ): boolean {
-  return settings?.showMobileButton !== false
+  return MOBILE_PAIRING_AVAILABLE && settings?.showMobileButton !== false
 }
 
 export function shouldShowAutomationsButton(

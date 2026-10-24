@@ -6,7 +6,7 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
     path: ['serve'],
     summary: 'Start an Axiom runtime server without opening a desktop window',
     usage:
-      'axiom serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--grant-desktop-control] [--project-root <path>] [--recipe-json] [--supervise] [--force] [--json]',
+      'axiom serve [--port <port>] [--pairing-address <host>] [--no-pairing] [--grant-desktop-control] [--project-root <path>] [--recipe-json] [--supervise] [--force] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'port',
@@ -24,7 +24,6 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       'With --port, serve exits with an error when that port is already in use. Without it, serve uses 6768 and moves to another port when 6768 is taken.',
       '--pairing-address changes only the client-advertised address; use a reachable LAN, Tailscale, SSH-forward, or reverse-proxy endpoint.',
       'Use --recipe-json with --project-root from VM recipes to print the recipe result JSON and leave the server running.',
-      'Use --mobile-pairing to print a mobile-scoped pairing QR/link instead of the default runtime-environment pairing link.',
       "A paired client cannot drive this machine's desktop (axiom computer) unless the offer was created with --grant-desktop-control.",
       'When the web client bundle is available, the server also prints a browser URL with the pairing data embedded.',
       'Exits with code 3, without starting anything, when another Axiom already serves this profile or cannot be shown to have stopped.',
@@ -37,8 +36,7 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       'axiom serve',
       'axiom serve --json',
       'axiom serve --project-root /workspace/repo --pairing-address wss://sandbox.example.com --recipe-json',
-      'axiom serve --port 6768 --pairing-address 100.64.1.20',
-      'axiom serve --pairing-address 100.64.1.20 --mobile-pairing'
+      'axiom serve --port 6768 --pairing-address 100.64.1.20'
     ]
   },
   {
