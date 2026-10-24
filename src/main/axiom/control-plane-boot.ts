@@ -48,6 +48,9 @@ export function stopAxiomControlPlane(runtime: OrcaRuntimeService): void {
   const plane = getAxiomControlPlane(runtime)
   plane.started = false
   plane.bootGeneration += 1
+  void plane.verification.stop().catch(() => {
+    console.warn('[axiom] Verification shutdown did not complete')
+  })
   clearInterval(plane.attemptReconcileTimer)
   plane.attemptReconcileTimer = undefined
   for (const consumer of plane.consumers.values()) {

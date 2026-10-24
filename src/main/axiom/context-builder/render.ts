@@ -1,4 +1,7 @@
-import { z } from 'zod'
+import {
+  VerificationRulesSchema,
+  resolveVerificationPlan
+} from '../../../shared/axiom-contract/verification-rules'
 import type { AxiomStore } from '../db/axiom-store'
 import { readRepositoryRules } from './repository-rules'
 import { redactContext } from './redaction'
@@ -80,7 +83,10 @@ export async function mandatorySections(store: AxiomStore, missionId: string, ta
   }
   const { title, objective, scope, acceptanceCriteria, requiredEvidence, risk, retryPolicy } =
     task.spec
-  const commands = z.array(z.string()).parse(policy.verificationRules.commands ?? [])
+  const commands = resolveVerificationPlan(
+    task.spec,
+    VerificationRulesSchema.parse(policy.verificationRules)
+  ).map(({ command }) => command)
   const decisions = store.listDecisions({ missionId, status: 'ACCEPTED' })
   const protocol = workerProtocol(missionId, taskId)
   const entries = [

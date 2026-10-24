@@ -56,6 +56,25 @@ export const VERIFICATION_RUN_STATUSES = [
 ] as const
 export const CandidateStatusSchema = z.enum(CANDIDATE_STATUSES)
 export const VerificationRunStatusSchema = z.enum(VERIFICATION_RUN_STATUSES)
+export type VerificationRunStatus = z.infer<typeof VerificationRunStatusSchema>
+export const VERIFICATION_RUN_TRANSITIONS: Readonly<
+  Record<VerificationRunStatus, readonly VerificationRunStatus[]>
+> = {
+  QUEUED: ['RUNNING', 'CANCELED'],
+  RUNNING: ['PASS', 'FAIL', 'INCONCLUSIVE', 'QUEUED', 'CANCELED'],
+  INCONCLUSIVE: ['SPECIALIST_REVIEW', 'HUMAN_REVIEW', 'CANCELED'],
+  SPECIALIST_REVIEW: ['PASS', 'FAIL', 'HUMAN_REVIEW', 'CANCELED'],
+  HUMAN_REVIEW: ['PASS', 'FAIL', 'CANCELED'],
+  PASS: [],
+  FAIL: [],
+  CANCELED: []
+}
+export function isLegalVerificationRunTransition(
+  from: VerificationRunStatus,
+  to: VerificationRunStatus
+): boolean {
+  return VERIFICATION_RUN_TRANSITIONS[from].includes(to)
+}
 export const REPLAN_LEVELS = ['NO_REPLAN', 'MINOR_ADJUSTMENT', 'MAJOR_REPLAN'] as const
 export const BLOCKING_APPROVAL_ACTION_KINDS = ['budget_increase'] as const
 export const RISK_LEVELS = ['low', 'medium', 'high'] as const

@@ -1,7 +1,10 @@
 import { z } from 'zod'
 import { AxiomIdSchema } from '../../../shared/axiom-contract/mission-objects'
 import { VerificationListParams } from '../../../shared/axiom-contract/verification-params'
-import { VerificationRunStatusSchema } from '../../../shared/axiom-contract/lifecycle'
+import {
+  VerificationRunStatusSchema,
+  isLegalVerificationRunTransition
+} from '../../../shared/axiom-contract/lifecycle'
 import type { OrchestrationDb } from '../../runtime/orchestration/db'
 import {
   VerificationRunSchema,
@@ -30,6 +33,8 @@ const Update = VerificationRunSchema.pick({
   verdictDetail: true,
   runtimeEpoch: true,
   worktreeId: true,
+  commands: true,
+  toolVersions: true,
   finishedAt: true
 })
   .partial()
@@ -87,11 +92,16 @@ export function verificationRunsStore(db: OrchestrationDb) {
     },
     updateVerificationRun(input: z.input<typeof Update>) {
       const p = Update.parse(input)
+      if (p.status !== undefined && !isLegalVerificationRunTransition(p.expectedStatus, p.status)) {
+        return false
+      }
       const fields = {
         status: p.status,
         verdict_detail: p.verdictDetail === undefined ? undefined : JSON.stringify(p.verdictDetail),
         runtime_epoch: p.runtimeEpoch,
         worktree_id: p.worktreeId,
+        commands: p.commands === undefined ? undefined : JSON.stringify(p.commands),
+        tool_versions: p.toolVersions === undefined ? undefined : JSON.stringify(p.toolVersions),
         finished_at: p.finishedAt
       }
       const entries = Object.entries(fields).filter(

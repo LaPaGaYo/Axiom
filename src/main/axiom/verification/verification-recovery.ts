@@ -57,9 +57,13 @@ export async function recoverVerifications(
   const handledWorktrees = new Set<string>()
   const pending = [
     ...store.listVerificationRunsByStatus('RUNNING').filter((r) => r.runtimeEpoch !== runtimeEpoch),
-    ...store
-      .listVerificationRunsByStatus('INCONCLUSIVE')
-      .filter((r) => r.worktreeId && r.verdictDetail.cleanupPending === true)
+    ...(
+      ['PASS', 'FAIL', 'INCONCLUSIVE', 'SPECIALIST_REVIEW', 'HUMAN_REVIEW', 'CANCELED'] as const
+    ).flatMap((status) =>
+      store
+        .listVerificationRunsByStatus(status)
+        .filter((r) => r.worktreeId && r.verdictDetail.cleanupPending === true)
+    )
   ]
   for (const run of pending) {
     if (run.worktreeId) {

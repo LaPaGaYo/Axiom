@@ -18,10 +18,18 @@ export const AXIOM_MISSION_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['mission', 'policy', 'update'],
-    summary: 'Update Mission provider routing or concurrency',
+    summary:
+      'Update Mission provider routing, concurrency or verification rules (JSON file replaces rules)',
     usage:
-      'axiom mission policy update --mission <id> [--routing-file <json>] [--concurrency <n>] [--retry-request <id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'mission', 'routing-file', 'concurrency', 'retry-request'],
+      'axiom mission policy update --mission <id> [--routing-file <json>] [--verification-rules-file <json>] [--concurrency <n>] [--retry-request <id>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'mission',
+      'routing-file',
+      'verification-rules-file',
+      'concurrency',
+      'retry-request'
+    ],
     examples: [
       'axiom mission policy update --mission mission_123 --routing-file routing.json --concurrency 3 --json'
     ],

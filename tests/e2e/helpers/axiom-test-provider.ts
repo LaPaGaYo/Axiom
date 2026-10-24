@@ -36,7 +36,10 @@ async function submitFixture(attemptId, missionId, taskId) {
     })
     process.exit(crashed.status || 1)
   }
-  const command = ['scenarios/stub-worker/worker.mjs', '--scenario', 'retry', '--attempt', '1', '--mode', 'succeed', '--cwd', process.cwd()]
+  const scenarioMarker = process.env.AXIOM_E2E_LEDGER + '.scenario-' + taskId
+  const scenario = existsSync(scenarioMarker) ? readFileSync(scenarioMarker, 'utf8').trim() : 'retry'
+  if (!['retry', 'deterministic-failure', 'agent-crash'].includes(scenario)) throw new Error('Unknown fixture scenario')
+  const command = ['scenarios/stub-worker/worker.mjs', '--scenario', scenario, '--attempt', '1', '--mode', 'succeed', '--cwd', process.cwd()]
   const started = Date.now()
   const stub = spawnSync(process.execPath, command, { cwd: process.cwd(), env: process.env, encoding: 'utf8', timeout: 60000 })
   if (stub.status !== 0) throw new Error('Fixture stub failed')
@@ -50,7 +53,7 @@ async function submitFixture(attemptId, missionId, taskId) {
   const changed = spawnSync('git', ['diff', '--name-only', 'HEAD'], { cwd: process.cwd(), encoding: 'utf8' })
   if (changed.status !== 0) throw new Error('Fixture diff failed')
   const report = {
-    summary: 'D49 retry scenario attempt 1 succeeded',
+    summary: 'D49 ' + scenario + ' scenario attempt 1 succeeded',
     filesChanged: [...new Set([...changed.stdout.trim().split(/\\r?\\n/).filter(Boolean), 'REPORT.md'])],
     checksRun: [{ command: 'node ' + command.join(' '), result: 'pass', durationMs: Date.now() - started },
       { command: 'fixture verification', result: 'skipped', note: 'Stub Worker; independent verification is queued for M3.' }],

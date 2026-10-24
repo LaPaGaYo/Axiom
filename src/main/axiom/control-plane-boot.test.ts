@@ -32,6 +32,7 @@ describe('M1 Control Plane boot', () => {
 
   it('awaits verification recovery before the first kick and includes verification in the existing timer', async () => {
     const cp = getAxiomControlPlane(runtime)
+    const stopVerification = vi.spyOn(cp.verification, 'stop')
     const order: string[] = []
     vi.spyOn(cp.recovery, 'recover').mockImplementation(() => {
       order.push('missions')
@@ -56,6 +57,7 @@ describe('M1 Control Plane boot', () => {
     await vi.advanceTimersByTimeAsync(60_000)
     expect(kick).toHaveBeenCalledTimes(2)
     stopAxiomControlPlane(runtime)
+    expect(stopVerification).toHaveBeenCalledOnce()
     await vi.advanceTimersByTimeAsync(60_000)
     expect(kick).toHaveBeenCalledTimes(2)
   })

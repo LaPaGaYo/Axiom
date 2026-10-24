@@ -1,4 +1,8 @@
 import { vi } from 'vitest'
+import { mkdir, writeFile } from 'node:fs/promises'
+import path from 'node:path'
+import { gitExecFileAsync } from '../../git/runner'
+import type { Repo } from '../../../shared/repo-types'
 import { fixture, planned } from '../mission-controller/controller-fixture.test-support'
 import { ArtifactStore } from '../artifacts/artifact-store'
 import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
@@ -93,6 +97,14 @@ export function queueAnotherVerification(f: ReturnType<typeof verificationFixtur
 }
 
 export function verificationRuntime() {
+  const showRepo = vi.fn(async (): Promise<Repo> => ({
+    id: 'repo',
+    path: '/repository',
+    displayName: 'repository',
+    badgeColor: '',
+    addedAt: 0,
+    connectionId: null
+  }))
   const worktrees: RuntimeWorktreeRecord[] = []
   const createManagedWorktree = vi.fn(
     async (args: RuntimeManagedWorktreeCreateArgs): Promise<CreateWorktreeResult> => {
@@ -138,5 +150,52 @@ export function verificationRuntime() {
     totalCount: worktrees.length,
     truncated: false
   }))
-  return { createManagedWorktree, removeManagedWorktree, listManagedWorktrees, worktrees }
+  return { createManagedWorktree, removeManagedWorktree, listManagedWorktrees, worktrees, showRepo }
+}
+
+export async function verificationGitFixture(root: string) {
+  const f = verificationFixture(path.join(root, 'artifacts'))
+  const repo = path.join(root, 'repository')
+  await mkdir(repo)
+  const git = async (...args: string[]) =>
+    (await gitExecFileAsync(args, { cwd: repo })).stdout.trim()
+  await git('init', '-q')
+  await git('config', 'user.name', 'Verification test')
+  await git('config', 'user.email', 'verification@localhost')
+  await writeFile(path.join(repo, 'file.txt'), 'immutable candidate')
+  await git('add', 'file.txt')
+  await git('-c', 'core.hooksPath=', 'commit', '--no-gpg-sign', '-qm', 'candidate')
+  await git('branch', f.binding.branch)
+  f.candidate.commitSha = await git('rev-parse', 'HEAD')
+  f.candidate.treeSha = await git('rev-parse', 'HEAD^{tree}')
+  f.db.db
+    .prepare('UPDATE candidates SET commit_sha = ?, tree_sha = ? WHERE id = ?')
+    .run(f.candidate.commitSha, f.candidate.treeSha, f.candidate.id)
+  const runtime = verificationRuntime()
+  runtime.showRepo.mockResolvedValue({
+    id: 'repo',
+    path: repo,
+    displayName: 'repository',
+    badgeColor: '',
+    addedAt: 0,
+    connectionId: null
+  })
+  const create = runtime.createManagedWorktree.getMockImplementation()!
+  runtime.createManagedWorktree.mockImplementation(async (args) => {
+    const result = await create(args)
+    const directory = path.join(root, args.name)
+    await git('worktree', 'add', '-b', args.branchNameOverride!, directory, args.baseBranch!)
+    result.worktree.id = `repo::${directory}`
+    result.worktree.path = directory
+    return result
+  })
+  const remove = runtime.removeManagedWorktree.getMockImplementation()!
+  runtime.removeManagedWorktree.mockImplementation(async (selector) => {
+    const worktree = runtime.worktrees.find((w) => `id:${w.id}` === selector)
+    if (worktree) {
+      await git('worktree', 'remove', '--force', worktree.path)
+    }
+    return remove(selector)
+  })
+  return { ...f, runtime, repo }
 }

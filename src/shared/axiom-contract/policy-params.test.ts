@@ -4,6 +4,17 @@ import { PolicyShowParams, PolicyUpdateParams } from './policy-params'
 import { policy } from './contract-fixtures.test-support'
 
 describe('Mission routing policy', () => {
+  it('validates verification rules on writes while legacy policy records remain readable', () => {
+    expect(
+      PolicyUpdateParams.parse({ missionId: 'm', patch: { verificationRules: {} } }).patch
+    ).toMatchObject({ verificationRules: { timeBudgetMinutes: 30, setupCommands: [] } })
+    for (const verificationRules of [{ commands: [] }, { setupCommands: 1 }]) {
+      expect(
+        PolicyUpdateParams.safeParse({ missionId: 'm', patch: { verificationRules } }).success
+      ).toBe(false)
+      expect(PolicySchema.safeParse({ ...policy, verificationRules }).success).toBe(true)
+    }
+  })
   it('validates strict show/update params and provider ids', () => {
     expect(PolicyShowParams.parse({ missionId: 'm' })).toEqual({ missionId: 'm' })
     expect(

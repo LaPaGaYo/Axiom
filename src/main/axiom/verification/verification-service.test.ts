@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { verificationFixture, verificationRuntime } from './verification-fixture.test-support'
-import { VerificationService } from './verification-service'
+import { VerificationService, shouldHoldVerification } from './verification-service'
 import * as pin from './verification-worktree'
 
 let root: string
@@ -11,6 +11,8 @@ let f: ReturnType<typeof verificationFixture>
 let runtime: ReturnType<typeof verificationRuntime>
 let service: VerificationService
 beforeEach(async () => {
+  vi.stubEnv('ORCA_E2E_HEADLESS', '1')
+  vi.stubEnv('AXIOM_E2E_HOLD_VERIFICATION', '1')
   root = await mkdtemp(path.join(tmpdir(), 'axiom-verification-'))
   f = verificationFixture(root)
   runtime = verificationRuntime()
@@ -24,6 +26,7 @@ beforeEach(async () => {
   vi.spyOn(pin, 'pinVerificationCandidate').mockResolvedValue(undefined)
 })
 afterEach(async () => {
+  vi.unstubAllEnvs()
   vi.restoreAllMocks()
   f.db.close()
   await rm(root, { recursive: true, force: true })
@@ -32,6 +35,17 @@ const events = () =>
   f.store
     .listAuditEvents({ missionId: f.missionId })
     .filter((e) => e.objectKind === 'verification_run')
+
+it('honours the hold only while main E2E mode is enabled', () => {
+  expect(shouldHoldVerification()).toBe(true)
+  vi.stubEnv('ORCA_E2E_HEADLESS', '0')
+  vi.stubEnv('ORCA_E2E_USER_DATA_DIR', '')
+  expect(shouldHoldVerification()).toBe(false)
+  vi.stubEnv('ORCA_E2E_USER_DATA_DIR', '/e2e')
+  expect(shouldHoldVerification()).toBe(true)
+  vi.stubEnv('AXIOM_E2E_HOLD_VERIFICATION', '0')
+  expect(shouldHoldVerification()).toBe(false)
+})
 
 it('claims exactly once under concurrent claimNext calls and moves the Task atomically', async () => {
   const results = await Promise.all([service.claimNext(), service.claimNext()])
@@ -188,6 +202,30 @@ it('does not lose a kick arriving as an empty drain finishes', async () => {
   await service.kick()
   await trailing
   expect(f.store.getVerificationRun(f.run.id)?.verdictDetail.phase).toBe('prepared')
+})
+
+it('restarts after shutdown interrupts an already pending boot recovery', async () => {
+  await service.kick()
+  let release!: () => void
+  runtime.listManagedWorktrees.mockImplementationOnce(async () => {
+    await new Promise<void>((resolve) => {
+      release = resolve
+    })
+    return { worktrees: [], totalCount: 0, truncated: false }
+  })
+  const boot = service.recoverAtBoot()
+  await vi.waitFor(() => expect(release).toEqual(expect.any(Function)))
+  await service.stop()
+  const restart = service.recoverAtBoot()
+  release()
+  await Promise.all([boot, restart])
+  await service.kick()
+  expect(f.store.getVerificationRun(f.run.id)).toMatchObject({
+    status: 'RUNNING',
+    claimCount: 2,
+    verdictDetail: { phase: 'prepared' }
+  })
+  expect(f.store.getVerificationRun(f.run.id)?.runtimeEpoch).not.toBe('epoch-one')
 })
 
 it('prepares two Tasks serially even when another kick arrives during Git IO', async () => {

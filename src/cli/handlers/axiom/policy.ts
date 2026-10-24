@@ -5,7 +5,7 @@ import {
   getOptionalPositiveIntegerFlag
 } from '../../flags'
 import { PolicyResponseSchema } from '../../../shared/axiom-contract/policy-params'
-import { readRoutingFile } from './input-files'
+import { readRoutingFile, readVerificationRulesFile } from './input-files'
 import { callAxiom } from './rpc-command'
 
 const formatPolicy = (value: unknown) =>
@@ -22,6 +22,7 @@ export const AXIOM_POLICY_HANDLERS: Record<string, CommandHandler> = {
   },
   'mission policy update': async (ctx) => {
     const file = optional(ctx.flags, 'routing-file')
+    const verificationFile = optional(ctx.flags, 'verification-rules-file')
     const concurrencyLimit = getOptionalPositiveIntegerFlag(ctx.flags, 'concurrency')
     await callAxiom(
       ctx,
@@ -30,6 +31,9 @@ export const AXIOM_POLICY_HANDLERS: Record<string, CommandHandler> = {
         missionId: required(ctx.flags, 'mission'),
         patch: {
           ...(file === undefined ? {} : { routing: await readRoutingFile(ctx.cwd, file) }),
+          ...(verificationFile === undefined
+            ? {}
+            : { verificationRules: await readVerificationRulesFile(ctx.cwd, verificationFile) }),
           ...(concurrencyLimit === undefined ? {} : { concurrencyLimit })
         }
       },

@@ -1,6 +1,7 @@
 import type { VerificationRun } from '../../../shared/axiom-contract/verification-params'
 import type { VerificationDependencies } from './verification-service'
 import { auditVerification } from './verification-claim'
+import { isLocalVerificationRepository } from './verification-checks'
 import {
   pinVerificationCandidate,
   removeVerificationWorktree,
@@ -10,7 +11,7 @@ import {
 export async function prepareVerification(
   deps: VerificationDependencies,
   run: VerificationRun
-): Promise<void> {
+): Promise<VerificationRun | undefined> {
   const { store, runtime, runtimeEpoch, artifacts, missions } = deps
   const fence = {
     id: run.id,
@@ -28,6 +29,10 @@ export async function prepareVerification(
       )
     }
     const mission = missions.getMission(run.missionId)
+    // Unsupported hosts are settled by the check runner without touching their filesystem.
+    if (!isLocalVerificationRepository(await runtime.showRepo(`id:${mission.repoId}`))) {
+      return run
+    }
     const binding = store.getAttemptBindingByDispatch(candidate.attemptId)
     if (!binding || binding.taskId !== run.taskId || binding.missionId !== run.missionId) {
       throw new VerificationPreparationError(
@@ -91,6 +96,8 @@ export async function prepareVerification(
     })
     if (!saved) {
       await removeVerificationWorktree(runtime, worktreeId)
+    } else {
+      return store.getVerificationRun(run.id)
     }
   } catch (error) {
     let cleanupFailed = false
@@ -134,4 +141,5 @@ export async function prepareVerification(
       })
     })
   }
+  return undefined
 }
