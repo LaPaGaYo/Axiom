@@ -108,6 +108,27 @@ function put(
 }
 
 describe('ContextBuilder', () => {
+  it('renders the Candidate contract for Workers and path semantics for Planners', async () => {
+    const worker = await builder.build({ missionId, taskId })
+    expect(worker.renderTemplate).toContain(
+      'Every file left in this worktree becomes part of the Candidate. Write reports and other Artifact files outside the worktree (for example in a temporary directory) before running axiom mission artifact put.'
+    )
+    expect(worker.renderTemplate).toContain(
+      'Verification compares the Candidate with its merge-base on the integration branch: a changed path outside allowedPaths fails it (scope_violation), an added line that matches a secret pattern fails it (secret_detected), and changes to dependency manifests, lockfiles, CI, hooks, test or lint configuration or agent instruction files go to human review unless an allowedPaths entry names them.'
+    )
+    const planner = await builder.build({
+      missionId,
+      role: 'planner',
+      goalRevisionId: store.getMission(missionId)!.activeGoalRevisionId!
+    })
+    expect(planner.renderTemplate).toContain(
+      'scope.allowedPaths entries are repository-relative: an entry covers that path and everything below it; * and ? match within one path segment, ** matches any number of segments, and . is the whole repository. Verification fails any change outside allowedPaths.'
+    )
+    expect(planner.renderTemplate).toContain(
+      'Name dependency manifests, lockfiles, CI workflows, hooks, test or lint configuration and agent instruction files (AGENTS.md, CLAUDE.md, .claude/, .codex/, .agents/, .mcp.json) in allowedPaths when a Task must change them; otherwise such a change goes to human review.'
+    )
+  })
+
   it('renders the same ordered plan as independent verification', async () => {
     const task = store.getTaskStage(taskId)!
     const policy = store.getPolicy(missionId)!
@@ -139,7 +160,7 @@ describe('ContextBuilder', () => {
     const first = await builder.build({ missionId, taskId })
     expect(upstream).toHaveLength(2)
     expect(first.packageId).toBe(
-      'ctx_5c6e0f74f9207d1dcfd083dc9fcd363304e4caf038b98fb6de9efd26437c319b'
+      'ctx_80cde191f3e0ee147e40801bdaa23bf72bf1c779ef9fd417bf7aad59f21eaf13'
     )
     expect(first.manifest.mandatory.map((entry) => entry.section)).toEqual(sections)
     expect(first.packageId).toBe(`ctx_${sha256(canonicalContextManifest(first.manifest))}`)

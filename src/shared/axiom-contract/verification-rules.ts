@@ -18,12 +18,48 @@ export const VerificationRulesSchema = z.strictObject({
     .array(z.string())
     .default([
       '.github/workflows/**',
-      'pnpm-lock.yaml',
-      'package-lock.json',
-      'yarn.lock',
-      'package.json',
+      '.github/actions/**',
+      '.gitlab-ci.yml',
+      '.circleci/**',
+      '.husky/**',
+      '.pre-commit-config.yaml',
+      '**/lefthook.yml',
+      '**/package.json',
+      '**/pnpm-lock.yaml',
+      '**/pnpm-workspace.yaml',
+      '**/package-lock.json',
+      '**/yarn.lock',
+      '**/.npmrc',
+      '**/vitest.config.*',
+      '**/vitest.workspace.*',
+      '**/jest.config.*',
+      '**/playwright.config.*',
+      '**/eslint.config.*',
+      '**/.eslintrc*',
+      '**/.oxlintrc*',
+      '**/AGENTS.md',
+      '**/CLAUDE.md',
+      '**/.claude/**',
+      '**/.codex/**',
+      '**/.agents/**',
+      '**/.mcp.json',
       '.axiom-work/**'
     ]),
+  secretPatterns: z
+    .array(
+      z
+        .string()
+        .min(1)
+        .refine((source) => {
+          try {
+            new RegExp(source)
+            return true
+          } catch {
+            return false
+          }
+        }, 'Invalid regular expression')
+    )
+    .default([]),
   setupCommands: Commands.default([]),
   retryOnce: Commands.default([
     'pnpm test',

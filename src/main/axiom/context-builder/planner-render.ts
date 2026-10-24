@@ -66,6 +66,8 @@ export async function buildPlannerContext(
         'Task ids must be unique; every edge endpoint must exist. readinessThreshold defaults to INTEGRATED.',
         'The graph must be acyclic with at least one root; milestoneId must reference an existing milestone.',
         'kind: task | fix; risk: low | medium | high; retryPolicy.maxAttempts >= 1.',
+        'scope.allowedPaths entries are repository-relative: an entry covers that path and everything below it; * and ? match within one path segment, ** matches any number of segments, and . is the whole repository. Verification fails any change outside allowedPaths.',
+        'Name dependency manifests, lockfiles, CI workflows, hooks, test or lint configuration and agent instruction files (AGENTS.md, CLAUDE.md, .claude/, .codex/, .agents/, .mcp.json) in allowedPaths when a Task must change them; otherwise such a change goes to human review.',
         'Optional TaskSpec.role is a free-text label only; it does not select a provider or materialize skills.',
         'Do not supply provenance; the Control Plane stamps it from the authenticated Planner Attempt.'
       ].join('\n')

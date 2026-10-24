@@ -162,9 +162,17 @@ export async function verificationGitFixture(root: string) {
   await git('init', '-q')
   await git('config', 'user.name', 'Verification test')
   await git('config', 'user.email', 'verification@localhost')
-  await writeFile(path.join(repo, 'file.txt'), 'immutable candidate')
+  await git('config', 'core.hooksPath', '')
+  await writeFile(path.join(repo, 'file.txt'), 'base')
   await git('add', 'file.txt')
-  await git('-c', 'core.hooksPath=', 'commit', '--no-gpg-sign', '-qm', 'candidate')
+  await git('commit', '--no-gpg-sign', '-qm', 'base')
+  const baseSha = await git('rev-parse', 'HEAD')
+  await git('branch', `axiom/integration/${f.missionId}`)
+  const scopePath = f.task.spec.scope.allowedPaths[0]
+  await mkdir(path.dirname(path.join(repo, scopePath)), { recursive: true })
+  await writeFile(path.join(repo, scopePath), 'immutable candidate')
+  await git('add', scopePath)
+  await git('commit', '--no-gpg-sign', '-qm', 'candidate')
   await git('branch', f.binding.branch)
   f.candidate.commitSha = await git('rev-parse', 'HEAD')
   f.candidate.treeSha = await git('rev-parse', 'HEAD^{tree}')
@@ -197,5 +205,5 @@ export async function verificationGitFixture(root: string) {
     }
     return remove(selector)
   })
-  return { ...f, runtime, repo }
+  return { ...f, runtime, repo, git, baseSha, scopePath }
 }

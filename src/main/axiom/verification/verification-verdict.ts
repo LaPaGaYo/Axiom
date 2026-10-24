@@ -1,3 +1,4 @@
+import type { DiffGateOutcome } from './diff-gate'
 import type { VerificationRules } from '../../../shared/axiom-contract/verification-rules'
 
 export type CheckOutcome = {
@@ -7,6 +8,10 @@ export type CheckOutcome = {
 export type VerificationVerdict = {
   verdict: 'PASS' | 'FAIL' | 'INCONCLUSIVE'
   reason:
+    | 'scope_violation'
+    | 'secret_detected'
+    | 'dangerous_change'
+    | 'diff_too_large'
     | 'checks_passed'
     | 'checks_failed'
     | 'environment'
@@ -20,10 +25,22 @@ export type VerificationVerdict = {
 
 export function decideVerificationVerdict(
   checks: CheckOutcome[],
-  rules: VerificationRules
+  rules: VerificationRules,
+  gate: DiffGateOutcome
 ): VerificationVerdict {
+  if (gate.outcome === 'fail') {
+    return { verdict: 'FAIL', reason: gate.reason }
+  }
   if (checks.some((check) => check.result === 'fail')) {
     return { verdict: 'FAIL', reason: 'checks_failed' }
+  }
+  if (gate.outcome === 'inconclusive') {
+    return {
+      verdict: 'INCONCLUSIVE',
+      reason: gate.reason,
+      ...(gate.detail ? { detail: gate.detail } : {}),
+      escalation: 'human'
+    }
   }
   if (checks.some((check) => check.result === 'environmental')) {
     return { verdict: 'INCONCLUSIVE', reason: 'environment', escalation: 'human' }

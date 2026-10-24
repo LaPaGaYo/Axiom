@@ -1,4 +1,4 @@
-import { mkdtemp, rm, access, readFile } from 'node:fs/promises'
+import { mkdtemp, rm, access, readFile, writeFile, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -241,4 +241,116 @@ it('shutdown stops a running check and preserves RUNNING for boot recovery', asy
   expect(saved().status).toBe('RUNNING')
   expect(saved().verdictDetail.phase).toBe('checking')
   expect(events().some((e) => e.event === 'verification.inconclusive')).toBe(false)
+})
+
+async function changeCandidate(file: string, content: string) {
+  await mkdir(path.dirname(path.join(f.repo, file)), { recursive: true })
+  await writeFile(path.join(f.repo, file), content)
+  await f.git('add', file)
+  await f.git('commit', '--no-gpg-sign', '-qm', 'gate probe')
+  f.candidate.commitSha = await f.git('rev-parse', 'HEAD')
+  f.candidate.treeSha = await f.git('rev-parse', 'HEAD^{tree}')
+  await f.git('branch', '-f', f.binding.branch, f.candidate.commitSha)
+  f.db.db
+    .prepare('UPDATE candidates SET commit_sha = ?, tree_sha = ? WHERE id = ?')
+    .run(f.candidate.commitSha, f.candidate.treeSha, f.candidate.id)
+}
+function scope(allowedPaths: string[]) {
+  const spec = f.store.getTaskStage(f.task.taskId)!.spec
+  f.db.db
+    .prepare('UPDATE task_stages SET spec = ? WHERE task_id = ?')
+    .run(JSON.stringify({ ...spec, scope: { ...spec.scope, allowedPaths } }), f.task.taskId)
+}
+it('fails an out-of-scope Candidate even when every command passes and retains complete evidence', async () => {
+  commands([node('process.exit(0)'), node('console.log(2)')])
+  await changeCandidate('outside.txt', 'out of scope')
+  await service.kick()
+  expect(saved()).toMatchObject({
+    status: 'FAIL',
+    verdictDetail: {
+      reason: 'scope_violation',
+      diff: {
+        integrationBase: { branch: `axiom/integration/${f.missionId}`, sha: f.baseSha },
+        mergeBase: f.baseSha,
+        scopeViolations: ['outside.txt'],
+        patchComplete: true
+      },
+      checks: [{ result: 'pass' }, { result: 'pass' }]
+    }
+  })
+  expect(events()).toContainEqual(
+    expect.objectContaining({
+      event: 'verification.failed',
+      after: expect.objectContaining({ scopeViolations: ['outside.txt'] })
+    })
+  )
+  expect(f.store.getTaskStage(f.task.taskId)?.stage).toBe('READY')
+})
+it('never persists a planted secret in the run, any Mission Artifact, or audit', async () => {
+  commands([node('process.exit(0)')])
+  const token = `gh` + `p_${'Z'.repeat(36)}`
+  await changeCandidate(f.scopePath, token)
+  await service.kick()
+  expect(saved()).toMatchObject({
+    status: 'FAIL',
+    verdictDetail: {
+      reason: 'secret_detected',
+      diff: { secrets: [{ path: f.scopePath, pattern: 'provider_token' }] },
+      checks: [{ result: 'pass' }]
+    }
+  })
+  expect(JSON.stringify(saved()).includes(token)).toBe(false)
+  expect(JSON.stringify(events()).includes(token)).toBe(false)
+  for (const artifact of f.artifacts.list({ missionId: f.missionId })) {
+    expect((await f.artifacts.read(artifact.id)).content.toString().includes(token)).toBe(false)
+  }
+  expect(events()).toContainEqual(
+    expect.objectContaining({
+      event: 'verification.failed',
+      after: expect.objectContaining({
+        secrets: [{ path: f.scopePath, pattern: 'provider_token' }]
+      })
+    })
+  )
+})
+it.each([false, true])(
+  'dangerous changes require an explicit scope entry: %s',
+  async (explicit) => {
+    commands([node('process.exit(0)')])
+    scope(explicit ? ['.', 'package.json'] : ['.'])
+    await changeCandidate('package.json', '{}')
+    await service.kick()
+    expect(saved()).toMatchObject({
+      status: explicit ? 'PASS' : 'INCONCLUSIVE',
+      verdictDetail: {
+        reason: explicit ? 'checks_passed' : 'dangerous_change',
+        ...(explicit ? {} : { escalation: 'human' })
+      }
+    })
+    expect(f.store.getTaskStage(f.task.taskId)?.stage).toBe(explicit ? 'VERIFIED' : 'VERIFYING')
+    if (!explicit) {
+      expect(events()).toContainEqual(
+        expect.objectContaining({
+          event: 'verification.inconclusive',
+          after: expect.objectContaining({
+            dangerous: [{ path: 'package.json', pattern: '**/package.json' }]
+          })
+        })
+      )
+    }
+  }
+)
+it.each([0, 1])('missing integration base still runs commands (exit %s)', async (exit) => {
+  commands([node(`process.exit(${exit})`)])
+  await f.git('branch', '-D', `axiom/integration/${f.missionId}`)
+  await service.kick()
+  expect(saved()).toMatchObject({
+    status: exit ? 'FAIL' : 'INCONCLUSIVE',
+    verdictDetail: {
+      reason: exit ? 'checks_failed' : 'environment',
+      ...(exit ? {} : { detail: 'integration_base_unavailable', escalation: 'human' }),
+      diff: { error: 'integration_base_unavailable' },
+      checks: [{ result: exit ? 'fail' : 'pass' }]
+    }
+  })
 })

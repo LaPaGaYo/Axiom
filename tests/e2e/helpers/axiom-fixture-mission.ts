@@ -90,6 +90,7 @@ export async function withFixtureMission(
     restart?: boolean
     runVerification?: boolean
     maxAttempts?: number
+    extraAllowedPaths?: string[]
   } = {}
 ) {
   const temp = mkdtempSync(path.join(os.tmpdir(), 'axiom-fixture-mission-'))
@@ -180,9 +181,12 @@ process.exit(result.status ?? 1)
       JSON.parse(readFileSync(path.join(clone, 'scenarios', 'goal', 'decomposition.json'), 'utf8')),
       mission.activeGoalRevisionId
     )
-    if (options.maxAttempts !== undefined) {
+    if (!options.planner) {
       for (const task of proposal.tasks) {
-        task.retryPolicy.maxAttempts = options.maxAttempts
+        if (options.maxAttempts !== undefined) {
+          task.retryPolicy.maxAttempts = options.maxAttempts
+        }
+        task.scope.allowedPaths.push(...(options.extraAllowedPaths ?? []))
       }
     }
     let planRevision

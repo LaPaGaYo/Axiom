@@ -38,31 +38,47 @@ async function submitFixture(attemptId, missionId, taskId) {
   }
   const scenarioMarker = process.env.AXIOM_E2E_LEDGER + '.scenario-' + taskId
   const scenario = existsSync(scenarioMarker) ? readFileSync(scenarioMarker, 'utf8').trim() : 'retry'
-  if (!['retry', 'deterministic-failure', 'agent-crash'].includes(scenario)) throw new Error('Unknown fixture scenario')
-  const command = ['scenarios/stub-worker/worker.mjs', '--scenario', scenario, '--attempt', '1', '--mode', 'succeed', '--cwd', process.cwd()]
-  const started = Date.now()
-  const stub = spawnSync(process.execPath, command, { cwd: process.cwd(), env: process.env, encoding: 'utf8', timeout: 60000 })
-  if (stub.status !== 0) throw new Error('Fixture stub failed')
-  // The frozen stub emits identical reports. Attribute this copy before content-addressing it,
-  // so Artifact deduplication cannot reuse a different Task's related metadata.
-  appendFileSync(path.join(process.cwd(), 'REPORT.md'), '\\nmission: ' + missionId + '\\ntaskId: ' + taskId + '\\nattemptId: ' + attemptId + '\\n')
-  const artifact = cli(['mission', 'artifact', 'put', '--mission', missionId, '--kind', 'worker_report', '--file', 'REPORT.md', '--related', taskId])
-  appendFileSync(process.env.AXIOM_E2E_LEDGER, JSON.stringify({ kind: 'artifact', attemptId, ...artifact }) + '\\n')
-  if (!artifact.response.ok) throw new Error('Artifact put failed')
-  const artifactId = artifact.response.result.artifact.id
-  const changed = spawnSync('git', ['diff', '--name-only', 'HEAD'], { cwd: process.cwd(), encoding: 'utf8' })
-  if (changed.status !== 0) throw new Error('Fixture diff failed')
-  const report = {
-    summary: 'D49 ' + scenario + ' scenario attempt 1 succeeded',
-    filesChanged: [...new Set([...changed.stdout.trim().split(/\\r?\\n/).filter(Boolean), 'REPORT.md'])],
-    checksRun: [{ command: 'node ' + command.join(' '), result: 'pass', durationMs: Date.now() - started },
-      { command: 'fixture verification', result: 'skipped', note: 'Stub Worker; independent verification is queued for M3.' }],
-    artifacts: [artifactId], limitations: ['Fixture stub; no independent verification run by Worker'],
-    risks: ['Write scope is enforced during M3 verification'], questions: [], followUps: ['VerificationService dequeues QUEUED']
-  }
-  // Keep the protocol envelope outside the Candidate snapshot.
+  if (!['retry', 'deterministic-failure', 'agent-crash', 'scope-violation', 'secret-line'].includes(scenario)) throw new Error('Unknown fixture scenario')
+  // Keep both the Worker Artifact and protocol envelope outside the Candidate snapshot.
   const temp = mkdtempSync(path.join(os.tmpdir(), 'axiom-submit-report-'))
   try {
+    const command = ['scenarios/stub-worker/worker.mjs', '--scenario', scenario, '--attempt', '1', '--mode', 'succeed', '--cwd', process.cwd()]
+    const started = Date.now()
+    const providerOnly = scenario === 'scope-violation' || scenario === 'secret-line'
+    let reportText
+    if (providerOnly) {
+      if (scenario === 'scope-violation') {
+        appendFileSync(path.join(process.cwd(), 'README.md'), '\\n<!-- axiom e2e scope probe -->\\n')
+      } else {
+        const token = 'gh' + 'p_' + 'Z'.repeat(36)
+        appendFileSync(path.join(process.cwd(), 'src', 'services', 'csv.ts'), '// axiom e2e probe ' + token + '\\n')
+      }
+      reportText = 'Provider diff-gate probe: ' + scenario + '\\n'
+    } else {
+      const stub = spawnSync(process.execPath, command, { cwd: process.cwd(), env: process.env, encoding: 'utf8', timeout: 60000 })
+      if (stub.status !== 0) throw new Error('Fixture stub failed')
+      const stubReport = path.join(process.cwd(), 'REPORT.md')
+      reportText = readFileSync(stubReport, 'utf8')
+      rmSync(stubReport)
+    }
+    // Attribution prevents Artifact deduplication from reusing another Task's related metadata.
+    reportText += '\\nmission: ' + missionId + '\\ntaskId: ' + taskId + '\\nattemptId: ' + attemptId + '\\n'
+    const reportPath = path.join(temp, 'REPORT.md')
+    writeFileSync(reportPath, reportText)
+    const artifact = cli(['mission', 'artifact', 'put', '--mission', missionId, '--kind', 'worker_report', '--file', reportPath, '--related', taskId])
+    appendFileSync(process.env.AXIOM_E2E_LEDGER, JSON.stringify({ kind: 'artifact', attemptId, ...artifact }) + '\\n')
+    if (!artifact.response.ok) throw new Error('Artifact put failed')
+    const artifactId = artifact.response.result.artifact.id
+    const changed = spawnSync('git', ['diff', '--name-only', 'HEAD'], { cwd: process.cwd(), encoding: 'utf8' })
+    if (changed.status !== 0) throw new Error('Fixture diff failed')
+    const report = {
+      summary: 'D49 ' + scenario + ' scenario attempt 1 succeeded',
+      filesChanged: changed.stdout.trim().split(/\\r?\\n/).filter(Boolean),
+      checksRun: [{ command: providerOnly ? 'provider scenario ' + scenario : 'node ' + command.join(' '), result: 'pass', durationMs: Date.now() - started },
+        { command: 'fixture verification', result: 'skipped', note: 'Stub Worker; independent verification is queued for M3.' }],
+      artifacts: [artifactId], limitations: ['Fixture stub; no independent verification run by Worker'],
+      risks: ['Write scope is enforced during M3 verification'], questions: [], followUps: ['VerificationService dequeues QUEUED']
+    }
     const file = path.join(temp, 'report.json')
     writeFileSync(file, JSON.stringify(report))
     const submission = cli(['attempt', 'submit', '--attempt', attemptId, '--report', file])

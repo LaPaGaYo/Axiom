@@ -8,14 +8,13 @@ import {
 } from '../../../shared/axiom-contract/verification-rules'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { redactContext } from '../context-builder/redaction'
-import { settleVerificationFailure } from '../execution/attempt-settlement'
 import type { VerificationDependencies } from './verification-service'
-import { auditVerification } from './verification-claim'
 import { executeVerificationPlan } from './verification-plan-runner'
 import { decideVerificationVerdict, type VerificationVerdict } from './verification-verdict'
 import { removeVerificationWorktree } from './verification-worktree'
-
-class VerificationInterrupted extends Error {}
+import { VerificationInterrupted, settleVerificationVerdict } from './verification-settlement'
+import { readCandidateDiff } from './candidate-diff'
+import { evaluateDiffGate, summarizeDiffGate, type DiffGate } from './diff-gate'
 
 export function isLocalVerificationRepository(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'>
@@ -112,6 +111,9 @@ export async function runVerificationChecks(
       tools: [],
       toolVersions: {}
     }
+    let gate: DiffGate | undefined
+    let diffSummary: ReturnType<typeof summarizeDiffGate> | undefined
+    let diffEvidence: ReturnType<typeof summarizeDiffGate> | undefined
     let verdict: VerificationVerdict
     if (!parsed.success) {
       verdict = { verdict: 'INCONCLUSIVE', reason: 'policy_invalid', escalation: 'human' }
@@ -127,6 +129,19 @@ export async function runVerificationChecks(
       if (!cwd) {
         throw new VerificationInterrupted()
       }
+      const candidate = store.getCandidate(run.candidateId)
+      if (!candidate) {
+        throw new VerificationInterrupted()
+      }
+      const diff = await readCandidateDiff({
+        cwd,
+        missionId: run.missionId,
+        candidateCommitSha: candidate.commitSha
+      })
+      assertCurrent()
+      gate = evaluateDiffGate({ diff, allowedPaths: task.spec.scope.allowedPaths, rules })
+      diffSummary = summarizeDiffGate(diff, gate, 50)
+      diffEvidence = summarizeDiffGate(diff, gate, 1000)
       result = await executeVerificationPlan({
         artifacts,
         run,
@@ -137,7 +152,7 @@ export async function runVerificationChecks(
         signal,
         assertCurrent
       })
-      verdict = decideVerificationVerdict(result.checks, rules)
+      verdict = decideVerificationVerdict(result.checks, rules, gate)
     }
     assertCurrent()
     const finishedAt = new Date().toISOString()
@@ -151,6 +166,7 @@ export async function runVerificationChecks(
         JSON.stringify({
           ...verdict,
           ...result,
+          ...(diffEvidence ? { diff: diffEvidence } : {}),
           runId: run.id,
           taskId: run.taskId,
           candidateId: run.candidateId,
@@ -168,6 +184,7 @@ export async function runVerificationChecks(
       : []
     const verdictDetail = {
       phase: 'verdict',
+      ...(diffSummary ? { diff: diffSummary } : {}),
       ...verdict,
       verdictArtifactId: evidence.id,
       evidenceArtifactIds: [...previousEvidence, evidence.id],
@@ -184,64 +201,14 @@ export async function runVerificationChecks(
         })
       )
     }
-    const settled = store.transaction('verification_verdict', () => {
-      const candidate = store.getCandidate(run.candidateId)
-      if (
-        store.getTaskStage(run.taskId)?.stage !== 'VERIFYING' ||
-        candidate?.status !== 'ACTIVE' ||
-        candidate.taskId !== run.taskId ||
-        candidate.missionId !== run.missionId
-      ) {
-        return
-      }
-      if (
-        !store.updateVerificationRun({
-          ...fence,
-          status: verdict.verdict,
-          finishedAt,
-          commands,
-          toolVersions: result.toolVersions,
-          verdictDetail
-        })
-      ) {
-        return
-      }
-      if (verdict.verdict === 'PASS') {
-        missions.transitionTaskStage({
-          taskId: run.taskId,
-          to: 'VERIFIED',
-          actor: 'VerificationService',
-          reason: 'verification_passed'
-        })
-      } else if (verdict.verdict === 'FAIL' && !settleVerificationFailure(deps, run).settled) {
-        throw new VerificationInterrupted()
-      }
-      for (const check of result.checks.filter((check) => check.reason === 'known_flaky')) {
-        auditVerification(deps, run, 'verification.known_flaky', {
-          checkIndex: check.index,
-          failures: check.failures
-        })
-      }
-      auditVerification(
-        deps,
-        run,
-        verdict.verdict === 'PASS'
-          ? 'verification.passed'
-          : verdict.verdict === 'FAIL'
-            ? 'verification.failed'
-            : 'verification.inconclusive',
-        {
-          ...verdict,
-          ...(verdict.verdict === 'FAIL'
-            ? {
-                failures: result.checks
-                  .filter((c) => c.result === 'fail')
-                  .flatMap((c) => c.failures)
-              }
-            : {})
-        }
-      )
-      return true
+    const settled = settleVerificationVerdict(deps, {
+      run,
+      verdict,
+      result,
+      verdictDetail,
+      finishedAt,
+      commands,
+      gate
     })
     if (settled) {
       cleanupStatus = verdict.verdict
