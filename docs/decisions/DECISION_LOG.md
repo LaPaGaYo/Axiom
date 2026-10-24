@@ -253,6 +253,8 @@ marketplace 官方源禁用 / skills 安装源改 `LaPaGaYo/Axiom` / star 提示
 **后果**：ratchet 基线减少约 205 对（cloud ~126 + mobile ~79）；上游针对 onorca 基础设施的工作流不再存在于本仓库。
 **取代规则**：恢复 cloud/ 或删除 mobile/ 需新 Decision。
 
+**修订（2026-10-24，Henry："同意整节隐藏,并且窗口标题改成Axiom"）**：V1 没有云账号，设置 › Axiom Account 整节隐藏（导航、搜索与面板；`src/shared/cloud-account-availability.ts` 的 `CLOUD_ACCOUNT_AVAILABLE` 由 `PRODUCT_EGRESS_POLICY.cloudAuth` 为 null 推出，构建带云默认值时自动恢复），账号代码保留；同时按 D32 把原生窗口标题改为 Axiom / Axiom Web（M0 漏改）。实施：UI-HYG。
+
 ## D33a · 修正 D33：`mobile/` 仍是交付代码（桌面包内含 mobile web bundle），保留在 ratchet 与 CI 中；只删原生发布工作流 — ACCEPTED（Henry 2026-10-04）
 
 **背景**：M0-07 attempt 1 的 Worker 正确地停下并提交了部分结果（`.axiom-work/reports/M0-07-1.md`）：(a) brief 里"`src/`、`config/`、`tests/` 不依赖 `cloud/`"不成立——`src/main/runtime/push/push-host-proof-vector.test.ts` 从 `cloud/packages/push-contract` 引入 fixture，`tests/e2e/relay-region-{correction,compatibility}.unit.test.ts` 测的是 cloud relay 代码，`config/reliability-gates.jsonc` 有四条门禁引用 cloud 路径，`config/scripts/source-tree-walk-benchmark.mjs` 扫描 `cloud/apps`；(b) D33 把 `mobile/` 当作不交付代码排除出 ratchet 的前提是错的——`config/electron-builder.config.cjs` 在打包时把 `mobile/` 构建出的 **mobile web bundle**（`out/mobile-web`，桌面端配对手机时提供的网页版 companion）装进桌面应用，所以 `mobile/` 的代码随桌面产品交付，其中的厂商出口 needle 必须继续受 ratchet 约束；打包工作流里的 `install-mobile-dependencies` 步骤也因此不能删。
@@ -559,6 +561,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 
 **修订（2026-10-21，验证者，M3-00 宿主证据）**：`codex`（`gpt-6-astra`，`subscription`）组合在 D58 的通道 B 上取得 Planner 角色的真实认证证据——`.axiom-work/verifications/M3-00-f3.md` 第 4 节（`PLAN_REVIEW`，`planrev_916dfdd2a12d`，13.5 min）；状态 provisional → certified（Planner，通道 B）；Worker 角色随 M3-08 的 smoke 补证。
 **修订（验证者 2026-10-20）**：`codex` 组合的宿主认证 smoke（`.axiom-work/verifications/M2-09-smoke-codex.md`）未能产出 Planner 提案：Codex 0.163.0 在 TUI 通道对每个 linked worktree 弹 Folder access 同意屏，预信任写入不生效；认证证据等 D58 决定通道后再补，矩阵条目与 `certified-providers.ts` 不变。
+
+**修订（2026-10-24，Henry："同意"；同日补充："v1这边还是保持原样，别的模型和harness，做worker就可以了……v1可能就我在使用，不会开放给别的，我觉得可能在v3之后再做适配会比较好"）**：V1 矩阵按新底子扩充，新增条目都是 `provisional`、只做 Worker，在 `src/main/axiom/agent-factory/certified-providers.ts` 登记：已有结构化通道（ACP / Pi RPC）的 `opencode2`（OpenCode 2 beta）、`omp`（OMP）、`pi`（Pi）由 harness 默认模型、只接低风险；`grok`（xAI Grok CLI）按启动参数选模型、最高中风险；ACP 官方名录里的 `codebuddy`（CodeBuddy Code）、`kimi`（Kimi CLI）、`qwen-code`（Qwen Code）给 Orca 现有的通用 ACP 适配补三条启动配置后加入，最高中风险（上游 `31fe3c7481` 仍只有 grok / opencode / opencode2 / omp / antigravity 五条，三条配置由 Axiom 新增）。`claude-agent-teams`（Claude Code Agent Teams）不承担 Mission 角色：主 Claude 自行拉起、指挥队友，违反"Worker 不直接生成 Worker"；Mission 的并行由 Control Plane 调度普通 `claude`。Trae CLI、ZCode（智谱）、DeepSeek Harness（`dsh`）没有原生 ACP（ZCode 只有第三方桥接 `zcode-acp`，`dsh` 只有 Web UI），V1 只用于手动工作区，登记 DEF-27。三条 ACP 启动配置与矩阵内全部结构化 harness 的协议一致性测试随 M3-08（Mission Attempt 接上结构化通道）实施。V1 只供 Henry 自用、不对外开放：Planner 与高风险 Task 仍只给 `claude` / `codex`；为其他 harness 或第三方模型开放 Planner / 高风险的适配——"A 级"从写死的 `claude` / `codex` 改为"结构化通道上已认证、由启动参数指定模型"的组合，高风险认证门槛，识别 Claude Code / Codex 背后接的第三方接口（如 `ANTHROPIC_BASE_URL` 指向 GLM、Codex `model_provider`）并单独记账，给外部测试者的单命令一致性检查，"不依赖 Claude / Codex"的出口条件——延到 V3 之后，登记 DEF-28。V1 出口仍要求用到的组合为 `certified`（第 3 条不变）。
 
 ## D58 · Codex / Claude Attempt 的执行通道与 AgentSpec 权限映射（harness 登录、目录信任、沙盒 / 审批标志）— ACCEPTED（Henry 2026-10-20：B 首选，A 后备）
 
