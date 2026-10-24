@@ -108,7 +108,7 @@ export function verificationExcerpt(output: string): string {
   const lines = stripVTControlCharacters(redactContext(output).content).split(/\r?\n/)
   const selected = new Set<number>()
   for (let i = 0; i < lines.length && selected.size < 40; i += 1) {
-    if (/FAIL|×|✗|Error|AssertionError|ERR_|failed|not found/.test(lines[i])) {
+    if (/FAIL|\u00d7|\u2717|Error|AssertionError|ERR_|failed|not found/.test(lines[i])) {
       for (
         let j = Math.max(0, i - 2);
         j <= Math.min(lines.length - 1, i + 3) && selected.size < 40;
