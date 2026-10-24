@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 import { MOBILE_PAIRING_AVAILABLE } from '../../../shared/mobile-pairing-availability'
+import { CLOUD_ACCOUNT_AVAILABLE } from '../../../shared/cloud-account-availability'
 
 export function buildCapabilitySettingsSections({
   isLocalWindowsHost,
@@ -129,7 +130,7 @@ export function buildSetupSettingsSections({
 }: SettingsNavigationBuildOptions): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
   return [
-    ...(showDesktopOnlySettings
+    ...(showDesktopOnlySettings && CLOUD_ACCOUNT_AVAILABLE
       ? [
           {
             id: 'orca-account',

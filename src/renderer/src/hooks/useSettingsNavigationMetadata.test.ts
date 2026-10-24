@@ -13,8 +13,17 @@ vi.mock('../../../shared/mobile-pairing-availability', () => ({
   }
 }))
 
+// UI-HYG: these cases exercise the dormant cloud account section.
+const cloudAccount = vi.hoisted(() => ({ available: true }))
+vi.mock('../../../shared/cloud-account-availability', () => ({
+  get CLOUD_ACCOUNT_AVAILABLE() {
+    return cloudAccount.available
+  }
+}))
+
 beforeEach(() => {
   mobilePairing.available = true
+  cloudAccount.available = true
 })
 
 const repo = {
@@ -45,6 +54,27 @@ function ids(
 }
 
 describe('settings navigation metadata', () => {
+  it('omits the cloud account navigation and search while preserving Set Up order', () => {
+    cloudAccount.available = false
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo]
+    })
+
+    expect(sections.map((section) => section.id)).not.toContain('orca-account')
+    expect(
+      sections
+        .filter((section) => section.group === 'setup')
+        .map((section) => section.id)
+        .slice(0, 3)
+    ).toEqual(['setup-guide', 'general', 'integrations'])
+    expect(
+      buildCmdJSettingsResults(sections).some((result) => result.sectionId === 'orca-account')
+    ).toBe(false)
+  })
+
   it('omits Mobile navigation and palette results while the mobile companion is dormant', () => {
     mobilePairing.available = false
     const sections = buildSettingsNavigationMetadata({

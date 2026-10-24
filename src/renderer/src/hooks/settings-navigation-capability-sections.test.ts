@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { buildSetupSettingsSections } from './settings-navigation-capability-sections'
 
-describe('desktop setup settings with the shipped mobile availability', () => {
-  it('omits the Mobile section', () => {
+describe('desktop setup settings with the shipped mobile and cloud account availability', () => {
+  it('omits the Mobile and Axiom Account sections', () => {
     const sections = buildSetupSettingsSections({
       isMac: false,
       isWindows: false,
@@ -19,8 +19,8 @@ describe('desktop setup settings with the shipped mobile availability', () => {
     })
 
     expect(sections.some((section) => section.id === 'mobile')).toBe(false)
+    expect(sections.some((section) => section.id === 'orca-account')).toBe(false)
     expect(sections.map((section) => section.id)).toEqual([
-      'orca-account',
       'setup-guide',
       'general',
       'integrations'

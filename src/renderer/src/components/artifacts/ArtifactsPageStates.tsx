@@ -2,6 +2,7 @@ import { ArrowRight, Files, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { OrcaSignInButton, OrcaSignInWaitNotice } from '../OrcaSignInProgress'
+import { CLOUD_ACCOUNT_AVAILABLE } from '../../../../shared/cloud-account-availability'
 
 export function ArtifactsPageErrorBanner({
   error,
@@ -78,13 +79,15 @@ export function ArtifactsPageAuthState({
               'Axiom account sign-in is not configured on this machine yet.'
             )}
           </p>
-          <Button variant="outline" size="sm" onClick={onOpenAccountSettings}>
-            {translate(
-              'auto.components.artifacts.ArtifactsPage.openAccountSettings',
-              'Open account settings'
-            )}
-            <ArrowRight />
-          </Button>
+          {CLOUD_ACCOUNT_AVAILABLE ? (
+            <Button variant="outline" size="sm" onClick={onOpenAccountSettings}>
+              {translate(
+                'auto.components.artifacts.ArtifactsPage.openAccountSettings',
+                'Open account settings'
+              )}
+              <ArrowRight />
+            </Button>
+          ) : null}
         </div>
       )}
     </div>
