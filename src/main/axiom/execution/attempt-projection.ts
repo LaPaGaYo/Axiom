@@ -32,6 +32,11 @@ export async function projectAttempt(
   if (submission && !candidate) {
     throw new Error('Submission Candidate is missing')
   }
+  const transcriptArtifactId = submission
+    ? store
+        .listArtifacts({ missionId: binding.missionId, kind: 'log', relatedTo: submission.id })
+        .findLast((artifact) => artifact.createdBy === 'AttemptSettlement')?.id
+    : undefined
   return AttemptSummarySchema.parse({
     ...binding,
     attemptId: binding.dispatchId,
@@ -41,6 +46,7 @@ export async function projectAttempt(
       submission && candidate
         ? {
             id: submission.id,
+            ...(transcriptArtifactId ? { transcriptArtifactId } : {}),
             candidateId: candidate.id,
             commitSha: candidate.commitSha,
             treeSha: candidate.treeSha,

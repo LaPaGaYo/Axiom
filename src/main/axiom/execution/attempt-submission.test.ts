@@ -7,6 +7,8 @@ beforeEach(() => {
   f = submissionFixture()
 })
 afterEach(() => {
+  vi.clearAllTimers()
+  vi.useRealTimers()
   f.db.close()
   vi.restoreAllMocks()
 })
@@ -69,7 +71,8 @@ describe('Attempt submission settlement', () => {
     expect(f.db.getTask(f.t01.taskId)?.status).toBe('completed')
     expect(f.db.getDispatchContextById(f.t01.attemptId)?.status).toBe('completed')
     expect(f.db.getWorkerDispatch(f.t01.attemptId)?.state).toBe('succeeded')
-    expect(f.retain).toHaveBeenCalledExactlyOnceWith(f.t01.attemptId)
+    expect(f.capture).toHaveBeenCalledOnce()
+    expect(f.releaseWorker).not.toHaveBeenCalled()
     expect(f.store.listAuditEvents({ missionId: f.mission.id })).toContainEqual(
       expect.objectContaining({
         event: 'attempt.submitted',
@@ -91,7 +94,7 @@ describe('Attempt submission settlement', () => {
     expect(f.store.listSubmissions(f.mission.id)).toHaveLength(1)
     expect(f.kick).toHaveBeenCalledTimes(1)
     expect(f.snapshotGit).toHaveBeenCalledTimes(1)
-    expect(f.retain).toHaveBeenCalledTimes(1)
+    expect(f.capture).toHaveBeenCalledTimes(1)
     expect(f.db.getUnreadRunMailbox(f.mission.runId)).toHaveLength(1)
   })
   it('supersedes the previous ACTIVE Candidate when a later Attempt submits', async () => {
@@ -142,14 +145,14 @@ describe('Attempt submission settlement', () => {
     expect(await f.submit()).toMatchObject({ ok: false, error: { code: 'inactive_dispatch' } })
     expect(f.snapshot()).toEqual(before!)
     expect(f.kick).not.toHaveBeenCalled()
-    expect(f.retain).not.toHaveBeenCalled()
+    expect(f.capture).not.toHaveBeenCalled()
     expect(f.store.listCandidates(f.mission.id)).toEqual([])
     expect(f.store.listSubmissions(f.mission.id)).toEqual([])
     expect(f.notify).not.toHaveBeenCalled()
   })
-  it('audits retention failure without rolling back settlement or preventing SUBMISSION mail', async () => {
-    f.retain.mockImplementationOnce(() => {
-      throw new Error('retain failed')
+  it('audits archive capture failure without rolling back settlement or preventing SUBMISSION mail', async () => {
+    f.capture.mockImplementationOnce(() => {
+      throw new Error('sensitive capture failure')
     })
     const { submission, candidate } = await accepted()
     expect(f.store.listSubmissions(f.mission.id)).toEqual([submission])
@@ -166,16 +169,16 @@ describe('Attempt submission settlement', () => {
     const events = f.store.listAuditEvents({ missionId: f.mission.id })
     expect(events).toContainEqual(
       expect.objectContaining({
-        event: 'attempt.terminal_retain_failed',
+        event: 'attempt.transcript_archive_failed',
         objectKind: 'attempt',
         objectId: f.t01.attemptId
       })
     )
-    expect(events.some((event) => event.event === 'attempt.terminal_retained')).toBe(false)
+    expect(events.some((event) => event.event === 'attempt.transcript_archived')).toBe(false)
     expect(f.store.listMessages({ missionId: f.mission.id })).toHaveLength(1)
     expect(f.notify).toHaveBeenCalledWith(`run:${f.mission.runId}`, 'worker_done')
     expect(await accepted()).toEqual({ submission, candidate, duplicate: true })
-    expect(f.retain).toHaveBeenCalledTimes(1)
+    expect(f.capture).toHaveBeenCalledTimes(1)
   })
   it('guards RUNNING → SUBMITTED against every actor except AttemptSettlement', () => {
     const before = f.snapshot()

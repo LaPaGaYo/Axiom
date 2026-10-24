@@ -1,30 +1,27 @@
 import { exposeUtcTimestamp } from '../../runtime/orchestration/db/utc-timestamp'
 import { z } from 'zod'
 import { TERMINAL_MISSION_STATUSES } from '../../../shared/axiom-contract/lifecycle'
-import {
-  AttemptReconcileEntrySchema,
-  type AttemptReconcileEntry
-} from '../../../shared/axiom-contract/mission-params'
+import type { AttemptReconcileEntry } from '../../../shared/axiom-contract/mission-params'
 import { resolveWorkerStartReadinessTimeoutMs } from '../../../shared/orchestration-timing-budgets'
 import { inspectWorkerTerminal } from '../../runtime/rpc/methods/orchestration/worker/worker-observation'
 import { stopLocalWorker } from '../../runtime/rpc/methods/orchestration/worker/local-worker-stop'
-import { releaseLocalWorker } from '../../runtime/rpc/methods/orchestration/worker/local-worker-release'
 import { foldAttemptLiveness } from '../execution/attempt-projection'
 import { settleAttemptWithoutSubmission } from '../execution/attempt-settlement'
 import { reconcilePlanner } from './planner-reconciliation'
 import { observeAgentExit } from './agent-exit-observation'
 import {
   abandonmentEvidence,
+  activeWorkerStates as activeStates,
+  cancelAttempt,
   auditAttempt,
   lastAttemptAudit,
   observeAttemptLiveness,
-  retainSubmission,
+  releaseSubmission,
   type AttemptBinding,
   type RecoveryContext
 } from './attempt-recovery-effects'
 
 const StopReceipt = z.object({ state: z.string() })
-const activeStates = new Set(['starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown'])
 const terminalReasons = new Map([
   ['failed', 'attempt_failed'],
   ['stopped', 'attempt_stopped'],
@@ -109,6 +106,11 @@ export async function reconcileAttempt(
   if (!mission) {
     return entry
   }
+  // Submission owns release independently of verification, cancellation, or Mission status.
+  if (!planner && store.getSubmissionByDispatch(dispatchId)) {
+    entry.action = (await releaseSubmission(ctx, binding)) ?? 'unchanged'
+    return entry
+  }
   if (task?.stage === 'CANCELED' || TERMINAL_MISSION_STATUSES.has(mission.status)) {
     entry.action = await cancelAttempt(ctx, binding, observation)
     return entry
@@ -117,11 +119,6 @@ export async function reconcileAttempt(
     return reconcilePlanner(ctx, binding, observation, entry, agentExit)
   }
   if (!task) {
-    return entry
-  }
-  // Verification can claim before retention recovers; Submission, not Task stage, owns this resource.
-  if (store.getSubmissionByDispatch(dispatchId)) {
-    entry.action = retainSubmission(ctx, binding) ?? 'unchanged'
     return entry
   }
   if (!currentRunning(ctx, binding)) {
@@ -234,7 +231,11 @@ export async function reconcileAttempt(
     entry.action = 'stale'
     return entry
   }
-  const disposition = db.abandonWorkerDispatch(dispatchId, runtime.getRuntimeId(), 'RecoveryService').disposition
+  const disposition = db.abandonWorkerDispatch(
+    dispatchId,
+    runtime.getRuntimeId(),
+    'RecoveryService'
+  ).disposition
   store.transaction('recovery_abandon', () => {
     auditAttempt(ctx, binding, 'attempt.abandoned', {
       reason: 'unverifiable_tolerance_exceeded',
@@ -245,71 +246,4 @@ export async function reconcileAttempt(
   })
   entry.action = 'abandoned'
   return entry
-}
-
-async function cancelAttempt(
-  ctx: RecoveryContext,
-  binding: AttemptBinding,
-  observation: Awaited<ReturnType<typeof inspectWorkerTerminal>>
-): Promise<string> {
-  const dispatchId = binding.dispatchId!
-  const worker = ctx.db.getWorkerDispatch(dispatchId)
-  // A settled Candidate retains its resource until the Candidate lifecycle releases it.
-  if (worker?.state === 'succeeded' || ctx.store.getSubmissionByDispatch(dispatchId)) {
-    return 'unchanged'
-  }
-  let state: string | undefined = worker?.state
-  let disposition: string | undefined
-  if (worker && activeStates.has(worker.state)) {
-    if (worker.state !== 'stop_unknown' && observation.exact && observation.status === 'live') {
-      state = StopReceipt.parse(await stopLocalWorker(ctx.runtime, dispatchId)).state
-    } else {
-      // A current stop owns its outcome until it finishes; next tick retries the durable cancellation.
-      if (worker.state === 'stopping') {
-        return 'stopping'
-      }
-      const abandoned = ctx.db.abandonWorkerDispatch(dispatchId, ctx.runtime.getRuntimeId(), 'RecoveryService')
-      disposition = abandoned.disposition
-      state = ctx.db.getWorkerDispatch(dispatchId)?.state
-    }
-  }
-  if (state === 'stop_unknown') {
-    ctx.store.transaction('recovery_cancel_unknown', () =>
-      auditAttempt(ctx, binding, 'attempt.stop_unknown', { reason: 'mission_canceled' })
-    )
-    return state
-  }
-  if (state && activeStates.has(state)) {
-    return 'unchanged'
-  }
-  // Retry release even after a crash between the kernel settlement and this consequence.
-  const release = await releaseLocalWorker(ctx.runtime, dispatchId)
-  const event =
-    state === 'stopped'
-      ? 'attempt.stopped'
-      : state === 'abandoned'
-        ? 'attempt.abandoned'
-        : 'attempt.terminal_released'
-  // Preserve the liveness at abandonment on release-only replays, even if the host changes later.
-  const previousStop = z
-    .object({
-      priorStop: z.literal('stop_unknown'),
-      liveness: AttemptReconcileEntrySchema.shape.liveness.unwrap()
-    })
-    .safeParse(JSON.parse(lastAttemptAudit(ctx, binding, event)?.after ?? 'null'))
-  const stopContext: Record<string, string> =
-    worker?.state === 'stop_unknown'
-      ? { priorStop: 'stop_unknown', liveness: foldAttemptLiveness(observation) }
-      : previousStop.success
-        ? previousStop.data
-        : {}
-  const changed = ctx.store.transaction('recovery_cancel_release', () =>
-    auditAttempt(ctx, binding, event, {
-      reason: 'mission_canceled',
-      ...(state === 'abandoned' ? { disposition: disposition ?? 'abandoned' } : {}),
-      ...stopContext,
-      release
-    })
-  )
-  return changed ? (state ?? 'released') : 'unchanged'
 }

@@ -6,6 +6,8 @@ beforeEach(() => {
   f = submissionFixture()
 })
 afterEach(() => {
+  vi.clearAllTimers()
+  vi.useRealTimers()
   vi.restoreAllMocks()
   f.db.close()
 })
@@ -32,6 +34,9 @@ it('rejects candidate_unchanged inside settlement without any rows or Attempt ch
   expect(f.store.getTaskStage(f.t01.taskId)?.stage).toBe('RUNNING')
   expect(f.db.getDispatchContextById(f.t01.attemptId)?.status).toBe('dispatched')
   expect(f.kick).not.toHaveBeenCalled()
+  expect(f.capture).not.toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(2000)
+  expect(f.releaseWorker).not.toHaveBeenCalled()
   f.snapshotGit.mockResolvedValueOnce({
     commitSha: 'd'.repeat(40),
     treeSha: 'e'.repeat(40),

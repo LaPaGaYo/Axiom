@@ -29,3 +29,14 @@ it('validates optional submission hashes and requires a declared execution role'
     AttemptSummarySchema.parse({ ...attempt, submission: undefined }).submission
   ).toBeUndefined()
 })
+
+it('accepts old submission payloads and preserves the optional transcript Artifact reference', () => {
+  expect(AttemptSummarySchema.parse(attempt).submission).not.toHaveProperty('transcriptArtifactId')
+  const payload = {
+    ...attempt,
+    submission: { ...attempt.submission, transcriptArtifactId: 'art-transcript' }
+  }
+  expect(AttemptSummarySchema.parse(payload).submission?.transcriptArtifactId).toBe(
+    'art-transcript'
+  )
+})

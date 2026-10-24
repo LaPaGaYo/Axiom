@@ -8,6 +8,8 @@ beforeEach(() => {
   f = submissionFixture()
 })
 afterEach(() => {
+  vi.clearAllTimers()
+  vi.useRealTimers()
   f.db.close()
   vi.restoreAllMocks()
 })
@@ -65,28 +67,24 @@ it.each(['mission', 'relation'] as const)(
     expect(f.snapshotGit).not.toHaveBeenCalled()
   }
 )
-it.each(['retained', 'already_released', 'release_committed', 'no_owned_resource'] as const)(
-  'records the %s retain disposition without making it an error',
-  async (disposition) => {
-    const resource = f.db.getWorkerTerminalResourceByOwner(f.t01.attemptId)
-    expect(resource).toBeDefined()
-    if (!resource) {
-      throw new Error('Fixture terminal resource missing')
-    }
-    f.retain.mockReturnValueOnce(
-      disposition === 'no_owned_resource'
-        ? { disposition, resource: null }
-        : { disposition, resource }
-    )
-    expect(await f.submit()).toMatchObject({ ok: true })
-    expect(f.store.listAuditEvents({ missionId: f.mission.id })).toContainEqual(
-      expect.objectContaining({
-        event: 'attempt.terminal_retained',
-        after: expect.objectContaining({ retainDisposition: disposition })
-      })
-    )
-  }
-)
+it('records archive storage failure without changing the settled result or suppressing release', async () => {
+  f.put.mockRejectedValueOnce(new Error('sensitive storage failure'))
+  expect(await f.submit()).toMatchObject({ ok: true })
+  expect(f.store.listAuditEvents({ missionId: f.mission.id })).toContainEqual(
+    expect.objectContaining({
+      event: 'attempt.transcript_archive_failed',
+      after: {
+        submissionId: f.store.getSubmissionByDispatch(f.t01.attemptId)!.id,
+        reason: 'store_failed'
+      }
+    })
+  )
+  expect(f.store.getTaskStage(f.t01.taskId)?.stage).toBe('SUBMITTED')
+  expect(f.store.listCandidates(f.mission.id)).toHaveLength(1)
+  expect(f.store.listVerificationRuns({ missionId: f.mission.id })[0]?.status).toBe('QUEUED')
+  await vi.advanceTimersByTimeAsync(2000)
+  expect(f.releaseWorker).toHaveBeenCalledOnce()
+})
 it('serializes concurrent submissions and snapshots only once', async () => {
   const results = await Promise.all([f.submit(), f.submit()])
   const parsed = results.map((result) => {
@@ -158,6 +156,8 @@ it('recovers a missing post-commit message through authenticated duplicate submi
   ).toMatchObject({ ok: false })
   const stored = f.store.getSubmissionByDispatch(f.t01.attemptId)
   expect(stored?.report.summary).toBe('x'.repeat(4000))
+  await vi.advanceTimersByTimeAsync(2000)
+  expect(f.releaseWorker).not.toHaveBeenCalled()
   expect(await f.submit()).toMatchObject({
     ok: true,
     result: { duplicate: true, submission: stored }
@@ -169,6 +169,8 @@ it('recovers a missing post-commit message through authenticated duplicate submi
     })
   ])
   expect(f.snapshotGit).toHaveBeenCalledTimes(1)
+  await vi.advanceTimersByTimeAsync(2000)
+  expect(f.releaseWorker).not.toHaveBeenCalled()
 })
 it('schedules only after commit and suppresses the stage trigger on rollback', async () => {
   const schedule = vi

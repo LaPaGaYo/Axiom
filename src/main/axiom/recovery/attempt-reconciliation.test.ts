@@ -20,6 +20,7 @@ describe('Attempt recovery', () => {
   let artifacts: ArtifactStore
   let now: number
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     f = channelFixture()
     root = mkdtempSync(join(tmpdir(), 'axiom-recovery-'))
     artifacts = new ArtifactStore(f.store, root)
@@ -50,6 +51,8 @@ describe('Attempt recovery', () => {
     )
   })
   afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
     f.db.close()
     vi.restoreAllMocks()
     rmSync(root, { recursive: true, force: true })
@@ -452,31 +455,55 @@ describe('Attempt recovery', () => {
       expect(audits()).toEqual(after)
     }
   )
-  it('retains a submitted terminal after verification claims, following a crash after settlement', async () => {
+  it('releases a submitted terminal after verification claims and a lost release timer', async () => {
     vi.spyOn(snapshots, 'snapshotCandidate').mockResolvedValue({
       commitSha: 'a'.repeat(40),
       treeSha: 'b'.repeat(40),
       snapshotCommitted: false
     })
-    vi.spyOn(f.db, 'retainWorkerTerminalResource').mockImplementationOnce(() => {
-      throw new Error('crash window')
-    })
     expect(
-      await f.call('axiom.attempt.submit', { attemptId: f.t01.attemptId, from: f.t01.from, report })
+      await f.call('axiom.attempt.submit', {
+        attemptId: f.t01.attemptId,
+        from: f.t01.from,
+        report
+      })
     ).toMatchObject({ ok: true })
+    vi.clearAllTimers() // Simulate runtime loss after the receipt, before the grace expires.
     expect(f.db.getWorkerTerminalResourceByOwner(f.t01.attemptId)?.release_state).toBe(
       'not_requested'
     )
     expect(stage()?.stage).toBe('VERIFYING')
+    now += 61_000
+    const hostScope = { kind: 'local' as const, hostId: 'local' as const }
+    f.db.db
+      .prepare('UPDATE worker_terminal_resources SET host_scope = ? WHERE owner_dispatch_id = ?')
+      .run(JSON.stringify(hostScope), f.t01.attemptId)
+    vi.spyOn(f.runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
+      terminalHandle: f.t01.from,
+      runtimeId: f.runtime.getRuntimeId(),
+      ptyId: 'pty-worker',
+      worktreeId: 'repo::T01',
+      launchTokenHash: 'test-hash',
+      paneKey: f.t01.paneKey,
+      processIncarnation: f.t01.processIncarnation,
+      hostScope
+    })
+    // The kernel still owns identity proof, archival, close and resource settlement.
+    vi.spyOn(f.runtime, 'readTerminal').mockResolvedValue({
+      handle: f.t01.from,
+      tail: ['Worker output'],
+      truncated: false,
+      status: 'running',
+      nextCursor: null
+    })
     await recovery.reconcileAttempts()
-    expect(f.db.getWorkerTerminalResourceByOwner(f.t01.attemptId)?.release_state).toBe('retained')
-    expect(audits().filter((e) => e.event === 'attempt.terminal_retained')).toMatchObject([
+    expect(f.db.getWorkerTerminalResourceByOwner(f.t01.attemptId)?.release_state).toBe('released')
+    expect(audits().filter((e) => e.event === 'attempt.terminal_released')).toMatchObject([
       {
         after: {
-          taskId: f.t01.taskId,
           submissionId: expect.any(String),
-          candidateId: expect.any(String),
-          retainDisposition: 'retained'
+          state: 'released',
+          processAction: 'closed_agent_terminal'
         }
       }
     ])

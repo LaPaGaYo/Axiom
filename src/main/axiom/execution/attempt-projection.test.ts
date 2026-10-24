@@ -142,6 +142,39 @@ it('projects the bound role and immutable submission evidence', async () => {
       createdAt: submission.createdAt
     }
   })
+  expect(result.submission).not.toHaveProperty('transcriptArtifactId')
+  const save = (
+    id: string,
+    createdBy = 'AttemptSettlement',
+    related = [submission.id],
+    kind: 'log' | 'evidence' = 'log'
+  ) => {
+    f.store.insertArtifact({
+      id,
+      missionId: 'mission',
+      kind,
+      related,
+      createdBy,
+      sha256: 'c'.repeat(64),
+      sizeBytes: 10,
+      mediaType: 'application/json'
+    })
+  }
+  save('transcript-old')
+  save('transcript-new')
+  f.db.db
+    .prepare('UPDATE artifacts SET created_at = ? WHERE id = ?')
+    .run('2026-10-24 23:59:00', 'transcript-new')
+  save('unrelated', 'AttemptSettlement', ['other'])
+  save('wrong-author', 'Worker')
+  save('wrong-kind', 'AttemptSettlement', [submission.id], 'evidence')
+  const archived = await projectAttempt(f.store, binding, fleetWorker, async () => ({
+    status: 'exited',
+    exact: true,
+    terminal: null,
+    terminalHandle: null
+  }))
+  expect(archived.submission?.transcriptArtifactId).toBe('transcript-new')
 })
 
 it.each<{
@@ -161,7 +194,12 @@ it.each<{
     const binding = { ...f.store.getAttemptBinding('task', 1)!, dispatchId: 'd1' }
     const worker = fleetWorker()
     expect(worker.liveness).toMatchObject({ verdict: 'unverifiable', reason: 'missing_status' })
-    const inspectTerminal = vi.fn(async () => ({ status, exact: true, terminal: null, terminalHandle: null }))
+    const inspectTerminal = vi.fn(async () => ({
+      status,
+      exact: true,
+      terminal: null,
+      terminalHandle: null
+    }))
     expect(await projectAttempt(f.store, binding, () => worker, inspectTerminal)).toMatchObject({
       attemptId: 'd1',
       state: 'RUNNING',
@@ -181,7 +219,8 @@ it('preserves the host reason even when no fleet worker is available', async () 
       status: 'unverifiable',
       reason: 'missing_liveness_verdict',
       exact: true,
-      terminal: null, terminalHandle: null
+      terminal: null,
+      terminalHandle: null
     })
   expect(await projectAttempt(f.store, binding, () => null, inspectTerminal)).toMatchObject({
     state: 'START_UNKNOWN',
@@ -201,7 +240,8 @@ it('continues to fold fleet resource release state independently of host livenes
     .mockResolvedValue({
       status: 'live',
       exact: true,
-      terminal: null, terminalHandle: null
+      terminal: null,
+      terminalHandle: null
     })
   expect((await projectAttempt(f.store, binding, projectWorker, inspectTerminal)).workspace).toBe(
     null
