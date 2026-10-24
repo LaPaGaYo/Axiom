@@ -2,7 +2,7 @@ import { writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { z } from 'zod'
 import { test, expect } from './helpers/orca-app'
-import { cli, withFixtureMission } from './helpers/axiom-fixture-mission'
+import { cli, withFixtureMission, FIXTURE_COMMIT } from './helpers/axiom-fixture-mission'
 import { fixtureLedger, inspectFixtureMission } from './helpers/axiom-fixture-inspection'
 import {
   VerificationListResponseSchema,
@@ -103,7 +103,11 @@ test('M3-02: independent checks reject both broken fixture candidates and verify
           phase: 'verdict',
           claimCount: 1,
           commands: ['pnpm install --frozen-lockfile --prefer-offline', 'pnpm run verify:full'],
-          verdictDetail: { verdict: expected.verdict, verdictArtifactId: expect.any(String) }
+          verdictDetail: {
+            verdict: expected.verdict,
+            verdictArtifactId: expect.any(String),
+            diff: { scopeViolations: [], mergeBase: FIXTURE_COMMIT }
+          }
         })
         const checks = z
           .array(z.object({ result: z.string(), failures: z.array(z.string()) }))
@@ -141,6 +145,12 @@ test('M3-02: independent checks reject both broken fixture candidates and verify
         `[M3-02] ${JSON.stringify(runs.map(({ id, taskId, status, verdictDetail }) => ({ id, taskId, status, verdictDetail })))}`
       )
     },
-    { holdWorkers: true, runVerification: true, maxAttempts: 1 }
+    {
+      holdWorkers: true,
+      runVerification: true,
+      maxAttempts: 1,
+      // Why: the frozen D49 stub patches files outside decomposition scopes; this spec tests command verdicts.
+      extraAllowedPaths: ['src/domain/recurrence.ts', 'src/services/date-range.ts']
+    }
   )
 })

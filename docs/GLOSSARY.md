@@ -149,6 +149,8 @@ M3-02（D65 / D68）完整转换表：
 
 M3-02 新增 phase `checking`（确定性命令执行中）与 `verdict`（证据已持久化、判定已结算）。verdict reason：`checks_failed`（FAIL）、`environment`（环境失败，直接交人）、`flaky`（重跑通过）、`known_flaky`（人工隔离名单）、`no_checks`（无命令）、`policy_invalid`（旧策略不符合严格 schema，直接交人）；PASS 的 reason 为 `checks_passed`。INCONCLUSIVE 保持 Task VERIFYING，后续 M3-05 才路由审查。verdictDetail 只存摘要与 Artifact 引用；完整命令输出及摘录在内容寻址的证据中。
 
+M3-03（D65 2026-10-24 修订）新增 verdict reason：`scope_violation`（FAIL，候选改动越界）、`secret_detected`（FAIL，新增行命中密钥模式）、`dangerous_change`（INCONCLUSIVE，危险路径未在 scope 中明确命名）、`diff_too_large`（INCONCLUSIVE，patch 超过扫描上限）。diff 不可得仍为 `environment`，detail 为 `integration_base_unavailable` / `merge_base_unavailable` / `diff_unavailable`；diff 给出的 INCONCLUSIVE 一律 escalation=human。
+
 M3-01 的 `verdictDetail.phase`：`claimed`（事务领取）、`prepared`（独立 worktree 已 detached 检出并核验 Candidate commit/tree）、`prepare_failed`（准备失败，INCONCLUSIVE）、`requeued`（重启回收后重排队）、`canceled`（Candidate SUPERSEDED、Candidate 行缺失 `candidate_missing` 或 Task stage 已改变）。`prepared` 仍是 RUNNING，不代表验证通过；M3-02 才执行检查并产生 verdict。重启重排队的 run 可续接已 `VERIFYING` 的 Task，不回退 stage；普通 QUEUED 仍要求 SUBMITTED。每次领取递增 `claimCount`，记录 `runtimeEpoch / worktreeId / startedAt / finishedAt`；VerificationService 在启动时先回收旧 worktree 再重排队，保留旧审计与 Artifact。回收失败的 run 保持 RUNNING 与旧 epoch，标记 cleanupPending，由后续 kick / 60 s tick 重试；不阻止其他 run 或 Control Plane 启动。
 
 ### 4.9 IntegrationBatch

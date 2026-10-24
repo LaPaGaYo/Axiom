@@ -145,6 +145,8 @@ export async function mandatorySections(store: AxiomStore, missionId: string, ta
         }),
         'Write only within allowedPaths. No permission, credential, network or budget expansion without Control Plane authorization.',
         'Write scope is checked by verification-time diff inspection; CLI agents have no runtime write-scope enforcement.',
+        'Every file left in this worktree becomes part of the Candidate. Write reports and other Artifact files outside the worktree (for example in a temporary directory) before running axiom mission artifact put.',
+        'Verification compares the Candidate with its merge-base on the integration branch: a changed path outside allowedPaths fails it (scope_violation), an added line that matches a secret pattern fails it (secret_detected), and changes to dependency manifests, lockfiles, CI, hooks, test or lint configuration or agent instruction files go to human review unless an allowedPaths entry names them.',
         'Submission contract: axiom-submission-v1',
         '- Task and Attempt identifiers',
         '- Concise implementation summary',

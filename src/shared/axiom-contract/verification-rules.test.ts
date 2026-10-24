@@ -14,14 +14,36 @@ it('defaults all supported keys and rejects unknown keys and invalid commands', 
     inconclusiveRouting: 'specialist',
     nonCodeTasks: 'human_confirm',
     setupCommands: [],
-    knownFlaky: []
+    knownFlaky: [],
+    secretPatterns: []
   })
   expect(rules.dangerousPathPatterns).toEqual([
     '.github/workflows/**',
-    'pnpm-lock.yaml',
-    'package-lock.json',
-    'yarn.lock',
-    'package.json',
+    '.github/actions/**',
+    '.gitlab-ci.yml',
+    '.circleci/**',
+    '.husky/**',
+    '.pre-commit-config.yaml',
+    '**/lefthook.yml',
+    '**/package.json',
+    '**/pnpm-lock.yaml',
+    '**/pnpm-workspace.yaml',
+    '**/package-lock.json',
+    '**/yarn.lock',
+    '**/.npmrc',
+    '**/vitest.config.*',
+    '**/vitest.workspace.*',
+    '**/jest.config.*',
+    '**/playwright.config.*',
+    '**/eslint.config.*',
+    '**/.eslintrc*',
+    '**/.oxlintrc*',
+    '**/AGENTS.md',
+    '**/CLAUDE.md',
+    '**/.claude/**',
+    '**/.codex/**',
+    '**/.agents/**',
+    '**/.mcp.json',
     '.axiom-work/**'
   ])
   expect(rules.retryOnce).toEqual([
@@ -120,4 +142,16 @@ it('trims required evidence and skips empty items before de-duplicating', () => 
       VerificationRulesSchema.parse({})
     )
   ).toEqual([])
+})
+
+it('validates additive regex sources without flags and replaces dangerous defaults', () => {
+  expect(
+    VerificationRulesSchema.parse({
+      secretPatterns: ['^custom_[0-9]+$'],
+      dangerousPathPatterns: []
+    })
+  ).toMatchObject({ secretPatterns: ['^custom_[0-9]+$'], dangerousPathPatterns: [] })
+  for (const secretPatterns of [['('], [''], [1]]) {
+    expect(VerificationRulesSchema.safeParse({ secretPatterns }).success).toBe(false)
+  }
 })

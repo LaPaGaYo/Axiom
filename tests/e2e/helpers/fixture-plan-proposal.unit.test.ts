@@ -33,9 +33,16 @@ it('consumes a Task crash marker before the stub, exits without submitting, then
   const nativeRequire = createRequire(import.meta.url)
   const context = {
     require: (name: string) => {
+      if (name === 'node:path') {
+        return nativeRequire('node:path').posix
+      }
       if (name === 'node:fs') {
         return {
           existsSync: (file: string) => files.has(file),
+          readFileSync: (file: string) => {
+            expect(file).toBe('/fixture/REPORT.md')
+            return 'Frozen stub report'
+          },
           rmSync: (file: string) => files.delete(file),
           appendFileSync: (_file: string, body: string) => events.push(body),
           mkdtempSync: () => '/virtual-report',
@@ -193,3 +200,76 @@ describe('fixture-v1 PlanProposal conversion', () => {
     expect(() => fixturePlanProposal(input, 'goal-1', at)).toThrow(/cycle/)
   })
 })
+
+it.each(['scope-violation', 'secret-line'])(
+  'keeps the %s provider-only report outside the Candidate',
+  async (scenario) => {
+    const files = new Map([['/ledger.scenario-task-1', scenario]])
+    const written = new Map<string, string>()
+    const removed: string[] = []
+    const spawnSync = vi.fn((command: string, args: string[]) => {
+      expect(args.includes('scenarios/stub-worker/worker.mjs')).toBe(false)
+      if (command === 'git') {
+        return {
+          status: 0,
+          stdout: scenario === 'scope-violation' ? 'README.md\n' : 'src/services/csv.ts\n'
+        }
+      }
+      if (args.includes('artifact')) {
+        expect(args[args.indexOf('--file') + 1]).toBe('/virtual-report/REPORT.md')
+      }
+      return {
+        status: 0,
+        stdout: JSON.stringify({ ok: true, result: { artifact: { id: 'art_report' } } })
+      }
+    })
+    const nativeRequire = createRequire(import.meta.url)
+    await runInNewContext(
+      `${AXIOM_TEST_PROVIDER_SOURCE}\nsubmitFixture('attempt-1', 'mission-1', 'task-1')`,
+      {
+        require: (name: string) => {
+          if (name === 'node:path') {
+            return nativeRequire('node:path').posix
+          }
+          if (name === 'node:fs') {
+            return {
+              existsSync: (file: string) => files.has(file),
+              readFileSync: (file: string) => files.get(file),
+              writeFileSync: (file: string, content: string) => written.set(file, content),
+              appendFileSync: (file: string, content: string) =>
+                files.set(file, (files.get(file) ?? '') + content),
+              mkdtempSync: () => '/virtual-report',
+              rmSync: (file: string) => removed.push(file)
+            }
+          }
+          if (name === 'node:child_process') {
+            return { spawnSync }
+          }
+          return nativeRequire(name)
+        },
+        process: {
+          argv: [],
+          env: { AXIOM_E2E_LEDGER: '/ledger', ORCA_E2E_CLI_ENTRY: '/cli' },
+          execPath: '/node',
+          cwd: () => '/fixture',
+          stdout: { write() {} },
+          stdin: { setEncoding() {}, on() {}, resume() {} }
+        },
+        setInterval() {}
+      }
+    )
+    expect(written.get('/virtual-report/REPORT.md')).toContain('taskId: task-1')
+    const report = JSON.parse(written.get('/virtual-report/report.json')!)
+    expect(report.filesChanged).toEqual([
+      scenario === 'scope-violation' ? 'README.md' : 'src/services/csv.ts'
+    ])
+    expect(removed).toContain('/virtual-report')
+    expect(files.has('/fixture/REPORT.md')).toBe(false)
+    expect(written.has('/fixture/REPORT.md')).toBe(false)
+    if (scenario === 'secret-line') {
+      expect(files.get('/fixture/src/services/csv.ts')).toContain(`${'gh' + 'p_'}${'Z'.repeat(36)}`)
+    } else {
+      expect(files.get('/fixture/README.md')).toBe('\n<!-- axiom e2e scope probe -->\n')
+    }
+  }
+)

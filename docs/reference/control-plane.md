@@ -316,7 +316,7 @@ M2-07 宿主 spec 为 `tests/e2e/mission-attempt-submit.spec.ts`（需要 AXIOM_
 
 M3-01 在结算事务返回后触发 verification.kick(missionId)，拒绝/重复提交不触发；M3-02 在同一 drain 执行检查、记录 verdict；M4 才集成/释放 Candidate。D49 提交不构成真实 provider 认证。
 
-### Verification（M3-01 / M3-02）
+### Verification（M3-01 / M3-02 / M3-03）
 
 `verification/verification-service.ts` 是确定性的独立消费者；不启动模型、不采信 Worker 的 checksRun。`kick(missionId?)` 在整个 Control Plane 内合并为一个串行 drain；Mission 参数是触发提示，队列从 DB 读取，直到没有可领取的 run。三个入口：Submission 的 `axiom_submit` 事务返回后（拒绝/重复不触发）、启动恢复完成后、既有 60 s Attempt reconcile closure。没有新的 timer 或队列表。
 
@@ -346,7 +346,8 @@ phase 词汇为 `claimed | prepared | checking | verdict | prepare_failed | requ
 | timeBudgetMinutes     | 30，正整数；一次运行共用的 deadline                                                                                                        |
 | inconclusiveRouting   | specialist；可选 human                                                                                                                     |
 | nonCodeTasks          | human_confirm；可选 artifact_only                                                                                                          |
-| dangerousPathPatterns | `.github/workflows/**`、pnpm-lock.yaml、package-lock.json、yarn.lock、package.json、`.axiom-work/**`；仅解析，M3-03 使用                   |
+| dangerousPathPatterns | M3-03 下列 27 个危险路径模式；policy 显式设置时整体替换默认列表                   |
+| secretPatterns        | `[]`；非空 JavaScript 正则源码，无 flags；只追加，编译失败拒绝（invalid_argument） |
 | setupCommands         | `[]`                                                                                                                                       |
 | retryOnce             | 常见测试前缀：pnpm / npm / yarn / bun 的 test、run test；npx vitest、vitest、npx jest、jest、pytest、python -m pytest、go test、cargo test |
 | knownFlaky            | `[]`；人工维护的失败名模式，只有 `*` 是通配符                                                                                              |
@@ -359,14 +360,19 @@ deadline 从检查阶段开始（prepare 不计入），每条命令只得到剩
 
 retryOnce 对命令与前缀规范化空白，只允许相等、前缀后接空格或冒号；`pnpm run test:unit` 命中，fixture 的 `pnpm run verify:full` 不命中。匹配的 fail 在同一 worktree 最多重跑一次；两个 Attempt 的日志均保留，第二次 pass 使该 check 为 inconclusive(flaky)，第二次 fail 保持 fail。重试环境失败或预算耗尽不抹除第一次 deterministic fail。仍为 fail 且抽取出的失败名非空、全部匹配 knownFlaky（并无环境失败的重试）时变 inconclusive(known_flaky)，结算事务写一次 `verification.known_flaky {checkIndex, failures}`；系统不增加隔离名单。
 
-| Check 集合（按优先顺序）    | Verdict / reason                                  | escalation / Task                               |
-| --------------------------- | ------------------------------------------------- | ----------------------------------------------- |
-| 任一 fail                   | FAIL / checks_failed                              | VERIFYING → NEEDS_FIX → READY 或 BLOCKED        |
-| 无 fail，任一 environmental | INCONCLUSIVE / environment                        | human；保持 VERIFYING                           |
-| 无以上，任一 inconclusive   | INCONCLUSIVE / flaky（有 flaky 时）或 known_flaky | inconclusiveRouting；保持 VERIFYING             |
-| 无命令                      | INCONCLUSIVE / no_checks                          | human_confirm → human，否则 inconclusiveRouting |
-| 无以上，仍有 skipped        | INCONCLUSIVE / environment                        | human；不会把未执行的命令当成通过               |
-| 全部 pass                   | PASS / checks_passed                              | VERIFYING → VERIFIED                            |
+| Gate / Check（按优先顺序） | Verdict / reason | escalation / Task |
+| --- | --- | --- |
+| diff 新增行含密钥 | FAIL / secret_detected | VERIFYING → NEEDS_FIX → READY 或 BLOCKED |
+| diff 存在越界路径 | FAIL / scope_violation | 同上；即使所有命令 pass |
+| 任一 check fail | FAIL / checks_failed | 同上；优先于 diff INCONCLUSIVE |
+| diff 不可得 | INCONCLUSIVE / environment，detail 为固定 diff 错因 | human；保持 VERIFYING |
+| patch 超过扫描上限 | INCONCLUSIVE / diff_too_large | human；保持 VERIFYING |
+| 危险路径未被 scope 明确命名 | INCONCLUSIVE / dangerous_change | human；保持 VERIFYING |
+| 无以上，任一 environmental | INCONCLUSIVE / environment | human；保持 VERIFYING |
+| 无以上，任一 inconclusive | INCONCLUSIVE / flaky（有 flaky 时）或 known_flaky | inconclusiveRouting；保持 VERIFYING |
+| 无命令 | INCONCLUSIVE / no_checks | human_confirm → human，否则 inconclusiveRouting |
+| 无以上，仍有 skipped | INCONCLUSIVE / environment | human；未执行不能算通过 |
+| 全部 pass 且 gate clear | PASS / checks_passed | VERIFYING → VERIFIED |
 
 每个 verdict 的事务都带 id、expectedStatus=RUNNING、expectedRuntimeEpoch、expectedClaimCount，且要求 Task 仍 VERIFYING、Candidate 仍是该 Task 的 ACTIVE Candidate。CAS 丢失不写 verdict / stage / audit，仍回收本次 worktree。PASS 的 stage actor=VerificationService、reason=verification_passed，审计 verification.passed。FAIL 经 execution/attempt-settlement.ts 的 settleVerificationFailure，同事务先 NEEDS_FIX(verification_failed)，再按 attemptCount < retryPolicy.maxAttempts 进入 READY(retry) 或 BLOCKED(retry_budget_exhausted)，审计 verification.failed {failures}。INCONCLUSIVE 只结算 run 与 verification.inconclusive {reason, escalation}，M3-05 才接审查。updateVerificationRun 根据术语表 §4.8 的完整转换表拒绝非法变化，FAIL/PASS/CANCELED 终态不可再改判；无 status 的元数据更新仍合法。
 
@@ -375,6 +381,56 @@ retryOnce 对命令与前缀规范化空白，只允许相等、前缀后接空�
 verdict 文档为单个 application/json、kind=evidence Artifact，createdBy=VerificationService、related=[runId,taskId,candidateId]。包含 verdict/reason/escalation、checks（index/source/command/result/reason、exitCode/signal/durationMs、attempts、failures/excerpt、stdoutArtifactId/stderrArtifactId、truncated、每流原始字节数与截断标记）、工具探针记录、toolVersions、deadline 与时间戳。版本命令 node/pnpm/git --version 在检查之后运行，每个最多 10 秒且仍在同一预算内；缺失或未能取得版本记 unavailable，不影响 verdict。resolved commands 与 toolVersions 写到既有列；verdictDetail 仅存 phase=verdict、verdict/reason/escalation、verdictArtifactId、保留 prepare 证据的 evidenceArtifactIds，以及 check 的 index/source/command/result/reason/exitCode/durationMs/failures 摘要。日志和摘录不放 SQLite；verification show 因而能列出失败测试。重复内容沿用 ArtifactStore 的内容去重；verdict 文档的引用固定本次运行的关联。
 
 回收失败保留 worktreeId 与 cleanupPending=true；周期恢复现覆盖 PASS、FAIL、INCONCLUSIVE、两类 review 与 CANCELED 的待清理行，清理只更新元数据，不改变 verdict。shutdown 中 VerificationService.stop 中止运行中的进程树、停止 drain；RUNNING 保留，下一 boot 回收并重新 QUEUED。同一 plane 的 stop/start 也先等待旧 drain 退出，再换 epoch 恢复。E2E 唯一 hold seam：getMainE2EConfig().enabled 且 AXIOM_E2E_HOLD_VERIFICATION=1 时停在 prepared；非 E2E 模式不读取此变量。withFixtureMission 默认设置 hold，runVerification=true 时省略；新的 mission-verification.spec.ts 用 per-Task scenario marker 驱动三个冻结场景，并在批准的测试计划设 maxAttempts=1，阻止后续 Attempt 抢跑断言。
+
+**M3-03：候选 diff 检查（G2）**
+
+D64 的 2026-10-24 批准修订采用三点 diff。验证 worktree 检出不可变 Candidate 后、写 phase=checking 后、执行任何 setup / evidence / repository gate 命令前，先解析 `refs/heads/axiom/integration/<missionId>^{commit}` 为集成基线 SHA，再计算 `git merge-base <baseSha> <candidateCommitSha>`，比较 merge-base 到 Candidate。后续 Git 调用只用 SHA；修复 Attempt 合入新集成基线后，已集成的其他 Task 文件不再算该候选的 scope 改动。上一 Candidate 仅用于修复证据展示，不作 scope 基线。
+
+所有 Git 调用经 git runner 与 `gitOptionsForWorktree`。两个 diff 共用 `--no-color --no-ext-diff --no-textconv --no-renames`：重命名视作删除加新增，因此越界源路径不能躲在新路径后面。先用 `--name-status -z` 读取 status/path 对（包括删除、二进制、空文件和 mode 变更），再流式读取 `--submodule=short -U0` patch。patch 的每个 `diff --git ` section 按次序绑定一个 name-status 条目，不解析可能被 Git 引号转义的 header 路径；section 数不符即 diff_unavailable。仅扫描首个 `@@` 之后以 `+` 开头的新增行（去掉一个 `+`，逐文件以换行连接）；二进制无 hunk，只记录 binary。
+
+patch 默认最多 32 MiB；超限停止子进程，保留路径清单，丢弃全部新增文本，patchComplete=false，不以部分扫描证明安全。集成 ref 读取失败记 integration_base_unavailable，无公共祖先记 merge_base_unavailable，其余 Git / 解析失败记 diff_unavailable。失败证据保留已解析的分支、SHA、merge-base，不保存或记录原始 Git 输出。
+
+`scope.allowedPaths` 与 dangerousPathPatterns 共用 path-patterns.ts：反斜杠转 `/`、合并重复 `/`、去前导 `./` 与尾 `/`；空条目归一为 `.`。绝对路径（含 Windows drive）或任何 `..` 段无效、不授权，原条目记 ignoredScopeEntries。条目覆盖匹配的完整路径及其所有后代；`*` / `?` 只匹配段内任意字符 / 单字符，独立的 `**` 段可匹配零到多段；`.` 覆盖整个仓库。区分大小写、点文件不特殊，括号等其余字符都是字面量（例如 `app/[id]/page.tsx`）。实现对段索引做 memoisation 并合并连续 `**`。
+
+“明确命名”的确定性规则：一个有效 allowedPaths 条目 e 同时覆盖改动路径，并且 e 自身作为字面路径也匹配该危险模式。对默认清单，`.`、`src/`、`**` 不够；`package.json`、`**/package.json`、`src/storage/AGENTS.md`、`.github/workflows/` 则明确覆盖对应路径。越界路径已属 scopeViolations，不重复记 dangerous；每个 in-scope 路径只记首个未被明确授权的危险模式。
+
+默认 dangerousPathPatterns（policy 可整体替换）恰为：
+
+```json
+[
+  ".github/workflows/**", ".github/actions/**", ".gitlab-ci.yml", ".circleci/**",
+  ".husky/**", ".pre-commit-config.yaml", "**/lefthook.yml", "**/package.json",
+  "**/pnpm-lock.yaml", "**/pnpm-workspace.yaml", "**/package-lock.json", "**/yarn.lock",
+  "**/.npmrc", "**/vitest.config.*", "**/vitest.workspace.*", "**/jest.config.*",
+  "**/playwright.config.*", "**/eslint.config.*", "**/.eslintrc*", "**/.oxlintrc*",
+  "**/AGENTS.md", "**/CLAUDE.md", "**/.claude/**", "**/.codex/**", "**/.agents/**",
+  "**/.mcp.json", ".axiom-work/**"
+]
+```
+
+内置密钥模式 private_key（PRIVATE KEY 块）、provider_token（sk / ghp / gho / github_pat / xox[abp] 前缀）、aws_access_key_id（AKIA）始终启用，沿用 ContextBuilder 脱敏规则且不改变原 redactContext 输出。secretPatterns 只追加 JavaScript 正则源码（无 flags，非空且须可编译），命中名为 policy:<index>。检测无跨调用 lastIndex；证据只含 path + pattern 名，绝不含行号、摘录或匹配文本。规则有误报可能（例如带 sk- 前缀的长 kebab-case 标识符）；二进制文件不扫描。
+
+生成文件只记录，不增加 verdict 条件：`**/out/**`、`**/dist/**`、`**/*.lock`、`**/pnpm-lock.yaml`、`**/package-lock.json`、`**/bun.lockb`。它们仍受 scope、secret 和危险路径规则约束。
+
+gate 优先级为 diff 失败 → inconclusive/environment；否则 secret → fail/secret_detected；scope → fail/scope_violation；patch 不完整 → inconclusive/diff_too_large；危险改动 → inconclusive/dangerous_change；否则 clear。保留全部已取得的 findings，按路径排序。与命令组合时按上表：gate fail 优先于 check fail；check fail 优先于 gate inconclusive；其后沿用 M3-02 规则。**gate 从不跳过命令**，失败候选仍保留完整命令证据供修复；policy_invalid 与非本地 repository 路径不运行 gate。
+
+verdictDetail.diff 包含 integrationBase={branch,sha}、mergeBase、changedPaths（数量）、scopeViolations、dangerous（path/pattern）、secrets（path/pattern）、generated、binary、ignoredScopeEntries、patchComplete；每个列表最多 50 项，counts 对上述六个列表保存完整数量。既有 verdict evidence Artifact 使用同一 diff 结构，每列表最多 1000 项。失败为 `{error:<reason>}` 加已解析的 integrationBase / mergeBase（ref 不可得时只含 branch）。INCONCLUSIVE 同样有摘要。gate 原因赢得 verdict 时，verification.failed / verification.inconclusive 审计分别附最多 50 项 scopeViolations / secrets / dangerous。结算事务和 claim fencing 不变；FAIL 仍走 settleVerificationFailure，INCONCLUSIVE 仍保持 VERIFYING。
+
+Worker 的 Permissions, budget and submission contract 在运行时 write-scope 限制说明后追加：
+
+```text
+Every file left in this worktree becomes part of the Candidate. Write reports and other Artifact files outside the worktree (for example in a temporary directory) before running axiom mission artifact put.
+Verification compares the Candidate with its merge-base on the integration branch: a changed path outside allowedPaths fails it (scope_violation), an added line that matches a secret pattern fails it (secret_detected), and changes to dependency manifests, lockfiles, CI, hooks, test or lint configuration or agent instruction files go to human review unless an allowedPaths entry names them.
+```
+
+Planner 的 PlanProposal contract 追加：
+
+```text
+scope.allowedPaths entries are repository-relative: an entry covers that path and everything below it; * and ? match within one path segment, ** matches any number of segments, and . is the whole repository. Verification fails any change outside allowedPaths.
+Name dependency manifests, lockfiles, CI workflows, hooks, test or lint configuration and agent instruction files (AGENTS.md, CLAUDE.md, .claude/, .codex/, .agents/, .mcp.json) in allowedPaths when a Task must change them; otherwise such a change goes to human review.
+```
+
+DEF-21 ⑦ 的依赖规则：依赖变更集中到一个先行 Task，scope 明确列出 package.json 和所用 lockfile，下游 Task 等其集成；两个并行 Task 同时触及这些文件的提案警告留给 M5 Planner v2。M3-03b 才实现内容型篡改（删除/跳过测试、放宽断言、lint-disable）、Worker Artifact schema 与非代码 Task 路径。harness 写入 worktree 的本地状态（如 `.claude/settings.local.json`）也会进 Candidate 并因越界失败；启动配置移出 worktree 或经 Decision 设快照排除清单属于 M3-08。
 
 ### Questions 与 D50 待决项处置（M2-06b）
 
