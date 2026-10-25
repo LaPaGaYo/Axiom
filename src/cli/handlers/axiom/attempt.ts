@@ -138,7 +138,11 @@ export const AXIOM_ATTEMPT_HANDLERS: Record<string, CommandHandler> = {
       ctx,
       'axiom.attempt.show',
       { attemptId: required(ctx.flags, 'attempt') },
-      (value) => formatAttempt(AttemptResponseSchema.parse(value).attempt)
+      (value) => {
+        const attempt = AttemptResponseSchema.parse(value).attempt
+        const transcript = attempt.submission?.transcriptArtifactId
+        return `${formatAttempt(attempt)}${transcript ? `\nTranscript: ${transcript}` : ''}`
+      }
     )
   },
   'attempt list': async (ctx) => {

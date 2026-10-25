@@ -12,6 +12,8 @@ import { getAxiomControlPlane } from '../control-plane'
 import { routeWorkerMessage } from '../messaging/message-router'
 import { resolveAttemptSender } from './attempt-authority'
 import { snapshotCandidate } from './candidate-snapshot'
+import { archiveAttemptTranscript } from './attempt-transcript'
+import { scheduleSubmittedWorkerRelease } from './attempt-worker-release'
 
 // Only concurrent Git work is serialized here. Durable idempotency remains in SQLite/receipts.
 const queues = new WeakMap<OrchestrationDb, Map<string, Promise<void>>>()
@@ -249,32 +251,9 @@ async function settleSubmission(input: z.infer<typeof AttemptSubmitParams>, ctx:
   void verificationService.kick(mission.id).catch(() => {
     console.warn('[axiom] Verification preparation failed', { missionId: mission.id })
   })
-  // The kernel owns the retention transaction. A crash or failure here leaves a settled
-  // Submission and a not_requested resource for RecoveryService (M2-08) to retain later.
-  let retainDisposition:
-    | ReturnType<OrchestrationDb['retainWorkerTerminalResource']>['disposition']
-    | undefined
-  try {
-    retainDisposition = db.retainWorkerTerminalResource(attemptId).disposition
-  } catch {
-    // Persist the failure below without exposing raw kernel errors or undoing settlement.
-  }
-  store.transaction('attempt_retain', () =>
-    store.appendAuditEvent({
-      missionId: mission.id,
-      actor: 'AttemptSettlement',
-      objectKind: 'attempt',
-      objectId: attemptId,
-      event: retainDisposition ? 'attempt.terminal_retained' : 'attempt.terminal_retain_failed',
-      before: null,
-      after: {
-        taskId: task.taskId,
-        submissionId: result.submission.id,
-        candidateId: result.candidate.id,
-        ...(retainDisposition ? { retainDisposition } : {})
-      }
-    })
-  )
+  await archiveAttemptTranscript(runtime, result.submission)
   // Never send worker_done through orchestration.send: the dispatch is already settled here.
-  return publish(result)
+  publish(result)
+  scheduleSubmittedWorkerRelease(runtime, result.submission)
+  return result
 }

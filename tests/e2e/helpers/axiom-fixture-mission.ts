@@ -89,6 +89,7 @@ export async function withFixtureMission(
     holdWorkers?: boolean
     restart?: boolean
     runVerification?: boolean
+    releaseTerminals?: boolean
     maxAttempts?: number
     extraAllowedPaths?: string[]
   } = {}
@@ -128,6 +129,7 @@ process.exit(result.status ?? 1)
     PATH: `${temp}${path.delimiter}${process.env.PATH ?? ''}`,
     AXIOM_E2E_LEDGER: ledgerPath,
     ...(options.runVerification ? {} : { AXIOM_E2E_HOLD_VERIFICATION: '1' }),
+    ...(options.releaseTerminals ? {} : { AXIOM_E2E_HOLD_WORKER_RELEASE: '1' }),
     ORCA_E2E_CLI_ENTRY: cliEntry
   })
   let app: ElectronApplication | undefined

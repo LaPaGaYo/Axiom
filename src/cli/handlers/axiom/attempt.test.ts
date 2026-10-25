@@ -6,6 +6,7 @@ import { RuntimeClient } from '../../runtime-client'
 import { dispatch } from '../../dispatch'
 import { parseArgs, validateCommandAndFlags } from '../../args'
 import { COMMAND_SPECS } from '../../specs'
+import { attempt } from '../../../shared/axiom-contract/contract-fixtures.test-support'
 
 describe('Axiom attempt CLI registration', () => {
   it.each([
@@ -234,3 +235,34 @@ it.each([
     call.mockRestore()
   }
 })
+
+it.each([undefined, 'art-transcript'])(
+  'prints the optional transcript reference in attempt show (%s)',
+  async (transcriptArtifactId) => {
+    const client = new RuntimeClient('/unused', 500, null, null)
+    const call = vi.spyOn(client, 'call').mockResolvedValue({
+      id: 'rpc',
+      ok: true,
+      result: {
+        attempt: { ...attempt, submission: { ...attempt.submission, transcriptArtifactId } }
+      },
+      _meta: { runtimeId: 'runtime' }
+    })
+    const output = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      await dispatch(['attempt', 'show'], {
+        flags: new Map([['attempt', 'd1']]),
+        client,
+        cwd: '/unused',
+        json: false
+      })
+      const printed = output.mock.calls.flat().join('\n')
+      expect(printed.includes('Transcript: art-transcript')).toBe(
+        transcriptArtifactId !== undefined
+      )
+    } finally {
+      call.mockRestore()
+      output.mockRestore()
+    }
+  }
+)

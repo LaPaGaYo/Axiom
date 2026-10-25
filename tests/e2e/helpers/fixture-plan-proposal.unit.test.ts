@@ -201,18 +201,42 @@ describe('fixture-v1 PlanProposal conversion', () => {
   })
 })
 
-it.each(['scope-violation', 'secret-line'])(
+it.each(['scope-violation', 'secret-line', 'transcript-secret'])(
   'keeps the %s provider-only report outside the Candidate',
   async (scenario) => {
     const files = new Map([['/ledger.scenario-task-1', scenario]])
+    const stdout = vi.fn()
+    if (scenario === 'transcript-secret') {
+      files.set('/fixture/REPORT.md', 'Frozen retry report')
+    }
     const written = new Map<string, string>()
     const removed: string[] = []
     const spawnSync = vi.fn((command: string, args: string[]) => {
-      expect(args.includes('scenarios/stub-worker/worker.mjs')).toBe(false)
+      if (args.includes('scenarios/stub-worker/worker.mjs')) {
+        expect(scenario).toBe('transcript-secret')
+        expect(args).toEqual([
+          'scenarios/stub-worker/worker.mjs',
+          '--scenario',
+          'retry',
+          '--attempt',
+          '1',
+          '--mode',
+          'succeed',
+          '--cwd',
+          '/fixture'
+        ])
+        expect(stdout.mock.calls.flat().join('')).toContain(`${'gh' + 'p_'}${'T'.repeat(36)}`)
+        return { status: 0, stdout: '' }
+      }
       if (command === 'git') {
         return {
           status: 0,
-          stdout: scenario === 'scope-violation' ? 'README.md\n' : 'src/services/csv.ts\n'
+          stdout:
+            scenario === 'scope-violation'
+              ? 'README.md\n'
+              : scenario === 'secret-line'
+                ? 'src/services/csv.ts\n'
+                : 'src/retry.ts\n'
         }
       }
       if (args.includes('artifact')) {
@@ -239,7 +263,10 @@ it.each(['scope-violation', 'secret-line'])(
               appendFileSync: (file: string, content: string) =>
                 files.set(file, (files.get(file) ?? '') + content),
               mkdtempSync: () => '/virtual-report',
-              rmSync: (file: string) => removed.push(file)
+              rmSync: (file: string) => {
+                removed.push(file)
+                files.delete(file)
+              }
             }
           }
           if (name === 'node:child_process') {
@@ -252,7 +279,7 @@ it.each(['scope-violation', 'secret-line'])(
           env: { AXIOM_E2E_LEDGER: '/ledger', ORCA_E2E_CLI_ENTRY: '/cli' },
           execPath: '/node',
           cwd: () => '/fixture',
-          stdout: { write() {} },
+          stdout: { write: stdout },
           stdin: { setEncoding() {}, on() {}, resume() {} }
         },
         setInterval() {}
@@ -261,7 +288,11 @@ it.each(['scope-violation', 'secret-line'])(
     expect(written.get('/virtual-report/REPORT.md')).toContain('taskId: task-1')
     const report = JSON.parse(written.get('/virtual-report/report.json')!)
     expect(report.filesChanged).toEqual([
-      scenario === 'scope-violation' ? 'README.md' : 'src/services/csv.ts'
+      scenario === 'scope-violation'
+        ? 'README.md'
+        : scenario === 'secret-line'
+          ? 'src/services/csv.ts'
+          : 'src/retry.ts'
     ])
     expect(removed).toContain('/virtual-report')
     expect(files.has('/fixture/REPORT.md')).toBe(false)
@@ -269,6 +300,12 @@ it.each(['scope-violation', 'secret-line'])(
     if (scenario === 'secret-line') {
       const token = `${'gh' + 'p_'}${'Z'.repeat(36)}`
       expect(files.get('/fixture/src/services/csv.ts')).toBe(`// axiom e2e probe ${token}\n`)
+    } else if (scenario === 'transcript-secret') {
+      expect(written.get('/virtual-report/REPORT.md')).toContain('Frozen retry report')
+      expect(JSON.stringify([...written])).not.toContain(`${'gh' + 'p_'}${'T'.repeat(36)}`)
+      expect(
+        spawnSync.mock.calls.filter(([, args]) => args.includes('scenarios/stub-worker/worker.mjs'))
+      ).toHaveLength(1)
     } else {
       expect(files.get('/fixture/README.md')).toBe('\n<!-- axiom e2e scope probe -->\n')
     }

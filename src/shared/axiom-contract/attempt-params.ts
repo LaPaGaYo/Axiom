@@ -104,6 +104,7 @@ export const AttemptSummarySchema = z.object({
   updatedAt: z.string(),
   submission: SubmissionSchema.pick({ id: true, candidateId: true, createdAt: true })
     .extend({
+      transcriptArtifactId: AxiomIdSchema.optional(),
       commitSha: CandidateSchema.shape.commitSha,
       treeSha: CandidateSchema.shape.treeSha,
       filesChanged: SubmissionReportSchema.shape.filesChanged,

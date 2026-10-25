@@ -38,11 +38,14 @@ async function submitFixture(attemptId, missionId, taskId) {
   }
   const scenarioMarker = process.env.AXIOM_E2E_LEDGER + '.scenario-' + taskId
   const scenario = existsSync(scenarioMarker) ? readFileSync(scenarioMarker, 'utf8').trim() : 'retry'
-  if (!['retry', 'deterministic-failure', 'agent-crash', 'scope-violation', 'secret-line'].includes(scenario)) throw new Error('Unknown fixture scenario')
+  if (!['retry', 'deterministic-failure', 'agent-crash', 'scope-violation', 'secret-line', 'transcript-secret'].includes(scenario)) throw new Error('Unknown fixture scenario')
   // Keep both the Worker Artifact and protocol envelope outside the Candidate snapshot.
   const temp = mkdtempSync(path.join(os.tmpdir(), 'axiom-submit-report-'))
   try {
-    const command = ['scenarios/stub-worker/worker.mjs', '--scenario', scenario, '--attempt', '1', '--mode', 'succeed', '--cwd', process.cwd()]
+    if (scenario === 'transcript-secret') {
+      process.stdout.write('Transcript redaction probe: ' + 'gh' + 'p_' + 'T'.repeat(36) + '\\n')
+    }
+    const command = ['scenarios/stub-worker/worker.mjs', '--scenario', scenario === 'transcript-secret' ? 'retry' : scenario, '--attempt', '1', '--mode', 'succeed', '--cwd', process.cwd()]
     const started = Date.now()
     const providerOnly = scenario === 'scope-violation' || scenario === 'secret-line'
     let reportText
