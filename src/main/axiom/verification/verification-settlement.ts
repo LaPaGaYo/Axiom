@@ -11,7 +11,7 @@ export class VerificationInterrupted extends Error {}
 function gateAuditFindings(
   verdict: VerificationVerdict,
   gate?: DiffGate
-): Record<string, string[] | DiffGate['secrets']> {
+): Record<string, string[] | DiffGate['secrets'] | DiffGate['tampering']> {
   if (!gate || gate.outcome === 'clear' || gate.reason !== verdict.reason) {
     return {}
   }
@@ -23,6 +23,9 @@ function gateAuditFindings(
   }
   if (gate.reason === 'dangerous_change') {
     return { dangerous: gate.dangerous.slice(0, 50) }
+  }
+  if (gate.reason === 'test_tampering') {
+    return { tampering: gate.tampering.slice(0, 50) }
   }
   return {}
 }

@@ -68,6 +68,7 @@ export async function buildPlannerContext(
         'kind: task | fix; risk: low | medium | high; retryPolicy.maxAttempts >= 1.',
         'scope.allowedPaths entries are repository-relative: an entry covers that path and everything below it; * and ? match within one path segment, ** matches any number of segments, and . is the whole repository. Verification fails any change outside allowedPaths.',
         'Name dependency manifests, lockfiles, CI workflows, hooks, test or lint configuration and agent instruction files (AGENTS.md, CLAUDE.md, .claude/, .codex/, .agents/, .mcp.json) in allowedPaths when a Task must change them; otherwise such a change goes to human review.',
+        'Name a test file in allowedPaths when a Task must delete it, and give every Task required evidence commands unless its deliverable is an Artifact for human or Reviewer confirmation.',
         'Optional TaskSpec.role is a free-text label only; it does not select a provider or materialize skills.',
         'Do not supply provenance; the Control Plane stamps it from the authenticated Planner Attempt.'
       ].join('\n')

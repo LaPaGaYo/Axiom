@@ -98,7 +98,19 @@ it('renders ordered stored failures, safe diff findings, acceptance and a transc
     diff: {
       scopeViolations: ['README.md'],
       secrets: [{ path: 'src/key.ts', pattern: 'policy:0', matchedText: 'NEVER_INCLUDE_MATCH' }],
-      dangerous: [{ path: 'package.json', pattern: '**/package.json' }]
+      dangerous: [{ path: 'package.json', pattern: '**/package.json' }],
+      tampering: [
+        {
+          path: 'src/check.test.ts',
+          rule: 'assertions_reduced',
+          count: 2,
+          matchedText: 'NEVER_INCLUDE_MATCH'
+        }
+      ]
+    },
+    artifacts: {
+      required: true,
+      checked: [{ id: 'art_report', problem: 'invalid_json' }]
     }
   })
   const rendered = await section()
@@ -120,6 +132,11 @@ it('renders ordered stored failures, safe diff findings, acceptance and a transc
     'policy:0',
     'Dangerous changes',
     'package.json',
+    'Test tampering findings (path, rule, net count):',
+    '- src/check.test.ts (assertions_reduced, 2)',
+    'Restore the removed tests or assertions and remove the added skips or suppressions; the next verification applies the same rules.',
+    'Artifact problems:',
+    '- art_report (invalid_json)',
     'Not yet demonstrated',
     ...f.store.getTaskStage(taskId)!.spec.acceptanceCriteria,
     `axiom mission artifact read --artifact ${transcript.id}`
@@ -132,6 +149,27 @@ it('renders ordered stored failures, safe diff findings, acceptance and a transc
   }
   expect(rendered.content).not.toContain('check-1')
   expect(rendered.content).not.toContain('NEVER_INCLUDE_MATCH')
+})
+it('bounds new findings at 50 and omits code-Task Artifact problems', async () => {
+  seed()
+  const tampering = Array.from({ length: 52 }, (_, i) => ({
+    path: `path-${String(i).padStart(2, '0')}`,
+    rule: 'suppression_added',
+    count: 1
+  }))
+  const checked = Array.from({ length: 52 }, (_, i) => ({
+    id: `art-${String(i).padStart(2, '0')}`,
+    problem: 'empty'
+  }))
+  detail({ diff: { tampering }, artifacts: { required: true, checked } })
+  const first = await section()
+  expect((await section()).content).toBe(first.content)
+  expect(first.content).toContain('- path-49 (suppression_added, 1)')
+  expect(first.content).not.toContain('path-50')
+  expect(first.content).toContain('- art-49 (empty)')
+  expect(first.content).not.toContain('art-50')
+  detail({ artifacts: { required: false, checked } })
+  expect((await section()).content).not.toContain('Artifact problems:')
 })
 it('limits failure names to 20, each excerpt to 40 lines and all excerpt UTF-8 bytes to 8 KiB', async () => {
   seed()
@@ -190,8 +228,10 @@ it('starts clean for secrets, names only path/pattern and forbids reintroduction
     diff: {
       secrets: [
         { path: 'src/key.ts', pattern: 'provider_token', matchedText: 'NEVER_INCLUDE_MATCH' }
-      ]
-    }
+      ],
+      tampering: [{ path: 'src/check.test.ts', rule: 'test_skip_added', count: 1 }]
+    },
+    artifacts: { required: true, checked: [{ id: 'art_bad', problem: 'invalid_json' }] }
   })
   const result = await section()
   expect(result.source).toBe('previous-attempt:secret_detected')
@@ -199,6 +239,9 @@ it('starts clean for secrets, names only path/pattern and forbids reintroduction
   expect(result.content).toContain('secret_detected')
   expect(result.content).toContain('src/key.ts (provider_token)')
   expect(result.content).toContain('The secret must not be reintroduced.')
+  expect(result.content).toContain('- src/check.test.ts (test_skip_added, 1)')
+  expect(result.content).toContain('Restore the removed tests or assertions')
+  expect(result.content).toContain('Artifact problems:\n- art_bad (invalid_json)')
   expect(result.content).not.toContain('NEVER_INCLUDE_MATCH')
   expect(result.content).not.toContain('check-0')
 })

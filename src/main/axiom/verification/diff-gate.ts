@@ -6,6 +6,7 @@ import {
 import type { VerificationRules } from '../../../shared/axiom-contract/verification-rules'
 import { detectSecretPatterns } from '../context-builder/redaction'
 import type { CandidateDiff } from './candidate-diff'
+import { detectTestTampering, type TestTamperingFinding } from './test-tampering'
 
 export const GENERATED_PATH_PATTERNS = [
   '**/out/**',
@@ -20,7 +21,7 @@ export type DiffGateOutcome =
   | { outcome: 'fail'; reason: 'secret_detected' | 'scope_violation' }
   | {
       outcome: 'inconclusive'
-      reason: 'environment' | 'diff_too_large' | 'dangerous_change'
+      reason: 'environment' | 'diff_too_large' | 'test_tampering' | 'dangerous_change'
       detail?: string
     }
 export type DiffGate = DiffGateOutcome & {
@@ -29,6 +30,7 @@ export type DiffGate = DiffGateOutcome & {
   dangerous: { path: string; pattern: string }[]
   secrets: { path: string; pattern: string }[]
   generated: string[]
+  tampering: TestTamperingFinding[]
 }
 
 export function evaluateDiffGate(input: {
@@ -44,7 +46,18 @@ export function evaluateDiffGate(input: {
   const dangerous: DiffGate['dangerous'] = []
   const secrets: DiffGate['secrets'] = []
   const generated: string[] = []
-  const findings = { ignoredScopeEntries, scopeViolations, dangerous, secrets, generated }
+  const tampering =
+    diff.ok && diff.patchComplete
+      ? detectTestTampering({ ...diff, testPathPatterns: rules.testPathPatterns, allowedPaths })
+      : []
+  const findings = {
+    ignoredScopeEntries,
+    scopeViolations,
+    dangerous,
+    secrets,
+    generated,
+    tampering
+  }
   if (!diff.ok) {
     return { ...findings, outcome: 'inconclusive', reason: 'environment', detail: diff.reason }
   }
@@ -79,6 +92,9 @@ export function evaluateDiffGate(input: {
   if (!diff.patchComplete) {
     return { ...findings, outcome: 'inconclusive', reason: 'diff_too_large' }
   }
+  if (tampering.length) {
+    return { ...findings, outcome: 'inconclusive', reason: 'test_tampering' }
+  }
   if (dangerous.length) {
     return { ...findings, outcome: 'inconclusive', reason: 'dangerous_change' }
   }
@@ -94,7 +110,7 @@ export function summarizeDiffGate(diff: CandidateDiff, gate: DiffGate, limit: nu
       ...(diff.mergeBase ? { mergeBase: diff.mergeBase } : {})
     }
   }
-  const { scopeViolations, dangerous, secrets, generated, ignoredScopeEntries } = gate
+  const { scopeViolations, dangerous, secrets, generated, ignoredScopeEntries, tampering } = gate
   return {
     integrationBase: diff.integrationBase,
     mergeBase: diff.mergeBase,
@@ -102,6 +118,7 @@ export function summarizeDiffGate(diff: CandidateDiff, gate: DiffGate, limit: nu
     scopeViolations: scopeViolations.slice(0, limit),
     dangerous: dangerous.slice(0, limit),
     secrets: secrets.slice(0, limit),
+    tampering: tampering.slice(0, limit),
     generated: generated.slice(0, limit),
     binary: [...diff.binary].sort().slice(0, limit),
     ignoredScopeEntries: ignoredScopeEntries.slice(0, limit),
@@ -110,6 +127,7 @@ export function summarizeDiffGate(diff: CandidateDiff, gate: DiffGate, limit: nu
       scopeViolations: scopeViolations.length,
       dangerous: dangerous.length,
       secrets: secrets.length,
+      tampering: tampering.length,
       generated: generated.length,
       binary: diff.binary.length,
       ignoredScopeEntries: ignoredScopeEntries.length

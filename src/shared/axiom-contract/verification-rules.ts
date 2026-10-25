@@ -14,6 +14,16 @@ export const VerificationRulesSchema = z.strictObject({
   timeBudgetMinutes: z.number().int().positive().default(30),
   inconclusiveRouting: z.enum(['specialist', 'human']).default('specialist'),
   nonCodeTasks: z.enum(['artifact_only', 'human_confirm']).default('human_confirm'),
+  testPathPatterns: z
+    .array(z.string())
+    .default([
+      '**/*.test.*',
+      '**/*.spec.*',
+      '**/__tests__/**',
+      '**/test_*.py',
+      '**/*_test.py',
+      '**/*_test.go'
+    ]),
   dangerousPathPatterns: z
     .array(z.string())
     .default([

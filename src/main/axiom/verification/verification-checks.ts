@@ -15,6 +15,7 @@ import { removeVerificationWorktree } from './verification-worktree'
 import { VerificationInterrupted, settleVerificationVerdict } from './verification-settlement'
 import { readCandidateDiff } from './candidate-diff'
 import { evaluateDiffGate, summarizeDiffGate, type DiffGate } from './diff-gate'
+import { checkWorkerArtifacts } from './worker-artifacts'
 
 export function isLocalVerificationRepository(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'>
@@ -87,6 +88,11 @@ export async function runVerificationChecks(
     if (!task) {
       throw new VerificationInterrupted()
     }
+    const candidate = store.getCandidate(run.candidateId)
+    if (!candidate) {
+      throw new VerificationInterrupted()
+    }
+    const nonCodeTask = !task.spec.requiredEvidence.some((command) => command.trim())
     const parsed = VerificationRulesSchema.safeParse(
       store.getPolicy(run.missionId)?.verificationRules
     )
@@ -114,7 +120,7 @@ export async function runVerificationChecks(
     let gate: DiffGate | undefined
     let diffSummary: ReturnType<typeof summarizeDiffGate> | undefined
     let diffEvidence: ReturnType<typeof summarizeDiffGate> | undefined
-    let verdict: VerificationVerdict
+    let verdict: VerificationVerdict | undefined
     if (!parsed.success) {
       verdict = { verdict: 'INCONCLUSIVE', reason: 'policy_invalid', escalation: 'human' }
     } else if (!isLocalVerificationRepository(repo)) {
@@ -127,10 +133,6 @@ export async function runVerificationChecks(
     } else {
       const cwd = run.worktreeId && splitWorktreeIdForFilesystem(run.worktreeId)?.worktreePath
       if (!cwd) {
-        throw new VerificationInterrupted()
-      }
-      const candidate = store.getCandidate(run.candidateId)
-      if (!candidate) {
         throw new VerificationInterrupted()
       }
       const diff = await readCandidateDiff({
@@ -152,7 +154,19 @@ export async function runVerificationChecks(
         signal,
         assertCurrent
       })
-      verdict = decideVerificationVerdict(result.checks, rules, gate)
+    }
+    assertCurrent()
+    const workerArtifacts = await checkWorkerArtifacts({
+      store,
+      artifacts,
+      attemptId: candidate.attemptId,
+      required: nonCodeTask
+    })
+    if (gate) {
+      verdict = decideVerificationVerdict(result.checks, rules, gate, nonCodeTask, workerArtifacts)
+    }
+    if (!verdict) {
+      throw new VerificationInterrupted()
     }
     assertCurrent()
     const finishedAt = new Date().toISOString()
@@ -166,6 +180,7 @@ export async function runVerificationChecks(
         JSON.stringify({
           ...verdict,
           ...result,
+          artifacts: workerArtifacts,
           ...(diffEvidence ? { diff: diffEvidence } : {}),
           runId: run.id,
           taskId: run.taskId,
@@ -184,6 +199,7 @@ export async function runVerificationChecks(
       : []
     const verdictDetail = {
       phase: 'verdict',
+      artifacts: workerArtifacts,
       ...(diffSummary ? { diff: diffSummary } : {}),
       ...verdict,
       verdictArtifactId: evidence.id,

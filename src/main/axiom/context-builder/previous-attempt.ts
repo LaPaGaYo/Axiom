@@ -21,7 +21,32 @@ const Findings = z.array(z.object({ path: z.string(), pattern: z.string() }))
 const Diff = z.object({
   scopeViolations: z.array(z.string()).catch([]),
   secrets: Findings.catch([]),
-  dangerous: Findings.catch([])
+  dangerous: Findings.catch([]),
+  tampering: z
+    .array(
+      z.object({
+        path: z.string(),
+        rule: z.enum([
+          'test_file_deleted',
+          'test_skip_added',
+          'assertions_reduced',
+          'suppression_added'
+        ]),
+        count: z.number().int().positive()
+      })
+    )
+    .catch([])
+})
+const ArtifactEvidence = z.object({
+  required: z.boolean(),
+  checked: z
+    .array(
+      z.object({
+        id: z.string(),
+        problem: z.enum(['unreadable', 'empty', 'invalid_utf8', 'invalid_json']).optional()
+      })
+    )
+    .catch([])
 })
 const integrationReasons = {
   first_attempt: 'first Attempt',
@@ -39,6 +64,30 @@ function secretFindings(diff: unknown): string[] {
         ...parsed.data.secrets.map(({ path, pattern }) => `- ${path} (${pattern})`)
       ]
     : []
+}
+
+function contentFindings(detail: Record<string, unknown>): string[] {
+  const lines: string[] = []
+  const diff = Diff.safeParse(detail.diff)
+  if (diff.success) {
+    if (diff.data.tampering.length) {
+      lines.push(
+        'Test tampering findings (path, rule, net count):',
+        ...diff.data.tampering
+          .slice(0, 50)
+          .map(({ path, rule, count }) => `- ${path} (${rule}, ${count})`),
+        'Restore the removed tests or assertions and remove the added skips or suppressions; the next verification applies the same rules.'
+      )
+    }
+  }
+  const artifactEvidence = ArtifactEvidence.safeParse(detail.artifacts)
+  if (artifactEvidence.success && artifactEvidence.data.required) {
+    const problems = artifactEvidence.data.checked.filter(({ problem }) => problem).slice(0, 50)
+    if (problems.length) {
+      lines.push('Artifact problems:', ...problems.map(({ id, problem }) => `- ${id} (${problem})`))
+    }
+  }
+  return lines
 }
 
 async function readExcerpts(artifacts: ArtifactStore, artifactId: unknown) {
@@ -69,7 +118,8 @@ export async function previousAttemptSection(
     if (baseline.reason === 'secret_detected') {
       lines.push(
         ...secretFindings(baseline.verificationRun.verdictDetail.diff),
-        'The secret must not be reintroduced.'
+        'The secret must not be reintroduced.',
+        ...contentFindings(baseline.verificationRun.verdictDetail)
       )
     }
     return { source: `previous-attempt:${baseline.reason}`, content: lines.join('\n') }
@@ -125,6 +175,7 @@ export async function previousAttemptSection(
       )
     }
   }
+  lines.push(...contentFindings(detail))
   lines.push(
     'Not yet demonstrated:',
     ...(store.getTaskStage(run.taskId)?.spec.acceptanceCriteria ?? []).map(

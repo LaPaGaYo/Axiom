@@ -121,6 +121,12 @@ describe('ContextBuilder', () => {
       role: 'planner',
       goalRevisionId: store.getMission(missionId)!.activeGoalRevisionId!
     })
+    expect(worker.renderTemplate).toContain(
+      'Deleting or skipping tests, removing assertions from a test file, or adding lint, type-check or coverage suppressions sends the Candidate to human review (test_tampering). When the Task has no required evidence commands, reference at least one readable, non-empty Artifact in the submission (JSON must parse); a human or Reviewer confirms it.'
+    )
+    expect(planner.renderTemplate).toContain(
+      'Name a test file in allowedPaths when a Task must delete it, and give every Task required evidence commands unless its deliverable is an Artifact for human or Reviewer confirmation.'
+    )
     expect(planner.renderTemplate).toContain(
       'scope.allowedPaths entries are repository-relative: an entry covers that path and everything below it; * and ? match within one path segment, ** matches any number of segments, and . is the whole repository. Verification fails any change outside allowedPaths.'
     )
@@ -160,7 +166,7 @@ describe('ContextBuilder', () => {
     const first = await builder.build({ missionId, taskId })
     expect(upstream).toHaveLength(2)
     expect(first.packageId).toBe(
-      'ctx_80cde191f3e0ee147e40801bdaa23bf72bf1c779ef9fd417bf7aad59f21eaf13'
+      'ctx_3f2e9e7d0678704419932e53c82bffa9343a29c917050d3e93e82d059b9bbfd1'
     )
     expect(first.manifest.mandatory.map((entry) => entry.section)).toEqual(sections)
     expect(first.packageId).toBe(`ctx_${sha256(canonicalContextManifest(first.manifest))}`)
