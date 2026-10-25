@@ -1,4 +1,5 @@
 import { MISSION_CONTROLLER_ERROR_CODES } from '../../axiom/mission-controller/controller-context'
+import { OrchestrationError } from '../orchestration/orchestration-error'
 // Why: every RPC response needs the same runtimeId envelope, and the
 // runtime/browser error allowlists define the contract the CLI relies on to
 // format human-facing messages. Centralizing this mapping keeps the allowlist
@@ -110,6 +111,8 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
 const COMPUTER_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(Object.values(COMPUTER_ERROR_CODES))
 const LINEAR_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(LINEAR_ERROR_CODES)
 const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
+  'caller_not_desktop',
+  'caller_not_permitted_for_agent',
   'not_found',
   'attempt_not_found',
   'integration_base_unavailable',
@@ -214,7 +217,8 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     COMPUTER_PASSTHROUGH_CODES.has((error as { code: string }).code)
   ) {
     const code = (error as { code: string }).code
-    return errorResponse(id, meta, code, message, computerErrorData(code, message))
+    const data = error instanceof OrchestrationError ? error.data : computerErrorData(code, message)
+    return errorResponse(id, meta, code, message, data)
   }
   if (
     error instanceof Error &&

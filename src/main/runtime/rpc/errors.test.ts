@@ -30,6 +30,37 @@ class LineageError extends Error {
 }
 
 describe('mapRuntimeError', () => {
+  it.each(['caller_not_desktop', 'caller_not_permitted_for_agent'])(
+    'preserves the caller authority refusal %s',
+    (code) => {
+      expect(
+        mapRuntimeError(
+          'req_authority',
+          { runtimeId: 'runtime-1' },
+          new OrchestrationError(code, 'This caller cannot make this decision.')
+        ).error
+      ).toEqual({ code, message: 'This caller cannot make this decision.' })
+    }
+  )
+
+  it.each([{ reason: 'threshold_not_supported' }, undefined])(
+    'preserves orchestration invalid_argument data without adding computer recovery steps: %j',
+    (data) => {
+      const message = 'V1 supports only INTEGRATED dependencies'
+      expect(
+        mapRuntimeError(
+          'req_policy',
+          { runtimeId: 'runtime-1' },
+          new OrchestrationError('invalid_argument', message, data)
+        ).error
+      ).toEqual(
+        data === undefined
+          ? { code: 'invalid_argument', message }
+          : { code: 'invalid_argument', message, data }
+      )
+    }
+  )
+
   it('preserves a missing VerificationRun or Candidate read error', () => {
     expect(
       mapRuntimeError(

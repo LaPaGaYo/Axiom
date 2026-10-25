@@ -69,7 +69,7 @@ Milestone 存在 Plan JSON 内，没有独立表/状态机。Attempt 身份仍�
 
 ### ContextPackage（M2-02）
 
-`plane.artifacts` 与 `plane.contextBuilder` 已由 Scheduler、launcher、submit 服务复用。Artifact id = `art_` + sha256(canonical `{missionId,kind,sha256}`)；相同 Mission/kind/bytes 返回既有元数据（首次 related/createdBy 不被重写），跨 kind/Mission 共用内容文件。先写 `.tmp-<random>` 再 rename；read 重新检查 hash/size，缺文件或不匹配返回 `artifact_corrupt`。put 上限 8 MiB；RPC 用 `contentBase64`，CLI `mission artifact put --attempt <id> --mission … --kind … --file …` 在本机读文件；Worker 上传必须绑定 Attempt，出处与关联由宿主填写（D78，见调用方权限节；当前 CLI flag 注册缺口见该节）。read 的 `--json` 保留 base64，文本输出按 UTF-8；list 支持 kind 和单一 related id。
+`plane.artifacts` 与 `plane.contextBuilder` 已由 Scheduler、launcher、submit 服务复用。Artifact id = `art_` + sha256(canonical `{missionId,kind,sha256}`)；相同 Mission/kind/bytes 返回既有元数据（首次 related/createdBy 不被重写），跨 kind/Mission 共用内容文件。先写 `.tmp-<random>` 再 rename；read 重新检查 hash/size，缺文件或不匹配返回 `artifact_corrupt`。put 上限 8 MiB；RPC 用 `contentBase64`，CLI `mission artifact put --attempt <id> --mission … --kind … --file …` 在本机读文件；Worker 上传必须绑定 Attempt，出处与关联由宿主填写（D78，见调用方权限节）。read 的 `--json` 保留 base64，文本输出按 UTF-8；list 支持 kind 和单一 related id。
 
 ContextBuilder 固定强制顺序：(1) Task spec；(2) PlanRevision revision/milestone/带邻居标题的入出边；(3) ACCEPTED Decisions；(4) 权限、Mission/Task 预算、并发、重试与 `axiom-submission-v1` 字段清单；(5) 目标分支的 AGENTS.md/CLAUDE.md，各最多 16 KiB（缺文件省略，读失败不静默忽略）；(6) policy 验证命令；(7) Previous-Attempt failure evidence（M3-04，见下）。只读这两个规则文件，不读工作区版本或 `.env*`。
 
@@ -554,11 +554,21 @@ M2 之后：M3 复用 Question/待决项投影；M4 接 Approval，M5 使用 REQ
 
 第二层只消费宿主已经核实的 `ctx.orchestrationCaller`：以现有 dispatch 身份查询找到 `attempt_bindings` 后，不论 Worker、Planner 或 Reviewer，非 workspace permission，以及 agentSession.respondToApproval / respondToQuestion、orchestration.runCreate / dispatch / workerStart / taskCreate 都抛 `caller_not_permitted_for_agent`。workspace 读取、普通非 Axiom 会话不受这一层影响。可归属的拒绝在抛错前写该 Mission / Task 的 `authority.refused`，after 为 `{method,callerKind,attemptId}`；找不到 binding 时不伪造审计。
 
-实际覆盖由 `dispatcher-axiom-session-coverage.test.ts` 固定：当请求携带注入的 agentSessionId，admission 对**所有 orchestration. 方法**解析会话并设置 ctx（包括未列在 ORCHESTRATION_CALLER_PARAM 的 runShow / reset）；只有该表列出的方法才改写 caller params。Axiom 只有 AXIOM_ATTEMPT_CALLER_METHODS 的八个 Worker 动词、plan.propose、artifact.put 进入解析。其余 axiom.（含 plan.approve / policy.update / message.answer）、agentSession.respondTo*、settings 等方法不解析会话；CLI 的 compatibility envelope 也只为 orchestration. 与上述 Attempt 方法附带证据。无 agentSessionId 的 PTY 终端请求不产生 ctx.orchestrationCaller。无法归属的调用靠 D63 沙盒姿态；人工 Axiom 动作仍由 desktop 传输边界拒绝，不能把第二层当成认证边界。
+实际覆盖由 `dispatcher-axiom-session-coverage.test.ts` 固定：请求携带注入的 agentSessionId 时，宿主按下表解析 ctx.orchestrationCaller。CLI 的 compatibility envelope 只为相同的方法集合附带身份依据；测试逐一对照全部 AXIOM_METHODS，保证新扩展恰好是 desktop_only 方法。CLI 复用 AXIOM_MUTATION_METHODS（当前除 Attempt mutation 外均为 desktop_only），不引入 main 模块或第二套身份机制。
 
-artifact.put 增加可选 attemptId / from；带 attemptId 时在回执前及 handler 内复用 resolveAttemptSender，核对 Mission，createdBy 固定为 `attempt:<id>`、related 固定为该 Task / Attempt，忽略调用方自报出处和关联。不带 attemptId 时仅桌面可上传。CLI handler、Worker 配方与测试 provider 已传 --attempt。
+| 方法 / 调用条件 | 会话归属与第二层覆盖 |
+| --- | --- |
+| 所有 orchestration. 方法（含未列在 ORCHESTRATION_CALLER_PARAM 的 runShow / reset） | 有注入的 agentSessionId 时解析 ctx；只有 ORCHESTRATION_CALLER_PARAM 列出的方法改写 caller params。非 workspace 与 Run / Worker 创建拒绝可归属的 Axiom 会话；普通非 Axiom 会话行为不变。 |
+| AXIOM_ATTEMPT_CALLER_METHODS：八个 Worker 动词、plan.propose、artifact.put | 解析 ctx 并绑定 from；两个条件方法无 attemptId 时仍为 desktop_only。 |
+| 其余 desktop_only Axiom 方法（含 plan.approve / policy.update / message.answer） | 解析 ctx 以关联 authority.refused，但不改写 params，也不授予权限。所有非 desktop 调用仍拒绝；清掉会话环境也不能绕过 desktop 边界。 |
+| Axiom read、agentSession.respondToApproval / respondToQuestion、settings / computer 等非 orchestration 方法 | 不解析 ctx；非 Axiom 方法的解析范围与原实现一致。respondTo* 等方法只有已有宿主归属时才受第二层拦截，当前真实入口不能归属，仍靠 D63 沙盒姿态。 |
+| 无 agentSessionId，仅有 PTY terminal / pane 依据 | 不产生 ctx.orchestrationCaller；显式 session address 可触发原有 caller 参数绑定，但不产生 ctx。 |
 
-**M3-04c attempt 1 的范围阻塞，尚未验收**：① src/cli/specs/axiom-mission.ts 未在允许修改清单，artifact put 的 allowedFlags 尚未包含 attempt，因此真实 CLI 在上传前拒绝该 flag；② src/main/runtime/rpc/errors.ts 同样不在清单，新调用方错误被映射成 runtime_error，invalid_argument 的 computer 分支丢弃 threshold_not_supported 数据；③现有 human CLI 没有宿主解析的会话，self-approve 的三个 authority.refused 无法产生。对应断言保持失败，精确文件 / 行与验证记录见 `.axiom-work/reports/M3-04c-1.md`。没有另造身份机制或扩大 runtime 文件改动。
+会话解析只提供归属，desktop 传输盖章才是人工动作边界。不能把第二层当成认证边界，也不能把读取仍可用误记为允许 Agent 作人工决定。
+
+artifact.put 增加可选 attemptId / from；带 attemptId 时在回执前及 handler 内复用 resolveAttemptSender，核对 Mission，createdBy 固定为 `attempt:<id>`、related 固定为该 Task / Attempt，忽略调用方自报出处和关联。不带 attemptId 时仅桌面可上传。CLI 的 allowedFlags / usage / example 已注册 --attempt，handler、Worker 配方与测试 provider 使用同一 flag。
+
+`errors.ts` 保留 caller_not_desktop / caller_not_permitted_for_agent 的 wire code；OrchestrationError 的结构化 data 原样返回（包括 invalid_argument 的 reason=threshold_not_supported），不会被 computer recovery nextSteps 替换。真正的 computer 错误仍使用原恢复提示。实现和验证记录见 `.axiom-work/reports/M3-04c-2.md`；Electron 场景由宿主 verifier 独立执行。
 
 ## 7. Admission 守卫（映射 §4b）
 

@@ -18,6 +18,8 @@ import { AxiomStore } from '../../axiom/db/axiom-store'
 import { MissionController } from '../../axiom/mission-controller/mission-controller'
 import { createInput } from '../../axiom/mission-controller/controller-fixture.test-support'
 import { formatOrcaSessionAddress } from '../../../shared/orca-session-address'
+import { AXIOM_METHOD_CALLER_CLASS } from '../../axiom/authority/caller-authority'
+import { isAxiomMutation } from '../../../shared/axiom-contract/mutations'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
 vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
@@ -32,12 +34,26 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-it('pins the real admission gate: all orchestration methods and only listed Axiom methods', () => {
+const desktopMethods = Object.entries(AXIOM_METHOD_CALLER_CLASS)
+  .filter(([, callerClass]) => callerClass === 'desktop_only')
+  .map(([method]) => method)
+
+it('adds only desktop-only Axiom methods to host resolution, matching the CLI mutation inventory', () => {
+  for (const { name } of AXIOM_METHODS) {
+    const expected = AXIOM_ATTEMPT_CALLER_METHODS.includes(name) || desktopMethods.includes(name)
+    const request = orchestrationRequest(name, {}, { sessionId: SESSION_X })
+    expect(needsOrchestrationCallerResolution(request), name).toBe(expected)
+    expect(AXIOM_ATTEMPT_CALLER_METHODS.includes(name) || isAxiomMutation(name), name).toBe(
+      expected
+    )
+  }
+})
+
+it('preserves non-Axiom host resolution', () => {
   for (const method of [
     ...Object.keys(ORCHESTRATION_CALLER_PARAM),
     'orchestration.reset',
-    'orchestration.runShow',
-    ...AXIOM_ATTEMPT_CALLER_METHODS
+    'orchestration.runShow'
   ]) {
     expect(
       needsOrchestrationCallerResolution(
@@ -47,12 +63,11 @@ it('pins the real admission gate: all orchestration methods and only listed Axio
     ).toBe(true)
   }
   for (const method of [
-    ...AXIOM_METHODS.map((m) => m.name).filter(
-      (name) => !AXIOM_ATTEMPT_CALLER_METHODS.includes(name)
-    ),
     'agentSession.respondToApproval',
     'agentSession.respondToQuestion',
-    'settings.update'
+    'settings.update',
+    'terminal.list',
+    'computer.click'
   ]) {
     expect(
       needsOrchestrationCallerResolution(
@@ -62,7 +77,7 @@ it('pins the real admission gate: all orchestration methods and only listed Axio
     ).toBe(false)
   }
 })
-it('sets ctx for unlisted orchestration reads but not human Axiom or agentSession calls', async () => {
+it('attributes human Axiom calls without binding params, leaving agentSession calls unchanged', async () => {
   const names = [
     'orchestration.runShow',
     'orchestration.reset',
@@ -88,13 +103,13 @@ it('sets ctx for unlisted orchestration reads but not human Axiom or agentSessio
     ).toMatchObject({
       ok: true,
       result: {
-        session: method.startsWith('orchestration.') ? SESSION_X : null,
+        session: method === 'agentSession.respondToApproval' ? null : SESSION_X,
         params: {}
       }
     })
   }
 })
-it('enforces the second layer through the real dispatcher for attributed methods', async () => {
+function bindAxiomAttempt() {
   const store = new AxiomStore(h.db)
   const controller = new MissionController(h.db, store)
   const { mission } = controller.createMission(createInput)
@@ -114,6 +129,59 @@ it('enforces the second layer through the real dispatcher for attributed methods
     agentSpecId: 'spec',
     contextPackageId: 'ctx'
   })
+  return { store, mission, task, dispatch }
+}
+
+it.each([false, true])(
+  'audits every desktop-only refusal from an Axiom session (streaming: %s)',
+  async (streaming) => {
+    const { store, mission, task, dispatch } = bindAxiomAttempt()
+    const handler = vi.fn(() => ({}))
+    const dispatcher = new RpcDispatcher({
+      runtime: h.runtime,
+      methods: desktopMethods.map((name) =>
+        defineMethod({
+          name,
+          permission: 'workspace',
+          params: z.record(z.string(), z.unknown()),
+          handler
+        })
+      )
+    })
+    for (const method of desktopMethods) {
+      const request = orchestrationRequest(method, {}, { sessionId: SESSION_X })
+      const replies: string[] = []
+      let response: unknown
+      if (streaming) {
+        await dispatcher.dispatchStreaming(request, (reply) => replies.push(reply))
+        response = JSON.parse(replies[0]!)
+      } else {
+        response = await dispatcher.dispatch(request)
+      }
+      expect(response, method).toMatchObject({
+        ok: false,
+        error: { code: 'caller_not_desktop' }
+      })
+    }
+    expect(handler).not.toHaveBeenCalled()
+    const refused = store
+      .listAuditEvents({ missionId: mission.id })
+      .filter((row) => row.event === 'authority.refused')
+    expect(refused).toHaveLength(desktopMethods.length)
+    for (const method of desktopMethods) {
+      expect(refused).toContainEqual(
+        expect.objectContaining({
+          objectKind: 'task',
+          objectId: task.id,
+          after: { method, callerKind: 'local-cli', attemptId: dispatch.id }
+        })
+      )
+    }
+  }
+)
+
+it('enforces the second layer through the real dispatcher for attributed methods', async () => {
+  const { store, mission, task, dispatch } = bindAxiomAttempt()
   const handler = vi.fn(() => ({}))
   const dispatcher = new RpcDispatcher({
     runtime: h.runtime,
