@@ -16,7 +16,7 @@
 | **Control Plane / 控制平面** | Axiom 的确定性权威核心（见 §2）。不使用「Mission Control」作为 UI 标签，避免与 macOS Mission Control 混淆。 |
 | **Execution Kernel / 执行内核** | Orca 衍生运行时：终端、PTY、Git/worktree、Agent 会话、SSH/WSL、orchestration 原语。只回答「在哪里、以什么进程和工作区执行」。 |
 | **RPC 命名空间** | `axiom.mission.*`、`axiom.goal.*`、`axiom.plan.*`、`axiom.task.*`、`axiom.attempt.*`、`axiom.verification.*`、`axiom.integration.*`、`axiom.approval.*`、`axiom.decision.*`、`axiom.artifact.*`、`axiom.message.*`、`axiom.policy.*`。不得使用 `project.*`（Orca 已占用）。 |
-| **CLI** | 二进制 `axiom`。M1 已交付：`axiom mission create|show|list|start|pause|resume|cancel`、`axiom mission goal propose|activate|show`、`axiom plan propose|approve|reject|list|show`、`axiom task list|show|cancel`；全部支持 `--json`，mutation 支持 `--retry-request`。`approval` / `attempt` 保留给后续里程碑；Worker 命令见 §5。 |
+| **CLI** | 二进制 `axiom`。M1 已交付：`axiom mission create\|show\|list\|start\|pause\|resume\|cancel`、`axiom mission goal propose\|activate\|show`、`axiom plan propose\|approve\|reject\|list\|show`、`axiom task list\|show\|cancel`；全部支持 `--json`，mutation 支持 `--retry-request`。`approval` / `attempt` 保留给后续里程碑；Worker 命令见 §5。 |
 | **分支命名（D6，含修正）** | 集成基线 `axiom/integration/<missionId>`；Attempt 分支 `axiom/attempt/<taskId>/<seq>`（seq = 该 Task 的 Attempt 序号，由 Control Plane 递增；D6 原文的 `<attemptId>` 因 dispatch id 在 worktree 创建后才存在而改为序号，`attempt_bindings` 记录 `dispatch_id ↔ seq ↔ branch`）；集成临时分支 `axiom/integrating/<batchId>`；目标分支 = 用户指定（默认仓库默认分支）。 |
 | **数据落位** | 权威状态：Orca `orchestration.db`（新增 Axiom side tables，迁移 v43 起）；证据/Artifact 内容：`<userData>/axiom/artifacts/<sha256>`（内容寻址，DB 只存引用与 hash，G4）。 |
 | **Controlled Acceptance Fixture** | V1 演示与验收用的冻结仓库（D18）：固定 commit / Node / 包管理器版本，确定性离线检查，硬门槛见章程 §9；基线只经 fixture-version Decision 变更。v1 = 自建 FlowTask，`LaPaGaYo/flowtask-fixture` tag `fixture-v1`（commit `a6a8413`），manifest `fixture-manifest.v1.json`（D39、D42）。 |
@@ -55,8 +55,8 @@
 | **PlanRevision** | 一次被接受的计划版本：里程碑分组、Task 集、依赖、验收标准、风险；不覆盖历史 | `plan_revisions` | 无 |
 | **Milestone** | PlanRevision 内的分组标签 + 出口条件；V1 无独立状态机（A7） | 存于 PlanRevision | 无 |
 | **Task** | 持久工作单元：spec、scope、acceptance criteria、required evidence、risk、`retryPolicy.maxAttempts`、budget | 项目级：`task_stages`（D2）；执行级：Orca `tasks` | Orca `tasks`（`deps` 保持空，D10） |
-| **TaskEdge** | Task DAG 的一条依赖边（含 readiness 阈值：默认要求上游 `INTEGRATED`，可放宽为 `VERIFIED`） | `mission_task_edges` | 无（不用 Orca `tasks.deps`） |
-| **FIX_TASK** | IntegrationBatch `TESTING → FAILED` 时由 IntegrationController 经 `axiom.task.create` 创建的修复 Task（replan 分级 `MINOR_ADJUSTMENT`）；受影响的 Task 对它加 TaskEdge（D3） | `tasks` + `task_stages`（普通 Task，`spec.kind = fix`） | 同 Task |
+| **TaskEdge** | Task DAG 的一条依赖边（readiness 阈值：V1 只支持上游 `INTEGRATED`，D69 修订；`VERIFIED` 枚举保留给 V2，提案带它会被拒） | `mission_task_edges` | 无（不用 Orca `tasks.deps`） |
+| **FIX_TASK** | 没有肇事候选的 Mission 级失败（目标分支漂移合并冲突、全部集成后的最终全量回归失败，D70）时由 Control Plane 直接创建的修复 Task（replan 分级 `MINOR_ADJUSTMENT`）；批次级的 CONFLICT / FAILED 不建 FIX_TASK，原 Task 回 `NEEDS_FIX`（D79） | `tasks` + `task_stages`（普通 Task，`spec.kind = fix`） | 同 Task |
 | **Integration Queue** | 按序等待集成的 `INTEGRATION_READY` 候选集合，由 IntegrationController 串行消费；持久化为 `integration_batches.status = QUEUED` 的批次 | `integration_batches` | 无 |
 | **Attempt** | Task 的一次执行；`attemptId ≡ Orca dispatchId`（A5） | Orca `dispatch_contexts` + `worker_dispatches` + liveness；Axiom 轻表 `attempt_bindings`（`dispatch_id`、`seq`、`branch`、`agent_spec_id`、`context_package_id`） | 直接复用 + 绑定表 |
 | **AgentSpec** | Attempt 的执行合同（非人格）：role、capabilities、provider/model/reasoning、permissions、budget、workspace 策略、contextPackageId、submission contract | `agent_specs`（内容寻址） | `WorkerStartParams` 的 `agent/model/effort` 等为投影 |
@@ -81,6 +81,8 @@
 DRAFT → ANALYZING → PLAN_REVIEW → PLANNED → EXECUTING → FINALIZING → READY_FOR_APPROVAL → COMPLETED
 EXECUTING ↔ REPLANNING
 任一非终态 → PAUSED（可恢复到前一状态）/ BLOCKED / FAILED / CANCELED
+FINALIZING → EXECUTING（漂移合并冲突或最终全量回归失败，建 FIX_TASK，D70 / D79）
+READY_FOR_APPROVAL → FINALIZING（交付前目标分支 HEAD 已变，D70）
 ```
 - `PLAN_REVIEW`：PlanRevision 已 PROPOSED，等待人工或 policy 自动批准。
 - `FINALIZING`：所有 required Task 已 `INTEGRATED` 或经授权 `CANCELED`，运行最终全量回归与 completion gate 评估。
@@ -88,6 +90,8 @@ EXECUTING ↔ REPLANNING
 - `READY_FOR_APPROVAL`：等待最终交付 Approval（若 policy 要求）。
 - **Delivery / 交付**：把集成基线合入目标分支的最终动作；成功后进入 `COMPLETED`。
 - `BLOCKED`：阻塞解除（Approval GRANTED / DENIED、Question ANSWERED、预算经 Approval 上调或 replan）后回到进入前的状态；进入前的状态持久化在 `missions.previous_status`（与 `PAUSED` 相同）。
+- `BLOCKED(delivery_denied)`：交付 Approval 被 DENIED；人选择修改后重交（回 `EXECUTING`，走 Goal / plan 调整）或 `CANCELED`；EXPIRED 则重新请求，不自动交付（D70）。
+- `PAUSED`：停止新 admission 与新 VerificationRun 领取；运行中的 Attempt 按 policy `pauseMode: drain | stop`（默认 `drain`）；集成不开新批次、进行中的批次跑完；wall-clock 预算与 Approval 过期停表；恢复回 `previous_status`（D70）。
 
 ### 4.2 GoalRevision
 `PROPOSED → ACTIVE → SUPERSEDED`（用户直接编写的 Goal 创建即 ACTIVE；模型提出的修正为 PROPOSED）。Goal 变更 = `MAJOR_REPLAN` 触发。
@@ -100,14 +104,14 @@ EXECUTING ↔ REPLANNING
 DEFINED → READY → RUNNING → SUBMITTED → VERIFYING → VERIFIED → INTEGRATION_READY → INTEGRATED
 RUNNING           → NEEDS_FIX（Attempt FAILED / STOPPED / ABANDONED 且重试预算未耗尽）
 VERIFYING         → NEEDS_FIX（FAIL）
-INTEGRATION_READY → NEEDS_FIX（IntegrationBatch CONFLICT，候选 SUPERSEDED，D3）
+INTEGRATION_READY → NEEDS_FIX（IntegrationBatch CONFLICT 或 FAILED，候选 SUPERSEDED，D79）
 NEEDS_FIX         → READY（新 Attempt）
 任一非终态        → BLOCKED / CANCELED
-BLOCKED           → 阻塞解除后回到进入前的 stage（READY / VERIFYING / INTEGRATION_READY …）
+BLOCKED           → 按原因解除（D70 修订）：回到进入前的非运行 stage（READY / VERIFYING / INTEGRATION_READY …）；只有 Attempt 仍活着的 Question 答复回 RUNNING
 ```
-- `READY` = 上游依赖满足 TaskEdge 阈值 ∧ PlanRevision APPROVED ∧ Mission EXECUTING ∧ 无阻塞 Question/Approval ∧ 预算未耗尽。
-- `INTEGRATION_READY` = `VERIFIED` ∧ 全部上游依赖 `INTEGRATED` ∧（不需要 Approval ∨ Approval GRANTED）；条件在进入时评估。D3 的 FIX_TASK 边加在已处于 `INTEGRATION_READY` 的 Task 上时不回退 stage，只阻止其重新入队，直到 FIX_TASK `INTEGRATED`。
-- `BLOCKED` 的进入原因与解除事件：重试预算耗尽（Approval 提升预算 / replan）、`HUMAN_REVIEW` 等待（review 收敛）、Approval 等待（GRANTED / DENIED→CANCELED）、阻塞 Question（ANSWERED）。
+- `READY` = 上游依赖全部 `INTEGRATED`（V1 只支持这一阈值，D69 修订）∧ PlanRevision APPROVED ∧ Mission EXECUTING ∧ 无阻塞 Question/Approval ∧ 预算未耗尽。
+- `INTEGRATION_READY` = `VERIFIED` ∧ 全部上游依赖 `INTEGRATED`；条件在进入时评估。高风险 Approval 只在批次 `PROMOTABLE` 之后（§4.9，D79），Task 级不再要求 Approval。
+- `BLOCKED` 的进入原因与解除（D70 修订、D79）：重试预算耗尽（`retry_budget_exhausted`：经 Approval 提升预算 → READY，或取消 / replan）、`HUMAN_REVIEW` 等待（review 收敛）、批次 Approval 被拒（`approval_denied`：带理由重做 → NEEDS_FIX，或取消）、阻塞 Question（答复后 Attempt 仍活着 → RUNNING，已结束 → READY，答复进强制上下文）；其余原因解除后回 READY，不回 RUNNING。
 - `INTEGRATED` = 所属 IntegrationBatch 已 `PROMOTED`（候选已成为集成基线的一部分）。
 - 重试预算耗尽 → `BLOCKED` + replan 分级 + 按 policy 请求 Approval（B4）。
 - 终态：`INTEGRATED`、`CANCELED`。
@@ -115,7 +119,7 @@ BLOCKED           → 阻塞解除后回到进入前的 stage（READY / VERIFYIN
 ### 4.5 Task 执行投影（Orca `tasks.status`，非权威）
 `pending / ready / dispatched / completed / failed / blocked`。`completed` 含义 = 「当前 Attempt 已结算」，UI 不得显示为「完成」。
 
-### 4.6 Attempt（投影，不新建表）
+### 4.6 Attempt（投影：状态不新建表，`attempt_bindings` 只做绑定）
 | Axiom 视图 | 来源 |
 |---|---|
 | `LAUNCH_PENDING` | `attempt_bindings.dispatch_id IS NULL`：admission 已提交，尚未绑定内核 dispatch；`liveness / workspace = null`，恢复由 M2-08 负责 |
@@ -158,13 +162,14 @@ M3-01 的 `verdictDetail.phase`：`claimed`（事务领取）、`prepared`（独
 ### 4.9 IntegrationBatch
 ```text
 QUEUED → APPLYING → TESTING → PROMOTABLE → PROMOTED
-APPLYING → CONFLICT      （→ 原 Task NEEDS_FIX，D3）
-TESTING  → FAILED        （→ FIX_TASK，D3）
+APPLYING → CONFLICT      （→ 原 Task NEEDS_FIX，修复从集成基线 + 预合并的旧候选继续，D79）
+TESTING  → FAILED        （→ 原 Task NEEDS_FIX，修复从失败批次的合并 commit 继续，D79）
 PROMOTABLE → AWAITING_APPROVAL → PROMOTED | REJECTED
 任一非终态 → SUPERSEDED
 APPLYING / TESTING → QUEUED（应用重启时由 RecoveryService 丢弃临时分支后重排队）
 ```
 `PROMOTED` = 集成基线 ref 前进到该批次的合并 commit；Delivery（集成基线合入目标分支）是 Mission 级动作，见 §4.1。
+`AWAITING_APPROVAL` 是唯一的高风险 Approval 点（D79）：合并树回归通过后才进入；等待期间让出队头，GRANTED 时基线已动则重新合并并重跑回归再晋升；`REJECTED`（DENIED）→ 候选 SUPERSEDED、Task `BLOCKED(approval_denied)`。
 
 ### 4.10 Approval
 `PENDING → GRANTED | DENIED | EXPIRED | REVOKED`；`GRANTED → CONSUMED`（单次使用，执行后即消费）。
@@ -186,6 +191,14 @@ APPLYING / TESTING → QUEUED（应用重启时由 RecoveryService 丢弃临时�
 | `TaskSpec.role` | 可选的非空字符串标签（M2-09 / DEF-4）；提案、批准物化与 Task spec 保留它，不参与 provider 路由、角色权限或 skills 物化。省略时保持既有行为。 |
 | `ProviderFilterReason` | `not_installed \| not_certified \| disallowed \| tier_too_low`，按此顺序取首个命中原因（D57）。 |
 | `endpointProfile` | `subscription`（V1）：用户在 harness 中已有的登录或自行配置的凭据；进入 AgentSpec 的内容寻址，不包含凭据本身（D57）。 |
+| `caller_not_desktop` | 人工动作（`desktop_only` 方法）收到非桌面应用的调用（本机 CLI、配对设备或无法认定）时的拒绝码（D78）。 |
+| `workerPosture` | `sandboxed`（默认：`workspace-write`、网络关闭、审批桥）\| `bypass`（只作 policy 显式后备，`third_party` 仓库不可用）（D63 当前全文）。 |
+| `repositoryTrust` | `own`（默认）\| `third_party`：第三方仓库只许 sandboxed 姿态的 Worker（D63 当前全文）。 |
+| `threshold_not_supported` | 提案或 policy 里出现 `VERIFIED` 依赖阈值时的错误码（V1 只支持 `INTEGRATED`，D69 修订）。 |
+| `integration_merge` | 集成失败后修复 Attempt 的基线：CONFLICT = 当前集成基线 + 预合并的旧候选，FAILED = 失败批次的合并 commit（D79）。 |
+| `scope_extended` | 集成失败的修复需要动 Task scope 之外、但当前 PlanRevision 已授权某个 Task 写的文件时，写进该 Attempt AgentSpec 的扩展与审计（D79）。 |
+| `approval_denied` / `delivery_denied` | 批次 Approval 被拒时 Task 的 BLOCKED 原因（D79）/ 交付 Approval 被拒时 Mission 的 BLOCKED 原因（D70）。 |
+| `pauseMode` | `drain`（默认）\| `stop`：Mission PAUSED 时运行中 Attempt 的处理（D70）。 |
 
 ## 5. 消息类型与 Orca 映射（D9）
 
@@ -202,7 +215,7 @@ APPLYING / TESTING → QUEUED（应用重启时由 RecoveryService 丢弃临时�
 
 - `payload.axiom.type` 持久化产品类型；每条消息必须带 missionId 与相关 taskId / attemptId / decisionId / artifactId。
 - `merge_ready`、`dispatch`、`decision_gate` 不允许由 Worker 发出；`heartbeat` 是执行内核 liveness 信号，不是产品消息类型。
-- Worker CLI 命令统一挂在 `axiom attempt <verb>` 下：`axiom attempt submit | ask | blocked | handoff | inform | request | request-subtask | check`（`check` 读取自己的 mailbox）。不用顶层 `axiom check`——Orca CLI 已有顶层浏览器命令 `check`（`src/cli/specs/browser-basic.ts`）。全部携带 Orca dispatch capability。
+- Worker CLI 命令统一挂在 `axiom attempt <verb>` 下：`axiom attempt submit | ask | blocked | handoff | inform | request | request-subtask | check`（`check` 读取自己的 mailbox）。不用顶层 `axiom check`——Orca CLI 已有顶层浏览器命令 `check`（`src/cli/specs/browser-basic.ts`）。调用方身份由宿主核实（D73：终端 / pane / Orca session，不接受命令行指定）；人做的决定不经 CLI，只接受桌面应用（D78）。
 - Worker 在 Attempt 运行中提问走 `axiom attempt ask`（Orca `ask` / `question_threads`）；Orca decision gate 只用于**没有活跃 Attempt** 的 Task 级阻塞（`createGate` 在 supervised worker 活跃时会拒绝）。
 
 ## 6. Orca 术语对照
@@ -213,7 +226,7 @@ APPLYING / TESTING → QUEUED（应用重启时由 RecoveryService 丢弃临时�
 | coordinator | 已退役的 LLM 协调者概念；Axiom **不使用**，由 MissionController 消费 run mailbox |
 | dispatch / DispatchContext | Attempt |
 | worker / worker_dispatches | Attempt 的受监督进程 |
-| dispatch capability（`dcap_…`） | Attempt 的调用凭证，`axiom.*` RPC 复用其校验 |
+| caller identity（`RpcCallerIdentity`、`OrchestrationSessionCaller`） | 宿主按传输层与注入的会话认定调用方：`desktop` / `local-cli` / `paired-device`；Attempt 动词另按终端 / pane / Orca session 与进程代次核实（D73）；人做的决定只接受 `desktop`（D78） |
 | decision gate | 仅承载无活跃 Attempt 时的 Task 级 QUESTION 阻塞；不是 Approval |
 | `ask` / question_threads | Attempt 运行中的 QUESTION 通道 |
 | session party / 合成 session id（D14） | Control Plane 参与 orchestration 的身份：每个 Mission 一个符合 `isOrcaSessionId` 格式的合成 Orca session id，作为 Run coordinator 与 `session:<id>` mailbox 地址；进程内直接构造 `OrchestrationSessionCaller`，dispatch creator `{kind:'system'}` |

@@ -1,7 +1,7 @@
 # Axiom 决策日志（Decision Log）V1
 
-更新日期：2026-09-26
-状态说明：`ACCEPTED` = Henry 已拍板；`PROPOSED` = 审查中提出、设计 v1.1 已按此撰写、**等待批准**；`REJECTED` = 提议被否决（保留记录）；`SUPERSEDED` = 被后续决策取代。带字母后缀的条目（如 D6a、D7a）是对已拍板决策的修正提议。
+更新日期：2026-10-25
+状态说明：`ACCEPTED` = Henry 已拍板；`PROPOSED` = 审查中提出、设计 v1.1 已按此撰写、**等待批准**；`REJECTED` = 提议被否决（保留记录）；`SUPERSEDED` = 被后续决策取代。带字母后缀的条目（如 D6a、D7a）是对已拍板决策的修正提议。修订行：带 Henry 引语的为已批准；验证者撰写的修订行是实施细则，以所属条目的"当前全文"或下一次 Henry 审阅为准；2026-10-25 起新写的修订行在括号里注明"已批准"或"待批准"。
 本日志是「Decision 需有出处、备选、理由与取代规则」这条规则在文档层的落地；代码里的 `decisions` 表应从这里的条目起编号。
 延期到某个触发点再决定的事项登记在 `DEFERRED.md`（里程碑出口检查必须核对）。
 
@@ -25,7 +25,7 @@
 **后果**：readiness 由 MissionController 按 task stage 计算（见 D10）；`orchestration.taskUpdate` 对 Axiom 管理的 Task 需拒绝直接改 status；UI 投影层需要 stage → 展示文案的映射。
 **取代规则**：V2 若决定合并为单状态，需新 Decision 并附迁移与降级方案。
 
-## D3 · 集成失败时原 Task 的处理规则 — ACCEPTED
+## D3 · 集成失败时原 Task 的处理规则 — SUPERSEDED（由 D79 取代，2026-10-25）
 
 **决定**：
 - 文本冲突（git 无法自动合并）→ 原 Task 回 `NEEDS_FIX`，新 Attempt 的 ContextPackage 携带冲突证据（本质是 rebase 任务）；
@@ -34,6 +34,8 @@
 **理由**：文本冲突只涉及单个候选，重做最省；语义冲突涉及多个已验证候选，作废它们会浪费验证证据，用新 Task 修复更可审计。
 **修订提议（2026-10-21，端到端流程复审 L4，Henry："都记下来"；M4 集成 brief 定稿前批准）**：FIX_TASK 的执行合同补全——现文"相关 Task 保持 INTEGRATION_READY"与"原候选一律 SUPERSEDED"合在一起意味着该 Task 没有 ACTIVE 候选可集成，归宿要写明：① FIX_TASK 的 Attempt 基线 = 失败批次的合并树（保留的 `axiom/integrating/<batchId>` 临时分支 HEAD），不是集成基线，否则失败无法复现；② FIX_TASK 的 `allowedPaths` = 相关 Task scope 的并集 ∪ 回归失败证据指出的文件（Control Plane 从失败测试与堆栈推导，Replanner 可扩，随 MINOR_ADJUSTMENT 审计）；③ FIX_TASK 的候选 PROMOTED 时，其合并树已包含的那些被 SUPERSEDED 候选所属的 Task 一并 → `INTEGRATED`（批次记录 `includedCandidates[]`，Task 的 INTEGRATED 审计指向该批次），不再各自入队；④ FIX_TASK 重试耗尽 → 相关 Task 回 `NEEDS_FIX`（从各自上一候选继续，D64）并 replan 分级。
 
+
+**修订（2026-10-25，已批准：Henry "按建议"）**：V1 由 D79 取代——单候选批次的 `CONFLICT` 与 `FAILED` 都回原 Task `NEEDS_FIX`（FAILED 从失败批次的合并 commit 继续），FIX_TASK 只用于没有肇事候选的 Mission 级失败；上面的修订提议撤回。多候选批次的部分失败见 DEF-24。
 
 ## D4 · 候选 commit 由 Control Plane 在提交时生成快照 — ACCEPTED
 
@@ -564,6 +566,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 
 **修订（2026-10-24，Henry："同意"；同日补充："v1这边还是保持原样，别的模型和harness，做worker就可以了……v1可能就我在使用，不会开放给别的，我觉得可能在v3之后再做适配会比较好"）**：V1 矩阵按新底子扩充，新增条目都是 `provisional`、只做 Worker，在 `src/main/axiom/agent-factory/certified-providers.ts` 登记：已有结构化通道（ACP / Pi RPC）的 `opencode2`（OpenCode 2 beta）、`omp`（OMP）、`pi`（Pi）由 harness 默认模型、只接低风险；`grok`（xAI Grok CLI）按启动参数选模型、最高中风险；ACP 官方名录里的 `codebuddy`（CodeBuddy Code）、`kimi`（Kimi CLI）、`qwen-code`（Qwen Code）给 Orca 现有的通用 ACP 适配补三条启动配置后加入，最高中风险（上游 `31fe3c7481` 仍只有 grok / opencode / opencode2 / omp / antigravity 五条，三条配置由 Axiom 新增）。`claude-agent-teams`（Claude Code Agent Teams）不承担 Mission 角色：主 Claude 自行拉起、指挥队友，违反"Worker 不直接生成 Worker"；Mission 的并行由 Control Plane 调度普通 `claude`。Trae CLI、ZCode（智谱）、DeepSeek Harness（`dsh`）没有原生 ACP（ZCode 只有第三方桥接 `zcode-acp`，`dsh` 只有 Web UI），V1 只用于手动工作区，登记 DEF-27。三条 ACP 启动配置与矩阵内全部结构化 harness 的协议一致性测试随 M3-08（Mission Attempt 接上结构化通道）实施。V1 只供 Henry 自用、不对外开放：Planner 与高风险 Task 仍只给 `claude` / `codex`；为其他 harness 或第三方模型开放 Planner / 高风险的适配——"A 级"从写死的 `claude` / `codex` 改为"结构化通道上已认证、由启动参数指定模型"的组合，高风险认证门槛，识别 Claude Code / Codex 背后接的第三方接口（如 `ANTHROPIC_BASE_URL` 指向 GLM、Codex `model_provider`）并单独记账，给外部测试者的单命令一致性检查，"不依赖 Claude / Codex"的出口条件——延到 V3 之后，登记 DEF-28。V1 出口仍要求用到的组合为 `certified`（第 3 条不变）。
 
+**修订（2026-10-25，已批准：Henry "按建议"，`claude/fix-plan-v1.md` ④⑤）**：① 2026-10-21 修订行的"codex provisional → certified（Planner，通道 B）"不生效——那份证据在 bypass 姿态下取得（D63 原决定 2），`certified-providers.ts` 也一直是 `provisional`；codex 在 M3-08 以 sandboxed 姿态取得 Worker 证据后再改 `certified`（D63 当前全文第 7 条），M3-00-f3 的 Planner 证据保留为历史。② **第三种真实 provider = Antigravity**（D52 修订已把它定为 V1 的第三种）：走 Orca 现成的 TUI 通道（TUI 配置里已有 `preflightTrust: 'antigravity'` 与多行粘贴的等待参数），不等 ACP；新任务 M3-08b 先做半天时间盒探测——目录信任非交互通过、preamble 送达、`axiom attempt submit` 被宿主认出身份、权限设置能映射为"只改 worktree + 只放行 `axiom attempt` 与测试命令"、走完 `RUNNING → SUBMITTED → VERIFIED`；任一项不过换 OpenCode，同一清单；通过后改 `certified`（Worker，≤ medium）并记证据。③ 新 policy 开关 `routing.requireCertified`（V1 验收运行时打开，provisional 组合按 `not_certified` 过滤）。④ 没有 OS 级沙盒的 harness，`maxRisk` 不超过 medium，且不能接 `repositoryTrust: third_party` 的仓库。DEF-20 ⑪ 由此关闭。
+
 ## D58 · Codex / Claude Attempt 的执行通道与 AgentSpec 权限映射（harness 登录、目录信任、沙盒 / 审批标志）— ACCEPTED（Henry 2026-10-20：B 首选，A 后备）
 
 **背景**：M2-09 合入后，验证者在宿主 e2e 骨架里用真实 Codex CLI 0.163.0 跑 Planner smoke（`.axiom-work/verifications/M2-09-smoke-codex.md`，11 次运行）。结论：当前 Attempt 走的是 Orca 的 **TUI 通道**（`startLocalWorker` → PTY 里启动 `codex`，就绪后粘贴 preamble），而 Codex 0.163.0 对每个 Axiom linked worktree 都弹出 **Folder access** 同意屏（"You're in a subdirectory of a Git project. Trusting will apply to the repository root: <主 checkout>"），Orca 的预信任写入（UPSTREAM-2 移植的 `[projects."<worktree realpath>"] trust_level = "trusted"`）在此版本不生效，给仓库根写 `trusted`（两种路径形式、真实 home 与托管镜像 home 都写）也不生效，`--dangerously-bypass-approvals-and-sandbox` 同样不跳过；Worker 启动在 `agent_readiness` 60 s 超时 → `launch_failed`。Orca 的 **structured（app-server）通道**（实验性设置）在本树里会话立即结束（`start_unknown` → `process_exited`，空 transcript），原因未查明。另外两件事一起浮出：Orca 对所有 harness 的默认启动参数是 yolo（`codex: --dangerously-bypass-approvals-and-sandbox`，`claude: --dangerously-skip-permissions`），而 Axiom 没有把 AgentSpec 的 `permissions`（Planner 是 `write = []`）映射到任何 harness 标志或 app-server 线程策略——"权限确定性执行"目前只靠事后门禁（干净工作树检查、M3 验证）；`axiom.mission.plan` 未登记为 long-poll 导致 CLI 30 s 断连（已作为 M2-09 attempt 4 修复，不在本条范围）。流水线本身一直用的 `codex exec -s workspace-write`（非交互）从不弹同意屏——这是第三条可选通道。
@@ -624,6 +628,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 
 **取代规则**：授权范围的任何扩大以本条修订行记录，并附校准评估结果。
 
+
+**修订（2026-10-25，已批准：Henry "按建议"，文档对齐，`claude/fix-plan-v1.md` ⑥）**：本条（2026-10-20 批准）晚于 D8，V1 因此含一个可选、只给建议的 Jev 适配器（M3-07）；章程 §9 / §12 与 ARCHITECTURE §4.3 / §16.4 / §19 / §20 按此改写：RulesEngine 基线必备；Jev 走 BYOK，密钥存 Orca secret store、只回 `hasApiKey`、只在 Control Plane 调用——这是 V1 唯一新增的密钥存储（D57 第 5 条"V1 不新增 API key 存储"指 provider 凭据，不变）；学习型用法（按历史表现训练、自动改路由）在 V2。V1 的 12 条成功标准都不依赖 Jev，时间紧时 M3-07 是第一个可以挪出 V1 的任务，届时出口 8 只要求 RulesEngine 基线。
 ## D61 · M2 出口：Planning 与 Agent Factory 里程碑按六条出口准则关闭，D52 关闭 — ACCEPTED（Henry 2026-10-20："先把手上需要开发的做完"，验证者 2026-10-20 提议）
 
 **背景**：D52 把 M2 分解为 11 个 Task；实际执行 13 个 Task + 2 个上游同步（`docs/plans/M2.md`）：M2-00 … M2-05、M2-06a / 06b / 06c（D57）、M2-07、M2-08、UPSTREAM-1 / UPSTREAM-2（D56）、M2-09（+ 3 个 fix-up attempt）、M2-10、**M2-12（D59，由 M2-11 出口 e2e 发现）**、M2-11（2 个 attempt）。merge 清单：`0b4a67ced3`（M2-00）→ `669dd990f4`（M2-01）→ `a61072502a`（M2-02）→ `9c493465cb`（M2-03）→ `ab9d8e62fd`（M2-04）→ `f0ca598f4c`（M2-05）→ `e306ee73a5`（M2-06a）→ `ece8a4e1e6`（M2-06b）→ `8fb8d6d24f`（UPSTREAM-1）→ `30eaed93c7`（M2-06c）→ `b3d0c6edd9`（M2-07）→ `e0f92f3276`（M2-08）→ `5e1df6f29d`（UPSTREAM-2）→ `1c67a2c1e9` / `d50795c06e` / `1d8029764a`（M2-09）→ `d29f0aa316`（M2-10）→ `bc177584cd` / `814ddc8d9b`（M2-12）→ `06a502151c`（M2-11）。验证记录在 `.axiom-work/verifications/M2-*.md`、`UPSTREAM-*.md`；证据文档 `docs/review-evidence/axiom-m2/M2-exit-e2e.md`。
@@ -680,6 +686,11 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **修订（2026-10-24，验证者，M3-04 brief 定稿时）**：① 的落地细则——(a) 只看紧邻的上一 Attempt：它有 Submission、其 Candidate 仍为 `ACTIVE`、该 Candidate 最新的 VerificationRun 为 `FAIL` 时，seq N+1 的 worktree 以该 Candidate commit 为基建分支 `axiom/attempt/<taskId>/<N+1>`，建好后 HEAD 必须等于该 commit，否则 launch 失败（`fix_base_mismatch`），不重置、不改写任何分支；上一 Attempt 无 Submission、Candidate 已被取代或最新 run 不是 `FAIL` 时从集成基线重来。(b) FAIL 原因为 `secret_detected` 时也从集成基线重来：候选的 commit 历史里已有那段秘密，继续这棵树会把它带进集成历史；失败证据只给路径与模式名。(c) 上一 Attempt 已提交时 Orca 侧的 task 已是 `completed`，而 Orca 只给 `ready` 的 task 起新 dispatch（`retryOf` 只接失败 / 停止 / 放弃的 worker）——现状下提交后的 seq N+1 必然 launch 失败；launcher 起 Worker 前经内核公开的 `updateTaskStatus` 把它改回 `ready`（有活动 dispatch 时内核拒绝；Mission 管理的 Run 本来只由 Control Plane 改写）。ContextBuilder 与 launcher 共用同一判定（`resolveAttemptBaseline`），失败证据段与基线一致。实施：M3-04。
 
 
+**当前全文（2026-10-25 整合，已批准：Henry 批准修复方案"按建议"；含上面各修订与 D79，修订行留作历史）**：
+1. **修复 Attempt 的基线**（`resolveAttemptBaseline`，ContextBuilder 与 launcher 共用）：只看紧邻的上一 Attempt——它有 Submission、Candidate 仍 `ACTIVE`、该 Candidate 最新的 VerificationRun 为 `FAIL` 且原因不是 `secret_detected` → 以该 Candidate commit 为基建 `axiom/attempt/<taskId>/<N+1>`，HEAD 必须等于该 commit（否则 `fix_base_mismatch`，不重置任何分支）；集成失败（D79）→ 基线 `integration_merge`：CONFLICT 从当前集成基线 + Control Plane 预合并的旧候选，FAILED 从失败批次的合并 commit；其余情况（首个 Attempt、上一 Attempt 无 Submission、候选已被取代、最新 run 不是 FAIL、`secret_detected`）从集成基线重来。上一 Attempt 已提交时，launcher 先把 Orca task 改回 `ready`（有活动 dispatch 时内核拒绝）。
+2. **验证 worktree**：由 Orca worktree service（`createManagedWorktree`）创建；分支 `axiom/verify/<runId>/<claimCount>` 建自 Attempt 分支，随后 `checkout --detach <Candidate>` 并 `branch -f` 到同一 commit，HEAD / tree / ref / detached 四项核验（偏离即 `candidate_mismatch`）；不开终端；验证结束（任何 verdict）即回收；应用重启时 `RUNNING` 的 run 回收 worktree 后重新 `QUEUED`（claimCount 递增，旧审计与 Artifact 保留）；不进 renderer 的 worktree 列表（M3-09 过滤）。
+3. **scope 判定基线 = 三点 diff**：`git diff --no-renames $(git merge-base <axiom/integration/<missionId> 的 HEAD> <候选>) <候选>`；verdictDetail.diff 记录集成基线分支与 sha、merge-base；"上一 Candidate"只用于证据展示（本次修复改了什么）。
+
 ## D65 · V1 验证策略语义（`Policy.verificationRules` 的受支持键）— ACCEPTED（Henry 2026-10-20："先把手上需要开发的做完"，验证者 2026-10-20 提议）
 
 **决定**：`verificationRules` 只接受：`repositoryGates`（`{ low | medium | high: string[] }`，按 Task `risk` 追加在 `requiredEvidence` 之后运行的仓库门禁命令；fixture 默认空）、`timeBudgetMinutes`（单次 VerificationRun 上限，默认 30）、`inconclusiveRouting`（`specialist | human`，默认 `specialist`：先 Reviewer 再人）、`nonCodeTasks`（`artifact_only | human_confirm`，默认 `human_confirm`）、`dangerousPathPatterns`（默认 `.github/workflows/**`、lockfile、`package.json`、`.axiom-work/**`；命中且不在 Task scope → `INCONCLUSIVE(dangerous_change)`）；未知键被 `axiom.mission.policy.update` 拒绝（schema）。verdict 规则：任一 deterministic check `fail` → `FAIL`；全部 `pass` → `PASS`；无 `fail` 但有 `inconclusive` → `INCONCLUSIVE`；`skipped` 必须带策略依据。
@@ -695,6 +706,14 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 
 **修订（2026-10-24，M3-03b brief 定稿时，验证者）**：⑦ **内容型篡改规则**（三点 diff 的新增 / 删除行，逐文件净计数——新增次数减删除次数，移动或重排的行不计；证据只记路径、规则名与次数，不记内容）：测试文件（新键 `testPathPatterns`，默认 `**/*.test.*`、`**/*.spec.*`、`**/__tests__/**`、`**/test_*.py`、`**/*_test.py`、`**/*_test.go`，给出即整体替换）被删除——内容完全相同的新增测试文件（纯移动 / 改名）或 allowedPaths 有条目字面等于该路径（Task 要求删除）除外；测试文件里跳过 / 聚焦 / 待办标记净增加（`.skip` / `.only` / `.todo` / `.skipIf` / `.runIf` / `.fails`、`xit` / `fit` 一类、pytest / unittest 的 skip / xfail、Go 的 `t.Skip`）；测试文件里断言调用净减少（`expect(` / `assert…(` / Python `assert` / `.should` / Go `t.Error|Fatal|Fail…`）；任意文件里 lint / 类型检查 / 覆盖率抑制注释净增加（`eslint-disable`、`oxlint-disable`、`biome-ignore`、`@ts-ignore`、`@ts-nocheck`、`@ts-expect-error`、`# noqa`、`# type: ignore`、`pylint: disable`、`nolint`、`istanbul` / `c8` / `v8 ignore`）→ `INCONCLUSIVE(test_tampering)`，直接交人；检查同时失败时仍是 `FAIL(checks_failed)`，篡改发现随证据进修复 Attempt。⑧ **非代码 Task**（`requiredEvidence` 去空白后为空；仓库门禁照跑）：Submission 引用的 Artifact 至少一个，且非空、文本类为合法 UTF-8、JSON 可解析，否则 `FAIL(artifact_missing | artifact_invalid)`；Artifact 读不出来是存储问题 → `INCONCLUSIVE(environment)`（`artifact_unreadable`）；通过后即使门禁全绿也不 PASS，而是 `INCONCLUSIVE(non_code)`（取代 `no_checks`）：`human_confirm` → 人，`artifact_only` → 按 `inconclusiveRouting`。代码 Task 的 Artifact 检查只记证据（`verdictDetail.artifacts`）。按 kind 的内容 schema 等 TaskSpec 有 `requiredArtifacts` 时（M5 Planner v2）再定义。⑨ verdict 优先级：`secret_detected` → `scope_violation` → `checks_failed` → `artifact_missing` / `artifact_invalid`（非代码）→ `environment`（diff 不可得或非代码 Artifact 读不出）→ `diff_too_large` → `test_tampering` → `dangerous_change` → 检查的 `environment` → `flaky` / `known_flaky` → 被跳过的检查（`environment`）→ `non_code` → `PASS`；`policy_invalid` 不变。
 
+
+**当前全文（2026-10-25 整合，已批准：Henry 批准修复方案"按建议"；含上面各修订，修订行留作历史）**：
+- **受支持的键**（未知键被 `axiom.policy.update` 拒绝；存量 JSON 不合 schema → `INCONCLUSIVE(policy_invalid)`，交人）：`repositoryGates`（`{ low | medium | high: string[] }`，按 Task risk 追加在 `requiredEvidence` 之后；fixture 默认空）；`setupCommands: string[]`（`requiredEvidence` 之前的环境准备；失败 = `environmental`）；`timeBudgetMinutes`（默认 30）；`inconclusiveRouting: specialist | human`（默认 specialist）；`nonCodeTasks: artifact_only | human_confirm`（默认 human_confirm）；`dangerousPathPatterns`（默认清单见 M3-03 修订 ③，给出即整体替换）；`secretPatterns: string[]`（只追加，内置 `private_key` / `provider_token` / `aws_access_key_id` 不可移除）；`retryOnce: string[]`（命令前缀，默认覆盖常见测试命令）；`knownFlaky: string[]`（按失败名匹配，`*` 通配）；`testPathPatterns`（默认见 M3-03b 修订 ⑦，给出即整体替换）。
+- **路径模式**：仓库相对 POSIX 路径；条目覆盖匹配的路径及其下全部路径；`*` / `?` 只在一个路径段内，`**` 跨任意多段；其余字符按字面；`.` = 整个仓库；绝对路径或含 `..` 的条目无效；区分大小写。"Task scope 明确包含" = 覆盖该危险路径的条目本身也匹配危险模式。
+- **check 结果**：`pass / fail / environmental / inconclusive / skipped`（skipped 须带策略依据）；`retryOnce` 命中的失败重跑一次，通过记 `flaky`；`knownFlaky` 名单内记 `known_flaky`。
+- **diff 检查**（三点 diff，D64 当前全文第 3 条；不短路确定性命令）：越界 → `FAIL(scope_violation)`；新增行命中密钥 → `FAIL(secret_detected)`（证据只记路径与模式名）；危险路径未被明确包含 → `INCONCLUSIVE(dangerous_change)`；超过扫描上限 → `INCONCLUSIVE(diff_too_large)`；内容型篡改（测试文件删除、跳过 / 聚焦标记净增、断言净减、抑制注释净增）→ `INCONCLUSIVE(test_tampering)`；diff 检查给出的 INCONCLUSIVE 一律直接交人。
+- **非代码 Task**（`requiredEvidence` 去空白后为空）：Artifact 缺失或无效 → `FAIL(artifact_missing | artifact_invalid)`；读不出 → `INCONCLUSIVE(environment)`（`artifact_unreadable`）；否则 `INCONCLUSIVE(non_code)`（human_confirm → 人，artifact_only → 按 inconclusiveRouting）。
+- **verdict 优先级**：`secret_detected` → `scope_violation` → `checks_failed` → `artifact_missing` / `artifact_invalid`（非代码）→ `environment`（diff 不可得或非代码 Artifact 读不出）→ `diff_too_large` → `test_tampering` → `dangerous_change` → 检查的 `environment` → `flaky` / `known_flaky` → 被跳过的检查（`environment`）→ `non_code` → `PASS`；`policy_invalid` 独立。deterministic FAIL 不可被任何 review 推翻。
 ## D66 · Reviewer 角色契约（只读 AgentSpec + `ReviewProposal` + 只作用于 INCONCLUSIVE）— ACCEPTED（Henry 2026-10-20："先把手上需要开发的做完"，验证者 2026-10-20 提议）
 
 **决定**：Reviewer 是 Mission Intelligence 的第三个角色（Planner、Reviewer、Replanner），与 Planner 同一启动方式（attempt-launcher，`permissions.write = []`，只读 worktree 检出 Candidate commit）；输入 = Task + acceptance + diff 摘要 + VerificationRun 结果 + 仓库规则；输出 `ReviewProposal`（schema 进 `axiom-contract`：逐条 acceptance 的 `pass | fail | inconclusive` + 理由 + 证据引用，整体建议 `PASS | FAIL | HUMAN_REVIEW`，风险列表），经 `axiom verification review --run <id> --file <path>`（envelope capability）提交；Control Plane 只在 run 为 `INCONCLUSIVE` 时接受提案并据此收敛，**对 deterministic FAIL 的提案一律拒绝**（拒绝码复用 Orca 词汇 + 审计）；Reviewer 的 skills（DEF-4）在 M3-05 brief 定稿前复审。
@@ -703,7 +722,9 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **取代规则**：以修订行记录。
 
 
-## D63 · F3 诊断结论与 D58 通道落地方式：B（Orca 结构化 / app-server 通道）可行，三项有界修复进 M3-08；A 继续作后备；A′（ACP）入坑 — PROPOSED（验证者 2026-10-21，待 Henry 讨论后批准）
+**修订（2026-10-25，已批准：Henry "按建议"，D73 / D78 之后）**：Reviewer 提交（`axiom verification review`）不再用 envelope capability，按 D73 由宿主核实调用方会话，与 Planner 同属 D78 的 `attempt` 类；人工处置 `axiom.verification.resolve` 为 `desktop_only`（D78）。
+
+## D63 · F3 诊断结论与 D58 通道落地方式：B（Orca 结构化 / app-server 通道）可行，三项有界修复进 M3-08；A 继续作后备；A′（ACP）入坑 — ACCEPTED（整合版，Henry 2026-10-25："按建议"；验证者 2026-10-21 提议；现行条文见文末"当前全文"）
 
 **背景**：D58 把 B 定为首选、A 为后备，并要求先做时间盒的 F3 诊断（M3-00）。M3-00 attempt 1（`098c5798c5`，合入 `e8cdd3da29`）交付了因果链、按可能性排序的候选原因与确定性测试、扩展后的验证者本地 smoke（捕获 app-server 子进程的 stdin / stdout / 退出码、会话存储与 journal 快照）和手工探针 `codex-app-server-probe.command`；验证者在宿主上跑了探针（两次）与三次结构化 smoke（记录 `.axiom-work/verifications/M3-00-f3.md`）。
 
@@ -741,6 +762,16 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **后果**：M3-08 的宿主 smoke 加一条：Worker 终端里调用 `orca worktree create` 与 `orca agent launch` 被拒并留审计，Task 不卡死。
 
 
+**当前全文（2026-10-25 整合，已批准：Henry "按建议"，`claude/fix-plan-v1.md` ④；上面的决定 2、决定 1 ③ 与决定 4、补充 ① 的"`third_party` 只许只读 Attempt"、Worker CLI 作用域补充 (a) 的"Attempt 令牌"由本段取代，原文留作历史）**：
+1. **通道**：Codex Attempt 走 Orca 结构化（app-server）通道 B；A（`codex exec`）保持后备、不实现；A′（ACP）见 DEF-16。决定 1 ① 的首轮 `pending` 判定先在 UPSTREAM-3 之后的底子上复核（上游 `sendAgentTurn` 已改写这条路径），仍有问题才加 Axiom 修复。
+2. **V1 姿态 = 沙盒**：Planner / Worker / Reviewer 统一 `workspace-write`（可写根只有 Attempt worktree，网络关闭）+ `approvalPolicy: on-request`；Claude Code 用每 Attempt 物化的 worktree 级允许规则 + `PermissionRequest` 钩子。Worker 不写 `.git`（候选快照由 Control Plane 做，D4）。测试工具在沙盒里写缓存的问题由 M3-08 冒烟暴露，按需把缓存指到 worktree 或 TMPDIR。
+3. **审批桥**（修订提议 ②–⑤ 原样批准）：Mission 会话的审批请求不进 native chat，由 Control Plane 确定性回答，复用 Orca 现成的处理路径（`src/main/codex/codex-server-request-disposition.ts`、`agentSession.respondToApproval` 背后的服务），不另建；只放行精确 argv（Axiom 自带 CLI 的绝对路径 + 该角色的动词集 + 无 shell 元字符）；其余按 `escalationRouting: deny | human`（默认 deny，回给 agent 带原因的拒绝）；底线清单永不自动放行；每次回答写进 AgentSpec provenance 与审计；不经 DecisionEngine。M4 的 ApprovalGateway 复用同一规则与审计。
+4. **bypass 只作后备**：policy `workerPosture: sandboxed | bypass`（默认 `sandboxed`），只在某个 harness 的审批桥宿主冒烟失败时显式选用；写进 AgentSpec 与 CompletionReport 风险栏；`repositoryTrust: third_party` 永远不能用 bypass。
+5. **身份**：撤掉决定 1 ③ 的 `--from <assigneeHandle>`。结构化 Worker 用宿主核实的会话身份（D73 第 3 条；上游已有 `structuredAgentCliSourceEvidence` 与按注入环境里的 Orca session id 解析调用方）。M3-08 在宿主上证明两种通道都能解析出调用方之后，删掉 `assertAttemptRequestAuthority` 里 `ctx.orchestrationCaller?.address ?? caller.from` 的参数回退。Worker CLI 作用域补充的 (b)(c) 由 D78 落实（人做的决定只接受桌面应用、Agent 会话的第二层拒绝），(a) 的 Attempt 令牌按 D73 不做。
+6. **`repositoryTrust: own | third_party`**（补充 ①）：保留；`third_party` 允许 Worker Attempt，但只能在 sandboxed 姿态下（`runtime_posture_untrusted` 改为只在 bypass 下拒绝），这样 V1 第 12 条的 Blind External fixture 能按第三方仓库正常运行。补充 ② 的已知限制改为"选用 bypass 后备时"才进风险栏；补充 ③（网络出口与容器 / VM 执行，DEF-20 ④）不变。
+7. **认证**：决定 4 改为——codex 的 Planner 证据（M3-00-f3，bypass 姿态）保留为历史，组合状态仍为 `provisional`；M3-08 在 sandboxed 姿态下取得 Worker 证据（`RUNNING → SUBMITTED → VERIFIED`）后改为 `certified`；claude 跑通到 `SUBMITTED`。`certified-providers.ts` 与 D57 修订行同步。
+**后果**：M3-08 brief 按本段重写（token 用量、三条 ACP 启动配置与结构化 harness 一致性 smoke 等原有增补保留）；宿主冒烟证明：Planner 的 `plan propose` 与 Worker 的 `attempt submit` 经审批桥放行；越界写入与 `orca worktree create` / `orca agent launch` 被拒并留审计，Task 不卡死。
+
 ## D67 · V1 平台范围：macOS 与 Linux；Windows 定为 V1.x — ACCEPTED（Henry 2026-10-21："windows 定为 1.x 版本，先做 macos 和 linux"）
 
 **背景**：AGENTS.md 与架构把 macOS / Linux / Windows 都列为目标平台，但流水线只有 macOS 宿主（Henry 的 Mac Studio）与托管 CI（Linux）；V1 出口前没有任何 Windows 证据（fixture e2e、打包冷启动、WSL 通道）。2026-10-21 端到端流程复审（`claude/flow-review-v1.md` 缺口 14）把它列出，Henry 决定推迟。
@@ -766,7 +797,7 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **取代规则**：批准后以修订行记录；若内核枚举需要改动，另起内核 Decision（D56 流程）。
 - **批准（2026-10-23，Henry："批准D68，可以按照计划继续"）**：按上文生效，不改内核枚举。验证侧（第 2、3 条：check 结果 `environmental`、`INCONCLUSIVE(environment)` 直接路由到人、`retryOnce` / `knownFlaky`）随 M3-02 实施；Attempt 侧（第 1 条：`interrupted` 结算类别与退避）随 M3-06 与 M2-08 的结算路径实施；术语表 §4.6 / §4.8 的新枚举随各自的 Task 更新。
 
-## D69 · 依赖阈值 `VERIFIED` 的下游基线与失效规则 — PROPOSED（验证者 2026-10-21，端到端流程复审 L1；Henry："都记下来"，M3-04 brief 定稿前批准过渡规则、M4 批准完整规则）
+## D69 · 依赖阈值 `VERIFIED` 的下游基线与失效规则 — ACCEPTED（修订版：V1 只支持 INTEGRATED；Henry 2026-10-25："按建议"；验证者 2026-10-21 提议）
 
 **背景**：`mission_task_edges.readiness_threshold` 允许 `VERIFIED`（上游验证通过即放行下游），但 attempt-launcher 一律从集成基线建分支（D51 / §12.1）——下游 Worker 的树里没有上游的改动，等于在旧代码上干活；上游候选之后集成 CONFLICT 被 SUPERSEDED 时，下游没有任何失效机制。
 **决定（提议）**：
@@ -778,7 +809,9 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **后果**：M3-04 实现过渡规则 4 与 D64 三点 diff；M4 集成基线实现 1–3；术语表 §4.3 / §4.6 补 `base_conflict` / `base_superseded`；DEF-20 ② 的 scope 重叠校验对叠加基线同样生效。
 **取代规则**：M4 批准完整规则时以修订行撤销过渡规则。
 
-## D70 · Mission 状态机补全：收尾回退、交付拒绝与 PAUSED 语义 — PROPOSED（验证者 2026-10-21，端到端流程复审 L3 / L12；Henry："都记下来"，M4 brief 定稿前批准）
+**修订（2026-10-25，已批准：Henry "按建议"，`claude/fix-plan-v1.md` ③）——V1 只支持 `INTEGRATED` 依赖**：上面的过渡规则（第 4 条）没有随 M3-04 落地（代码里没有 `threshold_downgraded`，`task-readiness.ts` 仍对 `VERIFIED` 边放行），现改为 V1 的正式规则并在入口处落实：① 提案校验对 `VERIFIED` 边报错 `threshold_not_supported`（error，不是 warning），Planner 契约写明 V1 只用 `INTEGRATED`——批准的计划与实际行为一致，不做静默改写；② `policy.update` 拒绝把默认阈值设为 `VERIFIED`；③ `task-readiness.ts` 只认 `INTEGRATED`，已存的 `VERIFIED` 边自然按 `INTEGRATED` 处理，不需要迁移；④ 枚举保留（存量数据与 V2）。决定 1–3（叠加上游候选的基线、`base_conflict`、`base_superseded` 失效）登记 DEF-30，触发点 = V2 多候选批次或竞争 Attempt（DEF-23）。理由：它是并行度优化，V1 的 12 条标准都不需要（"≥3 个 Task 并行"用互不依赖的根 Task 满足），而完整规则是 M4 里成本最高的部分之一。实施：M3-04c（取代 M3-04b 行里的"D69 过渡规则"）。
+
+## D70 · Mission 状态机补全：收尾回退、交付拒绝与 PAUSED 语义 — ACCEPTED（Henry 2026-10-25："按建议"；验证者 2026-10-21 提议；补充见修订行）
 
 **背景**：§6.1 只有 `FINALIZING → READY_FOR_APPROVAL → COMPLETED` 的前进转换；§12.3 的漂移冲突与最终回归失败要生成 FIX_TASK，但 Scheduler 只在 `EXECUTING` 做 admission；交付 Approval 被 DENIED、FINALIZING 之后目标分支再次移动（TOCTOU）都没有定义；`PAUSED` 只说"可恢复到前一状态"。
 **决定（提议）**：
@@ -789,6 +822,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **理由**：没有回头路的收尾状态在真实仓库上必然撞到（用户在 Mission 期间会继续提交）；PAUSED 不定义就会出现"暂停了还在动"。
 **后果**：§6.1 表补四行；M4 实现 1–3，4 与 DEF-20 ① 同做；术语表 §4.1 加 `delivery_denied`、`pauseMode`。
 **取代规则**：以修订行记录。
+
+**修订（2026-10-25，已批准：Henry "按建议"，`claude/fix-plan-v1.md` ②-3）**：① 决定 1 的"产生 FIX_TASK / NEEDS_FIX"按 D79 理解——漂移合并冲突与最终全量回归失败没有肇事候选，用 FIX_TASK（由 Control Plane 直接建）；批次级失败回原 Task。② Task 解除 BLOCKED 按原因：Question 答复后，Attempt 仍活着回 `RUNNING`，已结束回 `READY` 起新 Attempt、答复进强制上下文（M3-04b）；`retry_budget_exhausted` → 人选"经 Approval 加预算 → `READY`"或取消；`approval_denied`（D79）→ 人选重做（`NEEDS_FIX`）或取消；其余原因一律回 `READY`，不回 `RUNNING`（旧 Attempt 不保证还在）。GLOSSARY §4.1 / §4.4 与 ARCHITECTURE §6.1 / §6.3 补这些转换。
 
 ## D71 · V1 前端信息架构：对话优先的 Mission，建在 Orca 现成的入口与外壳上 — ACCEPTED（Henry 2026-10-22：简化版 sample "作为 v1 完全没有问题"；"很多东西，我们可以在 orca 的基础上面去修改……避免了我们在 v1 前面重复造轮子"；"我同意"）
 
@@ -880,3 +915,39 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **理由**：显式记录是学习的前提——混入未记录的能力，结果无法归因到模型或 skill；副作用能力必须经 Control Plane 授权与审计；复用 Orca 的同步机制与 Skills 页，改动最小。
 **后果**：AgentSpec schema 增加组合字段（additive）；M3-08 brief 加过滤同步与 effective 记录；M3-09 加 Skills 页扩展；DEF-9 / DEF-18 / DEF-23 复审以本条为前提；policy 增加允许名单与风险分级。
 **取代规则**：以修订行记录。
+
+## D78 · 人做的决定只接受桌面应用这一个调用方（V1）；Agent 会话另加一层拒绝 — ACCEPTED（Henry 2026-10-25："按建议"；验证者 2026-10-25 提议，`claude/fix-plan-v1.md` ①）
+
+**背景**：架构复审（`claude/architecture-progress-review-v1.md` H1）核实：`axiom.plan.approve / reject`、`axiom.policy.update`、`axiom.goal.*`、`axiom.mission.*` 的状态动作、`axiom.task.create / cancel`、`axiom.message.answer / resolve` 都是 `permission: 'workspace'`；Orca 的调用方模型里本机未加戳的调用就是 owner（`rpc-caller-scope.ts`），Worker 终端里的 `axiom` CLI 正是这种调用；处理函数把出处直接写成人（`plan.approve` 用参数里的 `resolver` 记 `provenance.kind = 'user'`，`task.cancel` 与 `question-answer.ts` 写死 `actor: 'user'`）。只有 `axiom.attempt.*` 与带 `attemptId` 的 `plan.propose` 经 D73 核实调用方；`artifact.put` 的 `createdBy` / `related` 也由调用方给。结果：Worker 能回答自己的 QUESTION、批准自己的 REQUEST_SUBTASK、批准计划、改 `verificationRules`（例如清空 `testPathPatterns`），审计里都记成人做的。
+**选项**：A 只拒绝认得出是 Attempt 会话的调用（身份来自注入的环境变量，bypass 姿态下清掉即可绕过——"认出是 Agent 才拒绝"不成立）；B 给 Worker 发作用域令牌（要改 Orca 的 socket 认证模型，且是 D73 否掉的路）；C 人做的决定只接受传输层盖章为 `desktop` 的调用方；D 按 socket 对端进程树核实（DEF-25，需原生代码）。
+**决定**：C，加一层防误用。
+1. **方法分类**（`src/main/axiom/authority/caller-authority.ts`，单测断言每个已注册的 `axiom.*` 方法都有分类）：`desktop_only` = `mission.create / plan / start / pause / resume / cancel`、`goal.propose / activate`、`plan.approve / reject`、不带 `attemptId` 的 `plan.propose`、`policy.update`、`task.create / cancel`、`message.answer / resolve`，以及此后新增的人工动作（`verification.resolve`、`approval.*`、`mission.deliver` 等）；`attempt` = `attempt.*`、带 `attemptId` 的 `plan.propose`、`artifact.put`（改为必须带 `attemptId` 并经 `resolveAttemptSender` 核实，`createdBy` 与 `related` 由宿主按该 Attempt 填）；`read` = 各 `show / list / read`。
+2. **执行点**：dispatcher 在回执重放之前已调用 Axiom 的 `assertAttemptRequestAuthority`，同一处加 `assertAxiomCallerAuthority`：`desktop_only` 方法遇到 `ctx.caller?.kind !== 'desktop'`（`local-cli`、`paired-device` 或无法认定）→ `caller_not_desktop`；调用方能解析到某个 Attempt 时写 `authority.refused` 审计并挂到该 Attempt。
+3. **出处由调用方推出**：不再信参数里的 `resolver` 或写死的 `'user'`；人工动作的 provenance = `{ kind: 'user', via: 'desktop' }`。Control Plane 内部动作直接调用控制器，不走 RPC。
+4. **第二层（防误用，不是边界）**：调用方解析到 Axiom 的 Attempt / Planner / Reviewer 会话时，拒绝 Orca 的非 `workspace` 层级（`desktop-control`、`accounts-admin`、`settings-write`、`skills-admin`、`host-admin`、`pairing-admin`）、`agentSession.respondToApproval / respondToQuestion`，以及新建 Orca Run、起 worker 的编排方法；宿主解析不出会话的方法交给 D63 的沙盒姿态。
+5. **CLI**：人工动作子命令保留，返回"请在 Axiom 应用里操作"；读命令与 Worker 动词不变。
+**理由**：`RpcCallerIdentity` 由 dispatcher 按传输层盖章、从不读请求参数（`rpc-caller-identity.ts`），CLI 进程伪造不了 `desktop`；"默认拒绝、正面认定是人"不依赖 Agent 环境变量是否可信。与 D71"人的权威动作只在卡片上"一致。
+**后果**：V1 的人工动作只能在应用里做——已有 UI 的：建 Mission、开始规划、开始 / 暂停 / 继续 / 取消、批准 / 拒绝计划、回答 Question、处理子任务请求；policy 编辑与取消单个 Task 的最小入口进 M3-09，Goal 修订进 M5。E2E 的人工动作改走桌面调用方（`page.evaluate(window.api.runtime.call)`，与产品 `axiom-client.ts` 同一条路），测试 provider 增 `self-approve` 场景。实施：M3-04c。"CLI 发起、应用里确认"与配对设备的人工权限登记 DEF-31（V2）；DEF-25 不变。
+**取代规则**：以修订行记录；把任何 `desktop_only` 方法开放给其他调用方须新 Decision。
+
+## D79 · 集成失败的归属与单点 Approval：单候选批次的 CONFLICT / FAILED 都回原 Task 修复，FIX_TASK 只留给没有肇事候选的 Mission 级失败；高风险 Approval 只在批次一处 — ACCEPTED（Henry 2026-10-25："按建议"；验证者 2026-10-25 提议，`claude/fix-plan-v1.md` ②；取代 D3，D3 修订提议撤回）
+
+**背景**：D3 让回归失败（FAILED）新建 FIX_TASK、原候选 SUPERSEDED 且不得再入队，原 Task 因此永远没有 ACTIVE 候选可集成；GLOSSARY §4.4 又写 FIX_TASK 只阻止其重新入队，两处矛盾。D3 修订提议（2026-10-21）用"FIX_TASK 以失败批次合并树为基线、PROMOTED 时把所含候选的 Task 一并 INTEGRATED"补出路。但 D5 把批次固定为一个候选：回归失败时另一方已 PROMOTED，未集成的只有当前候选，与 CONFLICT 同为"一个候选对一个基线"。另外，Task 进 `INTEGRATION_READY` 与批次 `PROMOTABLE → AWAITING_APPROVAL` 各要一次 Approval，单候选批次下批的是同一个候选；`REJECTED` 之后的去向没有定义；等批准的批次会卡住串行队列。
+**决定**：
+1. **批次级失败一定有肇事者，回原 Task**：(a) `CONFLICT` → 原 Task `NEEDS_FIX`；修复 Attempt 的分支由 Control Plane 准备：从当前集成基线建分支，`git merge --no-commit <旧候选>`，冲突标记留在工作区（Worker 在沙盒里不写 `.git`，合并由 Control Plane 做；快照的 `git commit` 保留第二父提交，M4 brief 核实）；证据 = 冲突文件与双方改动摘要。(b) `FAILED` → 原 Task `NEEDS_FIX`；修复 Attempt 从失败批次的合并 commit 开始（固定为 `refs/axiom/batches/<batchId>/merged`）；证据 = 失败的回归测试与输出。(c) 两者复用 M3-04 的修复循环：`resolveAttemptBaseline` 新增基线 `integration_merge`（带批次与旧候选），ContextPackage 第 7 段加集成失败证据，计入 `maxAttempts`，耗尽 → `BLOCKED(retry_budget_exhausted)`；原候选 `SUPERSEDED`，新候选重新验证、重新入队。(d) **scope**：修复需要动 Task scope 之外的文件时（回归证据里的测试文件与堆栈路径），只在"当前 PlanRevision 里已有某个 Task 被授权写"的范围内自动扩大，写进该 Attempt 的 AgentSpec `permissions.write` 并审计 `scope_extended`；超出 → QUESTION 给人。验证的 diff 检查改用候选所属 Attempt 的 AgentSpec 写范围（现为 `task.spec.scope.allowedPaths`，普通 Attempt 两者相同）。
+2. **FIX_TASK 只用于没有肇事候选的 Mission 级失败**：目标分支漂移合并冲突、全部集成后的最终全量回归失败（D70 ①）；由 Control Plane 直接建（`spec.kind = fix`，MINOR_ADJUSTMENT），不捎带其他 Task 的候选，也就没有跨 Task 置 `INTEGRATED` 的机制。
+3. **单点 Approval**：`INTEGRATION_READY` = `VERIFIED` ∧ 全部上游 `INTEGRATED`（去掉 Approval 条件）；批次合并树回归通过（`PROMOTABLE`）后按 policy 做风险分级，高风险 → `AWAITING_APPROVAL`；Approval 绑定候选 tree 与风险发现，动作 = "在晋升时的基线上合并、合并树回归通过后晋升候选 X"。
+4. **等批准的批次让出队头**：不依赖它的候选照常集成（依赖它的本来就要等它 `INTEGRATED`）；GRANTED 后基线没动 → `PROMOTED`；基线动了 → 在新基线上重新合并并重跑回归，通过即晋升、不再批；冲突或失败 → 按第 1 条回原 Task，新候选需要新的 Approval。
+5. **拒绝与过期**：`DENIED` → 批次 `REJECTED`、候选 `SUPERSEDED`、Task `BLOCKED(approval_denied)`，待处理项让人选"带着拒绝理由重做（→ `NEEDS_FIX`）"或"取消 Task"；`EXPIRED` → 重新请求，绝不自动晋升。Mission 级交付 Approval 不变（D70）。
+6. **ref 由 Control Plane 独占**：候选 commit 固定到 `refs/axiom/candidates/<id>`；集成基线 `axiom/integration/<missionId>` 的期望 SHA 记库，每个批次开始前核对，不一致即停。
+**理由**：单候选批次下 FIX_TASK 那套机制（新 Task 类型、临时集成分支作 launcher 基线、跨 Task `INTEGRATED` 传递、耗尽回退）换不来东西；原 Task 自己修更简单、可追责，并复用已验证的修复循环。单点 Approval 批的是真正要晋升的内容；让出队头避免人不在时整条集成停摆。
+**后果**：V1 成功标准第 6 条（ARCHITECTURE §21）与章程 §11 / 成功标准表的括注改为"合并后失败的候选回到原 Task 修复"，M4 出口同改；GLOSSARY §3 / §4.4 / §4.9、ARCHITECTURE §6.3 / §6.7 / §7 / §12 / §13、AGENTS.md Integration 节、章程 §4 / §9 同步。多候选批次的部分失败仍按 D5 的取代规则另开 Decision（DEF-24）。实施：M4。
+**取代规则**：以修订行记录；引入多候选批次时另开 Decision。
+
+## D80 · M3 出口 10 的延后条目复审（DEF-5 / DEF-9 / DEF-11）与 2026-10-25 文档同步记录 — ACCEPTED（验证者 2026-10-25 按 M3 出口 10 复审，随修复方案提交；Henry 2026-10-25 批准修复方案"按建议"；复审结论只调整触发点、不改 V1 范围，可否决）
+
+**DEF-5（代码知识图 / CodeGraph）**：触发点"M3 验证范围设计时"已过——M3-02 的检查运行器与 M3-03 / M3-03b 的 scope、篡改检查都不需要代码智能，fixture 的测试套件几秒跑完，"受影响测试优先"没有收益；Planner v1 不带仓库分析输入（2026-10-20 复审）。结论：V1 不做；触发点改为 M5 Planner v2（仓库分析输入）或 V2。
+**DEF-9（Worker 记分卡）**：触发点"M3 VerificationService brief 定稿前"已过，verdict 结构已定（D65 当前全文）。结论：V1 的只读记分卡并入 M3-09——从 `verification_runs`、`submissions` 与审计派生的投影，指标 = 验证 verdict、通过所需 Attempt 数、篡改 / 越界次数、耗时（成本可得时），样本不足标"数据不足"，不影响路由（D57 第 4 条、D8）；按"skill × 模型 × 角色"的统计随 D77（提议）定。
+**DEF-11（agent 退出的立即触发）**：触发点"M3 VerificationService 设计时"已过——验证不经 agent 进程（检查由 VerificationService 直接运行），用不到它；M3-02b 起提交后由 Control Plane 主动释放 Worker 终端（D76），提交路径不依赖退出检测。结论：V1 不做；触发点改为 M3-06 Supervisor 显示 60 秒延迟造成实际等待，或用户提出。
+**文档同步（修复方案 ⑥）**：AGENTS.md、GLOSSARY、ARCHITECTURE、章程按 D57 / D60 / D63 / D69 / D70 / D73 / D78 / D79 改写（dispatch capability → 宿主核实身份、Jev 口径、FIX_TASK 与 Approval、Mission 收尾转换、依赖阈值、Gemini → Antigravity、M5 的 DecisionEngine 已在 M2 建成）；AGENTS.md 新增"Authoritative Sources by Topic"；Constitution 只把 D9 / D10 / D13 后面过时的 "proposed" 字样去掉（三者 2026-10-17 已 ACCEPTED，条文不变）。M3-04c 加 `config/scripts/axiom-docs-terminology.test.mjs`，让退役术语（`dcap_`、`--dispatch-capability`、`orchestrationCapability`）不再回到现行文档。
+**后果**：DEFERRED 三条的状态栏补本条；M3.md 出口 10 记为完成（DEF-4 / DEF-6 ③ 仍在 M3-05 brief 定稿前复审）。

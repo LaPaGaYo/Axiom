@@ -123,7 +123,7 @@ Worker 的完成报告只能形成不可变的 Submission，使 Task 进入 `SUB
 
 所有 `INTEGRATION_READY` 的候选进入单一 Integration Queue，由 IntegrationController 串行应用到集成基线（V1 每批一个候选，D5），并在集成树上运行完整回归。
 
-预期结果：能够发现"每个分支单独通过、合并后失败"的问题：文本冲突使原 Task 回到 `NEEDS_FIX`，回归失败则创建 FIX_TASK（D3）。
+预期结果：能够发现"每个分支单独通过、合并后失败"的问题：文本冲突与合并树回归失败都使原 Task 回到 `NEEDS_FIX`，从集成后的树修复（D79）。
 
 ### Objective 7：支持恢复、重试和重规划
 
@@ -174,7 +174,7 @@ Goal
 9. 对不可变 Candidate 运行 deterministic checks；
 10. 支持 VerificationRun `FAIL` → `NEEDS_FIX` → 新 Attempt；
 11. 支持串行集成和集成树全量回归；
-12. 支持集成冲突 → `NEEDS_FIX` 或 FIX_TASK；
+12. 支持集成冲突与合并树回归失败 → 原 Task `NEEDS_FIX`（D79）；
 13. 对高风险 promotion 与最终交付请求人工 Approval；
 14. 应用重启后恢复 Mission、Task、Attempt 和 Evidence；
 15. 根据所有 completion gates 给出最终完成判断和 CompletionReport；
@@ -182,7 +182,7 @@ Goal
 
 ## 9. V1 范围与里程碑
 
-V1 = M0–M4 全部，加上 M5 中的 `DecisionEngine` 接口与 RulesEngine 基线、replan 分级触发，以及 `MAJOR_REPLAN` → 新 PlanRevision → 批准 → 旧版本 `SUPERSEDED` 的完整闭环（D8，修订后）。放到 V1 之后的是 Jev 等学习型 DecisionEngine 实验、基于历史表现/成本的路由学习，以及 M6。
+V1 = M0–M4 全部，加上 M5 中的 `DecisionEngine` 接口与 RulesEngine 基线、replan 分级触发，以及 `MAJOR_REPLAN` → 新 PlanRevision → 批准 → 旧版本 `SUPERSEDED` 的完整闭环（D8，修订后）。V1 另含一个可选、只给建议的 Jev 适配器（D60，BYOK）；放到 V1 之后的是 Jev 的学习型用法、基于历史表现/成本的路由学习，以及 M6。
 
 | 里程碑 | 一句话说明 | V1 |
 |---|---|---|
@@ -190,8 +190,8 @@ V1 = M0–M4 全部，加上 M5 中的 `DecisionEngine` 接口与 RulesEngine �
 | M1 Mission Facade | Mission/Goal/Plan 与 Orca Run/Task 的映射、`task_stages`、重启恢复、基础 UI | 是 |
 | M2 Planning 与 Agent Factory | plan proposal、DAG 校验、AgentSpec、ContextPackage、provider routing 与预算 | 是 |
 | M3 Independent Verification | Submission、Candidate、VerificationRun、deterministic checks、`NEEDS_FIX` 循环 | 是 |
-| M4 Controlled Integration | Integration Queue、IntegrationController、集成树回归、FIX_TASK、Approval 与 promotion | 是 |
-| M5 Replanning 与 Decision Engine | replan 分级、`MAJOR_REPLAN` 闭环、`DecisionEngine` 抽象、Jev 实验、历史表现与成本反馈 | 接口 + RulesEngine 基线 + replan 闭环；Jev 与学习型反馈否 |
+| M4 Controlled Integration | Integration Queue、IntegrationController、集成树回归、失败回原 Task 修复（D79）、Approval 与 promotion | 是 |
+| M5 Replanning 与 Decision Engine | replan 分级、`MAJOR_REPLAN` 闭环、历史表现与成本反馈 | replan 闭环是（`DecisionEngine` 接口与 RulesEngine 已在 M2 建成；可选的 Jev 适配器在 M3，D60）；学习型反馈否 |
 | M6 Remote 与扩展 | 远端 mixed-version、SSH/WSL/federation 验证，再决定 cloud、mobile、多用户 | 否 |
 
 ### Demo 与验证 fixture（G8，D18）
@@ -273,7 +273,7 @@ V1 只有在以下条件全部满足时才算成功：
 | Agent 不是状态权威 | 伪造或错误的 `SUBMISSION` 无法直接进入 `INTEGRATION_READY` |
 | 验证可以发现真实错误 | 故意引入的测试失败得到 `FAIL`，Task 进入 `NEEDS_FIX` |
 | 系统能修复失败 | 生成新 Attempt，重新验证并保留历史 |
-| 并行结果能够安全集成 | 集成树回归被执行；冲突进入 `NEEDS_FIX` 或 FIX_TASK，而不是静默覆盖 |
+| 并行结果能够安全集成 | 集成树回归被执行；冲突与回归失败使原 Task 进入 `NEEDS_FIX`（D79），而不是静默覆盖 |
 | 系统可恢复 | 应用重启后 Mission 身份、Task stage、Attempt 和证据不丢失 |
 | Agent 可替换 | 某次 Attempt 失败后可更换 provider 继续同一 Task |
 | 高风险动作需要授权 | 未批准的 promotion 停在 `AWAITING_APPROVAL`，Approval 记录可审计 |
@@ -310,7 +310,7 @@ V1 不以以下事项为完成条件：
 - 替代 GitHub、Jira 或完整 IDE；
 - 训练自有基础模型；
 - 将 Jev 作为不可替换的核心依赖；
-- Jev 超出 `DecisionEngine` 接口与 RulesEngine 基线之外的实验（D8）；
+- Jev 的学习型用法（按历史表现训练、自动改路由）；V1 只有可选、只给建议的适配器（D8、D60）；
 - 多候选 IntegrationBatch（V1 固定一个候选，D5）；
 - 远端/federation 与 mixed-version 验证（D8，M6）；
 - 自动解决所有架构和产品歧义；

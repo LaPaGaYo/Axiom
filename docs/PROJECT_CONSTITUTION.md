@@ -1,6 +1,6 @@
 # Axiom Constitution
 
-Status: normative, version 1.0 (2026-09-26). Repository path: `docs/PROJECT_CONSTITUTION.md`. Vocabulary: `docs/GLOSSARY.md`. Decisions cited as D<n> are recorded in `docs/decisions/DECISION_LOG.md` (path per D13, proposed).
+Status: normative, version 1.0 (2026-09-26). Repository path: `docs/PROJECT_CONSTITUTION.md`. Vocabulary: `docs/GLOSSARY.md`. Decisions cited as D<n> are recorded in `docs/decisions/DECISION_LOG.md` (path per D13).
 
 ## 1. Purpose and Authority
 
@@ -50,7 +50,7 @@ A feature that violates an invariant MUST NOT be implemented even if it appears 
 | Mission state, bound repository, target branch, budget cap, policy | `missions` (Orca `runs` is only the container and the `run:<runId>` mailbox; it has no status column) |
 | Mission goal and constraints | the active `GoalRevision` (`goal_revisions`) |
 | Mission plan | the APPROVED `PlanRevision` (`plan_revisions`); exactly one is APPROVED per Mission at any time |
-| Work dependencies | the `TaskEdge` DAG in the Control Plane (`mission_task_edges`; per D10, proposed) |
+| Work dependencies | the `TaskEdge` DAG in the Control Plane (`mission_task_edges`; per D10) |
 | Task stage | `task_stages.stage` (D2) |
 | Task execution | the active `Attempt`, which is the Orca dispatch (`attemptId ≡ dispatchId`) |
 | Agent process state | the execution host's liveness verdict: `live`, `unverifiable`, `exited` |
@@ -83,9 +83,9 @@ Contributors MUST NOT introduce:
 - Mission completion based only on all Agents being idle or stopped;
 - silent replacement of an APPROVED PlanRevision;
 - destructive cleanup of user-owned changes;
-- Orca `promoteReadyTasks` or `tasks.deps` as dependency authority for Mission-managed Tasks (per D10, proposed);
-- a Worker-issued `merge_ready` message (per D9, proposed);
-- direct `orchestration.workerStart` or `orchestration.taskUpdate` against Mission-managed Tasks outside the Scheduler and Control Plane (D2; per D10, proposed);
+- Orca `promoteReadyTasks` or `tasks.deps` as dependency authority for Mission-managed Tasks (per D10);
+- a Worker-issued `merge_ready` message (per D9);
+- direct `orchestration.workerStart` or `orchestration.taskUpdate` against Mission-managed Tasks outside the Scheduler and Control Plane (D2; per D10);
 - an LLM "coordinator" consuming the `run:<runId>` mailbox; the upstream Coordinator is retired and `MissionController` is the mailbox's deterministic consumer;
 - `nestedWorkerMaxDepth` greater than 1 for Mission Workers;
 - RPC methods registered under `project.*`, which collides with Orca's existing `project.list` / `project.update` (D1).
@@ -126,4 +126,4 @@ Architecture invariants MUST NOT be reinterpreted to make a local implementation
 
 ## 8. Amendment
 
-This Constitution changes only through a recorded Decision in `docs/decisions/DECISION_LOG.md` (path per D13, proposed) that states context, alternatives, rationale, consequences, and supersession. The Decision MUST be ACCEPTED before the change is merged, and the changed text MUST cite it. There are no emergency edits: an urgent conflict is handled under §7, and the Constitution is amended afterwards.
+This Constitution changes only through a recorded Decision in `docs/decisions/DECISION_LOG.md` (path per D13) that states context, alternatives, rationale, consequences, and supersession. The Decision MUST be ACCEPTED before the change is merged, and the changed text MUST cite it. There are no emergency edits: an urgent conflict is handled under §7, and the Constitution is amended afterwards.

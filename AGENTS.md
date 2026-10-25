@@ -29,6 +29,24 @@ Upstream orchestration documentation lives in `skill-guides/orchestration.md`, `
 
 If these documents disagree, do not silently choose one. Report the conflict and follow the Authority Order.
 
+## Authoritative Sources by Topic
+
+Each topic has one canonical source. Other documents cite it by section instead of restating it; when two documents disagree, the canonical source wins and the other is fixed in the same change.
+
+| Topic | Canonical source |
+|---|---|
+| Invariants, Authority Order, Domain Authority Map, Prohibited Patterns, Completion Rule | `docs/PROJECT_CONSTITUTION.md` |
+| Vocabulary and every state machine (Mission, GoalRevision, PlanRevision, Task stage, Attempt projection, Candidate, VerificationRun, IntegrationBatch, Approval, Decision, Question) | `docs/GLOSSARY.md` §3–§4 |
+| Verification policy keys, check results, verdict reasons and precedence | D65 current text in `docs/decisions/DECISION_LOG.md`; as-built behavior in `docs/reference/control-plane.md` |
+| Fix Attempt baselines and verification worktrees | D64 current text; `docs/reference/control-plane.md` |
+| Caller identity and human authority | D73, D78; `docs/reference/control-plane.md` |
+| Worker posture, approval bridge, `repositoryTrust` | D63 current text |
+| Integration failure handling and the Approval point | D79 |
+| Provider matrix and certification | D57 and `src/main/axiom/agent-factory/certified-providers.ts` |
+| Orca kernel mapping and seams | `docs/reference/orca-mapping.md` |
+| Milestone scope, task order, and status | `docs/plans/M<n>.md` |
+| Items deferred to a trigger | `docs/decisions/DEFERRED.md` |
+
 ## Authority Order
 
 The normative Authority Order is `docs/PROJECT_CONSTITUTION.md` §1. This file ranks fourth: below explicit user requirements and ACCEPTED Decisions, the safety/permission/human-approval policies, and the Constitution; above the APPROVED `PlanRevision` and `Task` acceptance criteria, subsystem reference documentation, and existing implementation conventions. A lower-level instruction may narrow a higher-level rule but may not weaken or contradict it.
@@ -49,7 +67,7 @@ Reuse the Orca-derived Execution Kernel for:
   - The automatic Coordinator/scheduler (`coordinator.ts`, `coordinator_runs`, `orchestration.run`/`runStop`, CLI `coordinator-start`) is retired upstream and MUST NOT be revived. `MissionController` is the deterministic consumer of the run mailbox; the Scheduler is database-driven and restartable.
   - Dispatch and worker lifecycle (`dispatch_contexts`, `worker_dispatches`, `transitionLifecycleWithDb`): an Attempt is an Orca dispatch, `attemptId ≡ dispatchId`.
   - Messages, deliveries, and wake-up (`check --wait` long-poll, PTY nudge, structured-session turns).
-  - Dispatch capability (`dcap_…`) validation, `consumer_generation` fencing, and `mutation_receipts` idempotency.
+  - Host-verified caller identity (D73: the caller's terminal / pane / Orca session as the host resolves it, plus the process incarnation), `consumer_generation` fencing, and `mutation_receipts` idempotency.
   - Decision gates for `QUESTION` blocking only, never as Approvals (D7).
   - Federation (`worker-start --on <environment>`) for remote placement, post-V1 (D8).
 
@@ -177,7 +195,7 @@ An AgentSpec is an execution contract, not a persona, and is content-addressed i
 
 Workers may modify only their authorized scope. They must report discoveries that affect other Tasks through typed messages or Artifacts.
 
-Workers talk to the Control Plane only through the `axiom` CLI — `axiom attempt submit | ask | blocked | handoff | inform | request | request-subtask | check` (all Worker verbs live under `axiom attempt`, because Orca's CLI already has a top-level `check` command — D16) — which calls `axiom.attempt.*` RPC methods and carries the Orca dispatch capability (`--dispatch-capability dcap_…`). The RPC layer reuses Orca's `hasLifecycleAuthority` check, capability hash, `consumer_generation` fence, and `mutation_receipts`; Control Plane replies reach the Worker through its `dispatch:<dispatchId>` mailbox (`axiom attempt check`). No MCP server is introduced for this channel (D11).
+Workers talk to the Control Plane only through the `axiom` CLI — `axiom attempt submit | ask | blocked | handoff | inform | request | request-subtask | check` (all Worker verbs live under `axiom attempt`, because Orca's CLI already has a top-level `check` command — D16) — which calls `axiom.attempt.*` RPC methods. The host verifies the caller (D73: the terminal / pane / Orca session the host injected, never a command-line value, plus the process incarnation); the RPC layer reuses Orca's `hasLifecycleAuthority` check, `consumer_generation` fence, and `mutation_receipts`; Control Plane replies reach the Worker through its `dispatch:<dispatchId>` mailbox (`axiom attempt check`). No MCP server is introduced for this channel (D11).
 
 Workers must not directly spawn other Workers. `nestedWorkerMaxDepth` is pinned to 1 for Mission Workers by policy. A Worker may send `REQUEST_SUBTASK`; the Control Plane decides whether to create a Task after checking scope, depth, duplication, dependency, cost, and permissions.
 
@@ -311,9 +329,9 @@ In V1 each IntegrationBatch contains exactly one candidate, applied in queue ord
 - required Approval;
 - promotion result.
 
-Passing checks in isolated worktrees does not prove that combined changes pass. Run required regression checks on the integrated tree (`APPLYING → TESTING → PROMOTABLE`, then `AWAITING_APPROVAL` when policy requires it, then `PROMOTED`).
+Passing checks in isolated worktrees does not prove that combined changes pass. Run required regression checks on the integrated tree (`APPLYING → TESTING → PROMOTABLE`, then `AWAITING_APPROVAL` when policy requires it, then `PROMOTED`). High-risk Approval happens only at this batch step (D79): a batch awaiting Approval yields the head of the queue, and if the base moved before the grant it is re-merged and re-tested on the current base before promotion.
 
-Integration failure follows D3: a textual conflict (`CONFLICT`) returns the original Task to `NEEDS_FIX`, and the next Attempt's ContextPackage carries the conflict evidence; a merged tree that fails regression (`FAILED`) creates a `FIX_TASK` on which the affected Tasks depend while they stay `INTEGRATION_READY`. In both cases the original Candidate becomes `SUPERSEDED` and is never requeued. Do not silently resolve semantic conflicts; request a Decision when the correct resolution is not deterministic.
+Integration failure follows D79: a batch holds one candidate (D5), so both a textual conflict (`CONFLICT`) and a merged tree that fails regression (`FAILED`) return the original Task to `NEEDS_FIX`. The Control Plane prepares the fix Attempt's branch — for `CONFLICT`, the current integration base with the old candidate merged and the conflict markers left in place; for `FAILED`, the failed batch's merge commit — and the ContextPackage carries the conflict or regression evidence. The original Candidate becomes `SUPERSEDED`; the new candidate is verified and queued like any other. A `FIX_TASK` is created only for Mission-level failures with no culprit candidate (target-branch drift, the final full regression; D70). Do not silently resolve semantic conflicts; request a Decision when the correct resolution is not deterministic.
 
 A Task is `INTEGRATED` only when its batch is `PROMOTED` (the integration base ref advanced to the merge commit). Only promoted results count toward Mission completion.
 
@@ -341,6 +359,8 @@ Stop and request explicit Approval for policy-defined high-risk actions, includi
 - repeated automated failure with no safe bounded recovery.
 
 Approvals are stored in `approvals` (D7) with action kind, scoped inputs hash, risk, requester, expiry, resolver, resolution, outcome, and execution time. Lifecycle: `PENDING → GRANTED | DENIED | EXPIRED | REVOKED`, then `GRANTED → CONSUMED`; an Approval is single-use and is consumed by the exact action it authorizes. ApprovalGateway never reuses an expired, consumed, or differently scoped Approval, and a general conversation acknowledgment is not authorization. Risk `high` requires Approval by default. Orca decision gates carry `QUESTION` blocking only and are never used as Approvals.
+
+Human decisions are accepted only from the desktop app (D78). Every `axiom.*` method is classified `desktop_only`, `attempt`, or `read`; a `desktop_only` method (approving or rejecting plans, answering Questions, resolving subtask requests, policy changes, Mission state actions, Task creation and cancellation, and later verification resolution and Approvals) refuses any caller whose transport-stamped identity is not `desktop` with `caller_not_desktop`. The provenance of a human action comes from the caller, never from a request parameter. Calls from Mission Agent sessions are additionally refused for Orca's non-`workspace` permission tiers.
 
 Never expose secrets in logs, prompts, Artifacts, test output, or error messages. Use only task-authorized credentials through their normal configured mechanism.
 
@@ -535,7 +555,7 @@ This is submission readiness, not final acceptance.
 - New "Code Placement and RPC Conventions" section: `src/main/axiom/`, no `@ts-nocheck` logic, `axiom.*` only, five-step registration, contract fence, additive side tables from v43, content-addressed Artifacts, `ORCA_*` names kept (C10, D12, audit §8, C5, G4).
 - Control Plane services named per Glossary; Reviewer advisory; RulesEngine baseline with Jev optional; restart reconciliation (A4, A11, A9, D8, G5).
 - Task stage authority `task_stages`, readiness computed by MissionController, `tasks.deps` empty, `taskUpdate`/`workerStart` gated (B1, B2, C1, D2, D10); retry exhaustion → `BLOCKED` (B4); Attempt = dispatch projection (A5, B6).
-- Worker channel = `axiom` CLI over `axiom.attempt.*` with the dispatch capability, no MCP (C6, D11); `nestedWorkerMaxDepth` pinned to 1 (C7).
+- Worker channel = `axiom` CLI over `axiom.attempt.*`, no MCP (C6, D11; caller authentication follows D73); `nestedWorkerMaxDepth` pinned to 1 (C7).
 - Typed Communication: eight types with the Orca routing map, `heartbeat` kernel-only, `merge_ready`/`dispatch`/`decision_gate` forbidden for Workers (A1, C5, D9).
 - Submission persisted as an entity with a Control Plane candidate snapshot; Orca `completed` ≠ done; additive `worker_done` fields (B5, D4, C1).
 - Verification: dedicated worktree (G1), review resolves only `INCONCLUSIVE` (B9), write-scope limitation stated (G2), facet reuse (C8), non-code Tasks (G7), `oxlint` added to the command list (audit §11).
