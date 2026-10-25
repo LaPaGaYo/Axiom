@@ -86,6 +86,11 @@ it('pairs NUL paths with patch sections, including binary, empty, deleted, mode 
     ['new.txt', 'renamed'],
     [quoted, 'quoted']
   ])
+  expect([...diff.removedText]).toEqual([
+    ['gone.txt', 'gone'],
+    ['keep.txt', 'before'],
+    ['old.txt', 'renamed']
+  ])
   await git('config', 'diff.external', 'axiom_missing_external_diff')
   await git('config', 'color.ui', 'always')
   await git('config', 'diff.submodule', 'log')
@@ -111,6 +116,7 @@ it.skipIf(process.platform === 'win32')(
       ok: true,
       changes: [{ status: 'T', path: 'keep.txt' }],
       addedText: new Map([['keep.txt', 'gone.txt']]),
+      removedText: new Map([['keep.txt', 'before']]),
       binary: [],
       patchComplete: true
     })
@@ -137,6 +143,11 @@ it.skipIf(process.platform === 'win32')(
         ['keep.txt', 'gone.txt'],
         ['mode.txt', '++ between type changes'],
         ['old.txt', 'gone.txt']
+      ]),
+      removedText: new Map([
+        ['keep.txt', 'before'],
+        ['mode.txt', 'mode'],
+        ['old.txt', 'renamed']
       ]),
       patchComplete: true
     })
@@ -205,7 +216,7 @@ it('excludes another Task after a fix merges the newer integration base', async 
   })
 })
 
-it('drops all added text when the streamed patch exceeds the byte limit', async () => {
+it('drops both text maps when the streamed patch exceeds the byte limit', async () => {
   await put('keep.txt', 'changed\n')
   await commit()
   expect(await read(1)).toMatchObject({
@@ -213,6 +224,7 @@ it('drops all added text when the streamed patch exceeds the byte limit', async 
     patchComplete: false,
     changes: [{ status: 'M', path: 'keep.txt' }],
     addedText: new Map(),
+    removedText: new Map(),
     binary: []
   })
 })

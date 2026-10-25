@@ -152,6 +152,7 @@ export async function mandatorySections(
         'Write scope is checked by verification-time diff inspection; CLI agents have no runtime write-scope enforcement.',
         'Every file left in this worktree becomes part of the Candidate. Write reports and other Artifact files outside the worktree (for example in a temporary directory) before running axiom mission artifact put.',
         'Verification compares the Candidate with its merge-base on the integration branch: a changed path outside allowedPaths fails it (scope_violation), an added line that matches a secret pattern fails it (secret_detected), and changes to dependency manifests, lockfiles, CI, hooks, test or lint configuration or agent instruction files go to human review unless an allowedPaths entry names them.',
+        'Deleting or skipping tests, removing assertions from a test file, or adding lint, type-check or coverage suppressions sends the Candidate to human review (test_tampering). When the Task has no required evidence commands, reference at least one readable, non-empty Artifact in the submission (JSON must parse); a human or Reviewer confirms it.',
         'Submission contract: axiom-submission-v1',
         '- Task and Attempt identifiers',
         '- Concise implementation summary',

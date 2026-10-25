@@ -17,6 +17,14 @@ it('defaults all supported keys and rejects unknown keys and invalid commands', 
     knownFlaky: [],
     secretPatterns: []
   })
+  expect(rules.testPathPatterns).toEqual([
+    '**/*.test.*',
+    '**/*.spec.*',
+    '**/__tests__/**',
+    '**/test_*.py',
+    '**/*_test.py',
+    '**/*_test.go'
+  ])
   expect(rules.dangerousPathPatterns).toEqual([
     '.github/workflows/**',
     '.github/actions/**',
@@ -79,6 +87,15 @@ it('defaults all supported keys and rejects unknown keys and invalid commands', 
   expect(
     VerificationRulesSchema.parse({ setupCommands: [' node --version '] }).setupCommands
   ).toEqual(['node --version'])
+})
+
+it('replaces test path defaults, including an empty list, and rejects non-string patterns', () => {
+  for (const testPathPatterns of [[], ['checks/**']]) {
+    expect(VerificationRulesSchema.parse({ testPathPatterns }).testPathPatterns).toEqual(
+      testPathPatterns
+    )
+  }
+  expect(VerificationRulesSchema.safeParse({ testPathPatterns: [1] }).success).toBe(false)
 })
 
 it.each([

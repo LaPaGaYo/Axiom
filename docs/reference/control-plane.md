@@ -351,7 +351,7 @@ M2-07 宿主 spec 为 `tests/e2e/mission-attempt-submit.spec.ts`（需要 AXIOM_
 
 M3-01 在结算事务返回后触发 verification.kick(missionId)，拒绝/重复提交不触发；M3-02 在同一 drain 执行检查、记录 verdict；M4 才集成/释放 Candidate worktree；D76 的 Worker 终端释放独立进行。D49 提交不构成真实 provider 认证。
 
-### Verification（M3-01 / M3-02 / M3-03）
+### Verification（M3-01 / M3-02 / M3-03 / M3-03b）
 
 `verification/verification-service.ts` 是确定性的独立消费者；不启动模型、不采信 Worker 的 checksRun。`kick(missionId?)` 在整个 Control Plane 内合并为一个串行 drain；Mission 参数是触发提示，队列从 DB 读取，直到没有可领取的 run。三个入口：Submission 的 `axiom_submit` 事务返回后（拒绝/重复不触发）、启动恢复完成后、既有 60 s Attempt reconcile closure。没有新的 timer 或队列表。
 
@@ -382,6 +382,7 @@ phase 词汇为 `claimed | prepared | checking | verdict | prepare_failed | requ
 | inconclusiveRouting   | specialist；可选 human                                                                                                                     |
 | nonCodeTasks          | human_confirm；可选 artifact_only                                                                                                          |
 | dangerousPathPatterns | M3-03 下列 27 个危险路径模式；policy 显式设置时整体替换默认列表                   |
+| testPathPatterns      | `**/*.test.*`、`**/*.spec.*`、`**/__tests__/**`、`**/test_*.py`、`**/*_test.py`、`**/*_test.go`；policy 显式设置时整体替换（包括空列表） |
 | secretPatterns        | `[]`；非空 JavaScript 正则源码，无 flags；只追加，编译失败拒绝（invalid_argument） |
 | setupCommands         | `[]`                                                                                                                                       |
 | retryOnce             | 常见测试前缀：pnpm / npm / yarn / bun 的 test、run test；npx vitest、vitest、npx jest、jest、pytest、python -m pytest、go test、cargo test |
@@ -400,14 +401,16 @@ retryOnce 对命令与前缀规范化空白，只允许相等、前缀后接空�
 | diff 新增行含密钥 | FAIL / secret_detected | VERIFYING → NEEDS_FIX → READY 或 BLOCKED |
 | diff 存在越界路径 | FAIL / scope_violation | 同上；即使所有命令 pass |
 | 任一 check fail | FAIL / checks_failed | 同上；优先于 diff INCONCLUSIVE |
-| diff 不可得 | INCONCLUSIVE / environment，detail 为固定 diff 错因 | human；保持 VERIFYING |
+| 非代码 Task 无引用 Artifact / Artifact 为空、UTF-8 或 JSON 无效 | FAIL / artifact_missing 或 artifact_invalid | NEEDS_FIX → READY / BLOCKED；checks_failed 仍优先 |
+| diff 不可得，或非代码 Artifact 不可读 | INCONCLUSIVE / environment，detail 为固定 diff 错因或 artifact_unreadable | human；保持 VERIFYING；两者同时出现时保留 diff 错因 |
 | patch 超过扫描上限 | INCONCLUSIVE / diff_too_large | human；保持 VERIFYING |
+| 内容型篡改发现 | INCONCLUSIVE / test_tampering | human；保持 VERIFYING |
 | 危险路径未被 scope 明确命名 | INCONCLUSIVE / dangerous_change | human；保持 VERIFYING |
 | 无以上，任一 environmental | INCONCLUSIVE / environment | human；保持 VERIFYING |
 | 无以上，任一 inconclusive | INCONCLUSIVE / flaky（有 flaky 时）或 known_flaky | inconclusiveRouting；保持 VERIFYING |
-| 无命令 | INCONCLUSIVE / no_checks | human_confirm → human，否则 inconclusiveRouting |
 | 无以上，仍有 skipped | INCONCLUSIVE / environment | human；未执行不能算通过 |
-| 全部 pass 且 gate clear | PASS / checks_passed | VERIFYING → VERIFIED |
+| 无以上，非代码 Task（不取决于仓库门禁是否通过或有无命令） | INCONCLUSIVE / non_code | human_confirm → human，artifact_only → inconclusiveRouting；保持 VERIFYING |
+| 无以上，代码 Task 全部 pass 且 gate clear | PASS / checks_passed | VERIFYING → VERIFIED |
 
 每个 verdict 的事务都带 id、expectedStatus=RUNNING、expectedRuntimeEpoch、expectedClaimCount，且要求 Task 仍 VERIFYING、Candidate 仍是该 Task 的 ACTIVE Candidate。CAS 丢失不写 verdict / stage / audit，仍回收本次 worktree。PASS 的 stage actor=VerificationService、reason=verification_passed，审计 verification.passed。FAIL 经 execution/attempt-settlement.ts 的 settleVerificationFailure，同事务先 NEEDS_FIX(verification_failed)，再按 attemptCount < retryPolicy.maxAttempts 进入 READY(retry) 或 BLOCKED(retry_budget_exhausted)，审计 verification.failed {failures}。INCONCLUSIVE 只结算 run 与 verification.inconclusive {reason, escalation}，M3-05 才接审查。updateVerificationRun 根据术语表 §4.8 的完整转换表拒绝非法变化，FAIL/PASS/CANCELED 终态不可再改判；无 status 的元数据更新仍合法。
 
@@ -421,11 +424,11 @@ verdict 文档为单个 application/json、kind=evidence Artifact，createdBy=Ve
 
 D64 的 2026-10-24 批准修订采用三点 diff。验证 worktree 检出不可变 Candidate 后、写 phase=checking 后、执行任何 setup / evidence / repository gate 命令前，先解析 `refs/heads/axiom/integration/<missionId>^{commit}` 为集成基线 SHA，再计算 `git merge-base <baseSha> <candidateCommitSha>`，比较 merge-base 到 Candidate。后续 Git 调用只用 SHA；修复 Attempt 合入新集成基线后，已集成的其他 Task 文件不再算该候选的 scope 改动。上一 Candidate 仅用于修复证据展示，不作 scope 基线。
 
-所有 Git 调用经 git runner 与 `gitOptionsForWorktree`。两个 diff 共用 `--no-color --no-ext-diff --no-textconv --no-renames --ignore-submodules=none`：重命名视作删除加新增，因此越界源路径不能躲在新路径后面；即使仓库配置 `diff.ignoreSubmodules=all`，也必须列出 submodule 的 gitlink 改动。先用 `--name-status -z` 读取 status/path 对（包括删除、二进制、空文件和 mode 变更），再流式读取 `--submodule=short -U0` patch。patch 的 `diff --git ` sections 按次序绑定 name-status 条目：普通条目占一个 section，类型变更 `T`（例如文件替换为 symlink）占连续两个 section（删除后创建），两者都归该路径；预期 section 总数为条目数加 `T` 条目数，其余数量不符即 diff_unavailable。不解析可能被 Git 引号转义的 header 路径。每个 section 独立从首个 `@@` 开始扫描以 `+` 开头的新增行（去掉一个 `+`，同一路径的所有新增行以换行连接）；二进制 section 无 hunk，只记录 binary。
+所有 Git 调用经 git runner 与 `gitOptionsForWorktree`。两个 diff 共用 `--no-color --no-ext-diff --no-textconv --no-renames --ignore-submodules=none`：重命名视作删除加新增，因此越界源路径不能躲在新路径后面；即使仓库配置 `diff.ignoreSubmodules=all`，也必须列出 submodule 的 gitlink 改动。先用 `--name-status -z` 读取 status/path 对（包括删除、二进制、空文件和 mode 变更），再流式读取 `--submodule=short -U0` patch。patch 的 `diff --git ` sections 按次序绑定 name-status 条目：普通条目占一个 section，类型变更 `T`（例如文件替换为 symlink）占连续两个 section（删除后创建），两者都归该路径；预期 section 总数为条目数加 `T` 条目数，其余数量不符即 diff_unavailable。不解析可能被 Git 引号转义的 header 路径。每个 section 独立从首个 `@@` 开始扫描以 `+` 开头的新增行与以 `-` 开头的删除行（去掉一个前缀，同一路径的新增 / 删除行分别以换行连接为 addedText / removedText；hunk 前的 `---` / `+++` header 不作为内容）；二进制 section 无 hunk，只记录 binary。
 
-patch 默认最多 32 MiB；超限停止子进程，保留路径清单，丢弃全部新增文本，patchComplete=false，不以部分扫描证明安全。集成 ref 读取失败记 integration_base_unavailable，无公共祖先记 merge_base_unavailable，其余 Git / 解析失败记 diff_unavailable。失败证据保留已解析的分支、SHA、merge-base，不保存或记录原始 Git 输出。
+patch 默认最多 32 MiB；超限停止子进程，保留路径清单，丢弃全部新增与删除文本（两个 Map 均为空），patchComplete=false，不以部分扫描证明安全。集成 ref 读取失败记 integration_base_unavailable，无公共祖先记 merge_base_unavailable，其余 Git / 解析失败记 diff_unavailable。失败证据保留已解析的分支、SHA、merge-base，不保存或记录原始 Git 输出。
 
-`scope.allowedPaths` 与 dangerousPathPatterns 共用 path-patterns.ts：归一化前为空字符串的条目无效；其余条目将反斜杠转 `/`、合并重复 `/`、去前导 `./` 与尾 `/`，`./` 与 `.` 仍归一为 `.`。绝对路径（含 Windows drive）或任何 `..` 段也无效、不授权，无效 scope 原条目记 ignoredScopeEntries。条目覆盖匹配的完整路径及其所有后代；`*` / `?` 只匹配段内任意字符 / 单个 Unicode 码点，独立的 `**` 段可匹配零到多段；`.` 覆盖整个仓库。区分大小写、点文件不特殊，括号等其余字符都是字面量（例如 `app/[id]/page.tsx`）。实现对段索引做 memoisation 并合并连续 `**`；段内使用双索引通配匹配器，只重试最近一个 `*`，不编译正则表达式，避免多个星号的组合回溯。
+`scope.allowedPaths`、dangerousPathPatterns 与 testPathPatterns 共用 path-patterns.ts：归一化前为空字符串的条目无效；其余条目将反斜杠转 `/`、合并重复 `/`、去前导 `./` 与尾 `/`，`./` 与 `.` 仍归一为 `.`。绝对路径（含 Windows drive）或任何 `..` 段也无效、不授权，无效 scope 原条目记 ignoredScopeEntries。条目覆盖匹配的完整路径及其所有后代；`*` / `?` 只匹配段内任意字符 / 单个 Unicode 码点，独立的 `**` 段可匹配零到多段；`.` 覆盖整个仓库。区分大小写、点文件不特殊，括号等其余字符都是字面量（例如 `app/[id]/page.tsx`）。实现对段索引做 memoisation 并合并连续 `**`；段内使用双索引通配匹配器，只重试最近一个 `*`，不编译正则表达式，避免多个星号的组合回溯。
 
 “明确命名”的确定性规则：一个有效 allowedPaths 条目 e 同时覆盖改动路径，并且 e 自身作为字面路径也匹配该危险模式。对默认清单，`.`、`src/`、`**` 不够；`package.json`、`**/package.json`、`src/storage/AGENTS.md`、`.github/workflows/` 则明确覆盖对应路径。越界路径已属 scopeViolations，不重复记 dangerous；每个 in-scope 路径只记首个未被明确授权的危险模式。
 
@@ -447,15 +450,16 @@ patch 默认最多 32 MiB；超限停止子进程，保留路径清单，丢弃�
 
 生成文件只记录，不增加 verdict 条件：`**/out/**`、`**/dist/**`、`**/*.lock`、`**/pnpm-lock.yaml`、`**/package-lock.json`、`**/bun.lockb`。它们仍受 scope、secret 和危险路径规则约束。
 
-gate 优先级为 diff 失败 → inconclusive/environment；否则 secret → fail/secret_detected；scope → fail/scope_violation；patch 不完整 → inconclusive/diff_too_large；危险改动 → inconclusive/dangerous_change；否则 clear。保留全部已取得的 findings，按路径排序。与命令组合时按上表：gate fail 优先于 check fail；check fail 优先于 gate inconclusive；其后沿用 M3-02 规则。**gate 从不跳过命令**，失败候选仍保留完整命令证据供修复；policy_invalid 与非本地 repository 路径不运行 gate。
+gate 优先级为 diff 失败 → inconclusive/environment；否则 secret → fail/secret_detected；scope → fail/scope_violation；patch 不完整 → inconclusive/diff_too_large；内容型篡改 → inconclusive/test_tampering；危险改动 → inconclusive/dangerous_change；否则 clear。保留全部已取得的 findings，按路径排序。与命令组合时按上表：gate fail 优先于 check fail；check fail 优先于 gate inconclusive；其后沿用 M3-02 规则。**gate 从不跳过命令**，失败候选仍保留完整命令证据供修复；policy_invalid 与非本地 repository 路径不运行 gate。
 
-verdictDetail.diff 包含 integrationBase={branch,sha}、mergeBase、changedPaths（数量）、scopeViolations、dangerous（path/pattern）、secrets（path/pattern）、generated、binary、ignoredScopeEntries、patchComplete；每个列表最多 50 项，counts 对上述六个列表保存完整数量。既有 verdict evidence Artifact 使用同一 diff 结构，每列表最多 1000 项。失败为 `{error:<reason>}` 加已解析的 integrationBase / mergeBase（ref 不可得时只含 branch）。INCONCLUSIVE 同样有摘要。gate 原因赢得 verdict 时，verification.failed / verification.inconclusive 审计分别附最多 50 项 scopeViolations / secrets / dangerous。结算事务和 claim fencing 不变；FAIL 仍走 settleVerificationFailure，INCONCLUSIVE 仍保持 VERIFYING。
+verdictDetail.diff 包含 integrationBase={branch,sha}、mergeBase、changedPaths（数量）、scopeViolations、dangerous（path/pattern）、secrets（path/pattern）、tampering（path/rule/count）、generated、binary、ignoredScopeEntries、patchComplete；每个列表最多 50 项，counts 对上述七个列表保存完整数量。既有 verdict evidence Artifact 使用同一 diff 结构，每列表最多 1000 项。失败为 `{error:<reason>}` 加已解析的 integrationBase / mergeBase（ref 不可得时只含 branch）。INCONCLUSIVE 同样有摘要。gate 原因赢得 verdict 时，verification.failed / verification.inconclusive 审计分别附最多 50 项 scopeViolations / secrets / dangerous / tampering。结算事务和 claim fencing 不变；FAIL 仍走 settleVerificationFailure，INCONCLUSIVE 仍保持 VERIFYING。
 
 Worker 的 Permissions, budget and submission contract 在运行时 write-scope 限制说明后追加：
 
 ```text
 Every file left in this worktree becomes part of the Candidate. Write reports and other Artifact files outside the worktree (for example in a temporary directory) before running axiom mission artifact put.
 Verification compares the Candidate with its merge-base on the integration branch: a changed path outside allowedPaths fails it (scope_violation), an added line that matches a secret pattern fails it (secret_detected), and changes to dependency manifests, lockfiles, CI, hooks, test or lint configuration or agent instruction files go to human review unless an allowedPaths entry names them.
+Deleting or skipping tests, removing assertions from a test file, or adding lint, type-check or coverage suppressions sends the Candidate to human review (test_tampering). When the Task has no required evidence commands, reference at least one readable, non-empty Artifact in the submission (JSON must parse); a human or Reviewer confirms it.
 ```
 
 Planner 的 PlanProposal contract 追加：
@@ -463,9 +467,53 @@ Planner 的 PlanProposal contract 追加：
 ```text
 scope.allowedPaths entries are repository-relative: an entry covers that path and everything below it; * and ? match within one path segment, ** matches any number of segments, and . is the whole repository. Verification fails any change outside allowedPaths.
 Name dependency manifests, lockfiles, CI workflows, hooks, test or lint configuration and agent instruction files (AGENTS.md, CLAUDE.md, .claude/, .codex/, .agents/, .mcp.json) in allowedPaths when a Task must change them; otherwise such a change goes to human review.
+Name a test file in allowedPaths when a Task must delete it, and give every Task required evidence commands unless its deliverable is an Artifact for human or Reviewer confirmation.
 ```
 
-DEF-21 ⑦ 的依赖规则：依赖变更集中到一个先行 Task，scope 明确列出 package.json 和所用 lockfile，下游 Task 等其集成；两个并行 Task 同时触及这些文件的提案警告留给 M5 Planner v2。M3-03b 才实现内容型篡改（删除/跳过测试、放宽断言、lint-disable）、Worker Artifact schema 与非代码 Task 路径。harness 写入 worktree 的本地状态（如 `.claude/settings.local.json`）也会进 Candidate 并因越界失败；启动配置移出 worktree 或经 Decision 设快照排除清单属于 M3-08。
+DEF-21 ⑦ 的依赖规则：依赖变更集中到一个先行 Task，scope 明确列出 package.json 和所用 lockfile，下游 Task 等其集成；两个并行 Task 同时触及这些文件的提案警告留给 M5 Planner v2。M3-03b 的内容型篡改与非代码路径见下文；按 Artifact kind 的内容 schema 等 TaskSpec 增加 requiredArtifacts（M5 Planner v2）再定义。harness 写入 worktree 的本地状态（如 `.claude/settings.local.json`）也会进 Candidate 并因越界失败；启动配置移出 worktree 或经 Decision 设快照排除清单属于 M3-08。
+
+**M3-03b：内容型篡改、Worker Artifact 与非代码 Task（D65 修订 ⑦–⑨）**
+
+`test-tampering.ts` 是纯函数，只检查完整 patch 的 addedText / removedText。测试文件为匹配任一 testPathPatterns 的路径；沿用上述路径语义。所有计数逐文件取新增次数减删除次数，同文件移动、重排、等价格式化不增加计数。结果只含 `{path, rule, count}`，按 path、rule 排序，不存匹配文本。
+
+- `test_file_deleted`：测试路径 status=D，count=1；若有 status=A 的测试文件，其 addedText 等于源文件的 removedText（纯移动 / 改名），或某个有效 allowedPaths 条目归一后字面等于删除路径，则豁免。宽条目 `src/`、`.`、`**/*.test.*` 不豁免；移动同时编辑仍报告源文件删除。此豁免只作用于删除规则。
+- `test_skip_added`：测试文件中 skip / focus / pending 标记净增，count=净增次数。
+- `assertions_reduced`：未删除的测试文件中断言调用净减，count=减少次数。
+- `suppression_added`：任意文件中 lint / 类型检查 / coverage 抑制标记净增，count=净增次数，不受 testPathPatterns 限制。
+
+精确模式（JavaScript 正则，ASCII 源码）：
+
+```ts
+const SKIPS = [
+  /\b(?:describe|it|test|suite|context|bench)\.(?:skip|only|todo|skipIf|runIf|fails)\b/g,
+  /\b(?:xit|xtest|xdescribe|xcontext|xsuite|fit|fdescribe|ftest)\s*\(/g,
+  /@pytest\.mark\.(?:skip|skipif|xfail)\b/g,
+  /\bpytest\.skip\s*\(/g,
+  /@unittest\.skip/g,
+  /\bt\.Skip(?:f|Now)?\s*\(/g
+]
+const ASSERTIONS = [
+  /\b(?:expect|assert)(?:\.\w+)*\s*\(/g,
+  /\bassert[A-Z]\w*\s*\(/g,
+  /^\s*assert\s/gm,
+  /\.should\b/g,
+  /\bt\.(?:Error|Errorf|Fatal|Fatalf|Fail|FailNow)\s*\(/g
+]
+const SUPPRESSIONS = [
+  /(?:eslint-disable|oxlint-disable|biome-ignore|@ts-ignore|@ts-nocheck|@ts-expect-error|#\s*noqa\b|#\s*type:\s*ignore|pylint:\s*disable|\bnolint\b|istanbul\s+ignore|c8\s+ignore|v8\s+ignore)/g
+]
+
+```
+
+这是词法检查，不是语义审查：字符串、注释中的示例也可能命中；合法的删冗余断言、条件 skip、expected-failure 和抑制注释会交人。跨文件计数不抵消，改断言参数或等量替换断言不保证被发现。二进制内容不扫描，patch 被截断时不能据部分内容判安全。`checks_failed` 或 scope / secret 失败优先时，tampering 仍保留在 diff 证据中；下一修复 Attempt 的既有 Diff schema 解析该列表，在原有失败信息后追加 `Test tampering findings (path, rule, net count):`、最多 50 条 path/rule/count，以及恢复测试 / 断言、移除新增 skip / suppression 的指令。secret_detected 导致从干净集成基线重试时也通过同一渲染逻辑保留这些发现；原有摘录和失败名上限不变。
+
+命令计划执行后，`worker-artifacts.ts` 通过 Candidate.attemptId 读取 Submission，逐个检查 report.artifacts 引用：`artifacts.read` 失败为 unreadable；零字节为 empty；text/*、application/json、application/*+json 使用 fatal UTF-8 decoder，解码失败为 invalid_utf8；JSON 再解析，失败为 invalid_json。媒体类型匹配忽略大小写和 `;` 后参数。其他媒体类型只检查可读、非空；纯空白文本仍非空，纯空白 JSON 无效。所有 kind 使用同一检查，不推测按 kind 的 schema，也不以 Worker 的 checksRun 作证据。
+
+每个完成检查阶段的 run（含 policy_invalid / remote_repository_unsupported）在 verdictDetail 与完整证据 Artifact 中保存 `artifacts={required,checked:[{id,kind,mediaType,bytes,problem?}],counts:{checked,unreadable,empty,invalid_utf8,invalid_json}}`。required 表示非代码 Task；checked 列表按提交引用顺序最多 50 条，counts 统计全部引用，超出列表的无效项仍改变 verdict。可读时 bytes 是实际内容长度；不可读时保留可用元数据，未知字段为 null。只存元数据与固定问题名，不存内容或原始存储错误。
+
+非代码 Task 严格定义为 requiredEvidence 逐项 trim 后无非空命令，setupCommands / repositoryGates 不改变分类且仍照常运行。无引用 Artifact → FAIL(artifact_missing)；任一 empty / invalid_utf8 / invalid_json → FAIL(artifact_invalid)；无上述失败但有 unreadable → INCONCLUSIVE(environment, artifact_unreadable)，交人。其他优先级规则仍按上表；没有更高优先级原因时，非代码 Task 始终 INCONCLUSIVE(non_code)，即使门禁全绿或根本没有命令。human_confirm 交人，artifact_only 按 inconclusiveRouting（默认 specialist）；不自动 PASS。代码 Task 的 Artifact 问题仅为证据，不改变 verdict。修复上下文对 required=true 的 Artifact 问题追加 `Artifact problems:` 与最多 50 条 `id (problem)`。
+
+宿主 `mission-tamper-gate.spec.ts` 使用三个 provider-only 修改，分别为 date.test.ts 的 test.skip、guards.test.ts 删除一个 expect、clock.test.ts 增加 c8 ignore；provider 在预期文本缺失时抛错。三个候选的 setup 与 verify:full 必须全部 pass，但 run 均为 INCONCLUSIVE(test_tampering)、escalation=human，Task 保持 VERIFYING；diff 与审计中的单条发现必须精确一致，scopeViolations 为空。S4 的输入表修正仍无发现，修复循环的宿主回归继续由验证者运行。
 
 ### Questions 与 D50 待决项处置（M2-06b）
 

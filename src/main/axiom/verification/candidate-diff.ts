@@ -9,6 +9,7 @@ export type CandidateDiff =
       candidateCommitSha: string
       changes: { status: string; path: string }[]
       addedText: Map<string, string>
+      removedText: Map<string, string>
       binary: string[]
       patchComplete: boolean
     }
@@ -46,6 +47,7 @@ function parsePatch(patch: string, changes: { status: string; path: string }[]) 
     return null
   }
   const addedText = new Map<string, string>()
+  const removedText = new Map<string, string>()
   const binary: string[] = []
   let sectionIndex = 0
   for (const change of changes) {
@@ -53,6 +55,7 @@ function parsePatch(patch: string, changes: { status: string; path: string }[]) 
     const count = change.status === 'T' ? 2 : 1
     let hasBinarySection = false
     const added: string[] = []
+    const removed: string[] = []
     for (const lines of sections.slice(sectionIndex, sectionIndex + count)) {
       let inHunk = false
       let isBinary = false
@@ -66,6 +69,9 @@ function parsePatch(patch: string, changes: { status: string; path: string }[]) 
         if (inHunk && line.startsWith('+')) {
           added.push(line.slice(1))
         }
+        if (inHunk && line.startsWith('-')) {
+          removed.push(line.slice(1))
+        }
       }
       hasBinarySection ||= isBinary && !inHunk
     }
@@ -76,8 +82,11 @@ function parsePatch(patch: string, changes: { status: string; path: string }[]) 
     if (added.length) {
       addedText.set(change.path, added.join('\n'))
     }
+    if (removed.length) {
+      removedText.set(change.path, removed.join('\n'))
+    }
   }
-  return { addedText, binary }
+  return { addedText, removedText, binary }
 }
 
 /** Read only immutable commit identities after resolving the integration ref once. */
@@ -162,6 +171,7 @@ export async function readCandidateDiff(input: {
         candidateCommitSha,
         changes,
         addedText: new Map(),
+        removedText: new Map(),
         binary: [],
         patchComplete: false
       }

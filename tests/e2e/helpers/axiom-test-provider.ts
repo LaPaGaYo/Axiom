@@ -40,7 +40,13 @@ async function submitFixture(attemptId, missionId, taskId) {
   }
   const scenarioMarker = process.env.AXIOM_E2E_LEDGER + '.scenario-' + taskId
   const scenario = existsSync(scenarioMarker) ? readFileSync(scenarioMarker, 'utf8').trim() : 'retry'
-  if (!['retry', 'deterministic-failure', 'agent-crash', 'scope-violation', 'secret-line', 'transcript-secret'].includes(scenario)) throw new Error('Unknown fixture scenario')
+  const tamperProbes = {
+    'test-skip': { file: 'date.test.ts', expected: "\\ntest('extended years", replacement: "\\ntest.skip('extended years" },
+    'assertion-drop': { file: 'guards.test.ts', expected: '  expect(strings([1])).toBe(false)\\n', replacement: '' },
+    'suppression': { file: 'clock.test.ts', expected: "test('fixed clocks normalize instants and reject malformed input', () => {" }
+  }
+  const tamper = tamperProbes[scenario]
+  if (!tamper && !['retry', 'deterministic-failure', 'agent-crash', 'scope-violation', 'secret-line', 'transcript-secret'].includes(scenario)) throw new Error('Unknown fixture scenario')
   // Keep both the Worker Artifact and protocol envelope outside the Candidate snapshot.
   const temp = mkdtempSync(path.join(os.tmpdir(), 'axiom-submit-report-'))
   try {
@@ -49,10 +55,16 @@ async function submitFixture(attemptId, missionId, taskId) {
     }
     const command = ['scenarios/stub-worker/worker.mjs', '--scenario', scenario === 'transcript-secret' ? 'retry' : scenario, '--attempt', String(Math.min(seq, 2)), '--mode', 'succeed', '--cwd', process.cwd()]
     const started = Date.now()
-    const providerOnly = scenario === 'scope-violation' || scenario === 'secret-line'
+    const providerOnly = Boolean(tamper) || scenario === 'scope-violation' || scenario === 'secret-line'
     let reportText
     if (providerOnly) {
-      if (scenario === 'scope-violation') {
+      if (tamper) {
+        const file = path.join(process.cwd(), 'src', 'domain', tamper.file)
+        const content = readFileSync(file, 'utf8')
+        if (!content.includes(tamper.expected)) throw new Error('Missing fixture text: ' + scenario)
+        if (scenario === 'suppression') appendFileSync(file, '/* c8 ignore next */\\n')
+        else writeFileSync(file, content.replace(tamper.expected, tamper.replacement))
+      } else if (scenario === 'scope-violation') {
         appendFileSync(path.join(process.cwd(), 'README.md'), '\\n<!-- axiom e2e scope probe -->\\n')
       } else {
         const token = 'gh' + 'p_' + 'Z'.repeat(36)

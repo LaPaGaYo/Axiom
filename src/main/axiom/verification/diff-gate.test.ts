@@ -12,6 +12,7 @@ function diff(paths: string[], overrides = {}): CandidateDiff {
     candidateCommitSha: 'c',
     changes: paths.map((path) => ({ path, status: 'M' })),
     addedText: new Map(),
+    removedText: new Map(),
     binary: [],
     patchComplete: true,
     ...overrides
@@ -119,7 +120,10 @@ it('records generated paths without rejecting them when explicitly allowed', () 
 })
 it('caps every persisted list independently and preserves full counts and resolved identities', () => {
   const paths = Array.from({ length: 1002 }, (_, i) => `file-${String(i).padStart(4, '0')}`)
-  const value = diff(paths, { addedText: new Map(paths.map((p) => [p, provider])), binary: paths })
+  const value = diff(paths, {
+    addedText: new Map(paths.map((p) => [p, `${provider}\n/* c8 ignore next */`])),
+    binary: paths
+  })
   const result = gate(value, Array(1002).fill('../invalid'))
   for (const limit of [50, 1000]) {
     const summary = summarizeDiffGate(value, result, limit)
@@ -127,7 +131,13 @@ it('caps every persisted list independently and preserves full counts and resolv
       integrationBase: { sha: 'a' },
       mergeBase: 'b',
       changedPaths: 1002,
-      counts: { scopeViolations: 1002, secrets: 1002, binary: 1002, ignoredScopeEntries: 1002 }
+      counts: {
+        scopeViolations: 1002,
+        secrets: 1002,
+        binary: 1002,
+        ignoredScopeEntries: 1002,
+        tampering: 1002
+      }
     })
     if ('error' in summary) {
       throw new Error('Expected diff summary')
@@ -136,6 +146,7 @@ it('caps every persisted list independently and preserves full counts and resolv
     expect(summary.secrets).toHaveLength(limit)
     expect(summary.binary).toHaveLength(limit)
     expect(summary.ignoredScopeEntries).toHaveLength(limit)
+    expect(summary.tampering).toHaveLength(limit)
     expect(JSON.stringify(summary).includes(provider)).toBe(false)
   }
   const failure: CandidateDiff = {
@@ -149,4 +160,13 @@ it('caps every persisted list independently and preserves full counts and resolv
     integrationBase: failure.integrationBase,
     mergeBase: 'b'
   })
+})
+it('does not run content rules on an incomplete patch', () => {
+  const result = gate(
+    diff(['src/a.test.ts'], {
+      patchComplete: false,
+      addedText: new Map([['src/a.test.ts', 'test.skip("x")']])
+    })
+  )
+  expect(result).toMatchObject({ reason: 'diff_too_large', tampering: [] })
 })

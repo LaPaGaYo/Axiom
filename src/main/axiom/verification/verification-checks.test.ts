@@ -106,6 +106,11 @@ it.each([
       finishedAt: expect.any(String),
       verdictDetail: { phase: 'verdict', verdict: status, reason }
     })
+    expect(saved().verdictDetail.artifacts).toMatchObject({
+      required: false,
+      checked: [],
+      counts: { checked: 0 }
+    })
     expect(f.store.getTaskStage(f.task.taskId)?.stage).toBe(stage)
     expect(saved().verdictDetail.evidenceArtifactIds).toHaveLength(2)
     await expect(access(path.join(root, `verify-${f.task.taskId}-1`))).rejects.toMatchObject({
@@ -351,6 +356,162 @@ it.each([0, 1])('missing integration base still runs commands (exit %s)', async 
       ...(exit ? {} : { detail: 'integration_base_unavailable', escalation: 'human' }),
       diff: { error: 'integration_base_unavailable' },
       checks: [{ result: exit ? 'fail' : 'pass' }]
+    }
+  })
+})
+
+it.each([0, 1])('keeps tampering evidence even when checks exit %s', async (exit) => {
+  commands([node(`process.exit(${exit})`)])
+  scope(['.'])
+  const tampering = [{ path: 'src/probe.test.ts', rule: 'test_skip_added', count: 1 }]
+  await changeCandidate('src/probe.test.ts', 'test.skip("tamper")\n')
+  await service.kick()
+  expect(saved()).toMatchObject({
+    status: exit ? 'FAIL' : 'INCONCLUSIVE',
+    verdictDetail: {
+      reason: exit ? 'checks_failed' : 'test_tampering',
+      ...(exit ? {} : { escalation: 'human' }),
+      diff: { tampering, counts: { tampering: 1 }, scopeViolations: [] },
+      checks: [{ result: exit ? 'fail' : 'pass' }]
+    }
+  })
+  expect(f.store.getTaskStage(f.task.taskId)?.stage).toBe(exit ? 'READY' : 'VERIFYING')
+  if (!exit) {
+    expect(events()).toContainEqual(
+      expect.objectContaining({
+        event: 'verification.inconclusive',
+        after: expect.objectContaining({ reason: 'test_tampering', escalation: 'human', tampering })
+      })
+    )
+  }
+  const id = saved().verdictDetail.verdictArtifactId
+  if (typeof id !== 'string') {
+    throw new Error('Missing verdict Artifact')
+  }
+  expect(JSON.parse((await f.artifacts.read(id)).content.toString())).toMatchObject({
+    diff: { tampering }
+  })
+})
+
+function submission(artifactIds: string[]) {
+  f.store.insertSubmission({
+    id: 'worker-report',
+    missionId: f.missionId,
+    taskId: f.task.taskId,
+    attemptId: f.candidate.attemptId,
+    candidateId: f.candidate.id,
+    report: {
+      summary: 'Worker deliverables',
+      filesChanged: [],
+      checksRun: [],
+      artifacts: artifactIds,
+      limitations: [],
+      risks: [],
+      questions: [],
+      followUps: []
+    }
+  })
+}
+
+it.each([
+  { mode: 'missing', reason: 'artifact_missing', status: 'FAIL', problem: null },
+  { mode: 'empty', reason: 'artifact_invalid', status: 'FAIL', problem: 'empty' },
+  { mode: 'utf8', reason: 'artifact_invalid', status: 'FAIL', problem: 'invalid_utf8' },
+  { mode: 'json', reason: 'artifact_invalid', status: 'FAIL', problem: 'invalid_json' },
+  { mode: 'unreadable', reason: 'environment', status: 'INCONCLUSIVE', problem: 'unreadable' }
+])(
+  'checks non-code Artifacts after passing repository gates: $mode',
+  async ({ mode, reason, status, problem }) => {
+    commands([' ', '\n\t'], { repositoryGates: { low: [node('process.exit(0)')] } })
+    const ids: string[] = []
+    if (mode !== 'missing') {
+      const artifact = await f.artifacts.put({
+        missionId: f.missionId,
+        kind: 'worker_report',
+        createdBy: 'Worker',
+        related: [f.task.taskId],
+        mediaType: mode === 'json' ? 'application/json' : 'text/plain',
+        content:
+          mode === 'empty'
+            ? Buffer.alloc(0)
+            : mode === 'utf8'
+              ? Buffer.from([0xff])
+              : Buffer.from('{')
+      })
+      ids.push(artifact.id)
+      if (mode === 'unreadable') {
+        await rm(f.artifacts.pathFor(artifact.sha256))
+      }
+    }
+    submission(ids)
+    await service.kick()
+    expect(saved()).toMatchObject({
+      status,
+      verdictDetail: {
+        reason,
+        ...(mode === 'unreadable' ? { escalation: 'human', detail: 'artifact_unreadable' } : {}),
+        artifacts: {
+          required: true,
+          checked: problem ? [{ id: ids[0], problem }] : [],
+          counts: { checked: ids.length, ...(problem ? { [problem]: 1 } : {}) }
+        },
+        checks: [{ source: 'gate', result: 'pass' }]
+      }
+    })
+  }
+)
+
+it.each([
+  { nonCodeTasks: 'human_confirm', gates: true, escalation: 'human' },
+  { nonCodeTasks: 'artifact_only', gates: true, escalation: 'specialist' },
+  { nonCodeTasks: 'artifact_only', gates: false, escalation: 'specialist' }
+])(
+  'valid non-code Artifacts require confirmation: $nonCodeTasks / gates=$gates',
+  async ({ nonCodeTasks, gates, escalation }) => {
+    commands([], { nonCodeTasks, repositoryGates: gates ? { low: [node('process.exit(0)')] } : {} })
+    const artifact = await f.artifacts.put({
+      missionId: f.missionId,
+      kind: 'other',
+      createdBy: 'Worker',
+      related: [f.task.taskId],
+      mediaType: 'application/json',
+      content: Buffer.from('{"ok":true}')
+    })
+    submission([artifact.id])
+    await service.kick()
+    expect(saved()).toMatchObject({
+      status: 'INCONCLUSIVE',
+      verdictDetail: {
+        reason: 'non_code',
+        escalation,
+        artifacts: {
+          required: true,
+          checked: [{ id: artifact.id, kind: 'other', mediaType: 'application/json', bytes: 11 }],
+          counts: { checked: 1 }
+        }
+      }
+    })
+    expect(f.store.getTaskStage(f.task.taskId)?.stage).toBe('VERIFYING')
+  }
+)
+
+it('records a bad Artifact for a code Task without changing its PASS', async () => {
+  commands([node('process.exit(0)')])
+  const artifact = await f.artifacts.put({
+    missionId: f.missionId,
+    kind: 'other',
+    createdBy: 'Worker',
+    related: [f.task.taskId],
+    mediaType: 'application/json',
+    content: Buffer.from('{')
+  })
+  submission([artifact.id])
+  await service.kick()
+  expect(saved()).toMatchObject({
+    status: 'PASS',
+    verdictDetail: {
+      reason: 'checks_passed',
+      artifacts: { required: false, checked: [{ id: artifact.id, problem: 'invalid_json' }] }
     }
   })
 })
