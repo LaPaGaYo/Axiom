@@ -162,9 +162,9 @@ it('projects the bound role and immutable submission evidence', async () => {
   }
   save('transcript-old')
   save('transcript-new')
-  f.db.db
-    .prepare('UPDATE artifacts SET created_at = ? WHERE id = ?')
-    .run('2026-10-24 23:59:00', 'transcript-new')
+  const setCreatedAt = f.db.db.prepare('UPDATE artifacts SET created_at = ? WHERE id = ?')
+  setCreatedAt.run('2000-01-01 00:00:00', 'transcript-old')
+  setCreatedAt.run('2000-01-01 00:00:01', 'transcript-new')
   save('unrelated', 'AttemptSettlement', ['other'])
   save('wrong-author', 'Worker')
   save('wrong-kind', 'AttemptSettlement', [submission.id], 'evidence')
