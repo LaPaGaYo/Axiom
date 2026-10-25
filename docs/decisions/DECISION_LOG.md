@@ -677,6 +677,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 
 **批准（2026-10-24，Henry："批准（推荐）"）**：上条修订提议生效，由 M3-03 实施——基线 = `git merge-base <axiom/integration/<missionId> 的 HEAD> <候选 commit>`，diff 加 `--no-renames`；verdictDetail.diff 记录集成基线分支与 sha、merge-base。
 
+**修订（2026-10-24，验证者，M3-04 brief 定稿时）**：① 的落地细则——(a) 只看紧邻的上一 Attempt：它有 Submission、其 Candidate 仍为 `ACTIVE`、该 Candidate 最新的 VerificationRun 为 `FAIL` 时，seq N+1 的 worktree 以该 Candidate commit 为基建分支 `axiom/attempt/<taskId>/<N+1>`，建好后 HEAD 必须等于该 commit，否则 launch 失败（`fix_base_mismatch`），不重置、不改写任何分支；上一 Attempt 无 Submission、Candidate 已被取代或最新 run 不是 `FAIL` 时从集成基线重来。(b) FAIL 原因为 `secret_detected` 时也从集成基线重来：候选的 commit 历史里已有那段秘密，继续这棵树会把它带进集成历史；失败证据只给路径与模式名。(c) 上一 Attempt 已提交时 Orca 侧的 task 已是 `completed`，而 Orca 只给 `ready` 的 task 起新 dispatch（`retryOf` 只接失败 / 停止 / 放弃的 worker）——现状下提交后的 seq N+1 必然 launch 失败；launcher 起 Worker 前经内核公开的 `updateTaskStatus` 把它改回 `ready`（有活动 dispatch 时内核拒绝；Mission 管理的 Run 本来只由 Control Plane 改写）。ContextBuilder 与 launcher 共用同一判定（`resolveAttemptBaseline`），失败证据段与基线一致。实施：M3-04。
+
 
 ## D65 · V1 验证策略语义（`Policy.verificationRules` 的受支持键）— ACCEPTED（Henry 2026-10-20："先把手上需要开发的做完"，验证者 2026-10-20 提议）
 
