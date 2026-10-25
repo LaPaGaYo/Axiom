@@ -113,7 +113,7 @@ BLOCKED           → 按原因解除（D70 修订）：回到进入前的非运
 - `INTEGRATION_READY` = `VERIFIED` ∧ 全部上游依赖 `INTEGRATED`；条件在进入时评估。高风险 Approval 只在批次 `PROMOTABLE` 之后（§4.9，D79），Task 级不再要求 Approval。
 - `BLOCKED` 的进入原因与解除（D70 修订、D79）：重试预算耗尽（`retry_budget_exhausted`：经 Approval 提升预算 → READY，或取消 / replan）、`HUMAN_REVIEW` 等待（review 收敛）、批次 Approval 被拒（`approval_denied`：带理由重做 → NEEDS_FIX，或取消）、阻塞 Question（答复后 Attempt 仍活着 → RUNNING，已结束 → READY，答复进强制上下文）；其余原因解除后回 READY，不回 RUNNING。
 - `INTEGRATED` = 所属 IntegrationBatch 已 `PROMOTED`（候选已成为集成基线的一部分）。
-- 重试预算耗尽 → `BLOCKED` + replan 分级 + 按 policy 请求 Approval（B4）。
+- 重试预算耗尽 → `BLOCKED(retry_budget_exhausted)`：人选经 Approval 加预算、取消，或重新规划（V1 的 replan 只由人发起，D8 修订；B4）。
 - 终态：`INTEGRATED`、`CANCELED`。
 
 ### 4.5 Task 执行投影（Orca `tasks.status`，非权威）
@@ -182,7 +182,7 @@ APPLYING / TESTING → QUEUED（应用重启时由 RecoveryService 丢弃临时�
 
 ### 4.13 其它固定词汇
 - Liveness verdict：`live / unverifiable / exited`（执行宿主拥有执行真相）。
-- Replan 分级：`NO_REPLAN / MINOR_ADJUSTMENT / MAJOR_REPLAN`。
+- Replan 分级：`NO_REPLAN / MINOR_ADJUSTMENT / MAJOR_REPLAN`（V1：`MAJOR_REPLAN` 只由人发起，`MINOR_ADJUSTMENT` 是 Control Plane 确定性动作的审计标签；自动分级在 V2，D8 修订、DEF-36）。
 - 风险等级：`low / medium / high`；`high` 默认需要 Approval。
 - Verification check 结果：`pass / fail / environmental / inconclusive / skipped`（D68；`environmental` 包括 `tool_missing / timeout / killed / setup_failed`；`skipped` 需给出 `time_budget_exhausted / setup_failed` 等策略依据）。
 

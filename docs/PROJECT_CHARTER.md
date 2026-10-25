@@ -166,23 +166,23 @@ Goal
 1. 为一个本地 Git repository 创建 Mission 与 GoalRevision；
 2. 生成可审阅、可版本化并经人工或 policy 自动接受的 PlanRevision；
 3. 建立带 TaskEdge 依赖和 acceptance criteria 的 Task DAG；
-4. Claude Code、Codex、Antigravity（原 Gemini CLI）、OpenCode 中至少三种 provider 各至少完成一次 Attempt（不要求同时）；
+4. Codex 与 Claude Code 两种 provider 都能担任 Planner 与 Worker，两种角色各至少完成一次（不要求同时，每个 Mission 可交叉搭配；Antigravity 在 V1 之后第一个接入，D82）；
 5. 根据 Task 动态生成 AgentSpec 与 ContextPackage；
 6. 在隔离 worktree 中同时并行执行至少三个 Task（不要求来自不同 provider）；
-7. 支持八种 typed messages（含 `QUESTION`、`BLOCKED`、`HANDOFF`、`SUBMISSION`）；
+7. Worker 经提交报告交付改动、疑问、阻塞与建议的后续工作，由 Control Plane 转成对象（D82；干活中途的实时消息与交接在 V1 之后）；
 8. 将 `SUBMITTED` 与 `VERIFIED` 严格分离；
 9. 对不可变 Candidate 运行 deterministic checks；
 10. 支持 VerificationRun `FAIL` → `NEEDS_FIX` → 新 Attempt；
 11. 支持串行集成和集成树全量回归；
 12. 支持集成冲突与合并树回归失败 → 原 Task `NEEDS_FIX`（D79）；
-13. 对高风险 promotion 与最终交付请求人工 Approval；
+13. 对最终交付请求人工 Approval（绑定交付的 commit，交付为 PR，D82）；
 14. 应用重启后恢复 Mission、Task、Attempt 和 Evidence；
 15. 根据所有 completion gates 给出最终完成判断和 CompletionReport；
 16. 构建产物不向原厂（onorca.dev / stablyai）端点发送任何请求，并有自动化验证。
 
 ## 9. V1 范围与里程碑
 
-V1 = M0–M4 全部，加上 M5 中的 `DecisionEngine` 接口与 RulesEngine 基线、replan 分级触发，以及 `MAJOR_REPLAN` → 新 PlanRevision → 批准 → 旧版本 `SUPERSEDED` 的完整闭环（D8，修订后）。V1 另含一个可选、只给建议的 Jev 适配器（D60，BYOK）；放到 V1 之后的是 Jev 的学习型用法、基于历史表现/成本的路由学习，以及 M6。
+V1 = M0–M4 全部（按 D82 精简），加上 M5 中的 `DecisionEngine` 接口与 RulesEngine 基线，以及人发起的 `MAJOR_REPLAN` → 新 PlanRevision → 批准 → 旧版本 `SUPERSEDED` 的完整闭环（D8，2026-10-25 修订）。V1 不接 Jev；V1 之后的路线见 ARCHITECTURE §23（D81）。
 
 | 里程碑 | 一句话说明 | V1 |
 |---|---|---|
@@ -190,9 +190,9 @@ V1 = M0–M4 全部，加上 M5 中的 `DecisionEngine` 接口与 RulesEngine �
 | M1 Mission Facade | Mission/Goal/Plan 与 Orca Run/Task 的映射、`task_stages`、重启恢复、基础 UI | 是 |
 | M2 Planning 与 Agent Factory | plan proposal、DAG 校验、AgentSpec、ContextPackage、provider routing 与预算 | 是 |
 | M3 Independent Verification | Submission、Candidate、VerificationRun、deterministic checks、`NEEDS_FIX` 循环 | 是 |
-| M4 Controlled Integration | Integration Queue、IntegrationController、集成树回归、失败回原 Task 修复（D79）、Approval 与 promotion | 是 |
-| M5 Replanning 与 Decision Engine | replan 分级、`MAJOR_REPLAN` 闭环、历史表现与成本反馈 | replan 闭环是（`DecisionEngine` 接口与 RulesEngine 已在 M2 建成；可选的 Jev 适配器在 M3，D60）；学习型反馈否 |
-| M6 Remote 与扩展 | 远端 mixed-version、SSH/WSL/federation 验证，再决定 cloud、mobile、多用户 | 否 |
+| M4 Controlled Integration | 串行合入队列与集成树回归、失败回原 Task 修复（D79）、一次交付批准与 PR 交付（D82）、CompletionReport | 是 |
+| M5 Replanning 与 Decision Engine | 人发起的 `MAJOR_REPLAN` 闭环、replan 自动分级、历史表现与成本反馈 | 人发起的 replan 闭环是（`DecisionEngine` 接口与 RulesEngine 已在 M2 建成）；自动分级（DEF-36）、Jev（DEF-38）与学习型反馈否 |
+| V1 之后（原 M6） | V1.5 Axiom 开发 Axiom → V2 真实项目试用 → V3 自主维护（ARCHITECTURE §23，D81） | 否 |
 
 ### Demo 与验证 fixture（G8，D18）
 
@@ -242,7 +242,7 @@ Controlled fixture 上的成功证明确定性的端到端行为；blind fixture
 - Integration Queue 与 IntegrationController；
 - ApprovalGateway；
 - audit/recovery 机制；
-- DecisionEngine abstraction：RulesEngine 基线必备，Jev 作为可选 provider；
+- DecisionEngine abstraction：RulesEngine 基线必备；Jev 作为 provider 在 V1 之后接入（D82，DEF-38）；
 - M0：Orca fork 的品牌、更新、telemetry 和第三方 notice 隔离，以及**网络出口清单 + 断言测试**；
 - `axiom.*` RPC 命名空间与 `axiom` CLI（D1）；
 - 文档：`docs/GLOSSARY.md`、`docs/PROJECT_CONSTITUTION.md`、`docs/reference/orca-mapping.md`（落位按 D13）。
@@ -269,14 +269,14 @@ V1 只有在以下条件全部满足时才算成功：
 |---|---|
 | Goal 被转换为合法 Task DAG | GoalRevision、`APPROVED` PlanRevision、DAG validation 和 acceptance criteria 可查看 |
 | 至少三个 Task 并行执行 | 同一时刻三个 `RUNNING` Attempt，各有独立 worktree 记录 |
-| 至少三种 provider 可用 | 三种 provider 各有至少一次完成的 Attempt（不要求同时） |
+| 至少两种 provider 可用 | Codex 与 Claude Code 都能担任 Planner 与 Worker，两种角色各有至少一次完成的记录（不要求同时，D82） |
 | Agent 不是状态权威 | 伪造或错误的 `SUBMISSION` 无法直接进入 `INTEGRATION_READY` |
 | 验证可以发现真实错误 | 故意引入的测试失败得到 `FAIL`，Task 进入 `NEEDS_FIX` |
 | 系统能修复失败 | 生成新 Attempt，重新验证并保留历史 |
 | 并行结果能够安全集成 | 集成树回归被执行；冲突与回归失败使原 Task 进入 `NEEDS_FIX`（D79），而不是静默覆盖 |
 | 系统可恢复 | 应用重启后 Mission 身份、Task stage、Attempt 和证据不丢失 |
 | Agent 可替换 | 某次 Attempt 失败后可更换 provider 继续同一 Task |
-| 高风险动作需要授权 | 未批准的 promotion 停在 `AWAITING_APPROVAL`，Approval 记录可审计 |
+| 高风险动作需要授权 | 未经批准不会交付（推分支、开 PR）；Approval 绑定交付的 commit、可审计（D82） |
 | 完成有证据 | CompletionReport 能关联 Goal、PlanRevision、Task、Attempt、验证和集成结果 |
 | 演示可复现 | 全部成功标准在 Controlled Acceptance Fixture 上按 fixture manifest 复现（D18） |
 | 有泛化证据 | 在 Blind External Validation Fixture 上完成一次未经调优的端到端运行并记录结果（D18；是否必须通过待定） |
@@ -310,7 +310,9 @@ V1 不以以下事项为完成条件：
 - 替代 GitHub、Jira 或完整 IDE；
 - 训练自有基础模型；
 - 将 Jev 作为不可替换的核心依赖；
-- Jev 的学习型用法（按历史表现训练、自动改路由）；V1 只有可选、只给建议的适配器（D8、D60）；
+- 接入 Jev（D82：先在开发流程里攒标签、做校准；产品里第一个用途在 V1 之后，DEF-38）；
+- 干活中途与 Worker 对话、Worker 之间实时交接、审批桥、LLM Reviewer 与 LLM 监工（DEF-39、DEF-40）；
+- 第三种 provider（V1 之后第一个接入，DEF-37）；
 - 多候选 IntegrationBatch（V1 固定一个候选，D5）；
 - 远端/federation 与 mixed-version 验证（D8，M6）；
 - 自动解决所有架构和产品歧义；

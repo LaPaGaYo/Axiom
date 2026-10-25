@@ -176,7 +176,7 @@ EXECUTING ↔ REPLANNING
 | `PLAN_REVIEW → PLANNED` | PlanRevision APPROVED（人工或 policy 自动）；物化 Task、TaskEdge、`task_stages=DEFINED` |
 | `PLAN_REVIEW → ANALYZING` | PlanRevision REJECTED（`axiom.plan.reject`，记录理由）；等待新的提案 |
 | `PLANNED → EXECUTING` | 用户启动或 policy 自动启动；Scheduler 开始 admission |
-| `EXECUTING → REPLANNING` | Replan 分级为 `MAJOR_REPLAN`；暂停新 admission，活跃 Attempt 按 policy 继续或停止 |
+| `EXECUTING → REPLANNING` | `MAJOR_REPLAN`（V1 只由人发起：改 Goal 或从待处理项选"重新规划"，D8 修订；自动分级在 V2）；暂停新 admission，活跃 Attempt 按 policy 继续或停止 |
 | `REPLANNING → EXECUTING` | 新 PlanRevision APPROVED，旧 revision SUPERSEDED，Task 继承/取消/重绑完成 |
 | `EXECUTING → FINALIZING` | 所有 required Task ∈ {`INTEGRATED`, `CANCELED`}，无活跃 Attempt |
 | `FINALIZING → READY_FOR_APPROVAL` | 目标分支漂移已合入集成基线并通过最终全量回归；completion gate 全部通过；CompletionReport 生成 |
@@ -224,7 +224,7 @@ NEEDS_FIX → READY（新 Attempt）
 | `VERIFIED → INTEGRATION_READY` | 全部上游依赖 INTEGRATED（高风险 Approval 在批次 PROMOTABLE 之后，D79） |
 | `INTEGRATION_READY → INTEGRATED` | 所属 IntegrationBatch PROMOTED |
 | `INTEGRATION_READY → NEEDS_FIX` | 批次 CONFLICT 或 FAILED（D79）；候选 SUPERSEDED；修复 Attempt 的基线为 `integration_merge` |
-| `RUNNING → NEEDS_FIX / BLOCKED` | Attempt FAILED/STOPPED/ABANDONED：重试预算未耗尽 → NEEDS_FIX；耗尽 → BLOCKED + replan 分级 + 按 policy 请求 Approval |
+| `RUNNING → NEEDS_FIX / BLOCKED` | Attempt FAILED/STOPPED/ABANDONED：重试预算未耗尽 → NEEDS_FIX；耗尽 → BLOCKED，待处理项给人三个选项：经 Approval 加预算、取消、重新规划（D70 修订、D8 修订） |
 | `BLOCKED → <stage>` | 按原因解除（D70 修订）：Question 答复且 Attempt 仍活着 → RUNNING；`approval_denied` → NEEDS_FIX 或 CANCELED；`retry_budget_exhausted` → 经 Approval 加预算后 READY，或 CANCELED；其余 → READY，不回 RUNNING |
 | `* → CANCELED` | 授权取消（PlanRevision 变更或用户）；活跃 Attempt 先 stop/abandon |
 
@@ -429,7 +429,7 @@ ContextPackage 是可寻址（`id = sha256(manifest)`）、可复现、最小充
 | `MINOR_ADJUSTMENT` | 单 Task 修复、依赖微调、AgentSpec/ContextPackage 调整、集成失败修复的 scope 扩展（D79）、FIX_TASK 创建（只用于没有肇事候选的失败）、REQUEST_SUBTASK 批准 | `axiom.task.create/cancel`、edge 更新；记录 rationale，不新建 PlanRevision |
 | `MAJOR_REPLAN` | Goal 变更、架构假设失效、关键依赖不可用、同一 Task 连续 N 次失败或跨 Task 系统性失败、集成冲突扩大 | Mission → `REPLANNING`；Replanner 生成新 PlanRevision proposal → 批准 → 旧 revision SUPERSEDED（§6.2 的继承/取消/重绑规则） |
 
-V1 包含完整的 MAJOR_REPLAN 闭环（D8 修订）；学习型 replan 触发（Jev、历史表现）放 V1 之后。
+V1 只实现人发起的 `MAJOR_REPLAN` 闭环（D8 修订 2026-10-25）：人改 Goal，或在待处理项（如 `BLOCKED(retry_budget_exhausted)`）里选"重新规划" → Replanner 提出新 PlanRevision → 人批准 → 旧 revision SUPERSEDED。上表 `MAJOR_REPLAN` 一行的其余触发器在 V1 不自动判定，由人发起；自动分级并进入 `REPLANNING` 放到 V2（DEF-36）。`MINOR_ADJUSTMENT` 一行是 Control Plane 的确定性动作，照常记审计。
 
 ## 14. Human Governance
 
@@ -528,9 +528,9 @@ Mission UI / axiom CLI
 
 ## 19. V1 边界（D8）
 
-**必须有**：单个本地 Git repository 的 Mission 与 GoalRevision；repo analysis 与可审阅的 PlanRevision（PROPOSED → APPROVED）；Task DAG 与 acceptance criteria；Claude Code / Codex / Antigravity（原 Gemini CLI）/ OpenCode 中至少三种执行者各至少完成一次 Attempt；动态 AgentSpec 与最小 ContextPackage；≥3 个 Task 并行执行；八种类型化消息；`task_stages` 权威与 Orca 投影；独立 deterministic verification + NEEDS_FIX 循环；单一 IntegrationController、单候选批次、集成树回归、冲突与回归失败回原 Task 修复（D79）；`approvals` 表与高风险 promotion / 交付审批；MAJOR_REPLAN → 新 PlanRevision 闭环；DecisionEngine 接口 + RulesEngine；崩溃重启后全部对象与队列恢复；Mission-first UI 与执行工作台钻取；M0 网络出口隔离及自动化断言。
+**必须有**：单个本地 Git repository 的 Mission 与 GoalRevision；repo analysis 与可审阅的 PlanRevision（PROPOSED → APPROVED）；Task DAG 与 acceptance criteria；Codex 与 Claude Code 两种执行者都能担任 Planner 与 Worker、两种角色各至少完成一次（D82）；动态 AgentSpec 与最小 ContextPackage；≥3 个 Task 并行执行；Worker 经提交报告交付改动、疑问与阻塞（D82；实时消息在 V1 之后）；`task_stages` 权威与 Orca 投影；独立 deterministic verification + NEEDS_FIX 循环；单一 IntegrationController、单候选批次、集成树回归、冲突与回归失败回原 Task 修复（D79）；`approvals` 表与交付审批（一次、绑定 commit，交付为 PR，D82）；人发起的 MAJOR_REPLAN → 新 PlanRevision 闭环（D8 修订）；DecisionEngine 接口 + RulesEngine；崩溃重启后全部对象与队列恢复；Mission-first UI 与执行工作台钻取；M0 网络出口隔离及自动化断言。
 
-**暂不做**：多用户 SaaS；移动端；云端 fleet；自动生产部署；无边界递归 Agent；Jev 成为硬依赖，或学习型 DecisionEngine（按历史表现训练、自动改路由；V1 只有可选、只给建议的 Jev 适配器，D60）；多候选集成批次；remote / federation / mixed-version 验证；复杂 marketplace；完全无人监督发布。
+**暂不做**：多用户 SaaS；移动端；云端 fleet；自动生产部署；无边界递归 Agent；接入 Jev（D82，DEF-38）；干活中途的实时消息、审批桥、LLM Reviewer 与 LLM 监工（DEF-39、DEF-40）；第三种 provider（DEF-37）；replan 自动分级（DEF-36）；多候选集成批次；remote / federation / mixed-version 验证；复杂 marketplace；完全无人监督发布。
 
 ## 20. 实施路线
 
@@ -539,23 +539,23 @@ Mission UI / axiom CLI
 | **M0 · Fork 与隔离** | 新身份（app id、bundle id、scheme、可执行名、`axiom` CLI）；updater/telemetry/feedback/changelog/nudge/kill-list/marketplace/skills 源/star 处置；login/relay/push 置 flag；artifact 分享禁用；LICENSE 与 Third-Party Notices；`package.json` license 字段；`mobile/`、`cloud/` 移出默认构建；空的 `axiom.*` 命名空间与 CLI 命令名注册；Controlled Acceptance Fixture 资格测试（许可确认、Node 22 + pnpm 10 固定工具链下的离线可复现检查、规模与时限门槛、预置场景 manifest，D18） | 打包产物冷启动 + 一次完整会话对 `onorca.dev` / `stablyai` / `posthog` / `api.github.com` 的请求数为 0（代理日志存档）；`verify:egress-allowlist` 通过；上游 CI 门（tc/test/lint）全绿；无 RPC/CLI 重名；fixture 候选通过全部硬门槛（否则切换到自有参考应用）并冻结 fixture manifest v1 |
 | **M1 · Mission Facade** | 迁移 v43 side tables；`axiom.mission/goal/plan/task` 的 CRUD 与状态机；Mission ↔ Run（system principal）；admission 守卫；run mailbox 消费者骨架；RecoveryService 对 Mission/Goal/Plan/Task 的重启恢复；Mission Home + Task 列表 | 重启后 Mission/Goal/PlanRevision/Task/stage 不丢失；对 Mission Run 的直接 `taskUpdate`/`workerStart`/`reset` 被拒绝；`orca-mapping.md` §4b 全部拦截点有测试 |
 | **M2 · Planning 与 Agent Factory** | Planner proposal contract 与 DAG 校验；plan 审批流；AgentSpec、ContextPackage、`attempt_bindings`；Scheduler 与预算；attempt-launcher；`axiom attempt *` 与 submit 结算路径；Candidate 快照 | 从 Goal 到 ≥3 个 Task 在 3 种 provider 上并行 RUNNING → SUBMITTED；伪造/过期/重复 SUBMISSION 被拒且不改状态 |
-| **M3 · Independent Verification** | 验证 worktree；deterministic checks；acceptance 评估；diff scope 检查；Reviewer advisory；INCONCLUSIVE 升级；NEEDS_FIX 循环与证据注入 | 故意注入的测试失败被 FAIL 拒绝并自动生成修复 Attempt；FAIL 不能被 review 推翻（测试） |
-| **M4 · Controlled Integration 与完成** | 集成基线与临时分支；单候选批次；集成树回归；CONFLICT / FAILED → 原 Task NEEDS_FIX（D79）；`approvals` 与 ApprovalGateway；promotion 与 Delivery；目标分支漂移合并；completion gates 与 CompletionReport；全对象重启恢复；M4 基本完成后独立选定 Blind External Validation Fixture（D18） | 两个各自通过、合并后失败的候选：后集成的那个回到原 Task 修复并最终集成（D79）；未批准的高风险 promotion 被阻止；CompletionReport 能解释「为什么完成」；Controlled fixture 的全部 manifest 场景可复现 |
-| **M5 · Replanning 与 DecisionEngine（V1 部分）** | replan 分级（`DecisionEngine` 接口与 RulesEngine 已在 M2 建成，M3 的 Supervisor 也用它）；MAJOR_REPLAN → 新 PlanRevision → 继承/取消/重绑 | Goal 变更触发新 PlanRevision，旧版本与理由保留；DecisionEngine 可被替换实现替代而核心状态机不变（测试） |
-| **M6 · Remote 与扩展（V1 之后）** | mixed-version、SSH/WSL/federation 下的 Attempt；Jev 的学习型用法与历史表现反馈；cloud/mobile/多用户评估 | — |
+| **M3 · Independent Verification** | 验证 worktree；deterministic checks；acceptance 评估；diff scope 检查；INCONCLUSIVE 交人处置（V1 无 LLM Reviewer，D82）；NEEDS_FIX 循环与证据注入 | 故意注入的测试失败被 FAIL 拒绝并自动生成修复 Attempt；FAIL 不能被 review 推翻（测试） |
+| **M4 · Controlled Integration 与完成** | 串行合入队列（单候选，合到最新集成头）；集成树回归；CONFLICT / FAILED → 原 Task NEEDS_FIX（D79）；一次交付批准（绑定 commit）与 PR 交付，没有远程仓库时本地合入；交付前在最新目标分支上重放并回归（D82）；completion gates 与 CompletionReport；全对象重启恢复；M4 基本完成后独立选定 Blind External Validation Fixture（D18） | 两个各自通过、合并后失败的候选：后集成的那个回到原 Task 修复并最终集成（D79）；未经批准不会交付；CompletionReport 能解释「为什么完成」；Controlled fixture 的全部 manifest 场景可复现 |
+| **M5 · Replanning 与 DecisionEngine（V1 部分）** | 人发起的 MAJOR_REPLAN → 新 PlanRevision → 继承/取消/重绑（D8 修订；自动分级在 V2）；DecisionEngine 可替换性（接口与 RulesEngine 已在 M2 建成，M3 的 Supervisor 也用它） | Goal 变更触发新 PlanRevision，旧版本与理由保留；DecisionEngine 可被替换实现替代而核心状态机不变（测试） |
+| **V1 之后** | 按 §23（D81 / D82）：V1.5 Axiom 开发 Axiom → V2 真实项目试用 → V3 自主维护；原 M6 的远端执行进 V2，federation / mixed-version / 多用户 / 手机端进 V3 | 各阶段开始前出里程碑计划 |
 
 ## 21. V1 成功标准
 
 在 Controlled Acceptance Fixture（章程 §9，D18）上，用户只输入目标与约束，系统必须能够：
 
 1. 生成可审阅计划与合法 DAG；
-2. 并行运行 ≥3 个 Task，且 ≥3 种 provider 各完成至少一次 Attempt；
+2. 并行运行 ≥3 个 Task；Codex 与 Claude Code 都能担任 Planner 与 Worker，两种角色各至少完成一次（D82）；
 3. 在 Attempt 崩溃或 `unverifiable` 后正确恢复或安全重试，且不重复启动；
 4. 拒绝把只有 SUBMISSION、没有验证证据的 Task 标为 INTEGRATION_READY；
 5. 捕获一个故意引入的测试失败并完成 NEEDS_FIX 循环；
 6. 处理两个单独通过但合并后失败的候选（后集成的那个回到原 Task 修复，D79）；
 7. 在集成树上跑完整回归；
-8. 对高风险 promotion 与最终交付请求人工 Approval，并拒绝未批准动作；
+8. 对最终交付（推分支、开 PR）请求人工 Approval，并拒绝未批准动作（D82）；
 9. 重启应用后保留 Mission、Task、Attempt、Decision、Evidence、Approval 与全部队列；
 10. 给出「为什么 Mission 已完成」的证据链，而不是只显示所有 Agent 已停止；
 11. 构建产物不向原厂端点发送任何请求；
@@ -582,6 +582,20 @@ Human approves risk, not routine
 ```
 
 护城河不是同时运行多少 Agent，而是把长期软件工程的**计划、执行、证据、决策、验证、集成和治理**连接成一个可重启、可审计的闭环。
+
+## 23. V1 精简与之后的路线（D82、D81）
+
+**V1（D82）**：Planner 是对话、只能提议；Worker 是黑盒（无界面一次性运行、沙盒、退出时由宿主提交）；验证是白盒（确定性检查，`INCONCLUSIVE` 交人）；串行合入 + 集成树回归；一次交付批准，交付即 PR；两种 provider（Codex、Claude Code，都能当 Planner 与 Worker，可交叉搭配）；replan 只由人发起；不接 Jev。
+
+**之后（D81）**
+
+| 阶段 | 内容 | 条件 |
+|---|---|---|
+| V1.5 Axiom 开发 Axiom | 评测集与误放行率（DEF-33）、仓库环境配置、第三种 provider（DEF-37）、Jev 失败归因（DEF-38 ①）、按需的 LLM Reviewer（DEF-40）、证据驱动的多 agent 辩论试点（DEF-41）、仓库经验文件 | V1 验收通过 |
+| V2 真实项目试用 | 按数据选 agent 与 skill 建议（DEF-38 ②③）、在有效场景启用多 agent 辩论（DEF-41）、自主度阶梯（DEF-35）、replan 自动分级（DEF-36）、多项目、容器 / VM 隔离；团队与记忆视数据而定（DEF-32）；干活中途的交互视需要（DEF-39） | V1.5 的指标达标 |
+| V3 自主维护 | 事件触发的维护、中风险自动合并与回滚、Control Plane 无界面常驻、多人、手机端 | 视 V2 的指标 |
+
+原则：证据高于说法；模型提议、Control Plane 决定、人授权；不绑定模型或 harness；自主度按范围、凭指标挣来。
 
 ---
 

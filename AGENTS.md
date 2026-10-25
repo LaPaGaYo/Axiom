@@ -46,6 +46,7 @@ Each topic has one canonical source. Other documents cite it by section instead 
 | Orca kernel mapping and seams | `docs/reference/orca-mapping.md` |
 | Milestone scope, task order, and status | `docs/plans/M<n>.md` |
 | Items deferred to a trigger | `docs/decisions/DEFERRED.md` |
+| V1 scope (simplified) and the post-V1 roadmap | D82, D81; `docs/ARCHITECTURE.md` §23 |
 
 ## Authority Order
 
