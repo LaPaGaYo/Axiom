@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import { AttemptSubmitParams } from '../../../shared/axiom-contract/attempt-params'
+import type { AttemptSubmitParams } from '../../../shared/axiom-contract/attempt-params'
+import {
+  SubmissionReportSchema,
+  type SubmissionReport
+} from '../../../shared/axiom-contract/submission-params'
+import type { AuditEvent } from '../../../shared/axiom-contract/mission-objects'
 import { AxiomMessagePayloadSchema } from '../../../shared/axiom-contract/message-params'
 import type { OrchestrationDb } from '../../runtime/orchestration/db'
 import { OrchestrationError } from '../../runtime/orchestration/orchestration-error'
@@ -19,33 +24,59 @@ import { scheduleSubmittedWorkerRelease } from './attempt-worker-release'
 const queues = new WeakMap<OrchestrationDb, Map<string, Promise<void>>>()
 export function submitAttempt(p: z.infer<typeof AttemptSubmitParams>, ctx: RpcContext) {
   const db = ctx.runtime.getOrchestrationDb()
+  const { store } = getAxiomControlPlane(ctx.runtime)
+  return serializeAttemptSubmission(db, p.attemptId, () =>
+    settleSubmission(p, ctx, {
+      resolveAuthority: () =>
+        resolveAttemptSender({
+          runtime: ctx.runtime,
+          db,
+          store,
+          ...p,
+          orchestrationCaller: ctx.orchestrationCaller,
+          orchestrationCompatibilityEvidence: ctx.orchestrationCompatibilityEvidence,
+          allowSubmissionReplay: true
+        })
+    })
+  )
+}
+
+export function serializeAttemptSubmission<T>(
+  db: OrchestrationDb,
+  attemptId: string,
+  operation: () => Promise<T>
+) {
   let queue = queues.get(db)
   if (!queue) {
     queue = new Map()
     queues.set(db, queue)
   }
-  return runKeyedSerializedOperation(queue, p.attemptId, () => settleSubmission(p, ctx))
+  return runKeyedSerializedOperation(queue, attemptId, operation)
 }
 
-async function settleSubmission(input: z.infer<typeof AttemptSubmitParams>, ctx: RpcContext) {
+// Callers supply their authority check; Git and the settlement transaction are shared.
+export async function settleSubmission(
+  input: { attemptId: string; report: SubmissionReport },
+  ctx: RpcContext,
+  options: {
+    resolveAuthority: () => ReturnType<typeof resolveAttemptSender>
+    headless?: boolean
+    finalizeReport?: (
+      snapshot: Awaited<ReturnType<typeof snapshotCandidate>>
+    ) => Promise<SubmissionReport>
+    audit?: Record<string, AuditEvent['after']>
+  }
+) {
   const { runtime, recordMutationReceipt } = ctx
   const db = runtime.getOrchestrationDb()
   const { store, missions, verification: verificationService } = getAxiomControlPlane(runtime)
-  const authorityInput = {
-    runtime,
-    db,
-    store,
-    ...input,
-    orchestrationCaller: ctx.orchestrationCaller,
-    orchestrationCompatibilityEvidence: ctx.orchestrationCompatibilityEvidence,
-    allowSubmissionReplay: true
-  }
-  const { mission, task, binding, sender } = resolveAttemptSender(authorityInput)
-  const parsed = AttemptSubmitParams.safeParse(input)
+  const { mission, task, binding, sender } = options.resolveAuthority()
+  const parsed = SubmissionReportSchema.safeParse(input.report)
   if (!parsed.success) {
     throw new OrchestrationError('invalid_argument', 'Invalid Submission report.')
   }
-  const { attemptId, report } = parsed.data
+  const { attemptId } = input
+  let report = parsed.data
   const existing = store.getSubmissionByDispatch(attemptId)
   const validateArtifacts = () => {
     for (const id of report.artifacts) {
@@ -120,15 +151,19 @@ async function settleSubmission(input: z.infer<typeof AttemptSubmitParams>, ctx:
   const snapshot = await snapshotCandidate({
     attemptId,
     worktreeId: worker.worktree_id,
-    branch: binding.branch
+    branch: binding.branch,
+    ...(options.headless ? { headless: true } : {})
   })
+  if (options.finalizeReport) {
+    report = SubmissionReportSchema.parse(await options.finalizeReport(snapshot))
+  }
   const result = runLifecycleWriteTransaction(db.db, 'axiom_submit', () => {
     // A new admission or worker identity during asynchronous Git work must fence this write.
     if (store.nextAttemptSeq(task.taskId) !== binding.seq + 1) {
       throw new OrchestrationError('stale_dispatch', 'A newer Attempt owns this Task.')
     }
     if (db.getDispatchContextById(attemptId)?.status === 'dispatched') {
-      resolveAttemptSender(authorityInput)
+      options.resolveAuthority()
     }
     validateArtifacts()
     const active = store
@@ -243,7 +278,8 @@ async function settleSubmission(input: z.infer<typeof AttemptSubmitParams>, ctx:
         taskId: task.taskId,
         submissionId: submission.id,
         candidateId: candidate.id,
-        verificationRunId: verification.id
+        verificationRunId: verification.id,
+        ...options.audit
       }
     })
     return { submission, candidate, duplicate: false }

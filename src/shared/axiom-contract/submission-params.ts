@@ -21,6 +21,18 @@ export const SubmissionReportSchema = z.strictObject({
   followUps: z.array(Text)
 })
 export type SubmissionReport = z.infer<typeof SubmissionReportSchema>
+// Paths are Worker claims; the host confines, reads and attributes them before submission.
+export const HeadlessSubmissionReportSchema = SubmissionReportSchema.omit({
+  filesChanged: true
+}).extend({
+  artifacts: z.array(
+    z.strictObject({
+      path: Text,
+      kind: z.enum(['worker_report', 'handoff', 'evidence', 'log', 'other']),
+      mediaType: Text
+    })
+  )
+})
 // Accept both Git object formats; no newer Git command is needed to read either.
 export const GitObjectIdSchema = z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/)
 export const CandidateSchema = z.object({

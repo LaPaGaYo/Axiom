@@ -60,6 +60,33 @@ describe('ArtifactStore', () => {
     expect(await readdir(root)).toEqual([a.sha256])
     expect(artifacts.list({ missionId: mission.id })).toHaveLength(2)
   })
+  it('preserves distinct Attempt attribution when report bytes are identical', async () => {
+    const a = await artifacts.put({
+      ...input,
+      kind: 'worker_report',
+      createdBy: 'attempt:a',
+      related: ['task', 'a']
+    })
+    const b = await artifacts.put({
+      ...input,
+      kind: 'worker_report',
+      createdBy: 'attempt:b',
+      related: ['task', 'b']
+    })
+    expect(a.id).not.toBe(b.id)
+    expect(a.sha256).toBe(b.sha256)
+    expect(b.createdBy).toBe('attempt:b')
+    expect(b.related).toEqual(['task', 'b'])
+    expect(
+      await artifacts.put({
+        ...input,
+        kind: 'worker_report',
+        createdBy: 'attempt:b',
+        related: ['task', 'b']
+      })
+    ).toEqual(b)
+    expect(await readdir(root)).toEqual([a.sha256])
+  })
   it('detects corruption and missing content without leaking bytes', async () => {
     const meta = await artifacts.put(input)
     await writeFile(artifacts.pathFor(meta.sha256), 'broken')

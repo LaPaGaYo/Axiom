@@ -1,4 +1,4 @@
-import { mkdtemp, rmdir } from 'node:fs/promises'
+import { mkdtemp, rmdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { gitExecFileAsync } from '../../git/runner'
@@ -11,6 +11,7 @@ export async function snapshotCandidate(input: {
   attemptId: string
   worktreeId: string
   branch: string
+  headless?: boolean
 }) {
   const worktree = splitWorktreeIdForFilesystem(input.worktreeId)
   if (!worktree?.repoId || !worktree.worktreePath) {
@@ -30,6 +31,58 @@ export async function snapshotCandidate(input: {
   }
   // Check before staging too: a branch mismatch must never write the target/integration branch.
   await assertBranch()
+  if (input.headless) {
+    // A private index ignores a sandbox-left index.lock without deleting anybody's lock.
+    const directory = await mkdtemp(path.join(tmpdir(), 'axiom-snapshot-index-'))
+    const isolated = {
+      ...options,
+      env: { ...process.env, GIT_INDEX_FILE: path.join(directory, 'index') }
+    }
+    const hooks = ['-c', `core.hooksPath=${directory}`]
+    try {
+      const parent = (await gitExecFileAsync(['rev-parse', 'HEAD'], options)).stdout.trim()
+      await gitExecFileAsync(['read-tree', 'HEAD'], isolated)
+      await gitExecFileAsync(['add', '-A', '--', '.', ':(exclude).axiom'], isolated)
+      await gitExecFileAsync(['rm', '-r', '--cached', '--ignore-unmatch', '--', '.axiom'], isolated)
+      const treeSha = GitObjectIdSchema.parse(
+        (await gitExecFileAsync(['write-tree'], isolated)).stdout.trim()
+      )
+      const oldTree = (await gitExecFileAsync(['rev-parse', 'HEAD^{tree}'], options)).stdout.trim()
+      const snapshotCommitted = treeSha !== oldTree
+      const commitSha = GitObjectIdSchema.parse(
+        snapshotCommitted
+          ? (
+              await gitExecFileAsync(
+                [
+                  ...hooks,
+                  '-c',
+                  'user.name=Axiom Control Plane',
+                  '-c',
+                  'user.email=axiom@localhost',
+                  'commit-tree',
+                  treeSha,
+                  '-p',
+                  parent,
+                  '-m',
+                  `axiom: candidate snapshot ${input.attemptId}`
+                ],
+                isolated
+              )
+            ).stdout.trim()
+          : parent
+      )
+      await assertBranch()
+      if (snapshotCommitted) {
+        await gitExecFileAsync(
+          [...hooks, 'update-ref', `refs/heads/${input.branch}`, commitSha, parent],
+          options
+        )
+      }
+      return { commitSha, treeSha, snapshotCommitted }
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  }
   const status = await gitExecFileAsync(['status', '--porcelain'], options)
   const snapshotCommitted = status.stdout.trim().length > 0
   if (snapshotCommitted) {

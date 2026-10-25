@@ -1,9 +1,9 @@
+import { controlPlaneHeadlessMode, markHeadlessWorkerReady } from './control-plane-worker-start'
 import type { LocalWorkerStartInput } from './local-worker-start-input'
 import { probeWorkerOpenCodeModelLaunchSupport } from './worker-opencode-model-preflight'
 import { resolveWorkerConfiguredAgentParams } from './worker-configured-agent-preflight'
 import { waitForWorkerAgentReady } from '../../../../launched-agent-composer-readiness'
 import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
-import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
 import { resolveDispatchCallerWorktreeId } from '../../orchestration-caller-workspace'
 import { resolveWorkerStartModeOnHost } from '../../orchestration-worker-start-mode'
@@ -34,12 +34,8 @@ export async function startLocalWorker(args: LocalWorkerStartInput): Promise<unk
   const params = terminal ? { ...args.params, terminal: terminal.address } : args.params
   const chat = terminal ? chatAssigneeOf(terminal) : null
   const requestedWorktree = params.worktree ?? 'current'
-  if (args.controlPlane?.worktreeId !== undefined && requestedWorktree !== 'current') {
-    throw new OrchestrationError(
-      'invalid_argument',
-      'controlPlane.worktreeId requires current worktree placement.'
-    )
-  }
+  const headless = args.controlPlane?.headless
+  const headlessMode = controlPlaneHeadlessMode(args)
   const createsWorktree = requestedWorktree === 'new-child' || requestedWorktree === 'new-top-level'
   const launchParams = await resolveWorkerConfiguredAgentParams(runtime, params, async () => {
     const callerWorkspaceId = await resolveDispatchCallerWorktreeId(
@@ -110,10 +106,12 @@ export async function startLocalWorker(args: LocalWorkerStartInput): Promise<unk
       resolvedWorktreeId: resolvedWorktree?.id
     })
   }
-  const hostMode = resolveWorkerStartModeOnHost(runtime, args.mode, resolvedWorktree?.id, agent)
+  const hostMode =
+    headlessMode ?? resolveWorkerStartModeOnHost(runtime, args.mode, resolvedWorktree?.id, agent)
   let mode = chatWorkerMode(await hostMode, chat)
 
   const startOptions = {
+    ...(headless ? { channel: 'headless' } : {}),
     worktree: requestedWorktree,
     mode,
     resolvedWorktreeId: resolvedWorktree?.id ?? null,
@@ -186,6 +184,7 @@ export async function startLocalWorker(args: LocalWorkerStartInput): Promise<unk
       mode,
       agent,
       launchPreferences: launch.preferences,
+      headless,
       effects,
       onStage: (stage) => {
         failedStage = stage
@@ -224,7 +223,7 @@ export async function startLocalWorker(args: LocalWorkerStartInput): Promise<unk
           effects,
           timeoutMs: Math.max(0, readinessDeadline - Date.now())
         })
-      : chat
+      : chat || headless
         ? // A chat takes its task as a queued send whatever it is doing, so nothing is waited on.
           null
         : await waitForWorkerAgentReady(runtime, terminalHandle, {
@@ -260,6 +259,10 @@ export async function startLocalWorker(args: LocalWorkerStartInput): Promise<unk
       setupState: setupReceipt.state,
       terminalOwnership: params.terminal ? 'external' : 'created'
     })
+
+    if (headless) {
+      return markHeadlessWorkerReady(db, task.id, started.dispatch.id, effects, mode)
+    }
 
     return await deliverAndSettleWorkerStartReadiness({
       runtime,

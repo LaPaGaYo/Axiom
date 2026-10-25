@@ -23,6 +23,10 @@ import { redactContext } from '../context-builder/redaction'
 import { missionCaller } from './mission-caller'
 import { resolveAttemptBaseline } from './attempt-baseline'
 import { attemptBaselineAudit, prepareWorkerFixLaunch } from './attempt-fix-launch'
+import { hasHeadlessWorkerBuilder } from './headless-worker-command'
+import { createHeadlessWorkerLaunch } from './headless-worker-launch'
+import { watchHeadlessAttempt } from './attempt-exit-submission'
+import { createAttemptLaunchAudit } from './attempt-launch-audit'
 
 type LauncherRuntime = Pick<OrcaRuntimeService, 'createManagedWorktree' | 'requireStore'>
 export type AttemptWorkerStartArgs = Omit<Parameters<typeof startLocalWorker>[0], 'runtime'> & {
@@ -49,32 +53,7 @@ export function createAttemptLauncher(
   planner?: { goalRevisionId: string; baseBranch: string; runSeq: number }
 ): AttemptLaunch {
   const { db, store, missions, artifacts } = deps
-  const audit = (
-    attempt: AdmittedAttempt,
-    event: string,
-    dispatchId: string | null,
-    after: AuditEvent['after']
-  ) => {
-    store.appendAuditEvent({
-      missionId: attempt.missionId,
-      actor: planner ? 'MissionController' : 'Scheduler',
-      event: planner ? event.replace('attempt.', 'planner.') : event,
-      objectKind: 'attempt',
-      objectId: dispatchId ?? `${attempt.taskId}/${attempt.seq}`,
-      before: null,
-      after: planner
-        ? {
-            missionId: attempt.missionId,
-            goalRevisionId: planner.goalRevisionId,
-            seq: planner.runSeq,
-            branch: attempt.branch,
-            provider: store.getAgentSpec(attempt.agentSpecId)?.spec.provider ?? null,
-            ...(typeof after === 'object' && after !== null && !Array.isArray(after) ? after : {})
-          }
-        : after,
-      createdAt: deps.now?.() ?? new Date().toISOString()
-    })
-  }
+  const audit = createAttemptLaunchAudit(deps, planner)
   const fail = (attempt: AdmittedAttempt) =>
     planner
       ? undefined
@@ -164,6 +143,14 @@ export function createAttemptLauncher(
         }
       })
       const worktreeId = created.worktree.id
+      const headless = !planner && hasHeadlessWorkerBuilder(spec.provider)
+      if (!planner) {
+        workerAudit = {
+          ...workerAudit,
+          channel: headless ? 'headless' : 'tui',
+          posture: headless ? 'headless-sandboxed' : 'tui-bypass'
+        }
+      }
       const caller = missionCaller(mission.coordinatorOrcaSessionId, worktreeId)
       if (baseline) {
         const prepared = await prepareWorkerFixLaunch(
@@ -206,6 +193,19 @@ export function createAttemptLauncher(
           worktreeId,
           dispatchMaxDepth: 1,
           callerIdentity: caller,
+          ...(headless
+            ? {
+                headless: createHeadlessWorkerLaunch({
+                  deps,
+                  attempt,
+                  spec,
+                  worktree: created.worktree,
+                  render,
+                  audit: workerAudit,
+                  onPrepared: (id, after) => audit(attempt, 'attempt.headless_prepared', id, after)
+                })
+              }
+            : {}),
           preambleBuilder: (p) => {
             // The provider can propose before startLocalWorker returns its readiness receipt.
             // Bind before delivering its Attempt preamble.
@@ -269,6 +269,9 @@ export function createAttemptLauncher(
           fail(attempt)
         }
       })
+      if (headless && receipt.state === 'ready' && !deps.startWorker) {
+        watchHeadlessAttempt(deps.runtime, receipt.dispatchId)
+      }
     } catch (error) {
       try {
         // Once bound, an unexpected persistence failure belongs to recovery, never a fresh launch.

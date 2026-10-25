@@ -168,7 +168,7 @@ test('M2-07: three fixture Workers submit immutable Candidates and reject a forg
         expect(candidate.treeSha).not.toBe(baseTree)
         expect(submission.candidateId).toBe(candidate.id)
         expect(submission.report.summary).not.toBe('')
-        expect(submission.report.artifacts).toHaveLength(1)
+        expect(submission.report.artifacts).toHaveLength(process.platform === 'win32' ? 1 : 2)
         expect(settled.verification.find((v) => v.candidateId === candidate.id)).toMatchObject({
           taskId: binding.task_id,
           status: 'RUNNING',

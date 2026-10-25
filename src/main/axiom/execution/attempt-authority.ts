@@ -153,3 +153,54 @@ function verifySubmissionReplay(
     )
   }
 }
+
+/** In-process exit settlement has no CLI caller; recheck durable ownership instead. */
+export function resolveHostAttempt(db: OrchestrationDb, store: AxiomStore, attemptId: string) {
+  const binding = store.getAttemptBindingByDispatch(attemptId)
+  const dispatch = db.getDispatchContextById(attemptId)
+  const task = binding && store.getTaskStage(binding.taskId)
+  const mission = binding && store.getMission(binding.missionId)
+  const kernelTask = binding && db.getTask(binding.taskId)
+  const run = mission && db.getRun(mission.runId)
+  const worker = db.getWorkerDispatch(attemptId)
+  if (
+    !binding ||
+    !dispatch ||
+    !task ||
+    !mission ||
+    !run ||
+    !worker ||
+    task.missionId !== mission.id ||
+    dispatch.task_id !== task.taskId ||
+    dispatch.run_id !== mission.runId ||
+    kernelTask?.run_id !== mission.runId
+  ) {
+    throw new OrchestrationError('task_dispatch_mismatch', 'Headless Attempt binding mismatch.')
+  }
+  if (
+    dispatch.status !== 'dispatched' ||
+    task.stage !== 'RUNNING' ||
+    !['ready', 'start_unknown'].includes(worker.state)
+  ) {
+    throw new OrchestrationError('inactive_dispatch', 'Headless Attempt is not dispatched.')
+  }
+  if (
+    store.nextAttemptSeq(task.taskId) !== binding.seq + 1 ||
+    db.getDispatchContext(task.taskId)?.id !== attemptId
+  ) {
+    throw new OrchestrationError('stale_dispatch', 'A newer Attempt owns this Task.')
+  }
+  return {
+    binding,
+    dispatch,
+    task,
+    mission,
+    run,
+    sender: {
+      address: `dispatch:${attemptId}`,
+      terminalHandle: dispatch.assignee_handle,
+      paneKey: dispatch.assignee_pane_key,
+      orcaSessionId: dispatch.assignee_orca_session_id
+    }
+  }
+}

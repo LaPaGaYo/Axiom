@@ -106,7 +106,8 @@ async function readExcerpts(artifacts: ArtifactStore, artifactId: unknown) {
 export async function previousAttemptSection(
   store: AxiomStore,
   artifacts: ArtifactStore,
-  baseline: AttemptBaseline
+  baseline: AttemptBaseline,
+  channel: 'tui' | 'headless' = 'tui'
 ): Promise<{ source: string; content: string }> {
   if (baseline.kind === 'integration') {
     if (baseline.reason === 'first_attempt') {
@@ -189,7 +190,7 @@ export async function previousAttemptSection(
   if (transcript) {
     lines.push(
       `Previous Submission transcript: ${transcript}`,
-      `axiom mission artifact read --artifact ${transcript}`
+      ...(channel === 'headless' ? [] : [`axiom mission artifact read --artifact ${transcript}`])
     )
   }
   return { source: `verification:${run.id}`, content: lines.join('\n') }

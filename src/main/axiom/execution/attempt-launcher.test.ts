@@ -125,6 +125,7 @@ it('kernel inputs: precreates from integration base and sends one synthetic call
   expect(args.controlPlane).toEqual({
     dispatchCreator: { kind: 'system' },
     worktreeId: 'wt-created',
+    headless: { prepare: expect.any(Function) },
     preambleBuilder: expect.any(Function),
     dispatchMaxDepth: 1,
     callerIdentity: args.callerSession
@@ -136,7 +137,7 @@ it('kernel inputs: precreates from integration base and sends one synthetic call
     coordinatorHandle: args.params.from,
     workerHandle: 'term_worker'
   })
-  expect(rendered).toContain('--attempt d1')
+  expect(rendered).toContain('Attempt: d1')
   expect(rendered).not.toContain('{{')
   expect(binding()?.dispatchId).toBe(`d-${attempt.taskId}`)
   expect(stage()).toBe('RUNNING')

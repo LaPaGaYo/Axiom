@@ -33,6 +33,7 @@ import {
   type WorkerSetupReceipt
 } from './worker-topology'
 import { createWorkerWorktree } from './worker-worktree-creation'
+import type { ControlPlaneWorkerStart } from './control-plane-worker-start'
 
 /** Only what the placement itself reads. The runtime's own worktree accessors are untyped, so
  *  naming the two fields keeps `any` out of this module's unions. */
@@ -66,6 +67,7 @@ type WorkerAgentPlacementArgs = {
   mode: WorkerStartModeReceipt
   agent: TuiAgent | undefined
   launchPreferences: AgentLaunchPreferences | undefined
+  headless?: ControlPlaneWorkerStart['headless']
   effects: WorkerEffect[]
   /** Attributes a throw to the step that was running, the way the caller's own stages do. */
   onStage: (stage: string) => void
@@ -86,6 +88,35 @@ export async function placeWorkerAgent(
   args: WorkerAgentPlacementArgs
 ): Promise<WorkerAgentPlacement> {
   const existing = args.creationWorktree ? undefined : requireWorktree(args.resolvedWorktree)
+  if (args.headless && existing) {
+    args.db.recordWorkerStage({
+      dispatchId: args.dispatchId,
+      stage: 'terminal_creating',
+      worktreeId: existing.id,
+      effects: args.effects
+    })
+    const launch = await args.headless.prepare(args.dispatchId)
+    const terminal = await args.runtime.createTerminal(`id:${existing.id}`, {
+      ...launch,
+      title: `worker-${args.taskId}`,
+      surfaceOwner: false
+    })
+    args.effects.push({
+      kind: 'terminal',
+      role: 'agent',
+      action: 'created',
+      id: terminal.handle,
+      surface: terminal.surface
+    })
+    return {
+      mode: args.mode,
+      worktree: existing,
+      terminalHandle: terminal.handle,
+      structuredSession: null,
+      setupReceipt: EXISTING_WORKTREE_SETUP,
+      warning: terminal.warning
+    }
+  }
   if (existing && args.params.terminal) {
     args.effects.push({
       kind: 'terminal',

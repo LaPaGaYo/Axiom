@@ -9,7 +9,8 @@ import type { AxiomStore } from '../db/axiom-store'
 import type { MissionController } from '../mission-controller/mission-controller'
 import { canBecomeReady } from '../mission-controller/task-readiness'
 import type { ContextBuilder } from '../context-builder/context-builder'
-import { AgentFactoryError, type AgentFactory } from '../agent-factory/agent-factory'
+import { buildWorkerContracts, type AgentFactory } from '../agent-factory/agent-factory'
+import { AgentFactoryError } from '../agent-factory/provider-selection'
 import { blockingQuestionOrApproval } from './admission-blockers'
 import { orderByCriticalPath } from './critical-path'
 import { settleAttemptWithoutSubmission } from '../execution/attempt-settlement'
@@ -185,14 +186,12 @@ export class Scheduler {
         }
         let contracts: { agentSpecId: string; contextPackageId: string }
         try {
-          const context = await this.contextBuilder.build({ missionId, taskId: candidate.taskId })
-          const agent = await this.agentFactory.build({
+          contracts = await buildWorkerContracts(
+            this.contextBuilder,
+            this.agentFactory,
             missionId,
-            taskId: candidate.taskId,
-            role: 'worker',
-            contextPackageId: context.packageId
-          })
-          contracts = { agentSpecId: agent.id, contextPackageId: context.packageId }
+            candidate.taskId
+          )
         } catch (error) {
           if (!(error instanceof AgentFactoryError) || error.code !== 'no_eligible_provider') {
             throw error

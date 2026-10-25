@@ -109,7 +109,7 @@ test('M2 exit: Planner, parallel Workers, crash retry and immutable submission f
       expect(failed).toBeDefined()
       expect(JSON.parse(failed.after!)).toMatchObject({
         reason: 'process_exited',
-        evidence: 'shell_foreground'
+        evidence: process.platform === 'win32' ? 'shell_foreground' : 'exit_code'
       })
       expect(restarted).toBeDefined()
       expect(failed.sequence).toBeLessThan(restarted.sequence)
@@ -166,7 +166,7 @@ test('M2 exit: Planner, parallel Workers, crash retry and immutable submission f
         expect(candidate.treeSha).not.toBe(baseTree)
         expect(submission.candidateId).toBe(candidate.id)
         expect(submission.report.summary).not.toBe('')
-        expect(submission.report.artifacts).toHaveLength(1)
+        expect(submission.report.artifacts).toHaveLength(process.platform === 'win32' ? 1 : 2)
         expect(settled.verification.filter((v) => v.candidateId === candidate.id)).toHaveLength(1)
         expect(settled.verification.find((v) => v.candidateId === candidate.id)).toMatchObject({
           taskId: binding.task_id,

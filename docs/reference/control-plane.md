@@ -69,7 +69,7 @@ Milestone 存在 Plan JSON 内，没有独立表/状态机。Attempt 身份仍�
 
 ### ContextPackage（M2-02）
 
-`plane.artifacts` 与 `plane.contextBuilder` 已由 Scheduler、launcher、submit 服务复用。Artifact id = `art_` + sha256(canonical `{missionId,kind,sha256}`)；相同 Mission/kind/bytes 返回既有元数据（首次 related/createdBy 不被重写），跨 kind/Mission 共用内容文件。先写 `.tmp-<random>` 再 rename；read 重新检查 hash/size，缺文件或不匹配返回 `artifact_corrupt`。put 上限 8 MiB；RPC 用 `contentBase64`，CLI `mission artifact put --attempt <id> --mission … --kind … --file …` 在本机读文件；Worker 上传必须绑定 Attempt，出处与关联由宿主填写（D78，见调用方权限节）。read 的 `--json` 保留 base64，文本输出按 UTF-8；list 支持 kind 和单一 related id。
+`plane.artifacts` 与 `plane.contextBuilder` 已由 Scheduler、launcher、submit 服务复用。Artifact id = `art_` + sha256(canonical `{missionId,kind,sha256}`)；`createdBy=attempt:<id>` 的 Artifact 另外把 createdBy/related 纳入身份，以保留相同内容在不同 Attempt 的出处。相同身份重复 put 返回既有元数据，跨 kind/Mission/Attempt 共用内容文件。先写 `.tmp-<random>` 再 rename；read 重新检查 hash/size，缺文件或不匹配返回 `artifact_corrupt`。put 上限 8 MiB；RPC 用 `contentBase64`，CLI `mission artifact put --attempt <id> --mission … --kind … --file …` 在本机读文件；Worker 上传必须绑定 Attempt，出处与关联由宿主填写（D78，见调用方权限节）。read 的 `--json` 保留 base64，文本输出按 UTF-8；list 支持 kind 和单一 related id。
 
 ContextBuilder 固定强制顺序：(1) Task spec；(2) PlanRevision revision/milestone/带邻居标题的入出边；(3) ACCEPTED Decisions；(4) 权限、Mission/Task 预算、并发、重试与 `axiom-submission-v1` 字段清单；(5) 目标分支的 AGENTS.md/CLAUDE.md，各最多 16 KiB（缺文件省略，读失败不静默忽略）；(6) policy 验证命令；(7) Previous-Attempt failure evidence（M3-04，见下）。只读这两个规则文件，不读工作区版本或 `.env*`。
 
@@ -82,7 +82,7 @@ candidate baseline 的第 7 节按以下顺序渲染，source 为 `verification:
 3. `result: fail` 的 checks，按 index 升序：command、exitCode、最多 20 个失败名、verdict evidence Artifact（`verdictDetail.verdictArtifactId`）中对应 index 的 excerpt。每项摘录最多 40 行，全部摘录合计最多 8 KiB UTF-8，不截断多字节字符；用尽时标明省略。Artifact 缺失、读取/解析失败或找不到该项时写 `excerpt unavailable`，不阻止重试。
 4. `verdictDetail.diff` 中的 scope violations、secret findings（仅路径与模式名）、dangerous changes（路径与模式）。越界路径带明确的 remove/revert 指令：scope 对 merge-base 比较，留在树里会再次失败。
 5. Task 的全部 acceptanceCriteria，列在 `Not yet demonstrated` 下；逐条判定留给 M3-04b。
-6. 上一 Submission 的 transcript Artifact id 与 `axiom mission artifact read --artifact <id>` 配方（存在时）。与 `attempt show` 共用导出的 `findSubmissionTranscriptArtifactId`，不内联 transcript。
+6. 上一 Submission 的 transcript Artifact id（存在时）；`axiom mission artifact read --artifact <id>` 配方只给 terminal fallback，headless 不给 CLI 指令。与 `attempt show` 共用导出的 `findSubmissionTranscriptArtifactId`，不内联 transcript。
 
 只读已存 run、verdict Artifact、Task spec 与 transcript 元数据，不重跑检查、不读取 Worker 当前输出。相同输入得到相同 package id；run id 变化会改变 source 与 package id。
 
@@ -90,7 +90,7 @@ candidate baseline 的第 7 节按以下顺序渲染，source 为 `verification:
 
 规则与候选在纳入前脱敏：PRIVATE KEY 块、指定 provider token 前缀（兼容 hyphen/underscore）和 AKIA key 替换为 `[REDACTED]`；规则先脱敏再截断。候选的敏感部分在 omitted 中以 redacted 记录，安全替换文本仍可纳入；section header 标记 redacted。manifest ranked hash 绑定脱敏后的正文；强制 hash 绑定渲染节（第 4 节另含协议）。
 
-canonical manifest 无空白、对象键序固定，保留数组顺序，id = `ctx_` + sha256(canonical)。manifest 与完整 render template 均作为 Artifact 持久化，context row 只保留 JSON manifest/hash/引用。相同输入重复 build 不新增行或文件。模板最后的 `Axiom Worker protocol` 使用 D16 八个 `axiom attempt` verb；launcher 在交付时替换 `{{attemptId}}`；D73 之后模板不含任何凭据（身份由宿主核实）。
+canonical manifest 无空白、对象键序固定，保留数组顺序，id = `ctx_` + sha256(canonical)。manifest 与完整 render template 均作为 Artifact 持久化，context row 只保留 JSON manifest/hash/引用。相同输入重复 build 不新增行或文件。模板最后的 `Axiom Worker protocol` 按执行通道生成：headless 使用文件 Artifact 和最终 JSON report（见 M3-08 节），terminal fallback 保留 D16 八个 `axiom attempt` verb；两种模板的协议都参与 ContextPackage 内容寻址，launcher 在交付时替换 `{{attemptId}}`；D73 之后模板不含任何凭据（身份由宿主核实）。
 
 后续：M3-04b 负责逐条 acceptance、已答 Question 与跨 Attempt 未关闭发现；DEF-4/5 的 skills 与代码知识输入按登记触发点复审。
 
@@ -98,7 +98,7 @@ canonical manifest 无空白、对象键序固定，保留数组顺序，id = `c
 
 AgentFactory.build 接受 worker 的 missionId/taskId/contextPackageId，或 planner 的 missionId/goalRevisionId；引用必须存在且归属匹配。ContextPackage 是输入，不由 Factory 创建。主机安装集合由注入的 listInstalledProviders 提供，Control Plane 注入 detectInstalledAgentsWithShellPathHydration；此处不新增认证探测或网络调用。
 
-执行身份由 provider（harness）、model 与 endpointProfile 组成。D57 的允许清单在 `src/main/axiom/agent-factory/certified-providers.ts` 的 `CERTIFIED_PROVIDER_COMBOS`；V1 只有下列四个组合，`endpointProfile` 均为 `subscription`（用户在 harness 中已有的登录或自行配置），不存储凭据。当前状态均为 `provisional`：D57 的 2026-10-20 修订记录真实 Codex smoke 未产出提案（目录信任阻塞）；D58 已 ACCEPTED（B structured/app-server 首选、A exec 后备），真实 provider 认证仍待通道实施与权限映射。D49 测试通过不认证真实组合；后续逐组合补宿主 evidence，证明收到 preamble → `axiom attempt inform` → 产出候选 → 合法 `axiom attempt submit`，再改为 `certified`；V1 出口前所有用到的组合必须完成认证。
+执行身份由 provider（harness）、model 与 endpointProfile 组成。D57 的允许清单在 `src/main/axiom/agent-factory/certified-providers.ts` 的 `CERTIFIED_PROVIDER_COMBOS`；V1 只有下列四个组合，`endpointProfile` 均为 `subscription`（用户在 harness 中已有的登录或自行配置），不存储凭据。当前状态均为 `provisional`：D57 的 2026-10-20 修订记录真实 Codex smoke 未产出提案（目录信任阻塞）；D58 的 2026-10-25 修订按 D82 ③ 选择 Worker headless exec，Planner 保持原通道；M3-08 实施 Codex 通道，真实 provider 认证仍待宿主证据。D49 测试通过不认证真实组合；后续逐组合按 D57 当前通道补宿主 evidence，Codex Worker 证明 stdin prompt → 沙盒执行 → exit-code → 宿主 Submission，terminal fallback 证明 preamble/CLI 通道，再改为 `certified`；V1 出口前所有用到的组合必须完成认证。
 
 | Provider | 模型选择方式 | Tier | 角色 | 最高风险 |
 |---|---|---|---|---|
@@ -192,7 +192,7 @@ HEAD 验证完成后、构造 WorkerStartParams 之前，Worker launcher 重新�
 
 Worker 的 `attempt.started`、`attempt.start_unknown`、receipt 后的 `attempt.launch_failed` 在既有 after 字段中增加 `baseline: {kind, reason?, candidateId?, commitSha?}`；发生重开时增加 `orcaTaskReopened: true`。receipt 前的异常审计也保留已解析的 baseline 与已完成的重开标记，message 仍脱敏。
 
-只有显式配置 `routing.models[provider]`（AgentSpec 的 `model !== 'policy-default'`）时，launcher 才同时传 `model` 和 `reasoning.effort`；`reasoning.effort` 仅在此时生效。`policy-default` 时两者都省略，使用 provider 自身配置的模型与推理设置，避免内核拒绝 `--effort` 未配 `--model` 的组合。
+terminal fallback 只有显式配置 `routing.models[provider]`（AgentSpec 的 `model !== 'policy-default'`）时，launcher 才同时传 `model` 和 `reasoning.effort`；`reasoning.effort` 仅在此时生效。`policy-default` 时两者都省略，使用 provider 自身配置的模型与推理设置，避免内核拒绝 `--effort` 未配 `--model` 的组合。
 
 `timeoutMs = resolveWorkerStartReadinessTimeoutMs(undefined)`（当前 60,000ms）只限制 readiness wait；Attempt runtime cap 由 M2-08 按 admission 的 `created_at` 和 Task spec / Mission policy 预算执行。`ready` 保持 RUNNING；`failed` 经 M2-08 的共享 settlement 走 RUNNING → NEEDS_FIX → READY；预算耗尽则 NEEDS_FIX → BLOCKED (`retry_budget_exhausted`)；`outcome_unknown` 保持 RUNNING，交 M2-08。dispatch 铸造前抛错时保留 NULL binding，记录经脱敏的失败 message，按同一重试规则转 stage。未绑定的读投影为 LAUNCH_PENDING；M2-08 已接入该状态与 START_UNKNOWN 的恢复及 NEEDS_FIX → READY。
 
@@ -237,6 +237,20 @@ Recovery 扫描所有 planner bindings：未提案的 terminal worker 或确定 
 
 M2 之后：D58 解决真实 Planner 通道/目录信任与权限映射；M3 复审 DEF-4/5，Planner v2 与 replanning 留 M5。
 
+### Headless Worker（M3-08；D82 ③ / D58 / D63）
+
+macOS / Linux 的 Codex Worker 默认走 `channel=headless`、`posture=headless-sandboxed`；Planner、其他 provider 与 Windows 保持现有 terminal 路径，Worker fallback 审计为 `channel=tui`、`posture=tui-bypass`。这不代表真实 provider 已认证，也不创建 Axiom 管理的 CODEX_HOME（M3-08c）。
+
+`execution/headless-worker-command.ts` 通过既有 Codex executable resolver 或 `agentCmdOverrides.codex` 选可执行文件；不调用 shell 的 codex function。命令为 `exec --json --color never -s workspace-write -c sandbox_workspace_write.network_access=false -c approval_policy="never" -C <worktree> -o <attemptDir>/last-message.md [model/effort] -`。model/effort 使用现有 option catalog；policy-default 省略 model，effort 仍来自 AgentSpec。prompt 从 `<attemptDir>/prompt.md` 重定向到 stdin，argv/audit 不含 prompt 内容。`<userData>/axiom/attempts/<attemptId>/` 是 worktree 外的宿主目录，保存 prompt、launch.json（基线 commit / branch / worktree binding）、events.jsonl、last-message.md 与 exit-code；worktree 的 `.axiom/prompt.md` 是相同 prompt 的恢复副本。context 被压缩后，Worker 必须先重读该文件。
+
+D14 service-only `controlPlane.headless.prepare(dispatchId)` 在 dispatch 创建后、terminal spawn 前绑定 Attempt 并准备命令，RPC 不能请求该字段。强制 terminal mode，复用 `createTerminal({command, env})`，跳过 startupAgent/default args、交互 readiness 与 preamble paste。POSIX wrapper 用 tee 保存 JSONL，读取 `PIPESTATUS[0]`，临时文件 rename 发布 exit-code，再保持 shell 存活直到既有 D76 release；spawn 后即 ready。dispatch/custody/prepareStartingWorkerAuthority 与 PTY liveness 仍由内核负责，没有第二套进程生命周期。
+
+`execution/attempt-exit-submission.ts` 的串行队列与 CLI submit 共用。launch 后的 250 ms exit-file watcher 和恢复对账调用同一幂等入口；重启只凭持久 exit-code 结算，不对 headless Attempt 使用 D59 shell-foreground 证据。host 鉴权重新核对当前 dispatched dispatch、RUNNING Task、最新 binding、Mission/Run 与 worktree/branch。exit 0 且最终 fenced JSON 通过 `HeadlessSubmissionReportSchema` 时进入原 Submission transaction；schema 省略宿主计算的 filesChanged，artifacts 改为 `.axiom/artifacts/` 下的 path/kind/mediaType。路径必须解析到该目录内的普通、单链接文件，单个 Artifact 上限仍为 8 MiB。宿主把最终 report 存为 worker_report，并把所有 Worker Artifact 归属为 `createdBy=attempt:<id>`、`related=[taskId,attemptId]`。
+
+headless `snapshotCandidate` 使用临时私有 Git index，排除 `.axiom/`，不会删除已有 index.lock；commit-tree + 带旧值检查的 update-ref 只写 Attempt branch，并以空 hooksPath 禁用 hooks。filesChanged 从 launch baseline 到 Candidate commit 的 Git diff 计算。后续 Candidate / Submission / VerificationRun transaction、transcript archive 与 release 沿用现有实现，Worker 报告仍不等于独立验证。
+
+非零退出、缺报告、非法报告或非法 Artifact 通过 `settleAttemptWithoutSubmission` 处理。audit 保存 exitCode、脱敏 lastError / lastMessageExcerpt、reportError（适用时）及 D68 `settlement.kind`：无可识别 JSON event 或配额/认证错误为 interrupted，其他为 failed；重连 error 行本身不阻止有效成功报告。events 跳过未知类型和非 JSON 行，错误优先取 turn.failed.error.message，否则取最后 error.message；thread.started.thread_id 记为 providerSessionId，最后一次 turn.completed.usage 的数值原样记录，不累加事件、不把 cached/reasoning 重复加到 input/output。本任务增加 D68 退出分类与证据，复用现有 settlement 的 retry / attemptCount 规则；没有在此实现独立中断预算、退避或 provider fallback。
+
 ### Recovery（M2-08）
 
 `RecoveryService.recover()` 保留同步 Mission report；独立的 `async reconcileAttempts({missionId?})` 处理 Attempt。每次重新读取 binding、Task stage、worker/dispatch 与执行宿主观测；仅保存进行中的 Promise，重叠调用等待前一轮后重读持久状态。扫描非终态 Task 的 bindings，加上仍活跃的 kernel worker 对应 binding；CANCELED Task 的已结算资源也重查，补齐 kernel commit 与 release/audit 之间的崩溃窗口。旧 seq 不得结算最新 RUNNING admission。
@@ -248,7 +262,7 @@ M2 之后：D58 解决真实 Planner 通道/目录信任与权限映射；M3 复
 | a | starting/stopping 的 runtime_epoch 不同于当前 runtime：先 markWorkerStartUnknown / markWorkerStopUnknown，再 inspectWorkerTerminal | 保持 Task；后续按实际宿主 liveness 处置 |
 | b | RUNNING、worker failed/stopped/abandoned、无 Submission | 共享 settlement；failed 且无既有 attempt.failed 时，在同一 recovery_terminal 事务内先补 attempt.failed{reason: kernel_failed, lastError: worker.last_error ?? null}，再 settlement；重复 tick 不追加。放弃已提交而 Axiom consequence 未提交时，从关联 evidence Artifact 补回 attempt.abandoned；stopped / abandoned 其余行为不变，kernel-first stop 的补审计不在本次范围 |
 | c | RUNNING、活跃 worker（stop_unknown 除外）、宿主明确 exited：failDispatch(workerProcessExited=true, terminationReason=process_exited) | attempt.failed{reason: process_exited} → RUNNING → NEEDS_FIX → READY/BLOCKED |
-| c′（D59；M2-12 attempt 2 修正证明来源） | inspectWorkerTerminal.status=live、exact=true、terminal 非 null（PTY 通道）、worker.state=ready（preamble readiness 已结算），且 confirmTerminalShellForeground(terminal.handle) 返回 true：执行宿主的新鲜前台进程名是 shell（isShellProcess），经 controller.confirmForegroundProcess 读取，方法缺失时回退 getForegroundProcess。每 tick 一次新证明，不缓存、不计数；SSH 返回 null（访问器返回 false）、structured 无 terminal，均不适用 | 对账 entry.liveness 折叠为 exited，沿用 c 的 failDispatch 与重试，attempt.failed{reason: process_exited, evidence: shell_foreground}；last_error 为 Worker agent exited without a Submission。Planner 无提案时同样 fail/release，planner.attempt_failed{reason: no_proposal, evidence: shell_foreground}，沿用该次证明、不重探测，后续 tick 保留该审计 |
+| c′（D59；M2-12 attempt 2 修正证明来源） | 仅 terminal fallback / Planner：inspectWorkerTerminal.status=live、exact=true、terminal 非 null（PTY 通道）、worker.state=ready（preamble readiness 已结算），且 confirmTerminalShellForeground(terminal.handle) 返回 true：执行宿主的新鲜前台进程名是 shell（isShellProcess），经 controller.confirmForegroundProcess 读取，方法缺失时回退 getForegroundProcess。每 tick 一次新证明，不缓存、不计数；SSH 返回 null（访问器返回 false）、structured 无 terminal，均不适用 | 对账 entry.liveness 折叠为 exited，沿用 c 的 failDispatch 与重试，attempt.failed{reason: process_exited, evidence: shell_foreground}；last_error 为 Worker agent exited without a Submission。Planner 无提案时同样 fail/release，planner.attempt_failed{reason: no_proposal, evidence: shell_foreground}，沿用该次证明、不重探测，后续 tick 保留该审计 |
 | d | live、未命中 c′ 且非 stop_unknown：通常不动；now-createdAt 大于 Task spec.budget.maxRuntimeMinutes（无则 policy.budget.maxRuntimeMinutes，无 cap 不限）时 stopLocalWorker | stopped：attempt.stopped + settlement(runtime_budget_exceeded)；stop_unknown：只在首次停止结果写 attempt.stop_unknown，保持 RUNNING；下一 tick 无论宿主观测如何均走 e |
 | e | unverifiable 或 worker stop_unknown：写 liveness facet 的变化；stop_unknown 固定记 `{status: unverifiable, reason: stop_unknown}`；到 unverifiableToleranceMinutes 后先 put evidence，再 abandonWorkerDispatch | attempt.unverifiable；超时 attempt.abandoned（含 evidenceArtifactId、disposition）+ settlement(unverifiable_tolerance_exceeded)；等待期间不重复 stop、不启动新 Attempt |
 | f | RUNNING、最新 binding.dispatchId=null，超过两倍默认 readiness timeout（当前 120,000ms） | attempt.launch_pending_orphan + settlement；较新 pending 不动 |
@@ -291,7 +305,7 @@ CLI `src/cli/runtime/client.ts` 为 `axiom.*` 打版本戳，为 durable mutatio
 
 CLI JSON 输出是 `{ ok, result, ... }` / `{ ok:false, error:{code,...}, ... }`；单对象 result 用 `mission` / `goalRevision` / `planRevision` / `task`，列表用 `missions` / `planRevisions` / `tasks`。M2-10 的唯一 `MissionSummary` 形状包含 `runId`；可选 `reason` 来自该 Mission 最新一条 `mission.status` 且 `after.status === mission.status` 的审计的 `after.reason`，缺失时省略。所有 Mission RPC（含 mutation 响应）共用 `missionSummary(mission, store)`。TaskListItem 的 `id` 是 Orca Task id，不是提案 id。
 
-### Worker channel（M2-06a/b，D9 / D11 / D16）
+### Terminal fallback Worker channel（M2-06a/b，D9 / D11 / D16）
 
 已注册五个 mutation：`axiom.attempt.inform` / `request` / `blocked` / `handoff` / `request-subtask`。参数为 `{attemptId, from, senderPaneKey?, summary, body?, artifactIds?, related?, subtask?}`；只有 `request-subtask` 接受且必须带 `subtask`。严格 schema 不接受 `to`、自报 `type` 或 Mission/Task 身份。summary 与可选 body 各 ≤ 2,000 字符；较长内容先 `axiom mission artifact put`，再引用 Artifact id。`artifactIds` / `related.artifactId` 必须属于同 Mission，显式 `related.taskIds` 必须属于同 Mission，否则 `invalid_argument`，不写消息或审计。
 
@@ -312,7 +326,9 @@ CLI `axiom attempt <verb> --attempt <id> --summary <text>` 支持 `--body` / `--
 
 M2 之后：M3 复用 typed channel 投递验证证据；D58 的执行通道不能绕过身份 / 进程代次栅栏（D73）。
 
-### Submission settlement（M2-07，D2 / D4 / D11 / D16）
+### Submission settlement（M2-07 / M3-08，D2 / D4 / D11 / D16）
+
+headless 宿主入口与下述 terminal fallback CLI 入口复用 caller-independent `settleSubmission` transaction；CLI 仍执行原调用方身份检查，host 使用当前 dispatch/binding 检查，参见 M3-08 节。下面的 CLI 命令与普通索引快照描述用于 terminal fallback。
 
 `axiom.attempt.submit` 已注册为 mutation，参数 `{attemptId, from, senderPaneKey?, report}`，Task/Mission 从 binding 解析，不能由 Worker 自报；响应 `{submission, candidate, duplicate}`。报告严格要求 summary（≤4,000）、filesChanged、checksRun（command/result=pass|fail|skipped、可选 durationMs/note）、artifacts、limitations、risks、questions、followUps；拒绝多余字段。每个 Artifact 必须属于同 Mission，且 related 包含 Task 或 Attempt；Artifact 内容先独立上传，本事务只保存引用，不复制内容。
 
