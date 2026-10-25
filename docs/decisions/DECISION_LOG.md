@@ -931,6 +931,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 
 **修订与批准（2026-10-25，已批准：Henry 2026-10-25："可以，我同意"，随 D81；V1 范围按 D82）**：V1 只做 ①②③，落在 M3-08——Axiom 启动的所有角色用 Axiom 管理的配置目录（复用 Orca 账号目录同步、按允许名单过滤、默认空、不继承用户全局安装；钩子单独审查后才可启用；验证环境不加载任何插件），每个 Attempt 在 AgentSpec 记录 requested 与 effective 的完整执行组合（skills / 插件 / MCP / 钩子各带内容 hash，不一致记 `launch_mismatch`）。Skills 页、统计与 skill 建议在 V2（DEF-38）；DEF-4 的完整 Skill Registry 在 V2。
 
+**修订（2026-10-25，D83）**：① 的 effective 组合记在每个 Attempt 的 `attempt.started` 审计里（AgentSpec 按内容寻址、跨 Attempt 共用，不放每次的实际值）；② 的"复用 Orca 账号目录同步、按允许名单过滤"改为 D83 的方法 A（Orca 的同步做不到逐项过滤，而且会写回 `~/.codex`）。
+
 ## D78 · 人做的决定只接受桌面应用这一个调用方（V1）；Agent 会话另加一层拒绝 — ACCEPTED（Henry 2026-10-25："按建议"；验证者 2026-10-25 提议，`claude/fix-plan-v1.md` ①）
 
 **背景**：架构复审（`claude/architecture-progress-review-v1.md` H1）核实：`axiom.plan.approve / reject`、`axiom.policy.update`、`axiom.goal.*`、`axiom.mission.*` 的状态动作、`axiom.task.create / cancel`、`axiom.message.answer / resolve` 都是 `permission: 'workspace'`；Orca 的调用方模型里本机未加戳的调用就是 owner（`rpc-caller-scope.ts`），Worker 终端里的 `axiom` CLI 正是这种调用；处理函数把出处直接写成人（`plan.approve` 用参数里的 `resolver` 记 `provenance.kind = 'user'`，`task.cancel` 与 `question-answer.ts` 写死 `actor: 'user'`）。只有 `axiom.attempt.*` 与带 `attemptId` 的 `plan.propose` 经 D73 核实调用方；`artifact.put` 的 `createdBy` / `related` 也由调用方给。结果：Worker 能回答自己的 QUESTION、批准自己的 REQUEST_SUBTASK、批准计划、改 `verificationRules`（例如清空 `testPathPatterns`），审计里都记成人做的。
@@ -1001,3 +1003,17 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **修订**：D8（重申）、D57、D58、D60、D63、D77、D79；章程 §8 / §9 / §10 / §11 / §12；ARCHITECTURE §13 / §19 / §20 / §21 / §23；M3.md。
 **后果**：V1 成功标准"至少三种 provider"改为两种（Codex、Claude Code，都能担任 Planner 与 Worker），"八种 typed messages"改为经提交报告交付；M3 剩余任务按 M3.md "V1 精简后的 M3" 重排，M3-07 移出 V1；M4 按第 6 条写计划；DEF-32–DEF-40 登记。粗估 V1 剩余约 15 个任务、2–2.5 周。
 **取代规则**：以修订行记录；V1 验收前复审被移出的各项。
+
+## D83 · Agent 账号目录改用 Axiom 的做法（方法 A）：登录沿用 Orca 的账号系统，账号目录由 Axiom 单向配置、按允许名单启用，按 harness 适配器逐个迁移 — ACCEPTED（Henry 2026-10-25："同意你的意见"；验证者 2026-10-25 提议）
+
+**背景**：M3-08 合入后查实（只读代码梳理）：无界面 Worker 用的是用户当前选中的 Codex 账号目录（系统默认时就是 `~/.codex`），连同其中全部 skills / 插件 / MCP / 钩子；Orca 的账号目录做法是"同一套配置换个账号用"——软链 `~/.codex` 的资源目录、`config.toml` 双向同步并写回 `~/.codex`，做不到逐项过滤；复制 `auth.json` 会因刷新令牌轮换让原登录失效（Codex 官方：同一份 `auth.json` 不能被并发任务刷新）。Henry 不要两套登录，也担心账号信息外传——核实：登录是本机运行的官方 CLI，凭据存在本机；通往 Orca 团队的通道在 M0 已全部关闭并有测试（D25、D37 / D38、D40，`src/shared/product-egress-policy.ts`）。
+**决定**：
+1. **一套登录**：继续用 Orca 的账号系统登录与管理令牌（官方 `codex login`、刷新、额度）；去掉"系统默认（直接用 `~/.codex`）"选项，第一次在 Axiom 设置里登录一次。
+2. **账号目录由 Axiom 布置（方法 A）**：配置由 Axiom 单向写入；skills / 插件 / MCP / 用户钩子按允许名单启用，默认空；不软链 `~/.codex` 的资源，不写回 `~/.codex`。用户自己在 Workbench 开的会话也按这份名单；Mission 的 agent 再按 policy 收窄（有外部副作用的默认拒绝，钩子单独审过才可启用）。Axiom 自己的状态钩子是产品代码，交互会话保留，无界面 agent 不装。
+3. **令牌**：同一账号目录被多个进程共用；启动 agent 前若令牌临近刷新，先在 Orca 已有的目录锁下刷新一次。
+4. **记录**：每个 Attempt 在 `attempt.started` 审计里记录 requested 与 effective 的执行组合（harness 版本、配置 hash，skills / MCP / 插件 / 钩子各带内容 hash），不一致记 `launch_mismatch`。
+5. **按 harness 适配器迁移**：每个 harness 一个适配器——指向 Axiom 管理的目录、凭据位置、最小配置与允许名单、列出实际启用项并算 hash。V1 做 Codex（M3-08c）与 Claude Code（M3-08b）；没迁移的 harness 在用户终端里保持 Orca 现有做法，不能承担 Attempt（D57）；Antigravity 随 DEF-37 迁移，其余见 DEF-42。
+6. **外联验证**：M3-08c 之后的真实 Codex 冒烟同时录制运行期间全部出站连接，只允许 OpenAI 的域名（V1 成功标准"不向原厂端点发请求"提前验证）。
+**理由**：一套登录、一份凭据；配置显式、可审计；不再改用户的 `~/.codex`；适配器隔离各 harness 的差异。
+**后果**：Orca 的 Codex 账号代码与上游分叉（D56：只摘安全与 provider 修复）；WSL 账号随 Windows（V1.x，D67）再迁移；D77 加修订行；M3-08c 按本条重写；DEF-42 登记。
+**取代规则**：以修订行记录。

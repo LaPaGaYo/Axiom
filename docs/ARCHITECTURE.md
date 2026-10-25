@@ -585,7 +585,7 @@ Human approves risk, not routine
 
 ## 23. V1 精简与之后的路线（D82、D81）
 
-**V1（D82）**：Planner 是对话、只能提议；Worker 是黑盒（无界面一次性运行、沙盒、退出时由宿主提交）；验证是白盒（确定性检查，`INCONCLUSIVE` 交人）；串行合入 + 集成树回归；一次交付批准，交付即 PR；两种 provider（Codex、Claude Code，都能当 Planner 与 Worker，可交叉搭配）；replan 只由人发起；不接 Jev。
+**V1（D82）**：Planner 是对话、只能提议；Worker 是黑盒（无界面一次性运行、沙盒、退出时由宿主提交）；验证是白盒（确定性检查，`INCONCLUSIVE` 交人）；串行合入 + 集成树回归；一次交付批准，交付即 PR；两种 provider（Codex、Claude Code，都能当 Planner 与 Worker，可交叉搭配）；replan 只由人发起；不接 Jev；agent 账号目录由 Axiom 单向配置、按允许名单启用，登录沿用 Orca 的账号系统（D83）。
 
 **之后（D81）**
 

@@ -39,11 +39,12 @@
 | DEF-34 | PR 交付与仓库真实 CI | **已排进 V1**：交付即 PR，仓库 CI 与审查是最后一道关（D82 第 6 条，M4） | D81、D82 | SCHEDULED (M4) |
 | DEF-35 | 自主度阶梯：按仓库 × 范围 × 任务类型 × 风险授予（出 PR 由人审 / 低风险自动合并 / 中风险自动合并 + 回滚），升级经 Approval，以 DEF-33 的指标为门槛 | **V2 规划时**（中风险一档在 V3） | D81 | OPEN |
 | DEF-36 | replan 自动分级：规则或 DecisionEngine 把事件分为 `NO_REPLAN / MINOR_ADJUSTMENT / MAJOR_REPLAN` 并自动进入 `REPLANNING`；V1 只有人发起的 MAJOR_REPLAN | **V2 规划时** | D8 修订、D81 | OPEN |
-| DEF-37 | 第三种 provider：Antigravity（`agy`）作为 Worker 接入无界面运行器——先半天探查后台模式与沙盒 / 权限标志，再做适配器与认证；不行则 OpenCode | **V1 验收通过后第一件事** | D57、D82 | OPEN |
+| DEF-37 | 第三种 provider：Antigravity（`agy`）作为 Worker 接入无界面运行器——先半天探查后台模式与沙盒 / 权限标志，再做适配器与认证；不行则 OpenCode | **V1 验收通过后第一件事** | D57、D82 | OPEN；2026-10-25：接入时按 D83 做账号目录适配器 |
 | DEF-38 | Jev 的产品用途：① 失败归因（环境 vs 候选），先只给建议，校准达标后才影响重试；② 任务特征，供按数据选 agent；③ skill 建议与 Skills 页（D77 ⑥）。校准从现在起在开发流程里做（`.axiom-work/jev` 判断的 `human_verdict` 标签） | ① **V1.5**，开发流程里攒够几十条有标签样本且校准达到事先定的门槛；②③ **V2** | D60、D81、D82 | OPEN |
 | DEF-39 | 干活中途的交互：Worker 实时消息与交接（`INFORM` / `HANDOFF` / `REQUEST_SUBTASK` 等）、审批桥、人工接管正在跑的 Attempt、LLM 监工 | **V2 规划时**，或出现真实需要时 | D58、D63、D82 | OPEN |
 | DEF-40 | LLM Reviewer：语义审查，只给建议，确定性 FAIL 不可推翻 | **V1.5**，误放行数据显示需要时 | D66、D82 | OPEN |
 | DEF-41 | 证据驱动的多 agent 辩论：论据来源独立性校验（按证据 ID / 内容 hash 去重，加上不同厂商的模型、第一轮互不可见）；同源论点合并为一份权重，核对不了的说法不计分；每轮强制引入一条 Control Plane 能重跑或核对的新证据（复现命令、新测试、带 hash 的日志、bisect 结果）；推翻优先用可执行的反例，执行不了的交给人或 Jev 的窄问题，不让模型自由投票；按证据链完整性收敛，预算用完交人；确定性 FAIL 不可推翻。场景按价值：竞争实现（DEF-23）、失败归因、计划评审与代码审查（DEF-40） | **V1.5 试点**：高风险任务上的竞争实现、部分任务上的双厂商审查，用误放行率与成本对比单 agent；**V2** 按数据在有效的场景启用 | Henry 2026-10-25（"可以，先登记"）、D81 | OPEN；2026-10-25：计划推演（DEF-10 ①）是 V1.5 试点场景之一——批准计划前几个角色各自挑错并推演“某 provider 停服 / 某任务连败三次 / 预算减半”，风险报告附在计划卡上，只给建议 |
+| DEF-42 | 其余 harness 的账号目录迁移（D83 ⑤）：Cursor、Grok、OpenCode、Gemini、Amp、Droid 等按 D83 的适配器形态逐个迁移——指向 Axiom 管理的目录、凭据位置、最小配置与允许名单、列出实际启用项并算 hash；迁移前在用户终端里保持 Orca 现有做法，不能承担 Attempt；WSL 账号随 Windows（V1.x，D67） | 某个 harness 要承担 Attempt 时（随 D57 认证）；Antigravity 随 DEF-37 | D83 | OPEN |
 
 ## M2 出口核对（2026-10-20，D61）
 
@@ -152,3 +153,7 @@ D33 加修订行：设置 › Axiom Account 整节隐藏（`CLOUD_ACCOUNT_AVAILA
 ## 2026-10-25 记忆、上下文、skills 与 MiroFish 借鉴的分期（Henry："我们之前从context-mode和openviking吸取的长处，包括给skills打补丁的计划好像没在里面"；Henry 2026-10-25："可以，补进计划文档"）
 
 2026-10-21 的吸收（`claude/memory-rsi-review-v1.md`：context-mode、OpenViking / VikingMem、Anthropic Dreams、HarnessPro、darwin-skill）和 DEF-10 的 ①②⑤（`claude/external-projects-review-v1.md` §4）在 D82 精简时没有带进路线，两个 V1 钩子（token 用量、压缩后恢复）也一直没做。按版本计划重排：DEF-4 / DEF-10 / DEF-17 / DEF-18 / DEF-33 / DEF-41 各加修订行；D62 与 D81 加修订行；ARCHITECTURE §23 的 V1.5 / V2 / V3 行补上对应条目；M3.md 的 M3-08 行写明两个钩子（brief 已改，`7dcf576123`）。
+
+## 2026-10-25 Agent 账号目录（D83；Henry 2026-10-25："同意你的意见"）
+
+新增 **DEF-42**（其余 harness 的账号目录迁移）；DEF-37 的 Antigravity 接入同时按 D83 做适配器。
