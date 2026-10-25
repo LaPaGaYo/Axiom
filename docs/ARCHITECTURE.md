@@ -591,11 +591,11 @@ Human approves risk, not routine
 
 | 阶段 | 内容 | 条件 |
 |---|---|---|
-| V1.5 Axiom 开发 Axiom | 评测集与误放行率（DEF-33）、仓库环境配置、第三种 provider（DEF-37）、Jev 失败归因（DEF-38 ①）、按需的 LLM Reviewer（DEF-40）、证据驱动的多 agent 辩论试点（DEF-41）、仓库经验文件 | V1 验收通过 |
-| V2 真实项目试用 | 按数据选 agent 与 skill 建议（DEF-38 ②③）、在有效场景启用多 agent 辩论（DEF-41）、自主度阶梯（DEF-35）、replan 自动分级（DEF-36）、多项目、容器 / VM 隔离；团队与记忆视数据而定（DEF-32）；干活中途的交互视需要（DEF-39） | V1.5 的指标达标 |
-| V3 自主维护 | 事件触发的维护、中风险自动合并与回滚、Control Plane 无界面常驻、多人、手机端 | 视 V2 的指标 |
+| V1.5 Axiom 开发 Axiom | 评测集与误放行率（DEF-33，含模拟 Worker 压测 DEF-10 ⑤）、仓库环境配置、第三种 provider（DEF-37）、Jev 失败归因（DEF-38 ①）、按需的 LLM Reviewer（DEF-40）、证据驱动的多 agent 辩论试点（DEF-41，含计划推演 DEF-10 ①）、仓库经验文件与 Lesson / 整合运行（DEF-17，含 Mission 记忆图 DEF-10 ②）、记分卡成本轴与 pass^k（DEF-18） | V1 验收通过 |
+| V2 真实项目试用 | 按数据选 agent 与 skill 建议（DEF-38 ②③）、在有效场景启用多 agent 辩论（DEF-41）、自主度阶梯（DEF-35）、replan 自动分级（DEF-36）、多项目、容器 / VM 隔离、Skill Registry 与 skill 补丁（DEF-4）、harness 选档与定时整合（DEF-18 / DEF-17）；团队与成员记忆视数据而定（DEF-32）；干活中途的交互视需要（DEF-39） | V1.5 的指标达标 |
+| V3 自主维护 | 事件触发的维护、中风险自动合并与回滚、Control Plane 无界面常驻、多人、手机端；参数化内化视 V2 数据（DEF-17） | 视 V2 的指标 |
 
-原则：证据高于说法；模型提议、Control Plane 决定、人授权；不绑定模型或 harness；自主度按范围、凭指标挣来。
+原则：证据高于说法；模型提议、Control Plane 决定、人授权；不绑定模型或 harness；自主度按范围、凭指标挣来；记忆、skills 与 harness 可以进化，规则（权限、必需检查、审批、合入顺序）不进化。
 
 ---
 

@@ -681,6 +681,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 
 **修订（2026-10-25，D82）**：V1 的 Worker 姿态 = 沙盒 `workspace-write`、不弹审批、网络关闭，没有审批桥（DEF-39）；bypass 只作 policy 显式后备并写进 provenance；`repositoryTrust: third_party` 的规则不变。
 
+**修订（2026-10-25，记忆与 skills 分期，DEF-17 / DEF-18）**：2026-10-21 的零成本钩子按 D82 重排——token 用量改从 Codex 的 JSON 事件取（无界面 Worker 不走通道 B 的 `thread/tokenUsage/updated`），连同 provider 会话 id 记进提交或结算审计，进 M3-08；`axiom attempt recap` 不做，改为任务说明在 worktree 里留一份、无界面说明要求压缩后先重读（M3-08）；M3-04 的失败证据注入（verdict 一行、失败检查名、有界摘录）已落地；Reviewer 顺手产出 `lesson` Artifact 随 D82 移出 V1，归 V1.5 的 Lesson / ConsolidationRun（DEF-17）。
+
 ## D64 · 修复 Attempt 的分支基线与验证 worktree 生命周期 — ACCEPTED（Henry 2026-10-20："先把手上需要开发的做完"，验证者 2026-10-20 提议）
 
 **决定**：① NEEDS_FIX 之后的 seq N+1（`kind: fix` 或验证失败后的重试）从**上一 Candidate commit** 建分支 `axiom/attempt/<taskId>/<N+1>`，preamble 明示"继续上一候选树"（fixture S4 的语义）；FAILED / ABANDONED / launch 失败的重试仍从集成基线重来（既有行为）。② 验证 worktree 由 Control Plane 经 Orca worktree service 创建，detached 检出 Candidate commit，路径 `<userData>/axiom/verification/<runId>`，带 Axiom 标记不进 renderer 的 worktree 列表，验证结束（任何 verdict）即回收；重启时孤立的验证 worktree 按 runId 回收。③ Candidate diff 的比较基线 = 该 Attempt 的分支基线（集成基线或上一 Candidate），记录在 verdictDetail。
@@ -980,6 +982,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **理由**：三件事是同一闭环的三个面（谁来做、用什么做、凭什么信它）；分开设计会各自长出状态与评分体系。
 **后果**：DEF-15 以本条关闭；ARCHITECTURE §23。
 **取代规则**：每个阶段开始前出里程碑计划并复审本条。
+
+**修订（2026-10-25，记忆与 skills 分期；Henry 2026-10-25："可以，补进计划文档"）**：第 6 条的 V1.5 加 Lesson 与整合运行（DEF-17，含 Mission 记忆图 DEF-10 ②）、记分卡成本轴（DEF-18）、计划推演（DEF-10 ①，随 DEF-41 试点）与模拟 Worker 压测（DEF-10 ⑤，随 DEF-33 评测）；V2 加 Skill Registry 与 skill 补丁（DEF-4）、harness 选档与定时整合（DEF-18 / DEF-17）；参数化内化视 V2 数据；V1 只有 M3-08 的两个钩子（token 用量、压缩后重读任务说明）和 M4 证据驱动的完成报告（DEF-10 ④）。系统可以改进自己的记忆、skills 与 harness，永不改自己的规则（权限、必需检查、审批、合入顺序不在进化范围内）。
 
 ## D82 · V1 精简：Worker 当黑盒、验证当白盒，交付即 PR，两种 provider；实时消息、审批桥、LLM 审查与监工、Jev、第三种 provider 移出 V1 — ACCEPTED（Henry 2026-10-25："可以，我同意你对V1精简的建议"；验证者 2026-10-25 提议，独立复审代理结论一致）
 
