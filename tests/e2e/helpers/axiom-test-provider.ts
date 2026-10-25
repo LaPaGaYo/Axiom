@@ -2,7 +2,7 @@ import { FAKE_AGENT_PASTE_END_SCANNER_SOURCE } from './fake-agent-paste-end-scan
 
 /** D49: capture the preamble; the submit spec supplies a compiled CLI to run the frozen stub. */
 export const AXIOM_TEST_PROVIDER_SOURCE = `
-const { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs')
+const { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs')
 const { createHash } = require('node:crypto')
 const { spawn, spawnSync } = require('node:child_process')
 const path = require('node:path')
@@ -20,15 +20,22 @@ function cli(args) {
   try { response = JSON.parse(result.stdout) } catch { response = { ok: false } }
   return { status: result.status, response }
 }
-async function submitFixture(attemptId, missionId, taskId) {
+async function submitFixture(attemptId, missionId, taskId, outputPath) {
+  const headless = Boolean(outputPath)
   const deadline = Date.now() + 60000
-  // Preamble acknowledgment precedes the launcher's binding CAS. Wait for that public identity.
-  let response
-  while (!(response = cli(['attempt', 'show', '--attempt', attemptId]).response).ok) {
-    if (Date.now() >= deadline) throw new Error('Attempt binding timeout')
-    await new Promise(resolve => setTimeout(resolve, 100))
+  let seq
+  if (headless) {
+    while (existsSync(process.env.AXIOM_E2E_LEDGER + '.hold')) await new Promise(resolve => setTimeout(resolve, 50))
+    const branch = spawnSync('git', ['branch', '--show-current'], { cwd: process.cwd(), encoding: 'utf8' })
+    seq = Number(branch.stdout.trim().split('/').at(-1))
+  } else {
+    let response
+    while (!(response = cli(['attempt', 'show', '--attempt', attemptId]).response).ok) {
+      if (Date.now() >= deadline) throw new Error('Attempt binding timeout')
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+    seq = response.result.attempt.seq
   }
-  const seq = response.result.attempt.seq
   const crashMarker = process.env.AXIOM_E2E_LEDGER + '.crash-' + taskId
   if (existsSync(crashMarker)) {
     rmSync(crashMarker)
@@ -36,10 +43,21 @@ async function submitFixture(attemptId, missionId, taskId) {
     const crashed = spawnSync(process.execPath, ['scenarios/stub-worker/worker.mjs', '--scenario', 'agent-crash', '--mode', 'crash', '--cwd', process.cwd()], {
       cwd: process.cwd(), env: process.env, encoding: 'utf8', timeout: 60000
     })
+    if (headless) process.stdout.write(JSON.stringify({ type: 'turn.failed', error: { message: 'Fixture Worker crashed' } }) + '\\n')
     process.exit(crashed.status || 1)
   }
   const scenarioMarker = process.env.AXIOM_E2E_LEDGER + '.scenario-' + taskId
   const scenario = existsSync(scenarioMarker) ? readFileSync(scenarioMarker, 'utf8').trim() : 'retry'
+  if (headless && scenario === 'exit-nonzero') {
+    rmSync(scenarioMarker)
+    process.stdout.write(JSON.stringify({ type: 'turn.failed', error: { message: 'fixture work failed' } }) + '\\n')
+    process.exit(7)
+  }
+  if (headless && scenario === 'bad-report') {
+    writeFileSync(outputPath, 'Invalid final report')
+    process.stdout.write(JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 20, output_tokens: 2 } }) + '\\n')
+    return
+  }
   const tamperProbes = {
     'test-skip': { file: 'date.test.ts', expected: "\\ntest('extended years", replacement: "\\ntest.skip('extended years" },
     'assertion-drop': { file: 'guards.test.ts', expected: '  expect(strings([1])).toBe(false)\\n', replacement: '' },
@@ -48,7 +66,8 @@ async function submitFixture(attemptId, missionId, taskId) {
   const tamper = tamperProbes[scenario]
   if (!tamper && !['retry', 'deterministic-failure', 'agent-crash', 'scope-violation', 'secret-line', 'transcript-secret', 'self-approve'].includes(scenario)) throw new Error('Unknown fixture scenario')
   // Keep both the Worker Artifact and protocol envelope outside the Candidate snapshot.
-  const temp = mkdtempSync(path.join(os.tmpdir(), 'axiom-submit-report-'))
+  const temp = headless ? path.join(process.cwd(), '.axiom', 'artifacts') : mkdtempSync(path.join(os.tmpdir(), 'axiom-submit-report-'))
+  if (headless) mkdirSync(temp, { recursive: true })
   try {
     if (scenario === 'transcript-secret') {
       process.stdout.write('Transcript redaction probe: ' + 'gh' + 'p_' + 'T'.repeat(36) + '\\n')
@@ -97,10 +116,13 @@ async function submitFixture(attemptId, missionId, taskId) {
     reportText += '\\nmission: ' + missionId + '\\ntaskId: ' + taskId + '\\nattemptId: ' + attemptId + '\\n'
     const reportPath = path.join(temp, 'REPORT.md')
     writeFileSync(reportPath, reportText)
-    const artifact = cli(['mission', 'artifact', 'put', '--attempt', attemptId, '--mission', missionId, '--kind', 'worker_report', '--file', reportPath, '--related', taskId])
-    appendFileSync(process.env.AXIOM_E2E_LEDGER, JSON.stringify({ kind: 'artifact', attemptId, ...artifact }) + '\\n')
-    if (!artifact.response.ok) throw new Error('Artifact put failed')
-    const artifactId = artifact.response.result.artifact.id
+    let artifactId
+    if (!headless) {
+      const artifact = cli(['mission', 'artifact', 'put', '--attempt', attemptId, '--mission', missionId, '--kind', 'worker_report', '--file', reportPath, '--related', taskId])
+      appendFileSync(process.env.AXIOM_E2E_LEDGER, JSON.stringify({ kind: 'artifact', attemptId, ...artifact }) + '\\n')
+      if (!artifact.response.ok) throw new Error('Artifact put failed')
+      artifactId = artifact.response.result.artifact.id
+    }
     const changed = spawnSync('git', ['diff', '--name-only', 'HEAD'], { cwd: process.cwd(), encoding: 'utf8' })
     if (changed.status !== 0) throw new Error('Fixture diff failed')
     const report = {
@@ -108,8 +130,15 @@ async function submitFixture(attemptId, missionId, taskId) {
       filesChanged: changed.stdout.trim().split(/\\r?\\n/).filter(Boolean),
       checksRun: [{ command: providerOnly ? 'provider scenario ' + scenario : 'node ' + command.join(' '), result: 'pass', durationMs: Date.now() - started },
         { command: 'fixture verification', result: 'skipped', note: 'Stub Worker; independent verification is queued for M3.' }],
-      artifacts: [artifactId], limitations: ['Fixture stub; no independent verification run by Worker'],
+      artifacts: headless ? [{ path: '.axiom/artifacts/REPORT.md', kind: 'worker_report', mediaType: 'text/markdown' }] : [artifactId], limitations: ['Fixture stub; no independent verification run by Worker'],
       risks: ['Write scope is enforced during M3 verification'], questions: [], followUps: ['VerificationService dequeues QUEUED']
+    }
+    if (headless) {
+      delete report.filesChanged
+      writeFileSync(outputPath, reportText + '\\n\`\`\`json\\n' + JSON.stringify(report) + '\\n\`\`\`\\n')
+      process.stdout.write(JSON.stringify({ type: 'item.completed', item: { id: 'item-1', type: 'agent_message', text: report.summary } }) + '\\n')
+      process.stdout.write(JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 100, cached_input_tokens: 40, output_tokens: 25 } }) + '\\n')
+      return
     }
     const file = path.join(temp, 'report.json')
     writeFileSync(file, JSON.stringify(report))
@@ -117,7 +146,7 @@ async function submitFixture(attemptId, missionId, taskId) {
     appendFileSync(process.env.AXIOM_E2E_LEDGER, JSON.stringify({ kind: 'submission', attemptId, ...submission }) + '\\n')
     if (!submission.response.ok) throw new Error('Attempt submit failed')
   } finally {
-    rmSync(temp, { recursive: true, force: true })
+    if (!headless) rmSync(temp, { recursive: true, force: true })
   }
 }
 function fixtureProposal(tasks, goalRevisionId) {
@@ -160,6 +189,31 @@ if (process.argv[2] === '--planner-submit') {
     process.exit(1)
   }
 }
+if (process.argv[2] === 'exec') {
+  const argv = process.argv.slice(2)
+  const flag = name => argv[argv.indexOf(name) + 1]
+  const outputPath = flag('-o')
+  process.chdir(flag('-C'))
+  const promptPath = path.join(path.dirname(outputPath), 'prompt.md')
+  const prompt = readFileSync(0, 'utf8')
+  const attemptId = prompt.match(/^Attempt: (\\S+)/m)?.[1]
+  const missionId = prompt.match(/^Mission: (\\S+)/m)?.[1]
+  const taskId = prompt.match(/^Task: (\\S+)/m)?.[1]
+  if (!attemptId || !missionId || !taskId || !argv.includes('--json') || flag('-s') !== 'workspace-write') throw new Error('Invalid headless fixture launch')
+  appendFileSync(process.env.AXIOM_E2E_LEDGER, JSON.stringify({
+    cwd: process.cwd(), attemptId, terminalHandle: process.env.ORCA_TERMINAL_HANDLE, paneKey: process.env.ORCA_PANE_KEY,
+    preambleSha256: createHash('sha256').update(prompt).digest('hex'), preambleBytes: Buffer.byteLength(prompt),
+    argv, promptPath, CODEX_HOME: process.env.CODEX_HOME ?? null
+  }) + '\\n')
+  process.stdout.write(JSON.stringify({ type: 'thread.started', thread_id: 'fixture-' + attemptId }) + '\\n')
+  process.stdout.write(JSON.stringify({ type: 'turn.started' }) + '\\n')
+  // The launch-only spec deliberately keeps a live Worker without a submission.
+  if (!process.env.ORCA_E2E_CLI_ENTRY) setInterval(() => {}, 60000)
+  else void submitFixture(attemptId, missionId, taskId, outputPath).then(() => process.exit(0)).catch(error => {
+    process.stdout.write(JSON.stringify({ type: 'turn.failed', error: { message: error.message } }) + '\\n')
+    process.exit(1)
+  })
+} else {
 let delivered = ''
 let recorded = false
 process.stdout.write('\\u001b]0;Codex Ready\\u0007OpenAI Codex\\nmodel: e2e\\ndirectory: e2e\\n')
@@ -210,4 +264,5 @@ process.stdin.on('data', chunk => {
 process.stdin.setRawMode?.(true)
 process.stdin.resume()
 setInterval(() => {}, 60_000)
+}
 `

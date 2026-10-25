@@ -54,7 +54,16 @@ export class ArtifactStore {
     // Own the bytes across awaits; a caller must not change content after its hash is fixed.
     const content = Buffer.from(p.content)
     const hash = sha256(content)
-    const id = `art_${sha256(JSON.stringify({ missionId: p.missionId, kind: p.kind, sha256: hash }))}`
+    const id = `art_${sha256(
+      JSON.stringify({
+        missionId: p.missionId,
+        kind: p.kind,
+        sha256: hash,
+        ...(p.createdBy.startsWith('attempt:')
+          ? { createdBy: p.createdBy, related: p.related }
+          : {})
+      })
+    )}`
     const existing = this.store.getArtifact(id)
     if (existing) {
       return existing

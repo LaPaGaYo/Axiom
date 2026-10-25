@@ -1,4 +1,5 @@
 import { getAxiomControlPlane } from './control-plane'
+import { stopHeadlessAttemptWatchers } from './execution/attempt-exit-submission'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { ATTEMPT_RECONCILE_INTERVAL_MS, type RecoveryReport } from './recovery/recovery-service'
 
@@ -45,6 +46,7 @@ export async function startAxiomControlPlane(
 }
 
 export function stopAxiomControlPlane(runtime: OrcaRuntimeService): void {
+  stopHeadlessAttemptWatchers(runtime)
   const plane = getAxiomControlPlane(runtime)
   plane.started = false
   plane.bootGeneration += 1

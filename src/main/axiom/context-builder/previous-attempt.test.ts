@@ -149,6 +149,14 @@ it('renders ordered stored failures, safe diff findings, acceptance and a transc
   }
   expect(rendered.content).not.toContain('check-1')
   expect(rendered.content).not.toContain('NEVER_INCLUDE_MATCH')
+  const headless = await previousAttemptSection(
+    f.store,
+    artifacts,
+    resolveAttemptBaseline(f.store, { taskId, seq: f.store.nextAttemptSeq(taskId) }),
+    'headless'
+  )
+  expect(headless.content).toContain(`Previous Submission transcript: ${transcript.id}`)
+  expect(headless.content).not.toContain('axiom mission artifact read')
 })
 it('bounds new findings at 50 and omits code-Task Artifact problems', async () => {
   seed()

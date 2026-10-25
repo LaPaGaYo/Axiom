@@ -1,7 +1,50 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { appendFileSync, existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { z } from 'zod'
 import Database from '../../../src/main/sqlite/sync-database'
+
+/** The exec provider exits before submission. The harness records only observed host receipts. */
+export function recordHeadlessFixtureReceipts(
+  userData: string,
+  missionId: string,
+  ledgerPath: string
+) {
+  const ledger = fixtureLedger(ledgerPath)
+  const state = inspectFixtureMission(userData, missionId)
+  for (const submission of state.submissions) {
+    if (
+      ledger.some(
+        (entry) => entry.kind === 'submission' && entry.attemptId === submission.attemptId
+      ) ||
+      !state.audits.some(
+        (entry) =>
+          entry.object_id === submission.attemptId && entry.event === 'attempt.transcript_archived'
+      )
+    ) {
+      continue
+    }
+    const candidate = state.candidates.find((entry) => entry.id === submission.candidateId)
+    appendFileSync(
+      ledgerPath,
+      `${[
+        {
+          kind: 'artifact',
+          attemptId: submission.attemptId,
+          source: 'host',
+          response: { ok: true, result: { artifactId: submission.report.artifacts[0] } }
+        },
+        {
+          kind: 'submission',
+          attemptId: submission.attemptId,
+          source: 'host',
+          response: { ok: true, result: { submission, candidate, duplicate: false } }
+        }
+      ]
+        .map((entry) => JSON.stringify(entry))
+        .join('\n')}\n`
+    )
+  }
+}
 import {
   CandidateRowCodec,
   SubmissionRowCodec,

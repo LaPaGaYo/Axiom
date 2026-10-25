@@ -5,6 +5,8 @@ import {
 import type { AxiomStore } from '../db/axiom-store'
 import { readRepositoryRules } from './repository-rules'
 import { redactContext } from './redaction'
+import { z } from 'zod'
+import { HeadlessSubmissionReportSchema } from '../../../shared/axiom-contract/submission-params'
 
 export type ContextSection = { section: string; source: string; text: string }
 
@@ -12,7 +14,28 @@ export function markdownSection(section: string, content: string): string {
   return `## ${section}\n\n${content}\n`
 }
 
-export function workerProtocol(missionId: string, taskId: string): string {
+export function workerProtocol(
+  missionId: string,
+  taskId: string,
+  channel: 'tui' | 'headless' = 'tui'
+): string {
+  if (channel === 'headless') {
+    return markdownSection(
+      'Axiom Worker protocol',
+      [
+        `Mission: ${missionId}\nTask: ${taskId}\nAttempt: {{attemptId}}`,
+        'Work and test in the Attempt worktree. The host snapshots and submits your work after this process exits.',
+        'Never spawn Workers or mark Tasks verified, integrated, or complete. A submission is a report, not verification.',
+        'Write non-code deliverables and required evidence under .axiom/artifacts/ and list their paths, kinds and media types in artifacts. The host stores and attributes them; .axiom/ is excluded from the Candidate.',
+        'If your context gets compacted, re-read .axiom/prompt.md before continuing: this prompt is the recovery point for this Attempt.',
+        'Put questions, blockers, limitations, risks and suggested follow-ups in the report. Do not call the Control Plane CLI.',
+        'End your final message with exactly one fenced ```json block matching this schema. The host computes the Candidate and filesChanged.',
+        '```json',
+        JSON.stringify(z.toJSONSchema(HeadlessSubmissionReportSchema), null, 2),
+        '```'
+      ].join('\n\n')
+    )
+  }
   const verbs = [
     'submit',
     'ask',
@@ -56,7 +79,8 @@ export async function mandatorySections(
   store: AxiomStore,
   missionId: string,
   taskId: string,
-  previousAttempt: { source: string; content: string }
+  previousAttempt: { source: string; content: string },
+  channel: 'tui' | 'headless' = 'tui'
 ) {
   const mission = store.getMission(missionId)
   const task = store.getTaskStage(taskId)
@@ -95,7 +119,7 @@ export async function mandatorySections(
         .join('\n') || 'none configured'
     : 'Verification rules are invalid (policy_invalid); the independent verifier will escalate to a human.'
   const decisions = store.listDecisions({ missionId, status: 'ACCEPTED' })
-  const protocol = workerProtocol(missionId, taskId)
+  const protocol = workerProtocol(missionId, taskId, channel)
   const entries = [
     {
       section: 'Task spec',
@@ -150,7 +174,9 @@ export async function mandatorySections(
         }),
         'Write only within allowedPaths. No permission, credential, network or budget expansion without Control Plane authorization.',
         'Write scope is checked by verification-time diff inspection; CLI agents have no runtime write-scope enforcement.',
-        'Every file left in this worktree becomes part of the Candidate. Write reports and other Artifact files outside the worktree (for example in a temporary directory) before running axiom mission artifact put.',
+        channel === 'headless'
+          ? 'The host computes the Candidate and changed files. Keep reports and other Artifacts under .axiom/artifacts/; .axiom/ never enters the Candidate.'
+          : 'Every file left in this worktree becomes part of the Candidate. Write reports and other Artifact files outside the worktree (for example in a temporary directory) before running axiom mission artifact put.',
         'Verification compares the Candidate with its merge-base on the integration branch: a changed path outside allowedPaths fails it (scope_violation), an added line that matches a secret pattern fails it (secret_detected), and changes to dependency manifests, lockfiles, CI, hooks, test or lint configuration or agent instruction files go to human review unless an allowedPaths entry names them.',
         'Deleting or skipping tests, removing assertions from a test file, or adding lint, type-check or coverage suppressions sends the Candidate to human review (test_tampering). When the Task has no required evidence commands, reference at least one readable, non-empty Artifact in the submission (JSON must parse); a human or Reviewer confirms it.',
         'Submission contract: axiom-submission-v1',

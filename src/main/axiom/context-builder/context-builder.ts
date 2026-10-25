@@ -17,7 +17,8 @@ import { previousAttemptSection } from './previous-attempt'
 const BuildParams = z.object({
   missionId: AxiomIdSchema,
   taskId: AxiomIdSchema,
-  tokenBudget: z.number().int().nonnegative().optional()
+  tokenBudget: z.number().int().nonnegative().optional(),
+  channel: z.enum(['tui', 'headless']).optional()
 })
 const PlannerBuildParams = z.object({
   missionId: AxiomIdSchema,
@@ -52,12 +53,18 @@ export class ContextBuilder {
       taskId: p.taskId,
       seq: this.store.nextAttemptSeq(p.taskId)
     })
-    const previousAttempt = await previousAttemptSection(this.store, this.artifacts, baseline)
+    const previousAttempt = await previousAttemptSection(
+      this.store,
+      this.artifacts,
+      baseline,
+      p.channel
+    )
     const { task, incoming, sections, protocol } = await mandatorySections(
       this.store,
       p.missionId,
       p.taskId,
-      previousAttempt
+      previousAttempt,
+      p.channel
     )
     const mandatory = sections.map(({ section, source, text }, index) => {
       // The protocol is rendered last but belongs to the mandatory submission contract.

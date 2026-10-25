@@ -10,6 +10,11 @@ import { settleAttemptWithoutSubmission } from '../execution/attempt-settlement'
 import { reconcilePlanner } from './planner-reconciliation'
 import { observeAgentExit } from './agent-exit-observation'
 import {
+  isHeadlessAttempt,
+  submitExitedAttempt,
+  watchHeadlessAttempt
+} from '../execution/attempt-exit-submission'
+import {
   abandonmentEvidence,
   activeWorkerStates as activeStates,
   cancelAttempt,
@@ -82,6 +87,7 @@ export async function reconcileAttempt(
     return entry
   }
   let worker = db.getWorkerDispatch(dispatchId)
+  const headless = !planner && isHeadlessAttempt(worker)
   if (worker && worker.runtime_epoch !== runtime.getRuntimeId()) {
     if (worker.state === 'starting') {
       worker = db.markWorkerStartUnknown(
@@ -96,8 +102,19 @@ export async function reconcileAttempt(
       )
     }
   }
+  if (headless && currentRunning(ctx, binding)) {
+    const result = await submitExitedAttempt(runtime, dispatchId)
+    if (result === 'submitted' || result === 'failed' || result === 'interrupted') {
+      return { ...entry, action: result, liveness: 'exited' }
+    }
+    if (result === 'pending') {
+      watchHeadlessAttempt(runtime, dispatchId)
+    }
+  }
   const observation = await inspectWorkerTerminal(runtime, db, dispatchId)
-  const agentExit = await observeAgentExit(ctx, binding, observation, worker)
+  const agentExit = headless
+    ? { exited: false as const }
+    : await observeAgentExit(ctx, binding, observation, worker)
   entry.liveness = agentExit.exited ? 'exited' : foldAttemptLiveness(observation)
   // Inspection and kernel calls await host IO. Always re-read durable authority afterwards.
   const task = store.getTaskStage(taskId)

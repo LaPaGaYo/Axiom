@@ -12,6 +12,7 @@ import { createRestartSession } from './orca-restart'
 import { waitForSessionReady } from './store'
 import { fixturePlanProposal } from './fixture-plan-proposal'
 import { AXIOM_TEST_PROVIDER_SOURCE } from './axiom-test-provider'
+import { recordHeadlessFixtureReceipts } from './axiom-fixture-inspection'
 import {
   buildFakeAgentCommandOverride,
   FAKE_AGENT_WINDOWS_SHELL
@@ -95,6 +96,7 @@ export async function withFixtureMission(
     releaseTerminals?: boolean
     maxAttempts?: number
     extraAllowedPaths?: string[]
+    holdExitSubmission?: boolean
   } = {}
 ) {
   const temp = mkdtempSync(path.join(os.tmpdir(), 'axiom-fixture-mission-'))
@@ -131,11 +133,13 @@ process.exit(result.status ?? 1)
     ORCA_BACKGROUND_LAUNCH: '1',
     PATH: `${temp}${path.delimiter}${process.env.PATH ?? ''}`,
     AXIOM_E2E_LEDGER: ledgerPath,
+    ...(options.holdExitSubmission ? { AXIOM_E2E_HOLD_EXIT_SUBMISSION: '1' } : {}),
     ...(options.runVerification ? {} : { AXIOM_E2E_HOLD_VERIFICATION: '1' }),
     ...(options.releaseTerminals ? {} : { AXIOM_E2E_HOLD_WORKER_RELEASE: '1' }),
     ORCA_E2E_CLI_ENTRY: cliEntry
   })
   let app: ElectronApplication | undefined
+  let receiptTimer: ReturnType<typeof setInterval> | undefined
   try {
     const clone = path.join(temp, 'fixture')
     git(['clone', '--no-hardlinks', '--branch', 'main', realpathSync(source), clone])
@@ -230,6 +234,12 @@ process.exit(result.status ?? 1)
       resolver: 'e2e'
     })
     await desktopCall(first.page, 'axiom.mission.start', { missionId: mission.id })
+    if (process.platform !== 'win32') {
+      receiptTimer = setInterval(
+        () => recordHeadlessFixtureReceipts(userData, mission.id, ledgerPath),
+        100
+      )
+    }
     await run({
       page: first.page,
       mission,
@@ -245,7 +255,9 @@ process.exit(result.status ?? 1)
               }
               await session.close(app)
               app = undefined
-              const next = await session.launch()
+              const next = await session.launch({
+                extraEnv: { AXIOM_E2E_HOLD_EXIT_SUBMISSION: '0' }
+              })
               app = next.app
               await waitForSessionReady(next.page)
               await next.page.evaluate(
@@ -267,6 +279,7 @@ process.exit(result.status ?? 1)
       releaseWorkers: () => rmSync(holdPath, { force: true })
     })
   } finally {
+    clearInterval(receiptTimer)
     try {
       if (app) {
         await session.close(app)

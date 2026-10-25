@@ -18,6 +18,7 @@ import type { TerminalAgent } from './terminal-agent'
 const HEADLESS_ONE_SHOT_MATCHERS: Partial<
   Record<TerminalAgent, (tokens: readonly string[]) => boolean>
 > = {
+  codex: (tokens) => tokens.slice(1).some((token) => token === 'exec' || token === 'e'),
   qoder: isQoderHeadlessCommand,
   'qoder-cn': isQoderHeadlessCommand,
   claude: isPrintModeHeadlessOneShotCommand,

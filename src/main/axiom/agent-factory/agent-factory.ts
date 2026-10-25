@@ -1,3 +1,5 @@
+import type { ContextBuilder } from '../context-builder/context-builder'
+import { hasHeadlessWorkerBuilder } from '../execution/headless-worker-command'
 import { z } from 'zod'
 import { AxiomIdSchema } from '../../../shared/axiom-contract/mission-objects'
 import { AgentSpecSchema } from '../../../shared/axiom-contract/agent-spec'
@@ -118,4 +120,32 @@ export class AgentFactory {
       return { id, spec }
     })
   }
+}
+
+export async function buildWorkerContracts(
+  contextBuilder: ContextBuilder,
+  agentFactory: AgentFactory,
+  missionId: string,
+  taskId: string
+) {
+  let context = await contextBuilder.build({ missionId, taskId })
+  let agent = await agentFactory.build({
+    missionId,
+    taskId,
+    role: 'worker',
+    contextPackageId: context.packageId
+  })
+  if (hasHeadlessWorkerBuilder(agent.spec.provider)) {
+    context = await contextBuilder.build({ missionId, taskId, channel: 'headless' })
+    agent = await agentFactory.build({
+      missionId,
+      taskId,
+      role: 'worker',
+      contextPackageId: context.packageId
+    })
+    if (!hasHeadlessWorkerBuilder(agent.spec.provider)) {
+      throw new Error('Worker provider changed during admission')
+    }
+  }
+  return { agentSpecId: agent.id, contextPackageId: context.packageId }
 }

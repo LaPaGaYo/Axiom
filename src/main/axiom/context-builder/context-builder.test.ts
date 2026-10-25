@@ -108,6 +108,19 @@ function put(
 }
 
 describe('ContextBuilder', () => {
+  it('pins the headless manifest separately from the terminal fallback', async () => {
+    await put('Sprint validation handoff.', [upstream[0]])
+    await put('CSV interchange report.', [upstream[1]], 'worker_report')
+    const headless = await builder.build({ missionId, taskId, channel: 'headless' })
+    const terminal = await builder.build({ missionId, taskId })
+    expect(headless.packageId).toBe(
+      'ctx_b471fb5ff6cab6ed5671c82e6fd7e6e063b9ddafa8dfc09539ff89d6cb5932e3'
+    )
+    expect(headless.packageId).not.toBe(terminal.packageId)
+    expect(headless.renderTemplate).toContain('re-read .axiom/prompt.md before continuing')
+    expect(headless.renderTemplate).not.toContain('axiom attempt submit')
+    expect(await builder.build({ missionId, taskId, channel: 'headless' })).toEqual(headless)
+  })
   it('renders the Candidate contract for Workers and path semantics for Planners', async () => {
     const worker = await builder.build({ missionId, taskId })
     expect(worker.renderTemplate).toContain(
