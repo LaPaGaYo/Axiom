@@ -31,6 +31,7 @@
 | DEF-26 | 手机端（D75：V1 只做桌面，手机伴侣休眠不删；Henry："we must do mobile in the future"）。方向（Henry 2026-10-22 同意）：默认复用 Orca 的 App 代码（`mobile/`：Expo 55 + React Native 0.83 + expo-router，一套代码出 iOS / Android 原生 App 与桌面内嵌的网页版），在上面加 Mission 页面（看进度、批准 Approval、回答 QUESTION、通知），藏掉用不上的；relay 与推送网关服务端自建（`cloud/` 已删，不能用 Orca 的服务器），或先只做局域网 / 虚拟内网；配对与认证按 D73 的身份模型；上架需要 Apple / Google 开发者账号与签名（原生发布工作流可从历史恢复），身份 `com.lapagayo.axiom.mobile`（D21）。届时再评估：上游手机代码改动过快或手机端定位变成纯审批 / 通知时，在仓库里 fork 裁剪；只做网页版伴侣是更轻的选项（iOS 推送要求加到主屏幕）。恢复时打开 `MOBILE_PAIRING_AVAILABLE`（D75 修订：配对入口统一看这个开关；不打包与棘轮排除尚未做，见 D75 修订行） | V3 之后、desktop 全部跑通之后才开工（Henry 2026-10-22："哪怕做 app 也要等到 V3 之后等 desktop 这边都跑通了之后才能开始"） | D75 | OPEN |
 | DEF-27 | Trae CLI / ZCode（智谱）/ DeepSeek Harness（`dsh`）承担 Mission 角色：现状没有原生 ACP（ZCode 只有第三方 `zcode-acp` 桥接，`dsh` 只有 Web UI），V1 只作手动工作区 harness（Orca TUI）；处理方式 = 按 D57 登记 provisional Worker + 协议一致性测试 | 任一 harness 提供原生 ACP 或稳定的结构化通道 | D57 修订 2026-10-24 | OPEN |
 | DEF-28 | 非 Claude / Codex 的 Planner 与高风险适配（Henry 2026-10-24："v3之后再做适配"）：① "A 级"改义——从写死的 `claude` / `codex`（structured-session 枚举）改为"结构化通道上已 `certified`、由启动参数指定模型"的组合，`highRiskTier` 随之；② 高风险认证门槛（协议一致性 + stop 后进程确实退出）；③ 识别 Claude Code / Codex 背后接的第三方接口并单独记账（`ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN` 在 settings.env 或进程环境，Orca `claudeAuthDiagnostic().baseUrlConfigured` 可复用；Codex `model_provider`；智谱等服务端把 Claude 模型名映射到自家模型，init 帧显示的仍是 Claude 名字），能用启动参数指定对方模型时可认证到 high，否则只接低风险；④ 给外部测试者的单命令一致性检查（DEF-8 本机认证的简化版）；⑤ "不依赖 Claude / Codex"作为出口条件；⑥ 没有合格 Worker 时 Task 的可见等待原因（现在调度器以 `no_eligible_provider` 跳过，全部跳过的轮不写事件） | V3 基建完成，或 Axiom 对外开放（取先到者） | D57 修订 2026-10-24 | OPEN |
+| DEF-29 | 桌面控制（Computer Use，`axiom computer`）的两项增强（参照 OpenAI Codex app 的 computer use 与把它接到其他 harness 的 LCU，2026-10-24 对比）：① **逐个 app 人工批准**——agent 第一次操作某个 app 时由人批准（仅本次 / 总是 / 拒绝），批准记录为 Axiom 的 Approval（精确到 app 的 bundle id 与发起的 Attempt，可撤销、可审计），已批准的 app 进 Mission 级或用户级允许名单；终端类 app、Axiom 自身与系统的管理员认证 / 安全对话框永远不可批准；浏览器、密码管理器等高风险 app 先警告；批准框只由人操作，模型看不到、也不能代答。② **后台坐标点击**——按坐标的点击不再经系统 HID 事件移动用户的真实光标，改为每个 agent 在自己的光标上下文里后台操作（现状：按元素的动作与键盘输入已在后台进行，坐标点击走 HID 事件会动光标），并支持多个 agent 同时操作不同的 app（同一 app 互斥）。前提：桌面控制先受 D63 的 Worker CLI 作用域约束（Mission 管理的终端默认拒绝 `axiom computer`）。只借思路：LCU 运行的是 OpenAI 的私有运行时，Axiom 不依赖、不打包 | **V2 规划时**（Henry 2026-10-24："这两点可以记成延后事项（DEF），放到 V2 再做"） | Computer Use 对比（Axiom 自带 vs LCU / Codex app，2026-10-24）；D63 Worker CLI 作用域补充 | OPEN（2026-10-24 登记） |
 
 ## M2 出口核对（2026-10-20，D61）
 
@@ -123,3 +124,7 @@ D57 加修订行：OpenCode 2 / OMP / Pi / Grok / CodeBuddy / Kimi / Qwen Code �
 ## 2026-10-24 UI hygiene（Henry："同意整节隐藏,并且窗口标题改成Axiom"）
 
 D33 加修订行：设置 › Axiom Account 整节隐藏（`CLOUD_ACCOUNT_AVAILABLE`），窗口标题改 Axiom（D32 漏改）。实施 Task UI-HYG；Jira 等任务追踪集成与现有 harness 保留。
+
+## 2026-10-24 Computer Use 对比登记（Henry："这两点可以记成延后事项（DEF），放到 V2 再做"）
+
+对比 Axiom 自带的 Computer Use（Orca 的原生辅助程序 + `axiom computer` CLI + skill，三平台）与 LCU（把 OpenAI Codex app 的 computer-use 运行时接到其他 harness）：Axiom 自带的覆盖面与可控性更全（三平台、不依赖第三方 app、经 Axiom runtime 可审计与限权、无条款风险），LCU 的桌面操作体验更强。不引入 LCU；新增 DEF-29 记下值得借鉴的两点（逐个 app 人工批准、后台坐标点击），V2 规划时复审。
