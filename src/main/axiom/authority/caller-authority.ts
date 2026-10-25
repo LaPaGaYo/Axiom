@@ -1,7 +1,9 @@
 import type { RpcContext } from '../../runtime/rpc/core'
 import type { RpcMethodPermission } from '../../runtime/rpc/rpc-method-permission'
 import { OrchestrationError } from '../../runtime/orchestration/orchestration-error'
+import { assertLifecycleCallerIsNotAnotherParty } from '../../runtime/rpc/methods/orchestration/messaging/lifecycle-caller-fence'
 import { getAxiomControlPlane } from '../control-plane'
+import { resolveAttemptIdentity } from '../execution/attempt-authority'
 
 type CallerClass = 'desktop_only' | 'attempt' | 'read'
 
@@ -86,7 +88,7 @@ export function assertAxiomCallerAuthority(
     return
   }
 
-  // Never infer a session from params or an unverified environment claim.
+  // The second layer still requires a host-resolved session; terminal evidence only attributes refusals.
   const caller = ctx.orchestrationCaller
   const dispatch = caller
     ? ctx.runtime
@@ -98,15 +100,20 @@ export function assertAxiomCallerAuthority(
   if (!desktopRefused && !binding) {
     return
   }
-  if (binding && store && dispatch) {
-    store.appendAuditEvent({
-      missionId: binding.missionId,
+  const refusedBinding = binding ?? (!caller ? resolveTerminalAttemptBinding(ctx) : undefined)
+  if (refusedBinding) {
+    getAxiomControlPlane(ctx.runtime).store.appendAuditEvent({
+      missionId: refusedBinding.missionId,
       actor: 'CallerAuthority',
       objectKind: 'task',
-      objectId: binding.taskId,
+      objectId: refusedBinding.taskId,
       event: 'authority.refused',
       before: null,
-      after: { method, callerKind: ctx.caller?.kind ?? 'unknown', attemptId: dispatch.id }
+      after: {
+        method,
+        callerKind: ctx.caller?.kind ?? 'unknown',
+        attemptId: refusedBinding.dispatchId
+      }
     })
   }
   throw new OrchestrationError(
@@ -115,4 +122,45 @@ export function assertAxiomCallerAuthority(
       ? 'Make this decision in the Axiom app; human actions are not accepted from the CLI or an agent session.'
       : 'This action is not permitted from a Mission agent session.'
   )
+}
+
+/** Attribution only: failure to identify a terminal must never replace the authority refusal. */
+function resolveTerminalAttemptBinding(ctx: RpcContext) {
+  try {
+    const { runtime, orchestrationCompatibilityEvidence: evidence } = ctx
+    const claimedPane = evidence?.terminalHandle
+      ? runtime.getLiveTerminalPaneKey(evidence.terminalHandle)
+      : null
+    if (evidence?.terminalHandle && claimedPane) {
+      assertLifecycleCallerIsNotAnotherParty(runtime, {
+        from: evidence.terminalHandle,
+        fromPaneKey: claimedPane,
+        evidence
+      })
+    }
+    // Same pane-first lookup as lifecycle-caller-fence: a reminted handle may be stale in the env.
+    const from = evidence?.paneKey
+      ? runtime.getTerminalHandleForPaneKey(evidence.paneKey)
+      : evidence?.terminalHandle
+    const paneKey = from ? runtime.getLiveTerminalPaneKey(from) : null
+    if (!from || !paneKey) {
+      return undefined
+    }
+    const db = runtime.getOrchestrationDb()
+    const dispatch = db.getActiveDispatchForIdentity(from, paneKey)
+    if (!dispatch) {
+      return undefined
+    }
+    return resolveAttemptIdentity({
+      runtime,
+      db,
+      store: getAxiomControlPlane(runtime).store,
+      from,
+      attemptId: dispatch.id,
+      orchestrationCompatibilityEvidence: evidence
+    }).binding
+  } catch {
+    // D73's active/stale/process/assignee/ownership checks are shared with Attempt verbs.
+    return undefined
+  }
 }

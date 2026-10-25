@@ -203,7 +203,15 @@ export class RpcDispatcher {
       return compatibility.result
     }
     const effectiveParams = compatibility.params ?? params
-    assertAxiomCallerAuthority(request.method, effectiveParams, context, method.permission)
+    assertAxiomCallerAuthority(
+      request.method,
+      effectiveParams,
+      {
+        ...context,
+        orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
+      },
+      method.permission
+    )
     assertAttemptRequestAuthority(request.method, effectiveParams, {
       ...context,
       orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence

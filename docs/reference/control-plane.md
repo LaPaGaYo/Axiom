@@ -554,6 +554,8 @@ M2 之后：M3 复用 Question/待决项投影；M4 接 Approval，M5 使用 REQ
 
 第二层只消费宿主已经核实的 `ctx.orchestrationCaller`：以现有 dispatch 身份查询找到 `attempt_bindings` 后，不论 Worker、Planner 或 Reviewer，非 workspace permission，以及 agentSession.respondToApproval / respondToQuestion、orchestration.runCreate / dispatch / workerStart / taskCreate 都抛 `caller_not_permitted_for_agent`。workspace 读取、普通非 Axiom 会话不受这一层影响。可归属的拒绝在抛错前写该 Mission / Task 的 `authority.refused`，after 为 `{method,callerKind,attemptId}`；找不到 binding 时不伪造审计。
 
+拒绝已决定、但没有 `ctx.orchestrationCaller` 时，hook 使用 dispatcher 传入的 `orchestrationCompatibilityEvidence` 为 PTY Worker 补审计归属：沿用 `lifecycle-caller-fence` 的 pane-key → 当前 handle 映射（pane 优先，兼容 handle 重铸），要求宿主仍有 live pane；若 evidence 的 handle 仍有 live pane，先用同一栅栏拒绝另一编排方的矛盾证据。再查询 active dispatch 并复用 Attempt 动词的 `resolveAttemptIdentity`：核实 binding、dispatched 状态、最新 Attempt、process incarnation（旧行无 incarnation 则查消息发送方）、非 stopping、lifecycle authority 与 Mission / Task / Run 一致。任何身份检查失败都只返回原权限拒绝，不写审计；不从业务 params 的 from / attemptId 认领身份。此回退只补归属，不产生 ctx 会话，也不扩大第二层的拒绝范围。D73 的同用户环境冒充限制与 DEF-25 仍适用；launchToken 不新增为 Attempt 凭据。
+
 实际覆盖由 `dispatcher-axiom-session-coverage.test.ts` 固定：请求携带注入的 agentSessionId 时，宿主按下表解析 ctx.orchestrationCaller。CLI 的 compatibility envelope 只为相同的方法集合附带身份依据；测试逐一对照全部 AXIOM_METHODS，保证新扩展恰好是 desktop_only 方法。CLI 复用 AXIOM_MUTATION_METHODS（当前除 Attempt mutation 外均为 desktop_only），不引入 main 模块或第二套身份机制。
 
 | 方法 / 调用条件 | 会话归属与第二层覆盖 |
@@ -562,7 +564,7 @@ M2 之后：M3 复用 Question/待决项投影；M4 接 Approval，M5 使用 REQ
 | AXIOM_ATTEMPT_CALLER_METHODS：八个 Worker 动词、plan.propose、artifact.put | 解析 ctx 并绑定 from；两个条件方法无 attemptId 时仍为 desktop_only。 |
 | 其余 desktop_only Axiom 方法（含 plan.approve / policy.update / message.answer） | 解析 ctx 以关联 authority.refused，但不改写 params，也不授予权限。所有非 desktop 调用仍拒绝；清掉会话环境也不能绕过 desktop 边界。 |
 | Axiom read、agentSession.respondToApproval / respondToQuestion、settings / computer 等非 orchestration 方法 | 不解析 ctx；非 Axiom 方法的解析范围与原实现一致。respondTo* 等方法只有已有宿主归属时才受第二层拦截，当前真实入口不能归属，仍靠 D63 沙盒姿态。 |
-| 无 agentSessionId，仅有 PTY terminal / pane 依据 | 不产生 ctx.orchestrationCaller；显式 session address 可触发原有 caller 参数绑定，但不产生 ctx。 |
+| 无 agentSessionId，仅有 PTY terminal / pane 依据 | 不产生 ctx.orchestrationCaller；已经拒绝的 desktop_only 调用经上述 D73 检查后写 authority.refused。无效 / 矛盾依据、非 live pane、过期 / stopping / 已结算 Attempt 不归属；第二层覆盖不变。显式 session address 可触发原有 caller 参数绑定，但不产生 ctx。 |
 
 会话解析只提供归属，desktop 传输盖章才是人工动作边界。不能把第二层当成认证边界，也不能把读取仍可用误记为允许 Agent 作人工决定。
 
