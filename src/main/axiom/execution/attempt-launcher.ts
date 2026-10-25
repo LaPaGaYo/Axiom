@@ -21,6 +21,8 @@ import type { ArtifactStore } from '../artifacts/artifact-store'
 import type { AdmittedAttempt, AttemptLaunch } from '../scheduler/scheduler'
 import { redactContext } from '../context-builder/redaction'
 import { missionCaller } from './mission-caller'
+import { resolveAttemptBaseline } from './attempt-baseline'
+import { attemptBaselineAudit, prepareWorkerFixLaunch } from './attempt-fix-launch'
 
 type LauncherRuntime = Pick<OrcaRuntimeService, 'createManagedWorktree' | 'requireStore'>
 export type AttemptWorkerStartArgs = Omit<Parameters<typeof startLocalWorker>[0], 'runtime'> & {
@@ -87,6 +89,7 @@ export function createAttemptLauncher(
           }
         )
   return async (attempt) => {
+    let workerAudit: Record<string, AuditEvent['after']> = {}
     try {
       const binding = store.getAttemptBinding(attempt.taskId, attempt.seq)
       if (
@@ -98,7 +101,7 @@ export function createAttemptLauncher(
       }
       const mission = missions.getMission(attempt.missionId)
       const run = db.getRun(mission.runId)
-      const existingTask = db.getTask(attempt.taskId)
+      let existingTask = db.getTask(attempt.taskId)
       const spec = store.getAgentSpec(attempt.agentSpecId)?.spec
       const context = store.getContextPackage(attempt.contextPackageId)
       if (
@@ -134,12 +137,20 @@ export function createAttemptLauncher(
       if (!isWorkerStartTimeoutWithinTimerLimit(timeoutMs)) {
         throw new OrchestrationError('invalid_argument', 'Invalid worker readiness timeout.')
       }
+      const baseline = planner ? undefined : resolveAttemptBaseline(store, attempt)
+      if (baseline) {
+        workerAudit = { baseline: attemptBaselineAudit(baseline) }
+      }
       const created = await deps.runtime.createManagedWorktree({
         repoSelector: `id:${mission.repoId}`,
         name: planner
           ? `planner-${attempt.missionId}-${planner.runSeq}`
           : `attempt-${attempt.taskId}-${attempt.seq}`,
-        baseBranch: planner?.baseBranch ?? `axiom/integration/${attempt.missionId}`,
+        baseBranch:
+          planner?.baseBranch ??
+          (baseline?.kind === 'candidate'
+            ? baseline.candidate.commitSha
+            : `axiom/integration/${attempt.missionId}`),
         branchNameOverride: attempt.branch,
         runHooks: false,
         setupDecision: 'run',
@@ -154,6 +165,19 @@ export function createAttemptLauncher(
       })
       const worktreeId = created.worktree.id
       const caller = missionCaller(mission.coordinatorOrcaSessionId, worktreeId)
+      if (baseline) {
+        const prepared = await prepareWorkerFixLaunch(
+          db,
+          store,
+          attempt,
+          baseline,
+          created.worktree
+        )
+        existingTask = prepared.existingTask
+        if (prepared.orcaTaskReopened) {
+          workerAudit.orcaTaskReopened = true
+        }
+      }
       const params = WorkerStartParams.parse({
         from: caller.address,
         task: attempt.taskId,
@@ -238,7 +262,8 @@ export function createAttemptLauncher(
           seq: attempt.seq,
           branch: attempt.branch,
           worktreeId,
-          provider: spec.provider
+          provider: spec.provider,
+          ...workerAudit
         })
         if (receipt.state === 'failed') {
           fail(attempt)
@@ -254,7 +279,7 @@ export function createAttemptLauncher(
           error instanceof Error ? error.message : 'Attempt launch failed'
         ).content.replace(/dcap_[A-Za-z0-9_-]+/g, '[REDACTED]')
         store.transaction('launch_failure', () => {
-          audit(attempt, 'attempt.launch_failed', null, { message })
+          audit(attempt, 'attempt.launch_failed', null, { message, ...workerAudit })
           fail(attempt)
         })
       } catch {

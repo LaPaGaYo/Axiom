@@ -52,7 +52,12 @@ function json(value: unknown): string {
   )
 }
 
-export async function mandatorySections(store: AxiomStore, missionId: string, taskId: string) {
+export async function mandatorySections(
+  store: AxiomStore,
+  missionId: string,
+  taskId: string,
+  previousAttempt: { source: string; content: string }
+) {
   const mission = store.getMission(missionId)
   const task = store.getTaskStage(taskId)
   if (!mission) {
@@ -170,8 +175,7 @@ export async function mandatorySections(store: AxiomStore, missionId: string, ta
     },
     {
       section: 'Previous-Attempt failure evidence',
-      source: 'previous-attempt:m2',
-      content: 'none (first attempt)'
+      ...previousAttempt
     }
   ]
   const sections: ContextSection[] = entries.map(({ section, source, content }) => {

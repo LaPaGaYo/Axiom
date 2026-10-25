@@ -23,10 +23,12 @@ function cli(args) {
 async function submitFixture(attemptId, missionId, taskId) {
   const deadline = Date.now() + 60000
   // Preamble acknowledgment precedes the launcher's binding CAS. Wait for that public identity.
-  while (!cli(['attempt', 'show', '--attempt', attemptId]).response.ok) {
+  let response
+  while (!(response = cli(['attempt', 'show', '--attempt', attemptId]).response).ok) {
     if (Date.now() >= deadline) throw new Error('Attempt binding timeout')
     await new Promise(resolve => setTimeout(resolve, 100))
   }
+  const seq = response.result.attempt.seq
   const crashMarker = process.env.AXIOM_E2E_LEDGER + '.crash-' + taskId
   if (existsSync(crashMarker)) {
     rmSync(crashMarker)
@@ -45,7 +47,7 @@ async function submitFixture(attemptId, missionId, taskId) {
     if (scenario === 'transcript-secret') {
       process.stdout.write('Transcript redaction probe: ' + 'gh' + 'p_' + 'T'.repeat(36) + '\\n')
     }
-    const command = ['scenarios/stub-worker/worker.mjs', '--scenario', scenario === 'transcript-secret' ? 'retry' : scenario, '--attempt', '1', '--mode', 'succeed', '--cwd', process.cwd()]
+    const command = ['scenarios/stub-worker/worker.mjs', '--scenario', scenario === 'transcript-secret' ? 'retry' : scenario, '--attempt', String(Math.min(seq, 2)), '--mode', 'succeed', '--cwd', process.cwd()]
     const started = Date.now()
     const providerOnly = scenario === 'scope-violation' || scenario === 'secret-line'
     let reportText
@@ -75,7 +77,7 @@ async function submitFixture(attemptId, missionId, taskId) {
     const changed = spawnSync('git', ['diff', '--name-only', 'HEAD'], { cwd: process.cwd(), encoding: 'utf8' })
     if (changed.status !== 0) throw new Error('Fixture diff failed')
     const report = {
-      summary: 'D49 ' + scenario + ' scenario attempt 1 succeeded',
+      summary: 'D49 ' + scenario + ' scenario attempt ' + seq + ' succeeded',
       filesChanged: changed.stdout.trim().split(/\\r?\\n/).filter(Boolean),
       checksRun: [{ command: providerOnly ? 'provider scenario ' + scenario : 'node ' + command.join(' '), result: 'pass', durationMs: Date.now() - started },
         { command: 'fixture verification', result: 'skipped', note: 'Stub Worker; independent verification is queued for M3.' }],

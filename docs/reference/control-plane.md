@@ -71,7 +71,20 @@ Milestone 存在 Plan JSON 内，没有独立表/状态机。Attempt 身份仍�
 
 `plane.artifacts` 与 `plane.contextBuilder` 已由 Scheduler、launcher、submit 服务复用。Artifact id = `art_` + sha256(canonical `{missionId,kind,sha256}`)；相同 Mission/kind/bytes 返回既有元数据（首次 related/createdBy 不被重写），跨 kind/Mission 共用内容文件。先写 `.tmp-<random>` 再 rename；read 重新检查 hash/size，缺文件或不匹配返回 `artifact_corrupt`。put 上限 8 MiB；RPC 用 `contentBase64`，CLI `mission artifact put --mission … --kind … --file … --related …` 在本机读文件。read 的 `--json` 保留 base64，文本输出按 UTF-8；list 支持 kind 和单一 related id。
 
-ContextBuilder 固定强制顺序：(1) Task spec；(2) PlanRevision revision/milestone/带邻居标题的入出边；(3) ACCEPTED Decisions；(4) 权限、Mission/Task 预算、并发、重试与 `axiom-submission-v1` 字段清单；(5) 目标分支的 AGENTS.md/CLAUDE.md，各最多 16 KiB（缺文件省略，读失败不静默忽略）；(6) policy 验证命令；(7) `none (first attempt)`，M3 补失败证据。只读这两个规则文件，不读工作区版本或 `.env*`。
+ContextBuilder 固定强制顺序：(1) Task spec；(2) PlanRevision revision/milestone/带邻居标题的入出边；(3) ACCEPTED Decisions；(4) 权限、Mission/Task 预算、并发、重试与 `axiom-submission-v1` 字段清单；(5) 目标分支的 AGENTS.md/CLAUDE.md，各最多 16 KiB（缺文件省略，读失败不静默忽略）；(6) policy 验证命令；(7) Previous-Attempt failure evidence（M3-04，见下）。只读这两个规则文件，不读工作区版本或 `.env*`。
+
+M3-04：Worker context 在 admission 插入 binding 之前，以 `store.nextAttemptSeq(taskId)` 调用与 launcher 共用的 `resolveAttemptBaseline`。第 7 节由 `context-builder/previous-attempt.ts` 准备 `{source, content}`，仍逐节经过 `redactContext`；协议仍绑定第 4 节的 hash/token 数。首个 Attempt 的正文 `none (first attempt)`、source `previous-attempt:m2` 均不变，因此首个 package id 不变。后续 integration baseline 用一行说明从集成基线重来及原因（自然语言与固定 reason code），source 为 `previous-attempt:<reason>`；`secret_detected` 另列失败 run 的密钥路径、模式名，并明确不得重新引入秘密，不携带匹配文本或该候选的历史。
+
+candidate baseline 的第 7 节按以下顺序渲染，source 为 `verification:<runId>`：
+
+1. `This Attempt continues the previous Candidate <commitSha> from Attempt <previousSeq>; fix the failures below in this tree. Do not weaken, skip or delete tests, assertions, lint rules or checks to make them pass.`
+2. 失败 run 的 verdict 与 reason。
+3. `result: fail` 的 checks，按 index 升序：command、exitCode、最多 20 个失败名、verdict evidence Artifact（`verdictDetail.verdictArtifactId`）中对应 index 的 excerpt。每项摘录最多 40 行，全部摘录合计最多 8 KiB UTF-8，不截断多字节字符；用尽时标明省略。Artifact 缺失、读取/解析失败或找不到该项时写 `excerpt unavailable`，不阻止重试。
+4. `verdictDetail.diff` 中的 scope violations、secret findings（仅路径与模式名）、dangerous changes（路径与模式）。越界路径带明确的 remove/revert 指令：scope 对 merge-base 比较，留在树里会再次失败。
+5. Task 的全部 acceptanceCriteria，列在 `Not yet demonstrated` 下；逐条判定留给 M3-04b。
+6. 上一 Submission 的 transcript Artifact id 与 `axiom mission artifact read --artifact <id>` 配方（存在时）。与 `attempt show` 共用导出的 `findSubmissionTranscriptArtifactId`，不内联 transcript。
+
+只读已存 run、verdict Artifact、Task spec 与 transcript 元数据，不重跑检查、不读取 Worker 当前输出。相同输入得到相同 package id；run id 变化会改变 source 与 package id。
 
 预算按 `ceil(UTF-8 bytes / 4)` 估计，调用参数优先，其次已解析 policy.budget 的可选正整数 `contextTokens`，否则 24,000。M2-03 已加入共享 BudgetSchema，可在 mission create RPC 的 policy 中设置；后续预算修改仍需 M4 Approval。协议块计入第 4 节的 hash/token 数。强制集永不裁剪，超限设 `budgetExceededByMandatory: true`；候选按既有入边查询顺序（from_task_id）、再 created_at/id，去重后取直接上游的 handoff/worker_report，第一项放不下即停止，余项记 budget。
 
@@ -79,7 +92,7 @@ ContextBuilder 固定强制顺序：(1) Task spec；(2) PlanRevision revision/mi
 
 canonical manifest 无空白、对象键序固定，保留数组顺序，id = `ctx_` + sha256(canonical)。manifest 与完整 render template 均作为 Artifact 持久化，context row 只保留 JSON manifest/hash/引用。相同输入重复 build 不新增行或文件。模板最后的 `Axiom Worker protocol` 使用 D16 八个 `axiom attempt` verb；launcher 在交付时替换 `{{attemptId}}`；D73 之后模板不含任何凭据（身份由宿主核实）。
 
-M2 之后：M3 将失败验证证据纳入重试 ContextPackage；DEF-4/5 的 skills 与代码知识输入按登记触发点复审。
+后续：M3-04b 负责逐条 acceptance、已答 Question 与跨 Attempt 未关闭发现；DEF-4/5 的 skills 与代码知识输入按登记触发点复审。
 
 ### Provider selection（M2-03）
 
@@ -161,7 +174,23 @@ M2 之后：M3 的验证结算接入既有调度触发；M4 接预算 Approval�
 
 `axiom.mission.start` RPC 在同步 `startExecution` 事务前 await `ensureIntegrationBase`：先读 `refs/heads/axiom/integration/<missionId>`，不存在则读目标分支 HEAD 并 `git branch` 创建；存在则沿用 SHA，不 reset。`integration.base_created/base_reused` 记录 SHA。失败返回 `target_branch_not_found` / `integration_base_unavailable`，Mission 保持 PLANNED。按本 Task 的明确细化，M2 只验证存在，祖先关系与漂移检查在 M4 §12.3；Architecture §16.2 的旧 timeout 映射按下述 runtime-cap 规则解释。
 
-启动顺序：读取已绑定 AgentSpec / ContextPackage render → 校验 Run/Task 与 prompt 大小 → 经现有 `createManagedWorktree` 从集成基线预创建 `axiom/attempt/<taskId>/<seq>`（不传 startupAgent）→ 直接调 `startLocalWorker` → CAS 回填 `attempt_bindings.dispatch_id` → audit / stage settlement。没有 `worktree_id` side-table 列；worktree id 写入启动 audit，读接口经 fleet 的 dispatch/workspace 读取。
+启动顺序：读取已绑定 AgentSpec / ContextPackage render → 校验 Run/Task 与 prompt 大小 → `resolveAttemptBaseline` → 经现有 `createManagedWorktree` 预创建 `axiom/attempt/<taskId>/<seq>`（不传 startupAgent）→ 校验修复基线 HEAD、必要时重开 Orca task → 直接调 `startLocalWorker` → CAS 回填 `attempt_bindings.dispatch_id` → audit / stage settlement。没有 `worktree_id` side-table 列；worktree id 写入启动 audit，读接口经 fleet 的 dispatch/workspace 读取。
+
+M3-04 / D64 ①：`execution/attempt-baseline.ts` 是 ContextBuilder 与 launcher 共用的纯存储判定，只看紧邻的 seq−1。该 binding 有 dispatch、dispatch 有 Submission、其 Candidate 仍为 ACTIVE、该 Candidate 最新 VerificationRun（按 createdAt 再 id 排序取最后一项，不预先过滤 FAIL）为 FAIL 且 reason 不是 `secret_detected`，才返回 candidate baseline（previousSeq、Candidate、VerificationRun）。其它情况按顺序返回 integration baseline：
+
+| reason | 条件 |
+| --- | --- |
+| `first_attempt` | seq 1 |
+| `previous_attempt_not_submitted` | seq−1 不存在、没有 dispatch 或没有 Submission（包括崩溃、放弃、launch 失败） |
+| `previous_candidate_superseded` | Submission 的 Candidate 不再 ACTIVE（缺失也不采用） |
+| `previous_verification_not_failed` | 无 run，或最新 run 不是 FAIL |
+| `secret_detected` | 最新 FAIL 的 reason 为 secret_detected；附带该 run 供安全证据展示，历史含秘密的 Candidate 不可续接 |
+
+candidate baseline 将完整 `candidate.commitSha` 传给 `createManagedWorktree.baseBranch`，新分支仍为本次 `attempt.branch`。创建后用返回的 `worktree.git.head` 验证；未提供时在新 worktree 中经 `gitExecFileAsync` / `gitOptionsForWorktree` 执行 `rev-parse HEAD`。不等于 Candidate commit 则抛出消息恰为 `fix_base_mismatch` 的异常，既有 catch 审计 `attempt.launch_failed {message}` 并按 launch_failed 结算；不 reset、改写或删除任何分支/worktree。integration baseline 仍从 `axiom/integration/<missionId>` 起，Planner 的 baseBranch 不变。
+
+HEAD 验证完成后、构造 WorkerStartParams 之前，Worker launcher 重新读取 Orca task：仅当 status=completed 且紧邻上一 Attempt 有 Submission 时，经内核公开 `db.updateTaskStatus(taskId, 'ready')` 重开，再读 task 并不带 retryOf 启动。这也适用于 secret_detected 的干净重试；内核在活动 dispatch 存在时拒绝重开。completed 但无上一 Submission 仍 launch 失败；failed/blocked 沿用既有 retryOf 路径；Planner 不经过此逻辑。
+
+Worker 的 `attempt.started`、`attempt.start_unknown`、receipt 后的 `attempt.launch_failed` 在既有 after 字段中增加 `baseline: {kind, reason?, candidateId?, commitSha?}`；发生重开时增加 `orcaTaskReopened: true`。receipt 前的异常审计也保留已解析的 baseline 与已完成的重开标记，message 仍脱敏。
 
 只有显式配置 `routing.models[provider]`（AgentSpec 的 `model !== 'policy-default'`）时，launcher 才同时传 `model` 和 `reasoning.effort`；`reasoning.effort` 仅在此时生效。`policy-default` 时两者都省略，使用 provider 自身配置的模型与推理设置，避免内核拒绝 `--effort` 未配 `--model` 的组合。
 

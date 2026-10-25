@@ -11,105 +11,115 @@ import { AXIOM_TEST_PROVIDER_SOURCE } from './axiom-test-provider'
 
 const at = '2026-10-17T12:00:00Z'
 
-it('consumes a Task crash marker before the stub, exits without submitting, then retries normally', async () => {
-  const files = new Set(['/ledger.crash-task-1'])
-  const events: string[] = []
-  const spawnSync = vi.fn((_command: string, args: string[]) => {
-    if (args.includes('--mode')) {
-      expect(files.has('/ledger.crash-task-1')).toBe(false)
-      return { status: args.includes('crash') ? 137 : 0 }
-    }
-    if (args[0] === 'diff') {
-      return { status: 0, stdout: 'src/retry.ts\n' }
-    }
-    return {
-      status: 0,
-      stdout: JSON.stringify({ ok: true, result: { artifact: { id: 'art_report' } } })
-    }
-  })
-  const exit = vi.fn((code: number) => {
-    throw new Error(`provider exit ${code}`)
-  })
-  const nativeRequire = createRequire(import.meta.url)
-  const context = {
-    require: (name: string) => {
-      if (name === 'node:path') {
-        return nativeRequire('node:path').posix
+it.each([1, 2, 3])(
+  'consumes a Task crash marker before the stub, then passes seq %i to the stub',
+  async (seq) => {
+    const files = new Set(['/ledger.crash-task-1'])
+    const events: string[] = []
+    const written = new Map<string, string>()
+    const spawnSync = vi.fn((_command: string, args: string[]) => {
+      if (args.includes('--mode')) {
+        expect(files.has('/ledger.crash-task-1')).toBe(false)
+        return { status: args.includes('crash') ? 137 : 0 }
       }
-      if (name === 'node:fs') {
-        return {
-          existsSync: (file: string) => files.has(file),
-          readFileSync: (file: string) => {
-            expect(file).toBe('/fixture/REPORT.md')
-            return 'Frozen stub report'
-          },
-          rmSync: (file: string) => files.delete(file),
-          appendFileSync: (_file: string, body: string) => events.push(body),
-          mkdtempSync: () => '/virtual-report',
-          writeFileSync() {}
+      if (args[0] === 'diff') {
+        return { status: 0, stdout: 'src/retry.ts\n' }
+      }
+      return {
+        status: 0,
+        stdout: JSON.stringify({
+          ok: true,
+          result: { attempt: { seq }, artifact: { id: 'art_report' } }
+        })
+      }
+    })
+    const exit = vi.fn((code: number) => {
+      throw new Error(`provider exit ${code}`)
+    })
+    const nativeRequire = createRequire(import.meta.url)
+    const context = {
+      require: (name: string) => {
+        if (name === 'node:path') {
+          return nativeRequire('node:path').posix
         }
-      }
-      if (name === 'node:child_process') {
-        return { spawnSync }
-      }
-      return nativeRequire(name)
-    },
-    process: {
-      argv: [],
-      env: { AXIOM_E2E_LEDGER: '/ledger', ORCA_E2E_CLI_ENTRY: '/cli' },
-      execPath: '/node',
-      cwd: () => '/fixture',
-      exit,
-      stdout: { write() {} },
-      stdin: { setEncoding() {}, on() {}, resume() {} }
-    },
-    setInterval() {}
-  }
-  await expect(
-    runInNewContext(
-      `${AXIOM_TEST_PROVIDER_SOURCE}
+        if (name === 'node:fs') {
+          return {
+            existsSync: (file: string) => files.has(file),
+            readFileSync: (file: string) => {
+              expect(file).toBe('/fixture/REPORT.md')
+              return 'Frozen stub report'
+            },
+            rmSync: (file: string) => files.delete(file),
+            appendFileSync: (_file: string, body: string) => events.push(body),
+            mkdtempSync: () => '/virtual-report',
+            writeFileSync: (file: string, content: string) => written.set(file, content)
+          }
+        }
+        if (name === 'node:child_process') {
+          return { spawnSync }
+        }
+        return nativeRequire(name)
+      },
+      process: {
+        argv: [],
+        env: { AXIOM_E2E_LEDGER: '/ledger', ORCA_E2E_CLI_ENTRY: '/cli' },
+        execPath: '/node',
+        cwd: () => '/fixture',
+        exit,
+        stdout: { write() {} },
+        stdin: { setEncoding() {}, on() {}, resume() {} }
+      },
+      setInterval() {}
+    }
+    await expect(
+      runInNewContext(
+        `${AXIOM_TEST_PROVIDER_SOURCE}
 submitFixture('attempt-1', 'mission-1', 'task-1')`,
-      context
+        context
+      )
+    ).rejects.toThrow('provider exit 137')
+    expect(exit).toHaveBeenCalledWith(137)
+    expect(events).toEqual([
+      `${JSON.stringify({ kind: 'crash', attemptId: 'attempt-1', taskId: 'task-1' })}\n`
+    ])
+    expect(spawnSync.mock.calls.map((call) => call[1])).toEqual([
+      ['/cli', 'attempt', 'show', '--attempt', 'attempt-1', '--json'],
+      [
+        'scenarios/stub-worker/worker.mjs',
+        '--scenario',
+        'agent-crash',
+        '--mode',
+        'crash',
+        '--cwd',
+        '/fixture'
+      ]
+    ])
+    spawnSync.mockClear()
+    await runInNewContext(
+      `${AXIOM_TEST_PROVIDER_SOURCE}
+submitFixture('attempt-2', 'mission-1', 'task-1')`,
+      { ...context }
     )
-  ).rejects.toThrow('provider exit 137')
-  expect(exit).toHaveBeenCalledWith(137)
-  expect(events).toEqual([
-    `${JSON.stringify({ kind: 'crash', attemptId: 'attempt-1', taskId: 'task-1' })}\n`
-  ])
-  expect(spawnSync.mock.calls.map((call) => call[1])).toEqual([
-    ['/cli', 'attempt', 'show', '--attempt', 'attempt-1', '--json'],
-    [
+    expect(spawnSync.mock.calls[1]![1]).toEqual([
       'scenarios/stub-worker/worker.mjs',
       '--scenario',
-      'agent-crash',
+      'retry',
+      '--attempt',
+      String(Math.min(seq, 2)),
       '--mode',
-      'crash',
+      'succeed',
       '--cwd',
       '/fixture'
-    ]
-  ])
-  spawnSync.mockClear()
-  await runInNewContext(
-    `${AXIOM_TEST_PROVIDER_SOURCE}
-submitFixture('attempt-2', 'mission-1', 'task-1')`,
-    { ...context }
-  )
-  expect(spawnSync.mock.calls[1]![1]).toEqual([
-    'scenarios/stub-worker/worker.mjs',
-    '--scenario',
-    'retry',
-    '--attempt',
-    '1',
-    '--mode',
-    'succeed',
-    '--cwd',
-    '/fixture'
-  ])
-  expect(
-    spawnSync.mock.calls.some((call) => call[1][1] === 'attempt' && call[1][2] === 'submit')
-  ).toBe(true)
-  expect(exit).toHaveBeenCalledTimes(1)
-})
+    ])
+    expect(
+      spawnSync.mock.calls.some((call) => call[1][1] === 'attempt' && call[1][2] === 'submit')
+    ).toBe(true)
+    expect(exit).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(written.get('/virtual-report/report.json')!).summary).toBe(
+      `D49 retry scenario attempt ${seq} succeeded`
+    )
+  }
+)
 
 function fixtureInput() {
   return {
@@ -201,113 +211,118 @@ describe('fixture-v1 PlanProposal conversion', () => {
   })
 })
 
-it.each(['scope-violation', 'secret-line', 'transcript-secret'])(
-  'keeps the %s provider-only report outside the Candidate',
-  async (scenario) => {
-    const files = new Map([['/ledger.scenario-task-1', scenario]])
-    const stdout = vi.fn()
-    if (scenario === 'transcript-secret') {
-      files.set('/fixture/REPORT.md', 'Frozen retry report')
+it.each(
+  ['scope-violation', 'secret-line', 'transcript-secret'].flatMap((scenario) =>
+    [1, 2, 3].map((seq) => ({ scenario, seq }))
+  )
+)('keeps the $scenario report outside the Candidate at seq $seq', async ({ scenario, seq }) => {
+  const files = new Map([['/ledger.scenario-task-1', scenario]])
+  const stdout = vi.fn()
+  if (scenario === 'transcript-secret') {
+    files.set('/fixture/REPORT.md', 'Frozen retry report')
+  }
+  const written = new Map<string, string>()
+  const removed: string[] = []
+  const spawnSync = vi.fn((command: string, args: string[]) => {
+    if (args.includes('scenarios/stub-worker/worker.mjs')) {
+      expect(scenario).toBe('transcript-secret')
+      expect(args).toEqual([
+        'scenarios/stub-worker/worker.mjs',
+        '--scenario',
+        'retry',
+        '--attempt',
+        String(Math.min(seq, 2)),
+        '--mode',
+        'succeed',
+        '--cwd',
+        '/fixture'
+      ])
+      expect(stdout.mock.calls.flat().join('')).toContain(`${'gh' + 'p_'}${'T'.repeat(36)}`)
+      return { status: 0, stdout: '' }
     }
-    const written = new Map<string, string>()
-    const removed: string[] = []
-    const spawnSync = vi.fn((command: string, args: string[]) => {
-      if (args.includes('scenarios/stub-worker/worker.mjs')) {
-        expect(scenario).toBe('transcript-secret')
-        expect(args).toEqual([
-          'scenarios/stub-worker/worker.mjs',
-          '--scenario',
-          'retry',
-          '--attempt',
-          '1',
-          '--mode',
-          'succeed',
-          '--cwd',
-          '/fixture'
-        ])
-        expect(stdout.mock.calls.flat().join('')).toContain(`${'gh' + 'p_'}${'T'.repeat(36)}`)
-        return { status: 0, stdout: '' }
-      }
-      if (command === 'git') {
-        return {
-          status: 0,
-          stdout:
-            scenario === 'scope-violation'
-              ? 'README.md\n'
-              : scenario === 'secret-line'
-                ? 'src/services/csv.ts\n'
-                : 'src/retry.ts\n'
-        }
-      }
-      if (args.includes('artifact')) {
-        expect(args[args.indexOf('--file') + 1]).toBe('/virtual-report/REPORT.md')
-      }
+    if (command === 'git') {
       return {
         status: 0,
-        stdout: JSON.stringify({ ok: true, result: { artifact: { id: 'art_report' } } })
+        stdout:
+          scenario === 'scope-violation'
+            ? 'README.md\n'
+            : scenario === 'secret-line'
+              ? 'src/services/csv.ts\n'
+              : 'src/retry.ts\n'
       }
-    })
-    const nativeRequire = createRequire(import.meta.url)
-    await runInNewContext(
-      `${AXIOM_TEST_PROVIDER_SOURCE}\nsubmitFixture('attempt-1', 'mission-1', 'task-1')`,
-      {
-        require: (name: string) => {
-          if (name === 'node:path') {
-            return nativeRequire('node:path').posix
-          }
-          if (name === 'node:fs') {
-            return {
-              existsSync: (file: string) => files.has(file),
-              readFileSync: (file: string) => files.get(file),
-              writeFileSync: (file: string, content: string) => written.set(file, content),
-              appendFileSync: (file: string, content: string) =>
-                files.set(file, (files.get(file) ?? '') + content),
-              mkdtempSync: () => '/virtual-report',
-              rmSync: (file: string) => {
-                removed.push(file)
-                files.delete(file)
-              }
+    }
+    if (args.includes('artifact')) {
+      expect(args[args.indexOf('--file') + 1]).toBe('/virtual-report/REPORT.md')
+    }
+    return {
+      status: 0,
+      stdout: JSON.stringify({
+        ok: true,
+        result: { attempt: { seq }, artifact: { id: 'art_report' } }
+      })
+    }
+  })
+  const nativeRequire = createRequire(import.meta.url)
+  await runInNewContext(
+    `${AXIOM_TEST_PROVIDER_SOURCE}\nsubmitFixture('attempt-1', 'mission-1', 'task-1')`,
+    {
+      require: (name: string) => {
+        if (name === 'node:path') {
+          return nativeRequire('node:path').posix
+        }
+        if (name === 'node:fs') {
+          return {
+            existsSync: (file: string) => files.has(file),
+            readFileSync: (file: string) => files.get(file),
+            writeFileSync: (file: string, content: string) => written.set(file, content),
+            appendFileSync: (file: string, content: string) =>
+              files.set(file, (files.get(file) ?? '') + content),
+            mkdtempSync: () => '/virtual-report',
+            rmSync: (file: string) => {
+              removed.push(file)
+              files.delete(file)
             }
           }
-          if (name === 'node:child_process') {
-            return { spawnSync }
-          }
-          return nativeRequire(name)
-        },
-        process: {
-          argv: [],
-          env: { AXIOM_E2E_LEDGER: '/ledger', ORCA_E2E_CLI_ENTRY: '/cli' },
-          execPath: '/node',
-          cwd: () => '/fixture',
-          stdout: { write: stdout },
-          stdin: { setEncoding() {}, on() {}, resume() {} }
-        },
-        setInterval() {}
-      }
-    )
-    expect(written.get('/virtual-report/REPORT.md')).toContain('taskId: task-1')
-    const report = JSON.parse(written.get('/virtual-report/report.json')!)
-    expect(report.filesChanged).toEqual([
-      scenario === 'scope-violation'
-        ? 'README.md'
-        : scenario === 'secret-line'
-          ? 'src/services/csv.ts'
-          : 'src/retry.ts'
-    ])
-    expect(removed).toContain('/virtual-report')
-    expect(files.has('/fixture/REPORT.md')).toBe(false)
-    expect(written.has('/fixture/REPORT.md')).toBe(false)
-    if (scenario === 'secret-line') {
-      const token = `${'gh' + 'p_'}${'Z'.repeat(36)}`
-      expect(files.get('/fixture/src/services/csv.ts')).toBe(`// axiom e2e probe ${token}\n`)
-    } else if (scenario === 'transcript-secret') {
-      expect(written.get('/virtual-report/REPORT.md')).toContain('Frozen retry report')
-      expect(JSON.stringify([...written])).not.toContain(`${'gh' + 'p_'}${'T'.repeat(36)}`)
-      expect(
-        spawnSync.mock.calls.filter(([, args]) => args.includes('scenarios/stub-worker/worker.mjs'))
-      ).toHaveLength(1)
-    } else {
-      expect(files.get('/fixture/README.md')).toBe('\n<!-- axiom e2e scope probe -->\n')
+        }
+        if (name === 'node:child_process') {
+          return { spawnSync }
+        }
+        return nativeRequire(name)
+      },
+      process: {
+        argv: [],
+        env: { AXIOM_E2E_LEDGER: '/ledger', ORCA_E2E_CLI_ENTRY: '/cli' },
+        execPath: '/node',
+        cwd: () => '/fixture',
+        stdout: { write: stdout },
+        stdin: { setEncoding() {}, on() {}, resume() {} }
+      },
+      setInterval() {}
     }
+  )
+  expect(written.get('/virtual-report/REPORT.md')).toContain('taskId: task-1')
+  const report = JSON.parse(written.get('/virtual-report/report.json')!)
+  expect(report.summary).toBe(`D49 ${scenario} scenario attempt ${seq} succeeded`)
+  expect(report.filesChanged).toEqual([
+    scenario === 'scope-violation'
+      ? 'README.md'
+      : scenario === 'secret-line'
+        ? 'src/services/csv.ts'
+        : 'src/retry.ts'
+  ])
+  expect(removed).toContain('/virtual-report')
+  expect(files.has('/fixture/REPORT.md')).toBe(false)
+  expect(written.has('/fixture/REPORT.md')).toBe(false)
+  if (scenario === 'secret-line') {
+    const token = `${'gh' + 'p_'}${'Z'.repeat(36)}`
+    expect(files.get('/fixture/src/services/csv.ts')).toBe(`// axiom e2e probe ${token}\n`)
+  } else if (scenario === 'transcript-secret') {
+    expect(written.get('/virtual-report/REPORT.md')).toContain('Frozen retry report')
+    expect(JSON.stringify([...written])).not.toContain(`${'gh' + 'p_'}${'T'.repeat(36)}`)
+    expect(
+      spawnSync.mock.calls.filter(([, args]) => args.includes('scenarios/stub-worker/worker.mjs'))
+    ).toHaveLength(1)
+  } else {
+    expect(files.get('/fixture/README.md')).toBe('\n<!-- axiom e2e scope probe -->\n')
   }
-)
+})

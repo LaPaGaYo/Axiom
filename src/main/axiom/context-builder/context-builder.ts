@@ -11,6 +11,8 @@ import { sha256 } from '../artifacts/artifact-store'
 import { mandatorySections, markdownSection } from './render'
 import { redactContext } from './redaction'
 import { buildPlannerContext } from './planner-render'
+import { resolveAttemptBaseline } from '../execution/attempt-baseline'
+import { previousAttemptSection } from './previous-attempt'
 
 const BuildParams = z.object({
   missionId: AxiomIdSchema,
@@ -46,10 +48,16 @@ export class ContextBuilder {
   private async buildWorker(input: z.input<typeof BuildParams>) {
     const p = BuildParams.parse(input)
     const tokenBudget = p.tokenBudget ?? this.store.getContextTokenBudget(p.missionId) ?? 24_000
+    const baseline = resolveAttemptBaseline(this.store, {
+      taskId: p.taskId,
+      seq: this.store.nextAttemptSeq(p.taskId)
+    })
+    const previousAttempt = await previousAttemptSection(this.store, this.artifacts, baseline)
     const { task, incoming, sections, protocol } = await mandatorySections(
       this.store,
       p.missionId,
-      p.taskId
+      p.taskId,
+      previousAttempt
     )
     const mandatory = sections.map(({ section, source, text }, index) => {
       // The protocol is rendered last but belongs to the mandatory submission contract.
