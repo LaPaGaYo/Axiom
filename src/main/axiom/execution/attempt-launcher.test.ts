@@ -14,6 +14,9 @@ import { PROVIDER_SELECTION_RULES } from '../agent-factory/provider-selection'
 import { Scheduler, type AdmittedAttempt } from '../scheduler/scheduler'
 import { createAttemptLauncher, type AttemptWorkerStartArgs } from './attempt-launcher'
 import { settleAttemptWithoutSubmission } from './attempt-settlement'
+import { previousSubmission } from './attempt-baseline.test-support'
+import * as gitRunner from '../../git/runner'
+import { gitOptionsForWorktree } from '../../git/git-runtime-options'
 
 let f: ReturnType<typeof planned>
 let root: string
@@ -67,8 +70,8 @@ beforeEach(async () => {
 })
 afterEach(async () => {
   vi.restoreAllMocks()
-  createManagedWorktree.mockClear()
-  startWorker.mockClear()
+  createManagedWorktree.mockReset()
+  startWorker.mockReset()
   f.db.close()
   await rm(root, { recursive: true, force: true })
 })
@@ -145,7 +148,8 @@ it('kernel inputs: precreates from integration base and sends one synthetic call
       seq: 1,
       branch: attempt.branch,
       worktreeId: 'wt-created',
-      provider: 'codex'
+      provider: 'codex',
+      baseline: { kind: 'integration', reason: 'first_attempt' }
     }
   })
   console.log(
@@ -289,3 +293,151 @@ it.each(['abandoned', 'circuit_broken'] as const)(
     }
   }
 )
+
+async function admitAfterSubmission(reason = 'checks_failed', submitted = true) {
+  await admit()
+  const dispatch = f.db.createStartingWorkerDispatch({
+    taskId: attempt.taskId,
+    creator: { kind: 'system' },
+    maxDepth: 1,
+    startOptions: {}
+  }).dispatch
+  f.store.bindAttemptDispatch(attempt.taskId, 1, dispatch.id)
+  f.db.settleWorkerReport({
+    taskId: attempt.taskId,
+    dispatchId: dispatch.id,
+    outcome: 'succeeded',
+    result: 'submitted'
+  })
+  expect(f.db.getTask(attempt.taskId)?.status).toBe('completed')
+  const previous = submitted
+    ? previousSubmission(f.store, {
+        missionId: f.missionId,
+        taskId: attempt.taskId,
+        dispatchId: dispatch.id,
+        reason
+      })
+    : undefined
+  f.store.updateTaskStage({ taskId: attempt.taskId, from: 'RUNNING', to: 'READY' })
+  await admit()
+  expect(attempt.seq).toBe(2)
+  return previous
+}
+
+function worktreeResult(head?: string): CreateWorktreeResult {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only id/path/git.head are read; the fake kernel never accesses catalog fields.
+  return {
+    worktree: { id: 'wt-created', path: root, ...(head ? { git: { head } } : {}) }
+  } as CreateWorktreeResult
+}
+
+it.each(['ready', 'outcome_unknown', 'failed'] as const)(
+  'continues the Candidate, reopens completed and audits %s',
+  async (state) => {
+    const previous = (await admitAfterSubmission())!
+    const reopen = vi.spyOn(f.db, 'updateTaskStatus')
+    createManagedWorktree.mockImplementationOnce(async (args) => {
+      expect(reopen).not.toHaveBeenCalled()
+      expect(args.baseBranch).toBe(previous.candidate.commitSha)
+      return worktreeResult(previous.candidate.commitSha)
+    })
+    startWorker.mockImplementationOnce(async (args) => {
+      expect(reopen).toHaveBeenCalledWith(attempt.taskId, 'ready')
+      expect(args.existingTask?.status).toBe('ready')
+      expect(args.params.retryOf).toBeUndefined()
+      const next = f.db.createStartingWorkerDispatch({
+        taskId: attempt.taskId,
+        creator: { kind: 'system' },
+        maxDepth: 1,
+        startOptions: {}
+      }).dispatch
+      return { taskId: attempt.taskId, dispatchId: next.id, state }
+    })
+    await launcher()(attempt)
+    expect(startWorker).toHaveBeenCalledOnce()
+    const event =
+      state === 'ready'
+        ? 'attempt.started'
+        : state === 'failed'
+          ? 'attempt.launch_failed'
+          : 'attempt.start_unknown'
+    expect(events(event).at(-1)?.after).toMatchObject({
+      seq: 2,
+      orcaTaskReopened: true,
+      baseline: {
+        kind: 'candidate',
+        candidateId: previous.candidate.id,
+        commitSha: previous.candidate.commitSha
+      }
+    })
+  }
+)
+
+it('reads HEAD with the shared Git runner when creation omits git.head', async () => {
+  const previous = (await admitAfterSubmission())!
+  createManagedWorktree.mockResolvedValueOnce(worktreeResult())
+  const git = vi
+    .spyOn(gitRunner, 'gitExecFileAsync')
+    .mockResolvedValue({ stdout: `${previous.candidate.commitSha}\n`, stderr: '' })
+  await launcher()(attempt)
+  expect(git.mock.calls).toEqual([[['rev-parse', 'HEAD'], gitOptionsForWorktree(root)]])
+  expect(startWorker).toHaveBeenCalledOnce()
+})
+
+it.each([true, false])(
+  'fails a mismatched HEAD without reopening, resetting or starting (metadata %s)',
+  async (metadata) => {
+    await admitAfterSubmission()
+    createManagedWorktree.mockResolvedValueOnce(
+      worktreeResult(metadata ? 'b'.repeat(40) : undefined)
+    )
+    const git = vi
+      .spyOn(gitRunner, 'gitExecFileAsync')
+      .mockResolvedValue({ stdout: `${'b'.repeat(40)}\n`, stderr: '' })
+    const reopen = vi.spyOn(f.db, 'updateTaskStatus')
+    await launcher()(attempt)
+    expect(events('attempt.launch_failed').at(-1)?.after).toMatchObject({
+      message: 'fix_base_mismatch'
+    })
+    expect(stage()).toBe('BLOCKED')
+    expect(binding()?.dispatchId).toBeNull()
+    expect(startWorker).not.toHaveBeenCalled()
+    expect(reopen).not.toHaveBeenCalled()
+    expect(git.mock.calls.map(([args]) => args)).toEqual(metadata ? [] : [['rev-parse', 'HEAD']])
+  }
+)
+
+it('reopens a submitted secret failure but starts clean on integration', async () => {
+  await admitAfterSubmission('secret_detected')
+  const reopen = vi.spyOn(f.db, 'updateTaskStatus')
+  await launcher()(attempt)
+  expect(createManagedWorktree).toHaveBeenCalledWith(
+    expect.objectContaining({ baseBranch: `axiom/integration/${f.missionId}` })
+  )
+  expect(reopen).toHaveBeenCalledWith(attempt.taskId, 'ready')
+  expect(startWorker.mock.calls[0][0].params.retryOf).toBeUndefined()
+  expect(events('attempt.started').at(-1)?.after).toMatchObject({
+    baseline: { kind: 'integration', reason: 'secret_detected' },
+    orcaTaskReopened: true
+  })
+})
+
+it('leaves completed without a previous Submission unstartable', async () => {
+  await admitAfterSubmission('checks_failed', false)
+  const reopen = vi.spyOn(f.db, 'updateTaskStatus')
+  startWorker.mockImplementationOnce(async () => {
+    f.db.createStartingWorkerDispatch({
+      taskId: attempt.taskId,
+      creator: { kind: 'system' },
+      maxDepth: 1,
+      startOptions: {}
+    })
+    throw new Error('Unexpected dispatch')
+  })
+  await launcher()(attempt)
+  expect(reopen).not.toHaveBeenCalled()
+  expect(stage()).toBe('BLOCKED')
+  expect(events('attempt.launch_failed').at(-1)?.after).toMatchObject({
+    message: expect.stringContaining('only a ready Task can start')
+  })
+})

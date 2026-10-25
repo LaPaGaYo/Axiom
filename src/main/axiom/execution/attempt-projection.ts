@@ -6,6 +6,16 @@ import type { OrchestrationFleetWorker } from '../../../shared/orchestration-fle
 import type { inspectWorkerTerminal } from '../../runtime/rpc/methods/orchestration/worker/worker-observation'
 import type { AxiomStore } from '../db/axiom-store'
 
+export function findSubmissionTranscriptArtifactId(
+  store: AxiomStore,
+  missionId: string,
+  submissionId: string
+) {
+  return store
+    .listArtifacts({ missionId, kind: 'log', relatedTo: submissionId })
+    .findLast((artifact) => artifact.createdBy === 'AttemptSettlement')?.id
+}
+
 export function foldAttemptLiveness(
   observation: Awaited<ReturnType<typeof inspectWorkerTerminal>>
 ) {
@@ -33,9 +43,7 @@ export async function projectAttempt(
     throw new Error('Submission Candidate is missing')
   }
   const transcriptArtifactId = submission
-    ? store
-        .listArtifacts({ missionId: binding.missionId, kind: 'log', relatedTo: submission.id })
-        .findLast((artifact) => artifact.createdBy === 'AttemptSettlement')?.id
+    ? findSubmissionTranscriptArtifactId(store, binding.missionId, submission.id)
     : undefined
   return AttemptSummarySchema.parse({
     ...binding,

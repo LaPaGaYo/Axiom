@@ -20,6 +20,9 @@ export function inspectFixtureMission(userData: string, missionId: string) {
       bindings: db
         .prepare('SELECT * FROM attempt_bindings WHERE mission_id = ? ORDER BY task_id, seq')
         .all(missionId),
+      contextPackages: db
+        .prepare('SELECT id, mandatory_refs FROM context_packages WHERE mission_id = ? ORDER BY id')
+        .all(missionId),
       tasks: db
         .prepare('SELECT * FROM task_stages WHERE mission_id = ? ORDER BY task_id')
         .all(missionId),
@@ -51,10 +54,14 @@ export function inspectFixtureMission(userData: string, missionId: string) {
             task_id: z.string(),
             dispatch_id: z.string().nullable(),
             seq: z.number(),
+            context_package_id: z.string(),
             branch: z.string()
           })
         )
         .parse(rows.bindings),
+      contextPackages: z
+        .array(z.object({ id: z.string(), mandatory_refs: z.string() }))
+        .parse(rows.contextPackages),
       tasks: z
         .array(
           z.object({
