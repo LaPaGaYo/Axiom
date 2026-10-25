@@ -1,4 +1,5 @@
-import { writeFileSync } from 'node:fs'
+import { desktopCall } from './helpers/axiom-desktop-call'
+import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { z } from 'zod'
 import { test, expect } from './helpers/orca-app'
@@ -21,7 +22,7 @@ test('M3-02: independent checks reject both broken fixture candidates and verify
   await withFixtureMission(
     testInfo,
     source,
-    async ({ mission, userData, ledgerPath, temp, releaseWorkers }) => {
+    async ({ page, mission, userData, ledgerPath, temp, releaseWorkers }) => {
       const inspect = () => inspectFixtureMission(userData, mission.id)
       const list = () =>
         VerificationListResponseSchema.parse(
@@ -67,15 +68,10 @@ test('M3-02: independent checks reject both broken fixture candidates and verify
         rulesFile,
         JSON.stringify({ setupCommands: ['pnpm install --frozen-lockfile --prefer-offline'] })
       )
-      cli(userData, [
-        'mission',
-        'policy',
-        'update',
-        '--mission',
-        mission.id,
-        '--verification-rules-file',
-        rulesFile
-      ])
+      await desktopCall(page, 'axiom.policy.update', {
+        missionId: mission.id,
+        patch: { verificationRules: JSON.parse(readFileSync(rulesFile, 'utf8')) }
+      })
       releaseWorkers()
       await expect
         .poll(() => list().filter((run) => ['PASS', 'FAIL'].includes(run.status)).length, {

@@ -54,7 +54,7 @@ function resolveWorkerSender(
   return { ...identity, task }
 }
 
-function resolveAttemptIdentity(input: SenderInput) {
+export function resolveAttemptIdentity(input: SenderInput) {
   const { runtime, db, store, from, attemptId, orchestrationCaller } = input
   const sender = orchestrationCallerIdentity(runtime, {
     handle: from,

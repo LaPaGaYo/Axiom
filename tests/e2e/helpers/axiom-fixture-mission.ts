@@ -1,3 +1,6 @@
+import { desktopCall } from './axiom-desktop-call'
+import { readGoalFile } from '../../../src/cli/handlers/axiom/input-files'
+import { DEFAULT_MISSION_POLICY } from '../../../src/shared/axiom-contract/mission-objects'
 import { spawnSync } from 'node:child_process'
 import { chmodSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
@@ -154,28 +157,17 @@ process.exit(result.status ?? 1)
       .object({ repo: z.object({ id: z.string() }) })
       .parse(cli(userData, ['repo', 'add', '--path', clone]))
     const { mission } = MissionResponseSchema.parse(
-      cli(userData, [
-        'mission',
-        'create',
-        '--repo',
-        `id:${repo.id}`,
-        '--target-branch',
-        'main',
-        '--goal-file',
-        path.join(clone, 'GOAL.md')
-      ])
+      await desktopCall(first.page, 'axiom.mission.create', {
+        repo: `id:${repo.id}`,
+        targetBranch: 'main',
+        goal: await readGoalFile(clone, 'GOAL.md'),
+        policy: DEFAULT_MISSION_POLICY
+      })
     )
-    const routing = path.join(temp, 'routing.json')
-    writeFileSync(routing, JSON.stringify({ preferredProviders: ['codex'] }))
-    cli(userData, [
-      'mission',
-      'policy',
-      'update',
-      '--mission',
-      mission.id,
-      '--routing-file',
-      routing
-    ])
+    await desktopCall(first.page, 'axiom.policy.update', {
+      missionId: mission.id,
+      patch: { routing: { preferredProviders: ['codex'] } }
+    })
     if (!mission.activeGoalRevisionId) {
       throw new Error('Missing GoalRevision')
     }
@@ -194,7 +186,7 @@ process.exit(result.status ?? 1)
     let planRevision
     if (options.planner) {
       const { attempt } = MissionPlanResponseSchema.parse(
-        cli(userData, ['mission', 'plan', '--mission', mission.id], { timeoutMs: 130_000 })
+        await desktopCall(first.page, 'axiom.mission.plan', { missionId: mission.id })
       )
       expect(attempt.provider).toBe('codex')
       expect(attempt.branch).toBe(`axiom/planner/${mission.id}/1`)
@@ -225,14 +217,19 @@ process.exit(result.status ?? 1)
           .sort()
       ).toEqual(['T01', 'T02', 'T03'])
     } else {
-      const planPath = path.join(temp, 'proposal.json')
-      writeFileSync(planPath, JSON.stringify(proposal))
       planRevision = PlanResponseSchema.parse(
-        cli(userData, ['plan', 'propose', '--mission', mission.id, '--file', planPath])
+        await desktopCall(first.page, 'axiom.plan.propose', {
+          missionId: mission.id,
+          planRevision: proposal,
+          provenance: proposal.provenance
+        })
       ).planRevision
     }
-    cli(userData, ['plan', 'approve', '--plan', planRevision.id, '--resolver', 'e2e'])
-    cli(userData, ['mission', 'start', '--mission', mission.id])
+    await desktopCall(first.page, 'axiom.plan.approve', {
+      planRevisionId: planRevision.id,
+      resolver: 'e2e'
+    })
+    await desktopCall(first.page, 'axiom.mission.start', { missionId: mission.id })
     await run({
       page: first.page,
       mission,

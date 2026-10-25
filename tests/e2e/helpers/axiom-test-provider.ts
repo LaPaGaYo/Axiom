@@ -46,7 +46,7 @@ async function submitFixture(attemptId, missionId, taskId) {
     'suppression': { file: 'clock.test.ts', expected: "test('fixed clocks normalize instants and reject malformed input', () => {" }
   }
   const tamper = tamperProbes[scenario]
-  if (!tamper && !['retry', 'deterministic-failure', 'agent-crash', 'scope-violation', 'secret-line', 'transcript-secret'].includes(scenario)) throw new Error('Unknown fixture scenario')
+  if (!tamper && !['retry', 'deterministic-failure', 'agent-crash', 'scope-violation', 'secret-line', 'transcript-secret', 'self-approve'].includes(scenario)) throw new Error('Unknown fixture scenario')
   // Keep both the Worker Artifact and protocol envelope outside the Candidate snapshot.
   const temp = mkdtempSync(path.join(os.tmpdir(), 'axiom-submit-report-'))
   try {
@@ -55,10 +55,25 @@ async function submitFixture(attemptId, missionId, taskId) {
     }
     const command = ['scenarios/stub-worker/worker.mjs', '--scenario', scenario === 'transcript-secret' ? 'retry' : scenario, '--attempt', String(Math.min(seq, 2)), '--mode', 'succeed', '--cwd', process.cwd()]
     const started = Date.now()
-    const providerOnly = Boolean(tamper) || scenario === 'scope-violation' || scenario === 'secret-line'
+    const providerOnly = Boolean(tamper) || scenario === 'scope-violation' || scenario === 'secret-line' || scenario === 'self-approve'
     let reportText
     if (providerOnly) {
-      if (tamper) {
+      if (scenario === 'self-approve') {
+        const plans = cli(['plan', 'list', '--mission', missionId])
+        const plan = plans.response.result?.planRevisions.find(row => row.status === 'APPROVED')
+        if (!plans.response.ok || !plan) throw new Error('Missing current PlanRevision')
+        const rulesFile = path.join(temp, 'verification-rules.json')
+        writeFileSync(rulesFile, JSON.stringify({ testPathPatterns: [] }))
+        const probes = [
+          ['plan.approve', ['plan', 'approve', '--plan', plan.id, '--resolver', 'worker-self-approve']],
+          ['policy.update', ['mission', 'policy', 'update', '--mission', missionId, '--verification-rules-file', rulesFile]],
+          ['message.answer', ['message', 'answer', '--mission', missionId, '--question', 'q_does_not_exist', '--body', 'x']]
+        ]
+        reportText = probes.map(([method, args]) => {
+          const result = cli(args)
+          return method + ' exitCode=' + result.status + ' errorCode=' + (result.response.error?.code ?? 'none')
+        }).join('\\n') + '\\n'
+      } else if (tamper) {
         const file = path.join(process.cwd(), 'src', 'domain', tamper.file)
         const content = readFileSync(file, 'utf8')
         if (!content.includes(tamper.expected)) throw new Error('Missing fixture text: ' + scenario)
@@ -70,7 +85,7 @@ async function submitFixture(attemptId, missionId, taskId) {
         const token = 'gh' + 'p_' + 'Z'.repeat(36)
         appendFileSync(path.join(process.cwd(), 'src', 'services', 'csv.ts'), '// axiom e2e probe ' + token + '\\n')
       }
-      reportText = 'Provider diff-gate probe: ' + scenario + '\\n'
+      reportText ??= 'Provider diff-gate probe: ' + scenario + '\\n'
     } else {
       const stub = spawnSync(process.execPath, command, { cwd: process.cwd(), env: process.env, encoding: 'utf8', timeout: 60000 })
       if (stub.status !== 0) throw new Error('Fixture stub failed')
@@ -82,7 +97,7 @@ async function submitFixture(attemptId, missionId, taskId) {
     reportText += '\\nmission: ' + missionId + '\\ntaskId: ' + taskId + '\\nattemptId: ' + attemptId + '\\n'
     const reportPath = path.join(temp, 'REPORT.md')
     writeFileSync(reportPath, reportText)
-    const artifact = cli(['mission', 'artifact', 'put', '--mission', missionId, '--kind', 'worker_report', '--file', reportPath, '--related', taskId])
+    const artifact = cli(['mission', 'artifact', 'put', '--attempt', attemptId, '--mission', missionId, '--kind', 'worker_report', '--file', reportPath, '--related', taskId])
     appendFileSync(process.env.AXIOM_E2E_LEDGER, JSON.stringify({ kind: 'artifact', attemptId, ...artifact }) + '\\n')
     if (!artifact.response.ok) throw new Error('Artifact put failed')
     const artifactId = artifact.response.result.artifact.id
@@ -161,7 +176,7 @@ process.stdin.on('data', chunk => {
     const end = delivered.indexOf('\\x1b[201~')
     const preamble = begin >= 0 && end >= 0 ? delivered.slice(begin + 6, end) : delivered
     const attemptId = preamble.match(/--attempt (\\S+)/)?.[1]
-    const artifactRecipe = preamble.match(/axiom mission artifact put --mission (\\S+) --kind <kind> --file <path> --related (\\S+)/)
+    const artifactRecipe = preamble.match(/axiom mission artifact put --attempt \\S+ --mission (\\S+) --kind <kind> --file <path> --related (\\S+)/)
     if (!attemptId || mode !== 'bracketed') {
       process.stdout.write('PASTE_PROTOCOL_ERROR\\n')
       return

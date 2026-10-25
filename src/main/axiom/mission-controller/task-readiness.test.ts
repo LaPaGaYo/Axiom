@@ -55,24 +55,26 @@ describe('database-derived readiness', () => {
     expect(f.controller.listTasks({ missionId: f.missionId, stage: 'READY' })).toEqual(ready)
   })
 
-  it.each(TASK_STAGES)('honors default and relaxed edges with upstream %s', (stage) => {
+  it.each(TASK_STAGES)('requires INTEGRATED even for legacy edges with upstream %s', (stage) => {
     f.db.close()
     const source = makeProposal()
     const proposal: PlanProposal = {
       ...source,
       tasks: source.tasks.slice(0, 3),
       edges: [
-        { fromTaskId: 'T01', toTaskId: 'T02', readinessThreshold: 'VERIFIED' },
+        { fromTaskId: 'T01', toTaskId: 'T02', readinessThreshold: 'INTEGRATED' },
         { fromTaskId: 'T01', toTaskId: 'T03', readinessThreshold: 'INTEGRATED' }
       ]
     }
     f = planned(fixture(), proposal)
+    // Seed a stored pre-D69 edge, without admitting a new unsupported proposal.
+    f.db.db
+      .prepare('UPDATE mission_task_edges SET readiness_threshold = ? WHERE to_task_id = ?')
+      .run('VERIFIED', task('T02').taskId)
     f.controller.startExecution(f.missionId)
     seedStage('T01', stage)
     const moved = f.controller.recomputeReadiness(f.missionId)
-    expect(task('T02').stage).toBe(
-      ['VERIFIED', 'INTEGRATION_READY', 'INTEGRATED'].includes(stage) ? 'READY' : 'DEFINED'
-    )
+    expect(task('T02').stage).toBe(stage === 'INTEGRATED' ? 'READY' : 'DEFINED')
     expect(task('T03').stage).toBe(stage === 'INTEGRATED' ? 'READY' : 'DEFINED')
     expect(moved).toEqual([...moved].sort())
   })

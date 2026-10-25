@@ -39,6 +39,7 @@ import { readAgentSessionRecordStore } from '../orchestration/structured-session
 import { structuredWorkerHostScope } from '../structured-worker-identity'
 import type { RpcRequest } from './core'
 import { isAxiomAttemptCallerMethod } from '../../../shared/axiom-contract/attempt-caller-methods'
+import { resolveAxiomCallerClass } from '../../axiom/authority/caller-authority'
 
 type CallerParam = 'from' | 'terminal' | 'callerTerminalHandle'
 
@@ -89,7 +90,11 @@ const NO_EFFECTS = { effectsApplied: false } as const
  * caller. Synchronous, so every other request, terminal callers included, takes no extra async hop.
  */
 export function needsOrchestrationCallerResolution(request: RpcRequest): boolean {
-  if (!request.method.startsWith('orchestration.') && !isAxiomAttemptCallerMethod(request.method)) {
+  if (
+    !request.method.startsWith('orchestration.') &&
+    !isAxiomAttemptCallerMethod(request.method) &&
+    resolveAxiomCallerClass(request.method, request.params) !== 'desktop_only'
+  ) {
     return false
   }
   return (

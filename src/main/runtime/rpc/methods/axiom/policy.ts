@@ -1,4 +1,5 @@
 import { defineMethod } from '../../core'
+import { assertSupportedReadinessThreshold } from '../../../../axiom/mission-controller/policy-readiness'
 import {
   PolicyShowParams,
   PolicyUpdateParams
@@ -29,6 +30,7 @@ export const AXIOM_POLICY_METHODS = [
     permission: 'workspace',
     params: PolicyUpdateParams,
     handler: (p, { runtime }) => {
+      assertSupportedReadinessThreshold(p.patch.readinessThreshold)
       if (Object.hasOwn(p.patch, 'budget')) {
         throw Object.assign(new Error('Budget updates require Approval (M4)'), {
           code: 'approval_required'
@@ -39,6 +41,9 @@ export const AXIOM_POLICY_METHODS = [
         const before = requirePolicy(store, p.missionId)
         const policy = {
           ...before,
+          ...(p.patch.readinessThreshold === undefined
+            ? {}
+            : { readinessThreshold: p.patch.readinessThreshold }),
           ...(p.patch.routing === undefined ? {} : { routing: p.patch.routing }),
           ...(p.patch.verificationRules === undefined
             ? {}

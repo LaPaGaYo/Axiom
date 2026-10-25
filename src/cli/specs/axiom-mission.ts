@@ -119,7 +119,7 @@ export const AXIOM_MISSION_COMMAND_SPECS: CommandSpec[] = [
     path: ['mission', 'artifact', 'put'],
     summary: 'Store content-addressed Mission evidence',
     usage:
-      'axiom mission artifact put --mission <id> --kind <kind> --file <path> [--related <ids>] [--media-type <type>] [--created-by <actor>] [--retry-request <id>] [--json]',
+      'axiom mission artifact put --mission <id> --kind <kind> --file <path> [--attempt <id>] [--related <ids>] [--media-type <type>] [--created-by <actor>] [--retry-request <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'mission',
@@ -128,10 +128,12 @@ export const AXIOM_MISSION_COMMAND_SPECS: CommandSpec[] = [
       'related',
       'media-type',
       'created-by',
+      'attempt',
       'retry-request'
     ],
     examples: [
-      'axiom mission artifact put --mission mission_123 --kind handoff --file handoff.md --related task_123'
+      'axiom mission artifact put --mission mission_123 --kind handoff --file handoff.md --related task_123',
+      'axiom mission artifact put --attempt dispatch_123 --mission mission_123 --kind worker_report --file REPORT.md'
     ],
     notes: ['Related ids are comma-separated. Maximum file size is 8 MiB.']
   },

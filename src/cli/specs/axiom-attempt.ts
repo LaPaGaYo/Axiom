@@ -7,7 +7,7 @@ export const AXIOM_ATTEMPT_COMMAND_SPECS: CommandSpec[] = [
       'axiom attempt submit --attempt <id> --report <path.json> [--retry-request <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'attempt', 'from', 'report', 'retry-request'],
     notes: [
-      'Attach REPORT.md first with axiom mission artifact put --kind worker_report; include its Artifact id in report.artifacts.'
+      'Attach REPORT.md first with axiom mission artifact put --attempt <id> --kind worker_report; include its Artifact id in report.artifacts.'
     ]
   },
   {

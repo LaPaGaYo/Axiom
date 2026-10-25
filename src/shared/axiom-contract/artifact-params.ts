@@ -48,7 +48,11 @@ export const ArtifactPutParams = ArtifactMetaSchema.pick({
   mediaType: true,
   related: true,
   createdBy: true
-}).extend({ contentBase64: ContentBase64 })
+}).extend({
+  contentBase64: ContentBase64,
+  attemptId: AxiomIdSchema.optional(),
+  from: z.string().min(1).optional()
+})
 export const ArtifactReadParams = z.object({ id: AxiomIdSchema })
 export const ArtifactListParams = z.object({
   missionId: AxiomIdSchema,

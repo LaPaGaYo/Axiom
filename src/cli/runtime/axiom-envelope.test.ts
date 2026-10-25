@@ -17,7 +17,7 @@ afterEach(() => {
 })
 
 it.each(AXIOM_MUTATION_METHODS)(
-  'stamps %s and reuses the durable request id with identity evidence only for Attempt callers',
+  'stamps %s and reuses the durable request id with session evidence for attribution',
   async (method) => {
     vi.stubEnv('ORCA_AGENT_SESSION_ID', '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37')
     vi.mocked(readMetadata).mockReturnValue({
@@ -34,22 +34,21 @@ it.each(AXIOM_MUTATION_METHODS)(
       _meta: { runtimeId: 'test' }
     })
     const client = new RuntimeClient('/test', 500, null, null)
-    await client.call(method, { example: true }, { orchestrationRequestId: 'same-id' })
+    const params =
+      method === 'axiom.artifact.put' || method === 'axiom.plan.propose'
+        ? { attemptId: 'attempt-1' }
+        : { example: true }
+    await client.call(method, params, { orchestrationRequestId: 'same-id' })
     const envelope = vi.mocked(sendRequest).mock.calls.at(-1)?.[4]
     expect(envelope).toMatchObject({
       orchestrationContractVersion: 1,
       orchestrationRequestId: 'same-id'
     })
-    if (method.startsWith('axiom.attempt.') || method === 'axiom.plan.propose') {
-      expect(envelope).toMatchObject({
-        orchestrationCompatibilityEvidence: {
-          agentSessionId: '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
-        },
-        compatibilityInvocationId: 'same-id'
-      })
-    } else {
-      expect(envelope).not.toHaveProperty('orchestrationCompatibilityEvidence')
-      expect(envelope).not.toHaveProperty('compatibilityInvocationId')
-    }
+    expect(envelope).toMatchObject({
+      orchestrationCompatibilityEvidence: {
+        agentSessionId: '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
+      },
+      compatibilityInvocationId: 'same-id'
+    })
   }
 )

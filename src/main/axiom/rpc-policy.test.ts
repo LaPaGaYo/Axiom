@@ -24,6 +24,38 @@ const updates = () =>
   f.store.listAuditEvents({ missionId }).filter((row) => row.event === 'policy.updated')
 
 describe('Mission policy RPC', () => {
+  it('refuses VERIFIED policy defaults at update and creation without writes', async () => {
+    const before = f.store.getPolicy(missionId)
+    const refused = {
+      ok: false,
+      error: { code: 'invalid_argument', data: { reason: 'threshold_not_supported' } }
+    }
+    expect
+      .soft(
+        await f.call('axiom.policy.update', {
+          missionId,
+          patch: { readinessThreshold: 'VERIFIED' }
+        })
+      )
+      .toMatchObject(refused)
+    expect
+      .soft(
+        await f.call('axiom.mission.create', {
+          ...createParams,
+          policy: { ...createParams.policy, readinessThreshold: 'VERIFIED' }
+        })
+      )
+      .toMatchObject(refused)
+    expect(f.store.getPolicy(missionId)).toEqual(before)
+    expect(f.store.listMissions({})).toHaveLength(1)
+    expect(updates()).toEqual([])
+    expect(
+      await f.call('axiom.policy.update', {
+        missionId,
+        patch: { readinessThreshold: 'INTEGRATED' }
+      })
+    ).toMatchObject({ ok: true })
+  })
   it('replaces verification rules atomically and rejects unknown keys and bad types', async () => {
     expect(
       await f.call('axiom.policy.update', {

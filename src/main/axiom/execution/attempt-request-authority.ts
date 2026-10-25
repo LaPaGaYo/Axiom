@@ -16,7 +16,7 @@ export function assertAttemptRequestAuthority(
     return
   }
   const caller = CallerParams.parse(params)
-  if (method === 'axiom.plan.propose' && !caller.attemptId) {
+  if ((method === 'axiom.plan.propose' || method === 'axiom.artifact.put') && !caller.attemptId) {
     return
   }
   const input = {

@@ -3,13 +3,18 @@ import { readInjectedAgentSessionId } from '../../shared/agent-session-caller-en
 import { readOrchestrationCompatibilityEvidence } from '../../shared/orchestration-compatibility-evidence'
 import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
 import { isAxiomAttemptCallerMethod } from '../../shared/axiom-contract/attempt-caller-methods'
+import { isAxiomMutation } from '../../shared/axiom-contract/mutations'
 
 export function orchestrationCallerEnvelope(
   method: string,
   compatibility: RuntimeOrchestrationEnvelope,
   requestId: string | undefined
 ): RuntimeOrchestrationEnvelope {
-  if (!method.startsWith('orchestration.') && !isAxiomAttemptCallerMethod(method)) {
+  if (
+    !method.startsWith('orchestration.') &&
+    !isAxiomAttemptCallerMethod(method) &&
+    !isAxiomMutation(method)
+  ) {
     return {}
   }
   return {

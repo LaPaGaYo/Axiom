@@ -32,6 +32,7 @@ import { recordRuntimeFeatureInteraction } from './runtime-feature-interaction'
 import type { RpcCallerScope } from './rpc-caller-scope'
 import { admitRpcRequest } from './rpc-request-admission-prologue'
 import { assertAttemptRequestAuthority } from '../../axiom/execution/attempt-request-authority'
+import { assertAxiomCallerAuthority } from '../../axiom/authority/caller-authority'
 
 export type DispatcherOptions = {
   runtime: OrcaRuntimeService
@@ -202,6 +203,15 @@ export class RpcDispatcher {
       return compatibility.result
     }
     const effectiveParams = compatibility.params ?? params
+    assertAxiomCallerAuthority(
+      request.method,
+      effectiveParams,
+      {
+        ...context,
+        orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
+      },
+      method.permission
+    )
     assertAttemptRequestAuthority(request.method, effectiveParams, {
       ...context,
       orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence

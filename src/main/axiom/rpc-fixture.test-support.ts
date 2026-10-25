@@ -35,14 +35,17 @@ export function rpcFixture(dbPath = ':memory:') {
   })
   const dispatcher = new RpcDispatcher({ runtime, methods: AXIOM_METHODS })
   const call = (method: string, params: unknown, envelope: Partial<RpcRequest> = {}) =>
-    dispatcher.dispatch({
-      id: randomUUID(),
-      authToken: 'test-caller',
-      method,
-      params,
-      orchestrationContractVersion: 1,
-      orchestrationRequestId: randomUUID(),
-      ...envelope
-    })
+    dispatcher.dispatch(
+      {
+        id: randomUUID(),
+        authToken: 'test-caller',
+        method,
+        params,
+        orchestrationContractVersion: 1,
+        orchestrationRequestId: randomUUID(),
+        ...envelope
+      },
+      { caller: { kind: 'desktop' } }
+    )
   return { db, runtime, dispatcher, store: new AxiomStore(db), call }
 }

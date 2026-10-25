@@ -84,7 +84,32 @@ describe('PlanRevision proposal', () => {
         ...proposal,
         edges: [...proposal.edges, { ...proposal.edges[0], readinessThreshold: 'VERIFIED' }]
       })
-    ).toMatchObject({ ok: false, errors: [{ code: 'duplicate_edge' }] })
+    ).toMatchObject({
+      ok: false,
+      errors: expect.arrayContaining([
+        {
+          code: 'duplicate_edge',
+          severity: 'error',
+          message: expect.any(String),
+          taskIds: expect.any(Array)
+        }
+      ])
+    })
+  })
+  it('rejects VERIFIED edges in V1 without removing the stored enum', () => {
+    const proposal = PlanProposalSchema.parse(makeProposal())
+    proposal.edges[0].readinessThreshold = 'VERIFIED'
+    expect(PlanProposalSchema.safeParse(proposal).success).toBe(true)
+    expect(validatePlanProposal(proposal)).toMatchObject({
+      ok: false,
+      errors: [
+        {
+          code: 'threshold_not_supported',
+          severity: 'error',
+          message: 'V1 supports only INTEGRATED dependencies'
+        }
+      ]
+    })
   })
   it('only emits the parallel-root warning when requested', () => {
     const proposal = makeProposal()

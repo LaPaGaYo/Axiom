@@ -16,6 +16,12 @@ describe('Mission routing policy', () => {
     }
   })
   it('validates strict show/update params and provider ids', () => {
+    expect(PolicyUpdateParams.parse({ missionId: 'm', patch: {} }).patch).toEqual({})
+    for (const readinessThreshold of ['VERIFIED', 'INTEGRATED']) {
+      expect(
+        PolicyUpdateParams.parse({ missionId: 'm', patch: { readinessThreshold } }).patch
+      ).toEqual({ readinessThreshold })
+    }
     expect(PolicyShowParams.parse({ missionId: 'm' })).toEqual({ missionId: 'm' })
     expect(
       PolicyUpdateParams.parse({ missionId: 'm', patch: { routing: {} } }).patch.routing
