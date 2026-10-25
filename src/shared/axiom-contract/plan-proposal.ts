@@ -29,6 +29,7 @@ export type PlanProposalError = {
     | 'cycle'
     | 'unknown_milestone'
     | 'insufficient_parallel_roots'
+    | 'threshold_not_supported'
   severity: 'error' | 'warning'
   message: string
   taskIds?: string[]
@@ -81,6 +82,14 @@ export function validatePlanProposal(
   const seenEdges = new Set<string>()
   for (const edge of edges) {
     const taskIds = [edge.fromTaskId, edge.toTaskId]
+    if (edge.readinessThreshold === 'VERIFIED') {
+      errors.push({
+        code: 'threshold_not_supported',
+        severity: 'error',
+        message: 'V1 supports only INTEGRATED dependencies',
+        taskIds
+      })
+    }
     if (taskIds.some((id) => !ids.has(id))) {
       errors.push({
         code: 'unknown_edge_endpoint',

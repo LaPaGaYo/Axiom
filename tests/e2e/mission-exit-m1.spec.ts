@@ -1,3 +1,6 @@
+import { desktopCall } from './helpers/axiom-desktop-call'
+import { readGoalFile } from '../../src/cli/handlers/axiom/input-files'
+import { DEFAULT_MISSION_POLICY } from '../../src/shared/axiom-contract/mission-objects'
 import { TUI_AGENT_CONFIG } from '../../src/shared/tui-agent-config'
 /**
  * M1 exit on D42's frozen Controlled Acceptance Fixture. The sole permitted
@@ -7,7 +10,7 @@ import { TUI_AGENT_CONFIG } from '../../src/shared/tui-agent-config'
  * §4b's complete intercept coverage belongs to src/main/axiom/admission/*.test.ts.
  */
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
@@ -184,31 +187,17 @@ test('M1 exit: frozen fixture survives restart and refuses direct Orca mutations
       .object({ repo: z.object({ id: z.string() }) })
       .parse(cli(userData, ['repo', 'add', '--path', clone]))
     const { mission } = MissionResponseSchema.parse(
-      cli(userData, [
-        'mission',
-        'create',
-        '--repo',
-        `id:${repo.id}`,
-        '--target-branch',
-        'main',
-        '--goal-file',
-        path.join(clone, 'GOAL.md')
-      ])
+      await desktopCall(first.page, 'axiom.mission.create', {
+        repo: `id:${repo.id}`,
+        targetBranch: 'main',
+        goal: await readGoalFile(clone, 'GOAL.md'),
+        policy: DEFAULT_MISSION_POLICY
+      })
     )
-    const routingPath = path.join(temp, 'routing.json')
-    writeFileSync(
-      routingPath,
-      JSON.stringify({ disallowedProviders: Object.keys(TUI_AGENT_CONFIG) })
-    )
-    cli(userData, [
-      'mission',
-      'policy',
-      'update',
-      '--mission',
-      mission.id,
-      '--routing-file',
-      routingPath
-    ])
+    await desktopCall(first.page, 'axiom.policy.update', {
+      missionId: mission.id,
+      patch: { routing: { disallowedProviders: Object.keys(TUI_AGENT_CONFIG) } }
+    })
     const shown = MissionResponseSchema.parse(
       cli(userData, ['mission', 'show', '--mission', mission.id])
     )
@@ -227,13 +216,18 @@ test('M1 exit: frozen fixture survives restart and refuses direct Orca mutations
     )
     expect(roots.map((task) => task.id).sort()).toEqual(['T01', 'T02', 'T03'])
     expect(roots.map((task) => task.title).sort()).toEqual(READY_TITLES)
-    const proposalPath = path.join(temp, 'proposal.json')
-    writeFileSync(proposalPath, JSON.stringify(proposal, null, 2))
     const { planRevision } = PlanResponseSchema.parse(
-      cli(userData, ['plan', 'propose', '--mission', mission.id, '--file', proposalPath])
+      await desktopCall(first.page, 'axiom.plan.propose', {
+        missionId: mission.id,
+        planRevision: proposal,
+        provenance: proposal.provenance
+      })
     )
-    cli(userData, ['plan', 'approve', '--plan', planRevision.id, '--resolver', 'e2e'])
-    cli(userData, ['mission', 'start', '--mission', mission.id])
+    await desktopCall(first.page, 'axiom.plan.approve', {
+      planRevisionId: planRevision.id,
+      resolver: 'e2e'
+    })
+    await desktopCall(first.page, 'axiom.mission.start', { missionId: mission.id })
     expect(inspectMission(userData, mission.id).attempts).toEqual([])
     const before = snapshot(userData, mission.id)
     const { tasks } = TaskListResponseSchema.parse(before.tasks)

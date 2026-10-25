@@ -29,7 +29,11 @@ it.each([1, 2, 3])(
         status: 0,
         stdout: JSON.stringify({
           ok: true,
-          result: { attempt: { seq }, artifact: { id: 'art_report' } }
+          result: {
+            attempt: { seq },
+            artifact: { id: 'art_report' },
+            planRevisions: [{ id: 'plan-1', status: 'APPROVED' }]
+          }
         })
       }
     })
@@ -237,6 +241,7 @@ const tamperScenarios = [
 it.each([
   ...[
     'scope-violation',
+    'self-approve',
     'secret-line',
     'transcript-secret',
     ...tamperScenarios.map(({ scenario }) => scenario)
@@ -273,27 +278,41 @@ it.each([
         expect(stdout.mock.calls.flat().join('')).toContain(`${'gh' + 'p_'}${'T'.repeat(36)}`)
         return { status: 0, stdout: '' }
       }
+      if (args.includes('approve') || args.includes('update') || args.includes('answer')) {
+        expect(scenario).toBe('self-approve')
+        return {
+          status: 1,
+          stdout: JSON.stringify({ ok: false, error: { code: 'caller_not_desktop' } })
+        }
+      }
       if (command === 'git') {
         return {
           status: 0,
           stdout:
-            scenario === 'scope-violation'
-              ? 'README.md\n'
-              : scenario === 'secret-line'
-                ? 'src/services/csv.ts\n'
-                : tamper
-                  ? `${tamper.file}\n`
-                  : 'src/retry.ts\n'
+            scenario === 'self-approve'
+              ? ''
+              : scenario === 'scope-violation'
+                ? 'README.md\n'
+                : scenario === 'secret-line'
+                  ? 'src/services/csv.ts\n'
+                  : tamper
+                    ? `${tamper.file}\n`
+                    : 'src/retry.ts\n'
         }
       }
       if (args.includes('artifact')) {
         expect(args[args.indexOf('--file') + 1]).toBe('/virtual-report/REPORT.md')
+        expect(args[args.indexOf('--attempt') + 1]).toBe('attempt-1')
       }
       return {
         status: 0,
         stdout: JSON.stringify({
           ok: true,
-          result: { attempt: { seq }, artifact: { id: 'art_report' } }
+          result: {
+            attempt: { seq },
+            artifact: { id: 'art_report' },
+            planRevisions: [{ id: 'plan-1', status: 'APPROVED' }]
+          }
         })
       }
     })
@@ -350,19 +369,67 @@ it.each([
     expect(written.get('/virtual-report/REPORT.md')).toContain('taskId: task-1')
     const report = JSON.parse(written.get('/virtual-report/report.json')!)
     expect(report.summary).toBe(`D49 ${scenario} scenario attempt ${seq} succeeded`)
-    expect(report.filesChanged).toEqual([
-      scenario === 'scope-violation'
-        ? 'README.md'
-        : scenario === 'secret-line'
-          ? 'src/services/csv.ts'
-          : tamper
-            ? tamper.file
-            : 'src/retry.ts'
-    ])
+    expect(report.filesChanged).toEqual(
+      scenario === 'self-approve'
+        ? []
+        : [
+            scenario === 'scope-violation'
+              ? 'README.md'
+              : scenario === 'secret-line'
+                ? 'src/services/csv.ts'
+                : tamper
+                  ? tamper.file
+                  : 'src/retry.ts'
+          ]
+    )
     expect(removed).toContain('/virtual-report')
     expect(files.has('/fixture/REPORT.md')).toBe(false)
     expect(written.has('/fixture/REPORT.md')).toBe(false)
-    if (tamper) {
+    if (scenario === 'self-approve') {
+      const calls = spawnSync.mock.calls.map(([, args]) => args)
+      expect(calls).toContainEqual([
+        '/cli',
+        'plan',
+        'approve',
+        '--plan',
+        'plan-1',
+        '--resolver',
+        'worker-self-approve',
+        '--json'
+      ])
+      expect(calls).toContainEqual([
+        '/cli',
+        'mission',
+        'policy',
+        'update',
+        '--mission',
+        'mission-1',
+        '--verification-rules-file',
+        '/virtual-report/verification-rules.json',
+        '--json'
+      ])
+      expect(calls).toContainEqual([
+        '/cli',
+        'message',
+        'answer',
+        '--mission',
+        'mission-1',
+        '--question',
+        'q_does_not_exist',
+        '--body',
+        'x',
+        '--json'
+      ])
+      expect(calls.some((args) => args.includes('scenarios/stub-worker/worker.mjs'))).toBe(false)
+      expect(calls.some((args) => args.includes('submit'))).toBe(true)
+      expect(
+        written.get('/virtual-report/REPORT.md')?.match(/exitCode=1 errorCode=caller_not_desktop/g)
+      ).toHaveLength(3)
+      expect(JSON.parse(written.get('/virtual-report/verification-rules.json')!)).toEqual({
+        testPathPatterns: []
+      })
+      expect([...written.keys()].some((file) => file.startsWith('/fixture/'))).toBe(false)
+    } else if (tamper) {
       expect(written.get(`/fixture/${tamper.file}`) ?? files.get(`/fixture/${tamper.file}`)).toBe(
         tamper.after
       )

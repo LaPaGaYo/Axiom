@@ -192,6 +192,8 @@ APPLYING / TESTING → QUEUED（应用重启时由 RecoveryService 丢弃临时�
 | `ProviderFilterReason` | `not_installed \| not_certified \| disallowed \| tier_too_low`，按此顺序取首个命中原因（D57）。 |
 | `endpointProfile` | `subscription`（V1）：用户在 harness 中已有的登录或自行配置的凭据；进入 AgentSpec 的内容寻址，不包含凭据本身（D57）。 |
 | `caller_not_desktop` | 人工动作（`desktop_only` 方法）收到非桌面应用的调用（本机 CLI、配对设备或无法认定）时的拒绝码（D78）。 |
+| `caller_not_permitted_for_agent` | 宿主已解析为 Axiom Attempt / Planner / Reviewer dispatch 的会话调用非 `workspace` 方法、Agent 审批 / 回答或创建 Run / Worker / Orca Task 时的第二层拒绝码（D78）；不替代桌面传输边界。 |
+| `authority.refused` | 调用方守卫拒绝动作且宿主会话能关联 `attempt_bindings` 时追加的审计事件；归属该 Mission / Task，记录 `method`、`callerKind`、`attemptId`（D78）。 |
 | `workerPosture` | `sandboxed`（默认：`workspace-write`、网络关闭、审批桥）\| `bypass`（只作 policy 显式后备，`third_party` 仓库不可用）（D63 当前全文）。 |
 | `repositoryTrust` | `own`（默认）\| `third_party`：第三方仓库只许 sandboxed 姿态的 Worker（D63 当前全文）。 |
 | `threshold_not_supported` | 提案或 policy 里出现 `VERIFIED` 依赖阈值时的错误码（V1 只支持 `INTEGRATED`，D69 修订）。 |

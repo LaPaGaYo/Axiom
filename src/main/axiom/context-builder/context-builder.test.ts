@@ -125,6 +125,9 @@ describe('ContextBuilder', () => {
       'Deleting or skipping tests, removing assertions from a test file, or adding lint, type-check or coverage suppressions sends the Candidate to human review (test_tampering). When the Task has no required evidence commands, reference at least one readable, non-empty Artifact in the submission (JSON must parse); a human or Reviewer confirms it.'
     )
     expect(planner.renderTemplate).toContain(
+      'Use readinessThreshold INTEGRATED only; V1 rejects VERIFIED edges (threshold_not_supported).'
+    )
+    expect(planner.renderTemplate).toContain(
       'Name a test file in allowedPaths when a Task must delete it, and give every Task required evidence commands unless its deliverable is an Artifact for human or Reviewer confirmation.'
     )
     expect(planner.renderTemplate).toContain(
@@ -166,7 +169,7 @@ describe('ContextBuilder', () => {
     const first = await builder.build({ missionId, taskId })
     expect(upstream).toHaveLength(2)
     expect(first.packageId).toBe(
-      'ctx_3f2e9e7d0678704419932e53c82bffa9343a29c917050d3e93e82d059b9bbfd1'
+      'ctx_f85df28ebdfe95ab6501cf47d08ad9900c7af1be6063bb5731b423c86f0b26cf'
     )
     expect(first.manifest.mandatory.map((entry) => entry.section)).toEqual(sections)
     expect(first.packageId).toBe(`ctx_${sha256(canonicalContextManifest(first.manifest))}`)
@@ -273,7 +276,9 @@ describe('ContextBuilder', () => {
     ]) {
       expect(renderTemplate).toContain(`axiom attempt ${verb} --attempt {{attemptId}}`)
     }
-    expect(renderTemplate).toContain(`axiom mission artifact put --mission ${missionId}`)
+    expect(renderTemplate).toContain(
+      `axiom mission artifact put --attempt {{attemptId}} --mission ${missionId}`
+    )
     expect(renderTemplate).toContain(`--related ${taskId}`)
     expect(renderTemplate).not.toMatch(/dcap_|dispatch_[a-f0-9]/)
     expect(renderTemplate).toContain('axiom-submission-v1')

@@ -11,6 +11,7 @@ import {
 } from '../../../shared/axiom-contract/artifact-params'
 import { RuntimeClientError } from '../../runtime/types'
 import { callAxiom } from './rpc-command'
+import { resolveOrchestrationTerminalHandle } from '../orchestration/terminal-identity'
 
 async function contentBase64(cwd: string, file: string) {
   try {
@@ -38,11 +39,16 @@ export const AXIOM_ARTIFACT_HANDLERS: Record<string, CommandHandler> = {
       throw new RuntimeClientError('invalid_argument', 'Unknown artifact kind')
     }
     const related = optional(ctx.flags, 'related')
+    const attemptId = optional(ctx.flags, 'attempt')
+    const from = attemptId
+      ? await resolveOrchestrationTerminalHandle(ctx.flags, ctx.cwd, ctx.client, 'from')
+      : undefined
     await callAxiom(
       ctx,
       'axiom.artifact.put',
       {
         missionId: required(ctx.flags, 'mission'),
+        ...(attemptId ? { attemptId, from } : {}),
         kind: kind.data,
         contentBase64: await contentBase64(ctx.cwd, required(ctx.flags, 'file')),
         mediaType: optional(ctx.flags, 'media-type') ?? 'application/octet-stream',

@@ -34,7 +34,7 @@ export function workerProtocol(missionId: string, taskId: string): string {
         (verb) =>
           `axiom attempt ${verb} --attempt {{attemptId}}${verb === 'submit' ? ' --report <path.json>' : ''}`
       ),
-      `axiom mission artifact put --mission ${missionId} --kind <kind> --file <path> --related ${taskId}`,
+      `axiom mission artifact put --attempt {{attemptId}} --mission ${missionId} --kind <kind> --file <path> --related ${taskId}`,
       '```'
     ].join('\n')
   )

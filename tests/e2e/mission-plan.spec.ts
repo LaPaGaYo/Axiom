@@ -1,3 +1,6 @@
+import { desktopCall } from './helpers/axiom-desktop-call'
+import { readGoalFile } from '../../src/cli/handlers/axiom/input-files'
+import { DEFAULT_MISSION_POLICY } from '../../src/shared/axiom-contract/mission-objects'
 import { spawnSync } from 'node:child_process'
 import {
   chmodSync,
@@ -171,30 +174,25 @@ test('M2-09: a read-only Planner proposes the fixture DAG and releases after PLA
       .object({ repo: z.object({ id: z.string() }) })
       .parse(cli(userData, ['repo', 'add', '--path', clone]))
     const { mission } = MissionResponseSchema.parse(
-      cli(userData, [
-        'mission',
-        'create',
-        '--repo',
-        `id:${repo.id}`,
-        '--target-branch',
-        'main',
-        '--goal-file',
-        path.join(clone, 'GOAL.md')
-      ])
+      await desktopCall(first.page, 'axiom.mission.create', {
+        repo: `id:${repo.id}`,
+        targetBranch: 'main',
+        goal: await readGoalFile(clone, 'GOAL.md'),
+        policy: DEFAULT_MISSION_POLICY
+      })
     )
-    const routing = path.join(temp, 'routing.json')
-    writeFileSync(routing, JSON.stringify({ preferredProviders: ['codex'] }))
-    cli(userData, [
-      'mission',
-      'policy',
-      'update',
-      '--mission',
-      mission.id,
-      '--routing-file',
-      routing
-    ])
+    await desktopCall(first.page, 'axiom.policy.update', {
+      missionId: mission.id,
+      patch: { routing: { preferredProviders: ['codex'] } }
+    })
+    const cliPlanning = invoke(userData, ['mission', 'plan', '--mission', mission.id])
+    expect(cliPlanning.status).not.toBe(0)
+    expect(JSON.parse(cliPlanning.stdout)).toMatchObject({
+      ok: false,
+      error: { code: 'caller_not_desktop' }
+    })
     const { attempt } = MissionPlanResponseSchema.parse(
-      cli(userData, ['mission', 'plan', '--mission', mission.id])
+      await desktopCall(first.page, 'axiom.mission.plan', { missionId: mission.id })
     )
     expect(attempt.provider).toBe('codex')
     expect(attempt.branch).toBe(`axiom/planner/${mission.id}/1`)
@@ -254,7 +252,10 @@ test('M2-09: a read-only Planner proposes the fixture DAG and releases after PLA
       cli(userData, ['mission', 'show', '--mission', mission.id])
     )
     expect(approved.mission.status).toBe('PLAN_REVIEW')
-    cli(userData, ['plan', 'approve', '--plan', plan.id, '--resolver', 'e2e'])
+    await desktopCall(first.page, 'axiom.plan.approve', {
+      planRevisionId: plan.id,
+      resolver: 'e2e'
+    })
     expect(
       MissionResponseSchema.parse(cli(userData, ['mission', 'show', '--mission', mission.id]))
         .mission.status
@@ -264,11 +265,14 @@ test('M2-09: a read-only Planner proposes the fixture DAG and releases after PLA
     ).tasks
     expect(tasks).toHaveLength(12)
     expect(tasks.some((t) => t.id === planner.task_id)).toBe(false)
+    await expect(
+      desktopCall(first.page, 'axiom.mission.plan', { missionId: mission.id })
+    ).rejects.toMatchObject({ code: 'illegal_transition' })
     const denied = invoke(userData, ['mission', 'plan', '--mission', mission.id])
     expect(denied.status).not.toBe(0)
     expect(JSON.parse(denied.stdout)).toMatchObject({
       ok: false,
-      error: { code: 'illegal_transition' }
+      error: { code: 'caller_not_desktop' }
     })
     expect(git(['-C', clone, 'rev-parse', 'refs/heads/main'])).toBe(FIXTURE_COMMIT)
   } finally {

@@ -50,11 +50,7 @@ export function canBecomeReady(
     ) {
       return false
     }
-    return (
-      upstream.stage === 'INTEGRATED' ||
-      (edge.readinessThreshold === 'VERIFIED' &&
-        (upstream.stage === 'VERIFIED' || upstream.stage === 'INTEGRATION_READY'))
-    )
+    return upstream.stage === 'INTEGRATED'
   })
 }
 

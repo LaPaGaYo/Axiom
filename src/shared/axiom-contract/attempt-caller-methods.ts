@@ -8,7 +8,8 @@ export const AXIOM_ATTEMPT_CALLER_METHODS: readonly string[] = [
   'axiom.attempt.handoff',
   'axiom.attempt.request-subtask',
   'axiom.attempt.check',
-  'axiom.plan.propose'
+  'axiom.plan.propose',
+  'axiom.artifact.put'
 ]
 
 export function isAxiomAttemptCallerMethod(method: string): boolean {

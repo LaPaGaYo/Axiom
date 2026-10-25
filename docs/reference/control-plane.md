@@ -69,7 +69,7 @@ Milestone 存在 Plan JSON 内，没有独立表/状态机。Attempt 身份仍�
 
 ### ContextPackage（M2-02）
 
-`plane.artifacts` 与 `plane.contextBuilder` 已由 Scheduler、launcher、submit 服务复用。Artifact id = `art_` + sha256(canonical `{missionId,kind,sha256}`)；相同 Mission/kind/bytes 返回既有元数据（首次 related/createdBy 不被重写），跨 kind/Mission 共用内容文件。先写 `.tmp-<random>` 再 rename；read 重新检查 hash/size，缺文件或不匹配返回 `artifact_corrupt`。put 上限 8 MiB；RPC 用 `contentBase64`，CLI `mission artifact put --mission … --kind … --file … --related …` 在本机读文件。read 的 `--json` 保留 base64，文本输出按 UTF-8；list 支持 kind 和单一 related id。
+`plane.artifacts` 与 `plane.contextBuilder` 已由 Scheduler、launcher、submit 服务复用。Artifact id = `art_` + sha256(canonical `{missionId,kind,sha256}`)；相同 Mission/kind/bytes 返回既有元数据（首次 related/createdBy 不被重写），跨 kind/Mission 共用内容文件。先写 `.tmp-<random>` 再 rename；read 重新检查 hash/size，缺文件或不匹配返回 `artifact_corrupt`。put 上限 8 MiB；RPC 用 `contentBase64`，CLI `mission artifact put --attempt <id> --mission … --kind … --file …` 在本机读文件；Worker 上传必须绑定 Attempt，出处与关联由宿主填写（D78，见调用方权限节；当前 CLI flag 注册缺口见该节）。read 的 `--json` 保留 base64，文本输出按 UTF-8；list 支持 kind 和单一 related id。
 
 ContextBuilder 固定强制顺序：(1) Task spec；(2) PlanRevision revision/milestone/带邻居标题的入出边；(3) ACCEPTED Decisions；(4) 权限、Mission/Task 预算、并发、重试与 `axiom-submission-v1` 字段清单；(5) 目标分支的 AGENTS.md/CLAUDE.md，各最多 16 KiB（缺文件省略，读失败不静默忽略）；(6) policy 验证命令；(7) Previous-Attempt failure evidence（M3-04，见下）。只读这两个规则文件，不读工作区版本或 `.env*`。
 
@@ -139,7 +139,7 @@ M2 仍仅允许首个 Plan 批准；替代计划批准属于 M5。`plan-material
 `task-readiness.ts` 对 DEFINED 重算 READY，要求：
 
 1. Mission 为 EXECUTING，Task 所属 Plan 为同 Mission 的 APPROVED revision。
-2. 每条上游边来自同 Mission/Plan；默认阈值需要 INTEGRATED；VERIFIED 阈值接受 VERIFIED、INTEGRATION_READY、INTEGRATED。
+2. 每条上游边来自同 Mission/Plan，且上游必须为 INTEGRATED。V1 不支持 VERIFIED 阈值（D69，2026-10-25 修订）：提案校验返回 error `threshold_not_supported`，创建 Mission / 更新 policy 默认阈值时拒绝 VERIFIED；存量 VERIFIED 边按 INTEGRATED 判定，不迁移、不改枚举。
 3. Task `attemptCount < retryPolicy.maxAttempts`，Mission policy 存在；配置了 `budget.maxAttempts` 时，Mission 总 attempt count 尚未耗尽。
 4. 无阻塞 Question/Approval。M2-04 的 `blockingQuestionOrApproval(ctx, task)` 依次查询 Task 的 pending `decision_gates`、经 `attempt_bindings.dispatch_id` 关联的 pending `question_threads`，以及同 Mission 的 PENDING `approvals`。前两者返回 question；Approval 只匹配 `BLOCKING_APPROVAL_ACTION_KINDS = [budget_increase]`，返回 approval（M4 扩展）。resolved/timeout gate、answered/closed thread 与非阻塞 action kind 不拦截。DEFINED readiness 和 READY admission 共用此检查。
 
@@ -219,7 +219,7 @@ ContextBuilder 的 planner 形式为 `{missionId,role:'planner',goalRevisionId}`
 
 1. Active GoalRevision id、objective、constraints、acceptanceCriteria。
 2. 仓库规则，沿用 Worker 的 `readRepositoryRules`，读取本次基线的根 AGENTS.md / CLAUDE.md，分别脱敏并限制为 16 KiB，缺失省略。
-3. `z.toJSONSchema(PlanProposalSchema.omit({provenance:true}))` 生成的 JSON Schema，以及唯一 Task id、合法边端点、默认 INTEGRATED、无环、至少一个 root、合法 milestoneId、kind/risk/maxAttempts 与可选 role 标签规则。
+3. `z.toJSONSchema(PlanProposalSchema.omit({provenance:true}))` 生成的 JSON Schema，以及唯一 Task id、合法边端点、V1 只允许 INTEGRATED（VERIFIED 边报 threshold_not_supported）、无环、至少一个 root、合法 milestoneId、kind/risk/maxAttempts 与可选 role 标签规则。
 4. 两个 Task、一条边的最小示例。
 5. `axiom plan propose --mission <id> --attempt {{attemptId}} --file <proposal.json> --json` 配方，要求 worktree 保持 clean，并明确将 proposal JSON 写到 worktree 外。
 
@@ -317,7 +317,7 @@ M2 之后：M3 复用 typed channel 投递验证证据；D58 的执行通道不�
 `axiom.attempt.submit` 已注册为 mutation，参数 `{attemptId, from, senderPaneKey?, report}`，Task/Mission 从 binding 解析，不能由 Worker 自报；响应 `{submission, candidate, duplicate}`。报告严格要求 summary（≤4,000）、filesChanged、checksRun（command/result=pass|fail|skipped、可选 durationMs/note）、artifacts、limitations、risks、questions、followUps；拒绝多余字段。每个 Artifact 必须属于同 Mission，且 related 包含 Task 或 Attempt；Artifact 内容先独立上传，本事务只保存引用，不复制内容。
 
 ```sh
-axiom mission artifact put --mission <missionId> --kind worker_report --file REPORT.md --related <taskId> --json
+axiom mission artifact put --attempt <attemptId> --mission <missionId> --kind worker_report --file REPORT.md --related <taskId> --json
 axiom attempt submit --attempt <attemptId> --report <path.json> --json
 ```
 
@@ -540,6 +540,26 @@ const SUPPRESSIONS = [
 
 M2 之后：M3 复用 Question/待决项投影；M4 接 Approval，M5 使用 REQUEST_SUBTASK 作为 replan 输入。
 
+### 调用方权限（D78）
+
+`src/main/axiom/authority/caller-authority.ts` 的 `AXIOM_METHOD_CALLER_CLASS` 覆盖所有已注册的 `axiom.*`，测试与 `AXIOM_METHODS` 双向对照，包含 `axiom.namespace.get`。方法只占一行；`resolveAxiomCallerClass` 按解析后的 `attemptId` 区分两种提案 / 上传入口。
+
+| 类别 | 方法（省略 axiom. 前缀） |
+| --- | --- |
+| desktop_only | mission.create / plan / start / pause / resume / cancel；goal.propose / activate；plan.approve / reject；policy.update；task.create / cancel；message.answer / resolve；无 attemptId 的 plan.propose / artifact.put |
+| attempt | attempt.submit / ask / inform / request / blocked / handoff / request-subtask / check；带 attemptId 的 plan.propose / artifact.put |
+| read | namespace.get；artifact.read / list；attempt.show / list；goal.show；message.list；mission.show / list；plan.show / list；policy.show；task.list / show；verification.show / list |
+
+`RpcDispatcher.invokeUnary` 在 `assertAttemptRequestAuthority` 旁、mutation receipt replay 之前调用 `assertAxiomCallerAuthority(method, params, ctx, method.permission)`；普通和 streaming transport 的 unary 请求共用此点。desktop_only 只接受 transport 盖章的 `ctx.caller.kind=desktop`；local-cli、paired-device、缺失身份均抛 `OrchestrationError(caller_not_desktop)`，提示在 Axiom app 决定。params 中的身份字段无权改变传输盖章的 caller kind。现有人工 handler 的 user / resolver provenance 不改，也不新增 schema。
+
+第二层只消费宿主已经核实的 `ctx.orchestrationCaller`：以现有 dispatch 身份查询找到 `attempt_bindings` 后，不论 Worker、Planner 或 Reviewer，非 workspace permission，以及 agentSession.respondToApproval / respondToQuestion、orchestration.runCreate / dispatch / workerStart / taskCreate 都抛 `caller_not_permitted_for_agent`。workspace 读取、普通非 Axiom 会话不受这一层影响。可归属的拒绝在抛错前写该 Mission / Task 的 `authority.refused`，after 为 `{method,callerKind,attemptId}`；找不到 binding 时不伪造审计。
+
+实际覆盖由 `dispatcher-axiom-session-coverage.test.ts` 固定：当请求携带注入的 agentSessionId，admission 对**所有 orchestration. 方法**解析会话并设置 ctx（包括未列在 ORCHESTRATION_CALLER_PARAM 的 runShow / reset）；只有该表列出的方法才改写 caller params。Axiom 只有 AXIOM_ATTEMPT_CALLER_METHODS 的八个 Worker 动词、plan.propose、artifact.put 进入解析。其余 axiom.（含 plan.approve / policy.update / message.answer）、agentSession.respondTo*、settings 等方法不解析会话；CLI 的 compatibility envelope 也只为 orchestration. 与上述 Attempt 方法附带证据。无 agentSessionId 的 PTY 终端请求不产生 ctx.orchestrationCaller。无法归属的调用靠 D63 沙盒姿态；人工 Axiom 动作仍由 desktop 传输边界拒绝，不能把第二层当成认证边界。
+
+artifact.put 增加可选 attemptId / from；带 attemptId 时在回执前及 handler 内复用 resolveAttemptSender，核对 Mission，createdBy 固定为 `attempt:<id>`、related 固定为该 Task / Attempt，忽略调用方自报出处和关联。不带 attemptId 时仅桌面可上传。CLI handler、Worker 配方与测试 provider 已传 --attempt。
+
+**M3-04c attempt 1 的范围阻塞，尚未验收**：① src/cli/specs/axiom-mission.ts 未在允许修改清单，artifact put 的 allowedFlags 尚未包含 attempt，因此真实 CLI 在上传前拒绝该 flag；② src/main/runtime/rpc/errors.ts 同样不在清单，新调用方错误被映射成 runtime_error，invalid_argument 的 computer 分支丢弃 threshold_not_supported 数据；③现有 human CLI 没有宿主解析的会话，self-approve 的三个 authority.refused 无法产生。对应断言保持失败，精确文件 / 行与验证记录见 `.axiom-work/reports/M3-04c-1.md`。没有另造身份机制或扩大 runtime 文件改动。
+
 ## 7. Admission 守卫（映射 §4b）
 
 `mission-managed-run-guard.ts` 按 Run、Task、dispatch 查 Mission 归属，在对象解析后、首次写入前拒绝。非 Mission Run 保持原行为；未知对象保持原错误。以下路径在 M1-07 / M2-06a 落地：
@@ -613,7 +633,7 @@ axiom attempt list --mission <missionId> --json
 axiom attempt show --attempt <dispatchId> --json
 ```
 
-`mission create --goal-file` 支持 Markdown（全文 objective，空 acceptanceCriteria）或 GoalBody JSON。`axiom mission plan --mission <id>` 启动 Planner，等 `mission show` 为 PLAN_REVIEW 后查看 `plan list/show`，执行 `plan approve --plan <id> --resolver <actor>`，再 `mission start --mission <id>`。人工 `plan propose --file` 路径仍可用，需要 PlanProposal JSON，fixture decomposition 必须先转换。UI 从 Mission list 选择，Refresh 或 mutation 后重读；选择的 Mission id 不跨重启持久化。
+D78 之后，创建 Mission、启动 Planner、人工提案、批准计划与开始执行都经桌面 IPC；CLI 保留读取、Worker / Planner Attempt 命令与 Orca 仓库注册。人工 CLI 子命令即使参数合法也被调用方守卫拒绝。fixture decomposition 仍须转换为 PlanProposal JSON，由 e2e 的 desktopCall 传给相同 RPC。UI 从 Mission list 选择，Refresh 或 mutation 后重读；选择的 Mission id 不跨重启持久化。
 
 M2-10：Mission Home 的 Attempt 计数仅包含 `role=worker` 的 RUNNING / SUBMITTED；Planner 为 STARTING / RUNNING 时显示进行中。ANALYZING 可 Start Planner；进行中的 mutation、活跃 Planner 或 PROPOSED plan 禁用重复启动。Planner readiness 的长等待期间保留 busy。Pending items 用 `message.list({missionId,pendingOnly:true})` 列出 QUESTION / REQUEST_SUBTASK，点击跳到所属 Task Detail。Task Detail 读取 Task 范围的 Attempt / message 列表，展示最新提交的 Attempt 的 Candidate 证据与按时间升序的单列消息；pending QUESTION 可回答，pending REQUEST_SUBTASK 可附理由接受/拒绝。answer/resolve/plan 均走统一 request-id envelope，不确定重试复用同一载荷的 id；成功或失败都重读 RPC，不用 mutation 响应推断权威状态。Task 选择只在当前 Mission 会话内保留，切换 Mission 时清空。worktreeId 经既有 `activateWorktreeFromSidebar` 导航，不新增执行面板。
 

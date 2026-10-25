@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { assertSupportedReadinessThreshold } from './policy-readiness'
 import { generateId } from '../../runtime/orchestration/db/generated-id'
 import { isOrcaSessionId } from '../../../shared/orca-session-address'
 import {
@@ -44,6 +45,7 @@ const CreateSchema = MissionSchema.pick({
 
 export function createMission(ctx: ControllerContext, input: CreateMissionInput) {
   const p = CreateSchema.parse(input)
+  assertSupportedReadinessThreshold(p.policy?.readinessThreshold)
   const sessionId = ctx.mintSessionId()
   if (!isOrcaSessionId(sessionId) || ctx.store.getMissionBySessionId(sessionId)) {
     throw new MissionControllerError('synthetic_session_id_invalid', { sessionId })

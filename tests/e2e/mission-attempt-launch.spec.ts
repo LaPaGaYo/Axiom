@@ -1,3 +1,6 @@
+import { desktopCall } from './helpers/axiom-desktop-call'
+import { readGoalFile } from '../../src/cli/handlers/axiom/input-files'
+import { DEFAULT_MISSION_POLICY } from '../../src/shared/axiom-contract/mission-objects'
 import { spawnSync } from 'node:child_process'
 import {
   chmodSync,
@@ -173,28 +176,17 @@ test('M2-05: launches three fixture Attempts and preserves identity without rela
       .object({ repo: z.object({ id: z.string() }) })
       .parse(cli(userData, ['repo', 'add', '--path', clone]))
     const { mission } = MissionResponseSchema.parse(
-      cli(userData, [
-        'mission',
-        'create',
-        '--repo',
-        `id:${repo.id}`,
-        '--target-branch',
-        'main',
-        '--goal-file',
-        path.join(clone, 'GOAL.md')
-      ])
+      await desktopCall(first.page, 'axiom.mission.create', {
+        repo: `id:${repo.id}`,
+        targetBranch: 'main',
+        goal: await readGoalFile(clone, 'GOAL.md'),
+        policy: DEFAULT_MISSION_POLICY
+      })
     )
-    const routing = path.join(temp, 'routing.json')
-    writeFileSync(routing, JSON.stringify({ preferredProviders: ['codex'] }))
-    cli(userData, [
-      'mission',
-      'policy',
-      'update',
-      '--mission',
-      mission.id,
-      '--routing-file',
-      routing
-    ])
+    await desktopCall(first.page, 'axiom.policy.update', {
+      missionId: mission.id,
+      patch: { routing: { preferredProviders: ['codex'] } }
+    })
     if (!mission.activeGoalRevisionId) {
       throw new Error('Missing GoalRevision')
     }
@@ -202,13 +194,18 @@ test('M2-05: launches three fixture Attempts and preserves identity without rela
       JSON.parse(readFileSync(path.join(clone, 'scenarios', 'goal', 'decomposition.json'), 'utf8')),
       mission.activeGoalRevisionId
     )
-    const planPath = path.join(temp, 'proposal.json')
-    writeFileSync(planPath, JSON.stringify(proposal))
     const { planRevision } = PlanResponseSchema.parse(
-      cli(userData, ['plan', 'propose', '--mission', mission.id, '--file', planPath])
+      await desktopCall(first.page, 'axiom.plan.propose', {
+        missionId: mission.id,
+        planRevision: proposal,
+        provenance: proposal.provenance
+      })
     )
-    cli(userData, ['plan', 'approve', '--plan', planRevision.id, '--resolver', 'e2e'])
-    cli(userData, ['mission', 'start', '--mission', mission.id])
+    await desktopCall(first.page, 'axiom.plan.approve', {
+      planRevisionId: planRevision.id,
+      resolver: 'e2e'
+    })
+    await desktopCall(first.page, 'axiom.mission.start', { missionId: mission.id })
     const list = () =>
       AttemptListResponseSchema.parse(cli(userData, ['attempt', 'list', '--mission', mission.id]))
         .attempts

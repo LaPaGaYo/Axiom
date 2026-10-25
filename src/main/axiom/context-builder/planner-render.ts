@@ -63,7 +63,7 @@ export async function buildPlannerContext(
       'PlanProposal contract',
       [
         JSON.stringify(z.toJSONSchema(PlanProposalSchema.omit({ provenance: true })), null, 2),
-        'Task ids must be unique; every edge endpoint must exist. readinessThreshold defaults to INTEGRATED.',
+        'Task ids must be unique; every edge endpoint must exist. Use readinessThreshold INTEGRATED only; V1 rejects VERIFIED edges (threshold_not_supported).',
         'The graph must be acyclic with at least one root; milestoneId must reference an existing milestone.',
         'kind: task | fix; risk: low | medium | high; retryPolicy.maxAttempts >= 1.',
         'scope.allowedPaths entries are repository-relative: an entry covers that path and everything below it; * and ? match within one path segment, ** matches any number of segments, and . is the whole repository. Verification fails any change outside allowedPaths.',
