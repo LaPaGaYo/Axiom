@@ -639,6 +639,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 
 **修订（2026-10-25，D82）**：M3-06 的 Supervisor 只用规则交付；M3-07（Jev 适配器）移出 V1。Jev 的第一个产品用途（失败归因）在 V1 之后，先在开发流程里攒标签、做校准（DEF-38）；M3 出口 8 改为规则基线。
 
+**修订（2026-10-26，路线复审 A；Henry 2026-10-26："同意你的建议，ABC可以按照你的建议修正"）**：第 3 条的"不授权自动动作"只针对 DecisionEngine / LLM 的分类。确定性规则（Attempt 超过 `maxRuntimeMinutes`、token 用量超过预算、进程存活但连续 N 分钟无输出）由 policy 授权自动结算：停止 Worker 进程（经 Orca worker release）、按 D68 修订行的类别结算、在 Task 的重试策略内重试，用完 → `BLOCKED` 交人；每次自动动作审计 `attempt.supervised{rule, evidence}` 与结算事件，写明触发的规则与阈值。LLM / Jev 分类仍只给建议（V1.5 之后再议）。M3-06 brief 按此写。
+
 ## D61 · M2 出口：Planning 与 Agent Factory 里程碑按六条出口准则关闭，D52 关闭 — ACCEPTED（Henry 2026-10-20："先把手上需要开发的做完"，验证者 2026-10-20 提议）
 
 **背景**：D52 把 M2 分解为 11 个 Task；实际执行 13 个 Task + 2 个上游同步（`docs/plans/M2.md`）：M2-00 … M2-05、M2-06a / 06b / 06c（D57）、M2-07、M2-08、UPSTREAM-1 / UPSTREAM-2（D56）、M2-09（+ 3 个 fix-up attempt）、M2-10、**M2-12（D59，由 M2-11 出口 e2e 发现）**、M2-11（2 个 attempt）。merge 清单：`0b4a67ced3`（M2-00）→ `669dd990f4`（M2-01）→ `a61072502a`（M2-02）→ `9c493465cb`（M2-03）→ `ab9d8e62fd`（M2-04）→ `f0ca598f4c`（M2-05）→ `e306ee73a5`（M2-06a）→ `ece8a4e1e6`（M2-06b）→ `8fb8d6d24f`（UPSTREAM-1）→ `30eaed93c7`（M2-06c）→ `b3d0c6edd9`（M2-07）→ `e0f92f3276`（M2-08）→ `5e1df6f29d`（UPSTREAM-2）→ `1c67a2c1e9` / `d50795c06e` / `1d8029764a`（M2-09）→ `d29f0aa316`（M2-10）→ `bc177584cd` / `814ddc8d9b`（M2-12）→ `06a502151c`（M2-11）。验证记录在 `.axiom-work/verifications/M2-*.md`、`UPSTREAM-*.md`；证据文档 `docs/review-evidence/axiom-m2/M2-exit-e2e.md`。
@@ -809,6 +811,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **后果**：M3-02（check 结果枚举、verdict 规则、`retryOnce` / `knownFlaky` 键 → D65 修订）、M3-06（分类输入）、M2-08 reconcile 的结算路径（`interrupted` 与退避）、术语表 §4.6 / §4.8 新枚举、记分卡指标加 `interrupted` 与 flaky 率；DEF-20 ①（等人停表）以本条的 `interrupted` 为可选形态之一。
 **取代规则**：批准后以修订行记录；若内核枚举需要改动，另起内核 Decision（D56 流程）。
 - **批准（2026-10-23，Henry："批准D68，可以按照计划继续"）**：按上文生效，不改内核枚举。验证侧（第 2、3 条：check 结果 `environmental`、`INCONCLUSIVE(environment)` 直接路由到人、`retryOnce` / `knownFlaky`）随 M3-02 实施；Attempt 侧（第 1 条：`interrupted` 结算类别与退避）随 M3-06 与 M2-08 的结算路径实施；术语表 §4.6 / §4.8 的新枚举随各自的 Task 更新。
+
+**修订（2026-10-26，路线复审 A；Henry 2026-10-26："同意你的建议，ABC可以按照你的建议修正"）**：`interrupted` 只用于第 1 条列出的环境性原因（出结果前退出、epoch 变化、配额 / 认证）。超时、超预算、停滞（进程存活但连续 N 分钟无输出）是工作性失败：结算为 FAILED，`reason` 分别为 `timeout` / `budget_exhausted` / `stalled`，计入 `maxAttempts`，按 D64 从集成基线重试，超时证据（最后输出摘录、用量）进下一次 Attempt 的失败证据段；Mission 预算耗尽仍是调度器的 `BLOCKED(budget)`。无界面 Worker 退出时的分类不变（M3-08）。
 
 ## D69 · 依赖阈值 `VERIFIED` 的下游基线与失效规则 — ACCEPTED（修订版：V1 只支持 INTEGRATED；Henry 2026-10-25："按建议"；验证者 2026-10-21 提议）
 
@@ -1006,6 +1010,10 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 
 **修订（2026-10-26，按角色选模型与默认交叉；Henry 2026-10-26："加入M3-08b范围"）**：M3-08b 加两项——① 按角色选模型：policy 从按 provider 选模型改为按角色（Planner 默认用最强一档、推理强度高；Worker 用编码模型，推理强度按 Task 风险，已有）；② 默认交叉：Planner 与 Worker 默认用不同 provider，只装了一家时退回同一家，并在执行组合里记下。快速模型的并行扫描不在 Axiom 层单独编排（Claude Code、Codex 内部已经用小模型并行探索代码）；LLM 交叉审查仍按第 5 条留在 V1 之外（DEF-40）。每个 Attempt 已记录模型、推理强度、结果与 token 用量，V1.5 / V2 按这些数据给各角色定档（DEF-18、DEF-38）。依据：Anthropic 实测多 agent 系统的 token 用量约为普通对话的 15 倍，且大多数编程任务能真正并行的部分比调研少（Anthropic Engineering，2025）。
 
+**修订（2026-10-26，路线复审 B：交付怎么开 PR；Henry 2026-10-26："同意你的建议，ABC可以按照你的建议修正"）**：第 6 条的"推分支、开 PR"复用 Orca 的 hosted-review 子系统（`hostedReview.create`：GitHub 走用户自己的 `gh pr create`，GitLab 走 `glab`，Bitbucket / Azure DevOps / Gitea 走各自 REST，凭据都是用户自己的；之后用 `github.prChecks` 等读仓库 CI 与评论作为"最后一道关"的证据）。与 M0 / D37 不冲突：M0 的"`api.github.com` 请求数为 0"是产品自己的冷启动 / 空闲出站，D37 本来就允许用户主动触发的请求；人批准交付后用用户自己的工具与凭据推送和开 PR，每次记审计。`gh` 没装或没登录（`auth_required`）→ 推分支后在用户浏览器打开 compare 页并预填标题与说明，由人创建；没有远程仓库 → 本地合入。PR 描述放摘要与证据引用，证据全文在本地 Artifact。`axiom doctor`（M3-10）预检 `gh`。不用 MCP 开 PR：这是人批准后 Control Plane 的动作，不交给模型的工具。写进 M4-2；DEF-20 ⑨、DEF-34 同步改。
+
+**修订（2026-10-26，路线复审 §2 / §5；Henry 2026-10-26："同意你的建议，ABC可以按照你的建议修正"）**：① M3 出口 3 改为"确定性 FAIL 不能被任何提议或人的 `axiom.verification.resolve` 推翻"（V1 没有 Reviewer，resolve 只能收敛 `INCONCLUSIVE`），单测 + e2e 归 M3-05；② 第 3 条的"阻塞与建议的后续工作写进报告、由 Control Plane 转成对象"归 M3-04b：报告里的 BLOCKED 原因 → Task `BLOCKED` 待处理项（D70 按原因解除），"建议的后续工作" → 待处理项卡片（DEF-22 ⑮ (10)），人决定是否建 Task；③ 第 2 条的"每次重新规划开新会话"写进 ARCHITECTURE §20 的 M5 行；④ M3-04b 的旧任务行按本条改写（无 Reviewer、无 `axiom attempt recap`、无中途 INFORM）。
+
 ## D83 · Agent 账号目录改用 Axiom 的做法（方法 A）：登录沿用 Orca 的账号系统，账号目录由 Axiom 单向配置、按允许名单启用，按 harness 适配器逐个迁移 — ACCEPTED（Henry 2026-10-25："同意你的意见"；验证者 2026-10-25 提议）
 
 **背景**：M3-08 合入后查实（只读代码梳理）：无界面 Worker 用的是用户当前选中的 Codex 账号目录（系统默认时就是 `~/.codex`），连同其中全部 skills / 插件 / MCP / 钩子；Orca 的账号目录做法是"同一套配置换个账号用"——软链 `~/.codex` 的资源目录、`config.toml` 双向同步并写回 `~/.codex`，做不到逐项过滤；复制 `auth.json` 会因刷新令牌轮换让原登录失效（Codex 官方：同一份 `auth.json` 不能被并发任务刷新）。Henry 不要两套登录，也担心账号信息外传——核实：登录是本机运行的官方 CLI，凭据存在本机；通往 Orca 团队的通道在 M0 已全部关闭并有测试（D25、D37 / D38、D40，`src/shared/product-egress-policy.ts`）。
@@ -1023,4 +1031,6 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **修订（2026-10-25，拆分与处理细则；Henry 2026-10-25："可以的"）**：落地拆成三个任务——**M3-08c** 账号目录由 Axiom 布置（布局模块单向生成配置、去掉指向 `~/.codex` 的软链、钩子只留 Axiom 自己的状态钩子、项目信任写到账号目录；添加 / 重新登录 / 切换 / 启动都走它；允许名单 V1 只有 skills 与 MCP）；**M3-08d** 去掉系统默认、Axiom 不再碰 `~/.codex`（没有账号时 Codex 拒绝启动、普通终端不受影响；镜像目录、令牌回拷、会话历史回填与链接停用；设置页去掉系统默认；e2e 预置测试账号）；**M3-08e** Worker 一侧（显式账号目录、无界面运行关掉钩子、启动前按需在锁下刷新令牌、记录执行组合与 hash、M3-08 的两项后续）。顺序 08c → 08e → 真实冒烟与外联录制 → 08d → 08b。处理细则：`~/.codex` 里的模型设置、profile、全局 `AGENTS.md`、prompts 不再带进 Axiom 的会话，会话里临时改的设置下次启动不保留；`~/.codex` 的会话历史在 Axiom 里只能看、不能接着跑；以前装进 `~/.codex/hooks.json` 的 Axiom 状态钩子做一次清理（先备份，只删我们自己那条与它的审批），之后不再碰 `~/.codex`；V1 允许名单只支持 skills 与 MCP，插件与用户钩子以后再加；orcad（远程 / WSL）V1 不动。
 
 **修订（2026-10-25，远程主机与跨机器的 skills / MCP；Henry 2026-10-25："同意，先这么定，之后如果还需要修改再修改"）**：① 处理细则里的"orcad（远程 / WSL）V1 不动"改为：远程（非 WSL）主机上的 orcad 与桌面共用同一套账号服务，它自己的账号目录同样按本条布置（M3-08c 起已是如此，不需要 orcad 专用代码）；远程主机的账号在 Axiom 设置页按机器管理，登录沿用 Orca 的主机登录流程（`accounts.hostSignIn*`：登录在那台主机上运行，Codex 用设备码，桌面只显示要打开的网页并转交验证码，凭据不离开那台主机），随远程执行一起做（DEF-43）；WSL 账号随 Windows（V1.x，D67）。② 允许名单只有一份，放在 Axiom 设置里，不按机器分；skills 由 Axiom 从本地 Skill Registry 装到要运行的机器上（DEF-4，V2），复用 Orca 的 skill 打包、内容 hash、按机器安装与版本跟踪部件，来源从 Orca 的云换成本地 Registry；网址型 MCP 随名单走，本地程序型 MCP 由每台机器各自安装，Axiom 只检查，缺了记 `attempt.launch_mismatch`；凭据始终留在运行 agent 的那台机器上。③ M3-08b 查清 Claude Code 从 Claude 账号读取 skills 的行为（Anthropic 支持文档：从账号单向同步），能关则关，关不了就记进执行组合。
+
+**修订（2026-10-26，路线复审 C；Henry 2026-10-26："同意你的建议，ABC可以按照你的建议修正"）**：第 2 条的"Mission 的 agent 再按 policy 收窄"不在 V1：V1 只有全局允许名单（默认空，已是最严），按 Mission 收窄随 Skill Registry 进 V2（DEF-4）；每个 Attempt 实际启用项已记在执行组合里（M3-08e）。
 
