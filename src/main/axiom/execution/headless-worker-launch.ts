@@ -1,3 +1,5 @@
+import { readCodexAccountHomeAllowlist } from '../../codex/codex-worker-launch-home'
+import { headlessWorkerCombination } from './worker-launch-combination'
 import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
 import type { AgentSpec } from '../../../shared/axiom-contract/agent-spec'
 import type { AuditEvent } from '../../../shared/axiom-contract/mission-objects'
@@ -14,6 +16,7 @@ export function createHeadlessWorkerLaunch(input: {
   worktree: CreateWorktreeResult['worktree']
   render: string
   audit: Record<string, AuditEvent['after']>
+  onMismatch: (dispatchId: string, reasons: string[]) => void
   onPrepared: (dispatchId: string, after: Record<string, AuditEvent['after']>) => void
 }) {
   return {
@@ -26,25 +29,41 @@ export function createHeadlessWorkerLaunch(input: {
         branch: attempt.branch,
         prompt: input.render.replaceAll('{{attemptId}}', dispatchId)
       })
+      const settings = deps.runtime.requireStore().getSettings()
+      const allowlist = readCodexAccountHomeAllowlist(settings)
+      const home = (await deps.codexWorkerHome?.()) ?? {
+        kind: 'unmanaged' as const,
+        homePath: null
+      }
       const launch = buildHeadlessWorkerCommand({
         provider: spec.provider,
         model: spec.model,
         effort: spec.reasoning.effort,
         worktree: worktree.path,
         attemptDir,
-        commandOverride: deps.runtime.requireStore().getSettings().agentCmdOverrides?.codex
+        commandOverride: settings.agentCmdOverrides?.codex,
+        accountHomePath: home.kind === 'account' ? home.homePath : undefined
       })
       if (!launch) {
         throw new Error('Headless builder unavailable')
       }
+      const { combination, reasons } = await headlessWorkerCombination(
+        spec,
+        home,
+        allowlist,
+        launch.argv[0]
+      )
       if (
         !deps.store.bindAttemptDispatch(attempt.taskId, attempt.seq, dispatchId) &&
         deps.store.getAttemptBinding(attempt.taskId, attempt.seq)?.dispatchId !== dispatchId
       ) {
         throw new Error('Attempt dispatch binding changed')
       }
-      Object.assign(input.audit, { argv: launch.argv, stdinPath: launch.stdinPath })
+      Object.assign(input.audit, { argv: launch.argv, stdinPath: launch.stdinPath, combination })
       input.onPrepared(dispatchId, { ...input.audit, attemptDir })
+      if (reasons.length) {
+        input.onMismatch(dispatchId, reasons)
+      }
       return buildHeadlessTerminalCommand({ ...launch, attemptDir })
     }
   }

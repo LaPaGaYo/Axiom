@@ -1,3 +1,7 @@
+import {
+  prepareCodexWorkerLaunchHome,
+  readCodexAccountHomeAllowlist
+} from '../codex/codex-worker-launch-home'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { VerificationService } from './verification/verification-service'
@@ -53,7 +57,18 @@ function createControlPlane(runtime: OrcaRuntimeService, db: OrchestrationDb) {
     }
   })
   const scheduler = new Scheduler(db, store, missions, contextBuilder, agentFactory, {
-    launch: createAttemptLauncher({ runtime, db, store, missions, artifacts })
+    launch: createAttemptLauncher({
+      runtime,
+      db,
+      store,
+      missions,
+      artifacts,
+      codexWorkerHome: () =>
+        prepareCodexWorkerLaunchHome({
+          resolveHome: () => runtime.resolveCodexHomeForWorkerLaunch(),
+          allowlist: readCodexAccountHomeAllowlist(runtime.requireStore().getSettings())
+        })
+    })
   })
   const recovery = new RecoveryService(db, store, missions, { runtime, artifacts })
   const runtimeEpoch = `epoch_${randomUUID()}`

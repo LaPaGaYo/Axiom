@@ -19,7 +19,7 @@ import { MissionController } from '../mission-controller/mission-controller'
 import { ArtifactStore, sha256 } from '../artifacts/artifact-store'
 import { ContextBuilder } from '../context-builder/context-builder'
 import { RulesEngine } from '../decision-engine/rules-engine'
-import { AgentFactory } from './agent-factory'
+import { AgentFactory, buildWorkerContracts } from './agent-factory'
 import { PROVIDER_SELECTION_RULES } from './provider-selection'
 
 let root: string
@@ -293,4 +293,36 @@ describe('AgentFactory', () => {
       budget: { maxRuntimeMinutes: 45, maxTokens: 123 }
     })
   })
+})
+
+it('chooses the worker channel without persisting a terminal contract first', async () => {
+  installed = ['codex']
+  const builder = new ContextBuilder(store, new ArtifactStore(store, path.join(root, 'artifacts')))
+  const contexts = vi.spyOn(store, 'insertContextPackage')
+  const specs = vi.spyOn(store, 'insertAgentSpec')
+  const before = store.listAuditEvents({ missionId })
+  expect(await factory.selectWorkerProvider({ missionId, taskId })).toBe('codex')
+  expect(store.listAuditEvents({ missionId })).toEqual(before)
+  expect(contexts).not.toHaveBeenCalled()
+  expect(specs).not.toHaveBeenCalled()
+  const result = await buildWorkerContracts(builder, factory, missionId, taskId)
+  expect(contexts).toHaveBeenCalledOnce()
+  expect(specs).toHaveBeenCalledOnce()
+  expect(store.getAgentSpec(result.agentSpecId)?.spec).toMatchObject({
+    contextPackageId: result.contextPackageId
+  })
+  expect(result.contextPackageId).not.toBe(contextPackageId)
+})
+it('refuses a provider change between selection and the final contract', async () => {
+  installed = ['codex']
+  const builder = new ContextBuilder(store, new ArtifactStore(store, path.join(root, 'artifacts')))
+  const buildContext = builder.build.bind(builder)
+  vi.spyOn(builder, 'build').mockImplementation(async (input) => {
+    const result = await buildContext(input)
+    installed = ['claude']
+    return result
+  })
+  await expect(buildWorkerContracts(builder, factory, missionId, taskId)).rejects.toThrow(
+    'provider changed during admission'
+  )
 })

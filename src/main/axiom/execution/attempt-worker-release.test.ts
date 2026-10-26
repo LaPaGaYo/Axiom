@@ -3,6 +3,7 @@ import * as e2e from '../../e2e-config'
 import { submissionFixture } from './submission-fixture.test-support'
 import {
   releaseSubmittedWorker,
+  scheduleFailedWorkerRelease,
   scheduleSubmittedWorkerRelease,
   WORKER_RELEASE_GRACE_MS
 } from './attempt-worker-release'
@@ -74,4 +75,17 @@ it.each([true, false])('honors the hold variable only with E2E enabled=%s', asyn
   expect(f.releaseWorker).toHaveBeenCalledTimes(enabled ? 0 : 1)
   await releaseSubmittedWorker(f.runtime, submission())
   expect(f.releaseWorker).toHaveBeenCalledTimes(enabled ? 0 : 2)
+})
+
+it('audits a failed failure-release without leaking the kernel error', async () => {
+  f.releaseWorker.mockRejectedValueOnce(new Error('private kernel error'))
+  scheduleFailedWorkerRelease(f.runtime, submission())
+  await vi.advanceTimersByTimeAsync(WORKER_RELEASE_GRACE_MS)
+  expect(f.store.listAuditEvents({ missionId: f.mission.id }).at(-1)).toMatchObject({
+    event: 'attempt.terminal_release_failed',
+    after: { reason: 'attempt_failed' }
+  })
+  expect(JSON.stringify(f.store.listAuditEvents({ missionId: f.mission.id }))).not.toMatch(
+    /private kernel error|submissionId/
+  )
 })

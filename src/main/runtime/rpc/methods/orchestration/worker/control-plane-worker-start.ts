@@ -30,8 +30,12 @@ export function buildHeadlessTerminalCommand(input: {
   attemptDir: string
 }) {
   const exitPath = path.join(input.attemptDir, 'exit-code')
+  const operands = [
+    ...Object.entries(input.env).map(([name, value]) => `${name}=${value}`),
+    ...input.argv
+  ]
   const script = [
-    `/usr/bin/env ${input.argv.map(quotePosixShell).join(' ')} < ${quotePosixShell(input.stdinPath)} | tee ${quotePosixShell(path.join(input.attemptDir, 'events.jsonl'))}`,
+    `/usr/bin/env ${operands.map(quotePosixShell).join(' ')} < ${quotePosixShell(input.stdinPath)} | tee ${quotePosixShell(path.join(input.attemptDir, 'events.jsonl'))}`,
     'axiom_worker_exit=${PIPESTATUS[0]}',
     `printf '%s\\n' "$axiom_worker_exit" > ${quotePosixShell(`${exitPath}.tmp`)}`,
     `mv ${quotePosixShell(`${exitPath}.tmp`)} ${quotePosixShell(exitPath)}`,

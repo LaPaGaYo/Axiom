@@ -27,6 +27,8 @@ describe('headless Worker command', () => {
       'sandbox_workspace_write.network_access=false',
       '-c',
       'approval_policy="never"',
+      '-c',
+      'features.hooks=false',
       '-C',
       '/work tree',
       '-o',
@@ -88,4 +90,17 @@ describe('headless Worker command', () => {
       })
     ).toBeNull()
   })
+})
+
+it('pins only an account home in the explicit launch environment', () => {
+  const launch = buildHeadlessWorkerCommand({
+    provider: 'codex',
+    model: 'policy-default',
+    effort: 'medium',
+    worktree: '/work',
+    attemptDir: '/attempt',
+    accountHomePath: '/Application Support/account/home'
+  })!
+  expect(launch.env).toEqual({ CODEX_HOME: '/Application Support/account/home' })
+  expect(launch.argv.join(' ')).not.toContain('CODEX_HOME')
 })

@@ -7,6 +7,10 @@ const { createHash } = require('node:crypto')
 const { spawn, spawnSync } = require('node:child_process')
 const path = require('node:path')
 const os = require('node:os')
+if (process.argv[2] === '--version') {
+  process.stdout.write('codex-cli 0.0.0-e2e\\n')
+  process.exit(0)
+}
 if (process.argv.slice(2).includes('app-server')) {
   process.stderr.write("error: unrecognized subcommand 'app-server'\\n")
   process.exit(2)

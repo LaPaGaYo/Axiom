@@ -22,6 +22,7 @@ import {
   lastAttemptAudit,
   observeAttemptLiveness,
   releaseSubmission,
+  releaseFailedHeadlessAttempt,
   type AttemptBinding,
   type RecoveryContext
 } from './attempt-recovery-effects'
@@ -126,6 +127,10 @@ export async function reconcileAttempt(
   // Submission owns release independently of verification, cancellation, or Mission status.
   if (!planner && store.getSubmissionByDispatch(dispatchId)) {
     entry.action = (await releaseSubmission(ctx, binding)) ?? 'unchanged'
+    return entry
+  }
+  if (headless && worker?.state === 'failed' && lastAttemptAudit(ctx, binding, 'attempt.failed')) {
+    entry.action = (await releaseFailedHeadlessAttempt(ctx, binding)) ?? 'unchanged'
     return entry
   }
   if (task?.stage === 'CANCELED' || TERMINAL_MISSION_STATUSES.has(mission.status)) {

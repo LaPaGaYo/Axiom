@@ -8,9 +8,11 @@ import { exposeUtcTimestamp } from '../../runtime/orchestration/db/utc-timestamp
 import { archiveAttemptTranscript } from '../execution/attempt-transcript'
 import {
   releaseSubmittedWorker,
+  releaseFailedWorker,
   shouldHoldWorkerRelease
 } from '../execution/attempt-worker-release'
 import { z } from 'zod'
+import { isHeadlessAttempt } from '../execution/attempt-exit-submission'
 import type { AuditEvent } from '../../../shared/axiom-contract/mission-objects'
 import type { PtyLivenessVerdict } from '../../../shared/pty-liveness-verdict'
 import type { OrchestrationDb } from '../../runtime/orchestration/db'
@@ -39,12 +41,12 @@ export type AttemptBinding = NonNullable<ReturnType<AxiomStore['getAttemptBindin
 export function lastAttemptAudit(ctx: RecoveryContext, binding: AttemptBinding, event: string) {
   const objectId = binding.dispatchId ?? `${binding.taskId}/${binding.seq}`
   return z
-    .object({ after: z.string().nullable() })
+    .object({ after: z.string().nullable(), created_at: z.string() })
     .optional()
     .parse(
       ctx.db.db
         .prepare(
-          `SELECT after FROM audit_events WHERE mission_id = ? AND object_kind = 'attempt'
+          `SELECT after, created_at FROM audit_events WHERE mission_id = ? AND object_kind = 'attempt'
      AND object_id = ? AND event = ? ORDER BY sequence DESC LIMIT 1`
         )
         .get(binding.missionId, objectId, event)
@@ -178,6 +180,26 @@ export async function releaseSubmission(
     await archiveAttemptTranscript(ctx.runtime, submission)
   }
   return releaseSubmittedWorker(ctx.runtime, submission)
+}
+
+export async function releaseFailedHeadlessAttempt(ctx: RecoveryContext, binding: AttemptBinding) {
+  const attemptId = binding.dispatchId!
+  const worker = ctx.db.getWorkerDispatch(attemptId)
+  const resource = ctx.db.getWorkerTerminalResourceByOwner(attemptId)
+  const failure = lastAttemptAudit(ctx, binding, 'attempt.failed')
+  if (
+    !isHeadlessAttempt(worker) ||
+    worker?.state !== 'failed' ||
+    ctx.store.getSubmissionByDispatch(attemptId) ||
+    !failure ||
+    !resource ||
+    shouldHoldWorkerRelease() ||
+    !['not_requested', 'retained', 'requested'].includes(resource.release_state) ||
+    !(ctx.now() - Date.parse(exposeUtcTimestamp(failure.created_at)!) >= 60_000)
+  ) {
+    return
+  }
+  return releaseFailedWorker(ctx.runtime, { missionId: binding.missionId, attemptId })
 }
 
 export async function cancelAttempt(

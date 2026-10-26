@@ -1,6 +1,6 @@
 import { codexAuthIsFresher } from './codex-auth-identity'
 
-function readCodexLastRefresh(authJson: string): number | null {
+export function readCodexLastRefresh(authJson: string): number | null {
   try {
     const parsed = JSON.parse(authJson) as unknown
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {

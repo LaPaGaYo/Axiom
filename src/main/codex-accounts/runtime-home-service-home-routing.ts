@@ -278,13 +278,17 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
       const resolved = this.resolveSelfContainedManagedHome(selfContainedAccount)
       if (resolved.kind === 'owned') {
         if (usesCodexAccountHomeLayout(resolved.homePath)) {
-          layoutCodexAccountHome({
-            homePath: resolved.homePath,
-            allowlist: this.store.getSettings().codexAccountHomeAllowlist ?? {
-              skills: [],
-              mcpServers: []
-            }
-          })
+          try {
+            layoutCodexAccountHome({
+              homePath: resolved.homePath,
+              allowlist: this.store.getSettings().codexAccountHomeAllowlist ?? {
+                skills: [],
+                mcpServers: []
+              }
+            })
+          } catch {
+            return { kind: 'skip' }
+          }
         }
         return { kind: 'ready', codexHomePath: resolved.homePath }
       }

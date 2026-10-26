@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { z } from 'zod'
 import { test, expect } from './helpers/orca-app'
@@ -37,7 +37,8 @@ test('three sandboxed exec Workers produce host submissions with Attempt attribu
       )!
       expect(JSON.parse(audit.after!)).toMatchObject({
         channel: 'headless',
-        posture: 'headless-sandboxed'
+        posture: 'headless-sandboxed',
+        combination: { requested: { hooks: 'off' } }
       })
     }
     const launches = readFileSync(ledgerPath, 'utf8')
@@ -59,7 +60,8 @@ test('three sandboxed exec Workers produce host submissions with Attempt attribu
         expect.arrayContaining([
           '-s',
           'workspace-write',
-          'sandbox_workspace_write.network_access=false'
+          'sandbox_workspace_write.network_access=false',
+          'features.hooks=false'
         ])
       )
       expect(entry.argv.join(' ')).not.toMatch(/dangerously-bypass|full-auto/)
@@ -98,6 +100,18 @@ for (const scenario of ['exit-nonzero', 'bad-report'] as const) {
         if (scenario === 'exit-nonzero') {
           await expect
             .poll(
+              () =>
+                inspect().audits.some(
+                  (row) =>
+                    row.event === 'attempt.terminal_released' &&
+                    row.object_id === first.dispatch_id &&
+                    JSON.parse(row.after!).reason === 'attempt_failed'
+                ),
+              { timeout: 60_000 }
+            )
+            .toBe(true)
+          await expect
+            .poll(
               () => inspect().submissions.filter((row) => row.taskId === first.task_id).length,
               { timeout: 120_000 }
             )
@@ -117,7 +131,7 @@ for (const scenario of ['exit-nonzero', 'bad-report'] as const) {
           })
         }
       },
-      { holdWorkers: true, maxAttempts: scenario === 'bad-report' ? 1 : 2 }
+      { holdWorkers: true, releaseTerminals: true, maxAttempts: scenario === 'bad-report' ? 1 : 2 }
     )
   })
 }
@@ -161,5 +175,78 @@ test('restart after the durable exit code creates exactly one submission per Att
       expect(inspect().audits.filter((row) => row.event === 'attempt.submitted')).toHaveLength(3)
     },
     { restart: true, holdExitSubmission: true }
+  )
+})
+
+test('a retry resolves the selected account and pins its home in the Worker wrapper', async (// oxlint-disable-next-line no-empty-pattern -- Fixture owns the background app lifecycle.
+{}, testInfo) => {
+  test.setTimeout(300_000)
+  await withFixtureMission(
+    testInfo,
+    source!,
+    async ({ page, userData, mission, ledgerPath, releaseWorkers }) => {
+      const inspect = () => inspectFixtureMission(userData, mission.id)
+      await expect
+        .poll(() => inspect().bindings.filter((row) => row.dispatch_id).length, { timeout: 60_000 })
+        .toBe(3)
+      const first = inspect().bindings[0]
+      const accountId = 'e2e-headless-home'
+      const managedHomePath = path.join(userData, 'codex-accounts', accountId, 'home')
+      mkdirSync(managedHomePath, { recursive: true })
+      writeFileSync(path.join(managedHomePath, '.orca-managed-home'), `${accountId}\n`)
+      writeFileSync(
+        path.join(managedHomePath, 'auth.json'),
+        JSON.stringify({ OPENAI_API_KEY: 'e2e-placeholder' })
+      )
+      await page.evaluate(
+        async ({ accountId, managedHomePath }) => {
+          await window.__store!.getState().updateSettings({
+            codexManagedAccounts: [
+              {
+                id: accountId,
+                email: 'headless-home@example.invalid',
+                managedHomePath,
+                createdAt: 1,
+                updatedAt: 1,
+                lastAuthenticatedAt: 1
+              }
+            ],
+            activeCodexManagedAccountId: accountId,
+            activeCodexManagedAccountIdsByRuntime: { host: accountId, wsl: {} }
+          })
+        },
+        { accountId, managedHomePath }
+      )
+      // The first Attempt was already prepared; its retry must read the new account selection.
+      writeFileSync(`${ledgerPath}.scenario-${first.task_id}`, 'exit-nonzero')
+      releaseWorkers()
+      await expect
+        .poll(() => inspect().submissions.filter((row) => row.taskId === first.task_id).length, {
+          timeout: 120_000
+        })
+        .toBe(1)
+      const submission = inspect().submissions.find((row) => row.taskId === first.task_id)!
+      const launch = readFileSync(ledgerPath, 'utf8')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line))
+        .find((row) => !row.kind && row.attemptId === submission.attemptId)
+      expect(launch.CODEX_HOME).toBe(managedHomePath)
+      const started = inspect().audits.find(
+        (row) => row.event === 'attempt.started' && row.object_id === submission.attemptId
+      )!
+      expect(JSON.parse(started.after!)).toMatchObject({
+        combination: {
+          requested: { hooks: 'off', codexHome: 'selected-account' },
+          effective: {
+            harnessVersion: 'codex-cli 0.0.0-e2e',
+            codexHome: { kind: 'account', path: managedHomePath },
+            configSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+            token: 'not_applicable'
+          }
+        }
+      })
+    },
+    { holdWorkers: true, maxAttempts: 2 }
   )
 })
