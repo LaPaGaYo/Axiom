@@ -1004,6 +1004,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **后果**：V1 成功标准"至少三种 provider"改为两种（Codex、Claude Code，都能担任 Planner 与 Worker），"八种 typed messages"改为经提交报告交付；M3 剩余任务按 M3.md "V1 精简后的 M3" 重排，M3-07 移出 V1；M4 按第 6 条写计划；DEF-32–DEF-40 登记。粗估 V1 剩余约 15 个任务、2–2.5 周。
 **取代规则**：以修订行记录；V1 验收前复审被移出的各项。
 
+**修订（2026-10-26，按角色选模型与默认交叉；Henry 2026-10-26："加入M3-08b范围"）**：M3-08b 加两项——① 按角色选模型：policy 从按 provider 选模型改为按角色（Planner 默认用最强一档、推理强度高；Worker 用编码模型，推理强度按 Task 风险，已有）；② 默认交叉：Planner 与 Worker 默认用不同 provider，只装了一家时退回同一家，并在执行组合里记下。快速模型的并行扫描不在 Axiom 层单独编排（Claude Code、Codex 内部已经用小模型并行探索代码）；LLM 交叉审查仍按第 5 条留在 V1 之外（DEF-40）。每个 Attempt 已记录模型、推理强度、结果与 token 用量，V1.5 / V2 按这些数据给各角色定档（DEF-18、DEF-38）。依据：Anthropic 实测多 agent 系统的 token 用量约为普通对话的 15 倍，且大多数编程任务能真正并行的部分比调研少（Anthropic Engineering，2025）。
+
 ## D83 · Agent 账号目录改用 Axiom 的做法（方法 A）：登录沿用 Orca 的账号系统，账号目录由 Axiom 单向配置、按允许名单启用，按 harness 适配器逐个迁移 — ACCEPTED（Henry 2026-10-25："同意你的意见"；验证者 2026-10-25 提议）
 
 **背景**：M3-08 合入后查实（只读代码梳理）：无界面 Worker 用的是用户当前选中的 Codex 账号目录（系统默认时就是 `~/.codex`），连同其中全部 skills / 插件 / MCP / 钩子；Orca 的账号目录做法是"同一套配置换个账号用"——软链 `~/.codex` 的资源目录、`config.toml` 双向同步并写回 `~/.codex`，做不到逐项过滤；复制 `auth.json` 会因刷新令牌轮换让原登录失效（Codex 官方：同一份 `auth.json` 不能被并发任务刷新）。Henry 不要两套登录，也担心账号信息外传——核实：登录是本机运行的官方 CLI，凭据存在本机；通往 Orca 团队的通道在 M0 已全部关闭并有测试（D25、D37 / D38、D40，`src/shared/product-egress-policy.ts`）。
