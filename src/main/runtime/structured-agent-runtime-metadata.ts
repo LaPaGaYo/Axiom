@@ -1,5 +1,6 @@
 import { agentSessionAccountHome } from '../../shared/agent-session-account-home'
 import { applyStructuredCodexWorkspaceTrust } from '../agent-workspace-trust-spawn'
+import { usesCodexAccountHomeLayout } from '../codex/codex-home-paths'
 import { ACP_LAUNCH_SPECS, type AcpLaunchSpec } from '../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../acp/acp-structured-agent-definitions'
 import { resolveAcpLaunchCommand } from '../acp/acp-structured-launch-resolution'
@@ -64,10 +65,12 @@ async function resolveCodexAccountHomePath(
 ): Promise<string> {
   const { launchEnv, purpose, workspacePath } = request
   if (purpose === 'launch' && workspacePath) {
+    const launchHome = await services.readCodexLaunchHome?.({ launchEnv })
     await applyStructuredCodexWorkspaceTrust({
       workspacePath: await workspacePath(),
       launchEnv,
-      settings: services.workspaceTrustSettings()
+      settings: services.workspaceTrustSettings(),
+      codexAccountHomePath: launchHome && usesCodexAccountHomeLayout(launchHome) ? launchHome : null
     })
   }
   return resolveStructuredCodexAccountHomePath({

@@ -12,6 +12,10 @@ import {
   testState
 } from './service-test-harness'
 import { createCanonicalHookTrustFixture } from './service-hook-trust-test-fixtures'
+import { snapshotAccountTestHome } from '../codex/codex-account-home-layout.test-support'
+
+const ACCOUNT_CONFIG =
+  '# Written by Axiom (D83). Edits are replaced at the next layout.\n\n[features]\napps = false\nplugins = false\n'
 
 // Why: temp homes exceed sun_path on macOS but not on Linux; keep asserted config bytes host-independent.
 vi.mock('../codex/codex-daemon-socket-path-guard', async (importOriginal) => ({
@@ -37,7 +41,7 @@ vi.mock('node:os', async () => {
 describe('CodexAccountService config sync', () => {
   registerCodexAccountsTestHomes()
 
-  it('syncs the canonical ~/.codex/config.toml into managed homes on startup', async () => {
+  it('lays out managed homes on startup without changing the system home', async () => {
     const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
     const canonicalConfig = 'approval_policy = "never"\nsandbox_mode = "danger-full-access"\n'
     writeFileSync(canonicalConfigPath, canonicalConfig, 'utf-8')
@@ -68,9 +72,11 @@ describe('CodexAccountService config sync', () => {
     const runtimeHome = createRuntimeHome()
 
     const { CodexAccountService } = await import('./service')
+    const before = snapshotAccountTestHome(join(testState.fakeHomeDir, '.codex'))
     new CodexAccountService(store as never, rateLimits as never, runtimeHome as never)
 
-    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(canonicalConfig)
+    expect(snapshotAccountTestHome(join(testState.fakeHomeDir, '.codex'))).toEqual(before)
+    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(ACCOUNT_CONFIG)
     expect(readFileSync(join(managedHomePath, 'auth.json'), 'utf-8')).toBe(
       '{"account":"managed"}\n'
     )
@@ -117,7 +123,7 @@ describe('CodexAccountService config sync', () => {
       for (const key of fixture.orcaKeys) {
         expect(entries.has(key)).toBe(false)
       }
-      // The launch-time hook mirror remaps user trust to this home's hooks.json.
+      // Account homes never inherit user-hook approvals from the system home.
       expect(entries.has(fixture.userKey)).toBe(false)
     }
 
@@ -131,7 +137,7 @@ describe('CodexAccountService config sync', () => {
     expectSanitizedManagedConfig()
   })
 
-  it('rewrites relative path config values when syncing into managed homes', async () => {
+  it('drops system model instructions and sandbox settings from account homes', async () => {
     const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
     writeFileSync(
       canonicalConfigPath,
@@ -168,13 +174,10 @@ describe('CodexAccountService config sync', () => {
     new CodexAccountService(store as never, rateLimits as never, runtimeHome as never)
 
     const managedConfig = readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')
-    expect(managedConfig).toContain(
-      `model_instructions_file = '${join(testState.fakeHomeDir, '.codex', 'instructions.md')}'`
-    )
-    expect(managedConfig).toContain('sandbox_mode = "danger-full-access"')
+    expect(managedConfig).toBe(ACCOUNT_CONFIG)
   })
 
-  it('does not rewrite a managed config the previous mirror pass already settled', async () => {
+  it('does not rewrite a managed config the previous layout already settled', async () => {
     const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
     const { escapeTomlString } = await import('../codex/config-toml-trust')
     const userHookKey = `${join(testState.fakeHomeDir, '.codex', 'user-hooks.json')}:stop:0:0`
@@ -216,8 +219,7 @@ describe('CodexAccountService config sync', () => {
     const { CodexAccountService } = await import('./service')
     new CodexAccountService(store as never, rateLimits as never, runtimeHome as never)
 
-    // The first pass remaps the user hook-trust entry into this home; once that
-    // has settled, a later pass must leave the file completely untouched.
+    // The first layout drops user-hook approvals; a later pass leaves its bytes and mtime intact.
     const settledConfig = readFileSync(managedConfigPath, 'utf-8')
     const oldDate = new Date('2024-01-01T00:00:00.000Z')
     utimesSync(managedConfigPath, oldDate, oldDate)
@@ -225,10 +227,10 @@ describe('CodexAccountService config sync', () => {
     new CodexAccountService(store as never, rateLimits as never, runtimeHome as never)
 
     expect(readFileSync(managedConfigPath, 'utf-8')).toBe(settledConfig)
-    expect(statSync(managedConfigPath).mtimeMs).toBeLessThan(Date.now() - 60_000)
+    expect(statSync(managedConfigPath).mtimeMs).toBe(oldDate.getTime())
   })
 
-  it('does not sync configs when ~/.codex/config.toml is missing', async () => {
+  it('lays out account configs even when the system config is missing', async () => {
     const firstManagedHomePath = createManagedHome(
       testState.userDataDir,
       'account-1',
@@ -274,12 +276,8 @@ describe('CodexAccountService config sync', () => {
     const { CodexAccountService } = await import('./service')
     new CodexAccountService(store as never, rateLimits as never, runtimeHome as never)
 
-    expect(readFileSync(join(firstManagedHomePath, 'config.toml'), 'utf-8')).toBe(
-      'sandbox_mode = "danger-full-access"\n'
-    )
-    expect(readFileSync(join(secondManagedHomePath, 'config.toml'), 'utf-8')).toBe(
-      'sandbox_mode = "workspace-write"\n'
-    )
+    expect(readFileSync(join(firstManagedHomePath, 'config.toml'), 'utf-8')).toBe(ACCOUNT_CONFIG)
+    expect(readFileSync(join(secondManagedHomePath, 'config.toml'), 'utf-8')).toBe(ACCOUNT_CONFIG)
   })
 
   it('re-syncs config when selecting an account', async () => {
@@ -318,13 +316,11 @@ describe('CodexAccountService config sync', () => {
 
     writeFileSync(join(managedHomePath, 'config.toml'), 'approval_policy = "untrusted"\n', 'utf-8')
 
+    const before = snapshotAccountTestHome(join(testState.fakeHomeDir, '.codex'))
     await service.selectAccount('account-1')
 
-    // Selecting merges canonical settings into the account's own home rather
-    // than overwriting it, so its local approval_policy survives the re-sync.
-    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(
-      'sandbox_mode = "danger-full-access"\napproval_policy = "untrusted"\n'
-    )
+    expect(snapshotAccountTestHome(join(testState.fakeHomeDir, '.codex'))).toEqual(before)
+    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(ACCOUNT_CONFIG)
     expect(rateLimits.refreshForCodexAccountChange).toHaveBeenCalledTimes(1)
     expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledTimes(1)
   })
@@ -361,9 +357,7 @@ describe('CodexAccountService config sync', () => {
     expect(
       () => new CodexAccountService(store as never, rateLimits as never, runtimeHome as never)
     ).not.toThrow()
-    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(
-      'approval_policy = "on-request"\n'
-    )
-    expect(warnSpy).toHaveBeenCalled()
+    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(ACCOUNT_CONFIG)
+    expect(warnSpy).not.toHaveBeenCalled()
   })
 })

@@ -17,6 +17,10 @@ import {
   testState
 } from './service-test-harness'
 import { createCanonicalHookTrustFixture } from './service-hook-trust-test-fixtures'
+import { snapshotAccountTestHome } from '../codex/codex-account-home-layout.test-support'
+
+const ACCOUNT_CONFIG =
+  '# Written by Axiom (D83). Edits are replaced at the next layout.\n\n[features]\napps = false\nplugins = false\n'
 
 // Why: temp homes exceed sun_path on macOS but not on Linux; keep asserted config bytes host-independent.
 vi.mock('../codex/codex-daemon-socket-path-guard', async (importOriginal) => ({
@@ -63,7 +67,7 @@ describe('CodexAccountService config sync', () => {
 
         const loginHome = options.env.CODEX_HOME
         expect(loginHome).toBeTruthy()
-        expect(readFileSync(join(loginHome!, 'config.toml'), 'utf-8')).toBe(canonicalConfig)
+        expect(readFileSync(join(loginHome!, 'config.toml'), 'utf-8')).toBe(ACCOUNT_CONFIG)
 
         const payload = Buffer.from(JSON.stringify({ email: 'user@example.com' })).toString(
           'base64url'
@@ -105,7 +109,9 @@ describe('CodexAccountService config sync', () => {
       runtimeHome as never
     )
 
+    const before = snapshotAccountTestHome(join(testState.fakeHomeDir, '.codex'))
     await service.addAccount()
+    expect(snapshotAccountTestHome(join(testState.fakeHomeDir, '.codex'))).toEqual(before)
     expect(store.getSettings().providerActivations?.codex?.source).toBe('account-added')
 
     expect(spawnMock).toHaveBeenCalledTimes(1)
@@ -241,7 +247,7 @@ describe('CodexAccountService config sync', () => {
         const loginHome = options.env.CODEX_HOME
         expect(loginHome).toBeTruthy()
         expect(readFileSync(join(loginHome!, '.orca-managed-home'), 'utf-8')).toBe('account-1\n')
-        expect(readFileSync(join(loginHome!, 'config.toml'), 'utf-8')).toBe(canonicalConfig)
+        expect(readFileSync(join(loginHome!, 'config.toml'), 'utf-8')).toBe(ACCOUNT_CONFIG)
 
         const child = new EventEmitter() as EventEmitter & {
           stdout: PassThrough
@@ -299,7 +305,9 @@ describe('CodexAccountService config sync', () => {
       runtimeHome as never
     )
 
+    const before = snapshotAccountTestHome(join(testState.fakeHomeDir, '.codex'))
     const result = await service.reauthenticateAccount('account-1')
+    expect(snapshotAccountTestHome(join(testState.fakeHomeDir, '.codex'))).toEqual(before)
 
     expect(result.accounts[0]).toMatchObject({
       email: 'new@example.com',

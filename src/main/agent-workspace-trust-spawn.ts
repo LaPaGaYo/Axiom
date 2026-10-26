@@ -60,7 +60,8 @@ export function applyAgentWorkspaceTrustToSpawn(
     env: args.env,
     claudeAuth: args.claudeAuth,
     wslDistro: args.wslDistro,
-    connectionId: args.connectionId
+    connectionId: args.connectionId,
+    ...(args.codexAccountHomePath ? { codexAccountHomePath: args.codexAccountHomePath } : {})
   }).then((fields) => {
     if (fields.agentWorkspaceTrust) {
       args.spawnOptions.agentWorkspaceTrust = fields.agentWorkspaceTrust
@@ -76,6 +77,7 @@ export async function applyStructuredCodexWorkspaceTrust(args: {
   workspacePath: string
   launchEnv: Record<string, string | undefined>
   settings: AgentWorkspaceTrustSetting
+  codexAccountHomePath?: string | null
 }): Promise<void> {
   if (!isAgentWorkspaceTrustOn(args.settings)) {
     return
@@ -84,6 +86,7 @@ export async function applyStructuredCodexWorkspaceTrust(args: {
     env: args.launchEnv,
     claudeAuth: null,
     wslDistro: null,
-    connectionId: null
+    connectionId: null,
+    ...(args.codexAccountHomePath ? { codexAccountHomePath: args.codexAccountHomePath } : {})
   })
 }

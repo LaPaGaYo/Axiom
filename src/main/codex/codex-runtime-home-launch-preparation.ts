@@ -7,6 +7,8 @@ import { codexHookService } from './hook-service'
 import { getDefaultWslDistro } from '../wsl'
 import { isAgentStatusHooksEnabledForAgent } from '../agent-hooks/managed-agent-hook-controls'
 import { reconcileCodexHooksForLaunch } from './codex-hook-reconcile'
+import { reconcileCodexAccountHomeHook } from './codex-account-home-hook'
+import { usesCodexAccountHomeLayout } from './codex-home-paths'
 
 /** Codex launch prep against a host's runtime-home service; the desktop and orcad share it. */
 export function createCodexRuntimeHomeLaunchPreparation(deps: {
@@ -53,6 +55,14 @@ export function createCodexRuntimeHomeLaunchPreparation(deps: {
       isAgentStatusHooksEnabledForAgent(deps.getSettings(), 'codex')
     const hooksEnabled = isHooksEnabled()
     try {
+      if (
+        runtimeHomePath &&
+        target?.runtime !== 'wsl' &&
+        usesCodexAccountHomeLayout(runtimeHomePath)
+      ) {
+        await reconcileCodexAccountHomeHook(runtimeHomePath, isHooksEnabled, launchesCodex)
+        return runtimeHomePath
+      }
       // Why: honor the persisted off switch so post-startup launches can't reinstall removed hooks.
       const status = await codexHookService.prepareRuntimeHomeForLaunch(
         runtimeHomePath,

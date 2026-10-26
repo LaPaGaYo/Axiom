@@ -1,4 +1,5 @@
 import { homedir } from 'node:os'
+import { join } from 'node:path'
 import {
   AGENT_TRUST_WRITE_DEADLINE_MS,
   SHORT_AGENT_TRUST_WRITE_DEADLINE_MS
@@ -21,6 +22,8 @@ export type AgentTrustLaunchContext = {
   wslDistro: string | null
   /** SSH connection that runs the agent; null means this machine. */
   connectionId: string | null
+  /** Ownership-checked host account home resolved by the launch caller; never an env override. */
+  codexAccountHomePath?: string | null
 }
 
 /** Spawn fields the dispatcher asks the caller to forward to the process owner. */
@@ -74,7 +77,10 @@ export async function applyAgentWorkspaceTrust(
           claudeAuth: context.claudeAuth,
           wslDistro: context.wslDistro
         }),
-      codexConfigFiles: () => getLocalCodexTrustConfigFiles(agentHome),
+      codexConfigFiles: () =>
+        context.codexAccountHomePath
+          ? [join(context.codexAccountHomePath, 'config.toml')]
+          : getLocalCodexTrustConfigFiles(agentHome),
       // Why: Codex queues behind a config lane it shares with Orca's hook installs.
       deadlineMs:
         preset === 'codex' ? AGENT_TRUST_WRITE_DEADLINE_MS : SHORT_AGENT_TRUST_WRITE_DEADLINE_MS

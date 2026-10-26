@@ -85,6 +85,8 @@ vi.mock('node:os', async () => {
 async function importServiceWithSideEffectSpies() {
   const syncResources = vi.fn()
   const syncConfig = vi.fn()
+  const layout = vi.fn()
+  vi.doMock('../codex/codex-account-home-layout', () => ({ layoutCodexAccountHome: layout }))
   const systemBridge = vi.fn(async () => {})
   const accountBridge = vi.fn(async () => {})
   const backfillMarker = vi.fn(() => false)
@@ -115,7 +117,7 @@ async function importServiceWithSideEffectSpies() {
   const { CodexRuntimeHomeService } = await import('./runtime-home-service')
   return {
     CodexRuntimeHomeService,
-    sideEffects: { syncResources, syncConfig, systemBridge, accountBridge, backfillMarker }
+    sideEffects: { syncResources, syncConfig, layout, systemBridge, accountBridge, backfillMarker }
   }
 }
 
@@ -191,8 +193,9 @@ describe('resolveHostCodexHomePathForLaunchReadOnly', () => {
     // Positive control: launch preparation for the same settings lands on the
     // same home and DOES run its side effects, so the spies are proven live.
     expect(service.prepareForCodexLaunch()).toBe(readOnlyHome)
-    expect(sideEffects.syncResources).toHaveBeenCalled()
-    expect(sideEffects.accountBridge).toHaveBeenCalled()
+    expect(sideEffects.layout).toHaveBeenCalled()
+    expect(sideEffects.syncResources).not.toHaveBeenCalled()
+    expect(sideEffects.accountBridge).not.toHaveBeenCalled()
   })
 
   it('system-default real home: answers null (real ~/.codex) with zero side effects, matching launch prep', async () => {

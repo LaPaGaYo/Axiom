@@ -14,7 +14,13 @@ import { codexHookService } from './hook-service'
 import { reconcileCodexHooksForLaunch } from './codex-hook-reconcile'
 import { ensureCodexDaemonSocketGuard } from './codex-config-mirror'
 import { isAgentStatusHooksEnabledForAgent } from '../agent-hooks/managed-agent-hook-controls'
-import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
+import {
+  getOrcaManagedCodexHomePath,
+  getSystemCodexHomePath,
+  usesCodexAccountHomeLayout
+} from './codex-home-paths'
+import { layoutCodexAccountHome } from './codex-account-home-layout'
+import { reconcileCodexAccountHomeHook } from './codex-account-home-hook'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import type { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-service'
 import type { GlobalSettings } from '../../shared/global-settings-types'
@@ -35,6 +41,15 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
       normalizeRuntimePathForComparison(home) === normalizeRuntimePathForComparison(systemHomePath)
     const isHooksEnabled = (): boolean =>
       isAgentStatusHooksEnabledForAgent(deps.getSettings(), 'codex')
+    if (!isSystemHome && usesCodexAccountHomeLayout(home)) {
+      layoutCodexAccountHome({
+        homePath: home,
+        allowlist: deps.getSettings()?.codexAccountHomeAllowlist ?? { skills: [], mcpServers: [] },
+        systemHomePath
+      })
+      await reconcileCodexAccountHomeHook(home, isHooksEnabled, true)
+      return
+    }
     try {
       if (isSystemHome) {
         // Why bounded: the resume waits only briefly for a reconcile; it runs on ~/.codex whatever the selection.

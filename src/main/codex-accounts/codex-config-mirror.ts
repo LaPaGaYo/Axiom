@@ -7,6 +7,8 @@ import {
   syncSystemConfigIntoManagedCodexHome
 } from '../codex/codex-config-mirror'
 import { readCodexTopLevelModelProvider } from '../codex/codex-model-provider-config'
+import { layoutCodexAccountHome } from '../codex/codex-account-home-layout'
+import { usesCodexAccountHomeLayout } from '../codex/codex-home-paths'
 import type { Store } from '../persistence'
 import { toWindowsWslPath } from '../wsl'
 
@@ -86,8 +88,7 @@ export class CodexConfigMirror {
       return
     }
 
-    // Why: mirroring a custom-provider pin into an OAuth managed home makes
-    // the new OAuth credentials inert; fail before login and leave user config intact.
+    // D56 keeps this login guard even when D83 isolates the account's config.
     throw new Error(
       `Axiom cannot add a Codex OAuth account while ~/.codex/config.toml pins the custom provider ${JSON.stringify(modelProvider)}. Keep using the system-default account for this provider, or remove model_provider (or set it to "openai") before adding an OAuth account. Axiom left your config unchanged.`
     )
@@ -105,9 +106,21 @@ export class CodexConfigMirror {
 
   private syncIntoManagedHome(
     managedHomePath: string,
-    canonicalConfig = this.readForManagedHome(managedHomePath),
+    canonicalConfig?: CanonicalCodexConfig | null,
     expectedAccountId?: string
   ): void {
+    if (usesCodexAccountHomeLayout(managedHomePath)) {
+      layoutCodexAccountHome({
+        homePath: this.assertManagedHomePath(managedHomePath, expectedAccountId),
+        allowlist: this.store.getSettings().codexAccountHomeAllowlist ?? {
+          skills: [],
+          mcpServers: []
+        }
+      })
+      return
+    }
+    canonicalConfig =
+      canonicalConfig === undefined ? this.readForManagedHome(managedHomePath) : canonicalConfig
     if (canonicalConfig === null) {
       // Why: with no ~/.codex/config.toml there is nothing to mirror, but Codex still cannot start in a long home without the daemon guard.
       // WSL homes are skipped: their ownership check is a blocking wsl.exe call (startup, account switch), and WSL launch prep guards the home it launches.

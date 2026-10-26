@@ -4,6 +4,7 @@ import type * as NodeOs from 'node:os'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getDefaultSettings } from '../../shared/constants'
+import { snapshotAccountTestHome } from '../codex/codex-account-home-layout.test-support'
 
 const testState = vi.hoisted(() => ({ fakeHomeDir: '' }))
 
@@ -59,9 +60,10 @@ describe('CodexConfigMirror without ~/.codex/config.toml', () => {
   it('still guards every managed home against the daemon socket limit', () => {
     mirror.safeSyncToManagedHomes()
 
-    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(
-      `[features]\n${OVERRIDE_LINE}\n`
-    )
+    const config = readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')
+    expect(config).toContain('Axiom (D83)')
+    expect(config).toContain(OVERRIDE_LINE)
+    expect(config).toContain('apps = false\nplugins = false')
     expect(existsSync(join(testState.fakeHomeDir, '.codex'))).toBe(false)
   })
 
@@ -81,13 +83,36 @@ describe('CodexConfigMirror without ~/.codex/config.toml', () => {
     expect(assertManagedHomePath).not.toHaveBeenCalled()
   })
 
-  it('adds the guard without touching settings already in the managed home', () => {
+  it('replaces runtime settings with the account layout and daemon guard', () => {
     writeFileSync(join(managedHomePath, 'config.toml'), 'model = "gpt-5"\n')
 
     mirror.safeSyncIntoManagedHome(managedHomePath, undefined, 'acct')
 
-    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(
-      `model = "gpt-5"\n\n[features]\n${OVERRIDE_LINE}\n`
+    const config = readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')
+    expect(config).not.toContain('model =')
+    expect(config).toContain(OVERRIDE_LINE)
+  })
+
+  it('reads the current allowlist on each lifecycle pass and retains the ownership check', () => {
+    const systemHome = join(testState.fakeHomeDir, '.codex')
+    mkdirSync(systemHome)
+    writeFileSync(join(systemHome, 'config.toml'), '[mcp_servers.docs]\ncommand = "docs"\n')
+    const settings = getDefaultSettings(testState.fakeHomeDir)
+    const assertHome = vi.fn((home: string) => home)
+    const currentMirror = new CodexConfigMirror({ getSettings: () => settings }, assertHome)
+    const before = snapshotAccountTestHome(systemHome)
+    currentMirror.safeSyncIntoManagedHome(managedHomePath, undefined, 'acct')
+    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf8')).not.toContain('mcp_servers')
+    settings.codexAccountHomeAllowlist.mcpServers = ['docs']
+    currentMirror.safeSyncIntoManagedHome(managedHomePath, undefined, 'acct')
+    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf8')).toContain(
+      '[mcp_servers.docs]'
     )
+    settings.codexAccountHomeAllowlist.mcpServers = []
+    currentMirror.safeSyncIntoManagedHome(managedHomePath, undefined, 'acct')
+    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf8')).not.toContain('mcp_servers')
+    expect(snapshotAccountTestHome(systemHome)).toEqual(before)
+    expect(assertHome).toHaveBeenCalledTimes(3)
+    expect(assertHome).toHaveBeenLastCalledWith(managedHomePath, 'acct')
   })
 })

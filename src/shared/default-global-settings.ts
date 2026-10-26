@@ -181,6 +181,7 @@ export function buildDefaultSettings(args: {
     promptCacheTimerEnabled: false,
     promptCacheTtlMs: 300_000,
     codexManagedAccounts: [],
+    codexAccountHomeAllowlist: { skills: [], mcpServers: [] },
     activeCodexManagedAccountId: null,
     activeCodexManagedAccountIdsByRuntime: { host: null, wsl: {} },
     claudeManagedAccounts: [],
