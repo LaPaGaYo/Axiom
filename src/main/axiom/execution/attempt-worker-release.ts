@@ -10,16 +10,31 @@ export function shouldHoldWorkerRelease(): boolean {
   return getMainE2EConfig().enabled && process.env.AXIOM_E2E_HOLD_WORKER_RELEASE === '1'
 }
 
+type FailedAttempt = Pick<SubmittedAttempt, 'missionId' | 'attemptId'>
+type ReleaseTarget = FailedAttempt & ({ id: string } | { reason: 'attempt_failed' })
+
+export function scheduleFailedWorkerRelease(runtime: OrcaRuntimeService, attempt: FailedAttempt) {
+  scheduleWorkerRelease(runtime, { ...attempt, reason: 'attempt_failed' })
+}
+
+export function releaseFailedWorker(runtime: OrcaRuntimeService, attempt: FailedAttempt) {
+  return releaseWorker(runtime, { ...attempt, reason: 'attempt_failed' })
+}
+
 export function scheduleSubmittedWorkerRelease(
   runtime: OrcaRuntimeService,
   submission: SubmittedAttempt
 ) {
+  scheduleWorkerRelease(runtime, submission)
+}
+
+function scheduleWorkerRelease(runtime: OrcaRuntimeService, target: ReleaseTarget) {
   if (shouldHoldWorkerRelease()) {
     return
   }
   // Let the CLI receive its receipt before closing its process tree; recovery covers a lost timer.
   setTimeout(() => {
-    void releaseSubmittedWorker(runtime, submission)
+    void releaseWorker(runtime, target)
   }, WORKER_RELEASE_GRACE_MS).unref()
 }
 
@@ -27,10 +42,16 @@ export async function releaseSubmittedWorker(
   runtime: OrcaRuntimeService,
   submission: SubmittedAttempt
 ) {
+  return releaseWorker(runtime, submission)
+}
+
+async function releaseWorker(runtime: OrcaRuntimeService, target: ReleaseTarget) {
   if (shouldHoldWorkerRelease()) {
     return
   }
-  const { missionId, attemptId, id: submissionId } = submission
+  const { missionId, attemptId } = target
+  const details: Record<string, string> =
+    'reason' in target ? { reason: target.reason } : { submissionId: target.id }
   const { store } = getAxiomControlPlane(runtime)
   try {
     const { state, processAction, archive } = await releaseLocalWorker(runtime, attemptId)
@@ -41,7 +62,7 @@ export async function releaseSubmittedWorker(
       objectId: attemptId,
       event: 'attempt.terminal_released',
       before: null,
-      after: { submissionId, state, processAction, archive }
+      after: { ...details, state, processAction, archive }
     })
     return 'terminal_released'
   } catch {
@@ -53,10 +74,10 @@ export async function releaseSubmittedWorker(
         objectId: attemptId,
         event: 'attempt.terminal_release_failed',
         before: null,
-        after: { submissionId, reason: 'release_failed' }
+        after: { reason: 'release_failed', ...details }
       })
     } catch {
-      console.warn('[axiom] Worker release audit failed', { attemptId, submissionId })
+      console.warn('[axiom] Worker release audit failed', { attemptId, ...details })
     }
     return 'terminal_release_failed'
   }

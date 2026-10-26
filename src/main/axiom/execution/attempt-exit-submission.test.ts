@@ -8,6 +8,7 @@ import { getAxiomControlPlane } from '../control-plane'
 import { RecoveryService } from '../recovery/recovery-service'
 import * as files from './headless-attempt-files'
 import * as git from '../../git/runner'
+import * as e2e from '../../e2e-config'
 
 let f: ReturnType<typeof submissionFixture>
 let root: string
@@ -54,6 +55,7 @@ afterEach(async () => {
   vi.useRealTimers()
   f.db.close()
   vi.restoreAllMocks()
+  vi.unstubAllEnvs()
   await rm(root, { recursive: true, force: true })
 })
 it('submits exactly once, with computed paths, attributed report, usage and session id', async () => {
@@ -116,6 +118,13 @@ it.each([
   const before = f.snapshot()
   await submitExitedAttempt(f.runtime, f.t01.attemptId)
   expect(f.snapshot()).toEqual(before)
+  await vi.advanceTimersByTimeAsync(2000)
+  expect(f.releaseWorker).toHaveBeenCalledExactlyOnceWith(f.runtime, f.t01.attemptId)
+  expect(f.store.listAuditEvents({ missionId: f.mission.id }).at(-1)).toMatchObject({
+    event: 'attempt.terminal_released',
+    objectId: f.t01.attemptId,
+    after: { reason: 'attempt_failed' }
+  })
 })
 it('classifies an exit before any event as interrupted', async () => {
   await writeFile(path.join(root, 'events.jsonl'), '')
@@ -236,3 +245,55 @@ it('accepts a valid completion after a transient reconnect error', async () => {
   )
   expect(await submitExitedAttempt(f.runtime, f.t01.attemptId)).toBe('submitted')
 })
+
+it.each(['not_requested', 'retained', 'requested'])(
+  'holds failed releases and recovers a lost timer once from %s after a later Task completes',
+  async (releaseState) => {
+    vi.spyOn(e2e, 'getMainE2EConfig').mockReturnValue({ ...e2e.getMainE2EConfig(), enabled: true })
+    vi.stubEnv('AXIOM_E2E_HOLD_WORKER_RELEASE', '1')
+    await writeFile(path.join(root, 'exit-code'), '7')
+    expect(await submitExitedAttempt(f.runtime, f.t01.attemptId)).toBe('failed')
+    vi.clearAllTimers()
+    f.db.db
+      .prepare("UPDATE audit_events SET created_at = ? WHERE event = 'attempt.failed'")
+      .run('2026-10-25T12:00:00.000Z')
+    f.db.db
+      .prepare("UPDATE task_stages SET stage = 'INTEGRATED' WHERE task_id = ?")
+      .run(f.t01.taskId)
+    f.db.db
+      .prepare('UPDATE worker_terminal_resources SET release_state = ? WHERE owner_dispatch_id = ?')
+      .run(releaseState, f.t01.attemptId)
+    let now = Date.parse('2026-10-25T12:00:59.999Z')
+    const recovery = new RecoveryService(f.db, f.store, f.missions, {
+      runtime: f.runtime,
+      artifacts: getAxiomControlPlane(f.runtime).artifacts,
+      now: () => now
+    })
+    await recovery.reconcileAttempts()
+    expect(f.releaseWorker).not.toHaveBeenCalled()
+    vi.stubEnv('AXIOM_E2E_HOLD_WORKER_RELEASE', '')
+    await recovery.reconcileAttempts()
+    expect(f.releaseWorker).not.toHaveBeenCalled()
+    now += 1
+    f.releaseWorker.mockImplementationOnce(async (_runtime, dispatchId) => {
+      f.db.db
+        .prepare(
+          "UPDATE worker_terminal_resources SET release_state = 'released' WHERE owner_dispatch_id = ?"
+        )
+        .run(dispatchId)
+      return {
+        dispatchId,
+        state: 'released',
+        processAction: 'closed_agent_terminal',
+        archive: null
+      }
+    })
+    await recovery.reconcileAttempts()
+    await recovery.reconcileAttempts()
+    expect(f.releaseWorker).toHaveBeenCalledExactlyOnceWith(f.runtime, f.t01.attemptId)
+    expect(f.store.listAuditEvents({ missionId: f.mission.id }).at(-1)).toMatchObject({
+      event: 'attempt.terminal_released',
+      after: { reason: 'attempt_failed' }
+    })
+  }
+)

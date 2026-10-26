@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { scheduleFailedWorkerRelease } from './attempt-worker-release'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { WorkerDispatchRow } from '../../runtime/orchestration/types'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
@@ -145,6 +146,7 @@ async function submitExit(runtime: OrcaRuntimeService, attemptId: string) {
         }
       )
     })
+    scheduleFailedWorkerRelease(runtime, { missionId: authority.mission.id, attemptId })
     return kind
   }
   const reportArtifact = await artifacts.put({

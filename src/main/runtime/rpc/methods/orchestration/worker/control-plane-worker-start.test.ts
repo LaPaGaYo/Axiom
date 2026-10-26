@@ -1,3 +1,5 @@
+import { buildHeadlessTerminalCommand } from './control-plane-worker-start'
+import { quotePosixShell } from '../../../../../../shared/shell-argument-quoting'
 import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
@@ -44,4 +46,17 @@ it('starts a raw headless command with normal dispatch custody, without prompt w
     worktree_id: 'repo::worktree'
   })
   expect(h.db.getWorkerTerminalResourceByOwner(receipt.dispatchId)?.ownership_state).toBe('owned')
+})
+
+it('renders explicit env operands after the login shell with space-safe quoting', () => {
+  const result = buildHeadlessTerminalCommand({
+    argv: ['/fake/codex', 'exec'],
+    env: { CODEX_HOME: '/Application Support/account/home' },
+    stdinPath: '/prompt',
+    attemptDir: '/attempt'
+  })
+  expect(result.command).toContain(
+    quotePosixShell('CODEX_HOME=/Application Support/account/home').replaceAll("'", "'\\''")
+  )
+  expect(result.command).toContain('/usr/bin/env')
 })

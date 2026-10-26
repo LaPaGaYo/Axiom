@@ -15,6 +15,7 @@ export function buildHeadlessWorkerCommand(input: {
   attemptDir: string
   platform?: NodeJS.Platform
   commandOverride?: string
+  accountHomePath?: string
 }) {
   if (!hasHeadlessWorkerBuilder(input.provider, input.platform)) {
     return null
@@ -31,6 +32,9 @@ export function buildHeadlessWorkerCommand(input: {
     catalog.models.find((entry) => entry.id === input.model)?.options ?? catalog.unknownModelOptions
   const effort =
     options?.find((entry) => entry.id === 'effort')?.apply.launchArgs?.(input.effort) ?? []
+  const env: Record<string, string> = input.accountHomePath
+    ? { CODEX_HOME: input.accountHomePath }
+    : {}
   return {
     argv: [
       binary,
@@ -44,6 +48,8 @@ export function buildHeadlessWorkerCommand(input: {
       'sandbox_workspace_write.network_access=false',
       '-c',
       'approval_policy="never"',
+      '-c',
+      'features.hooks=false',
       '-C',
       input.worktree,
       '-o',
@@ -52,7 +58,7 @@ export function buildHeadlessWorkerCommand(input: {
       ...effort,
       '-'
     ],
-    env: {},
+    env,
     stdinPath: path.join(input.attemptDir, 'prompt.md')
   }
 }

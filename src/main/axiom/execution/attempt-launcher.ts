@@ -1,3 +1,5 @@
+import { tuiWorkerCombination } from './worker-launch-combination'
+import type { CodexWorkerLaunchHome } from '../../codex/codex-worker-launch-home'
 import { settleAttemptWithoutSubmission } from './attempt-settlement'
 import { z } from 'zod'
 import type { AuditEvent } from '../../../shared/axiom-contract/mission-objects'
@@ -38,6 +40,7 @@ export type AttemptLauncherDependencies = {
   missions: MissionController
   artifacts: ArtifactStore
   now?: () => string
+  codexWorkerHome?: () => Promise<CodexWorkerLaunchHome>
 } & (
   | { runtime: OrcaRuntimeService; startWorker?: undefined }
   | { runtime: LauncherRuntime; startWorker: (args: AttemptWorkerStartArgs) => Promise<unknown> }
@@ -148,7 +151,8 @@ export function createAttemptLauncher(
         workerAudit = {
           ...workerAudit,
           channel: headless ? 'headless' : 'tui',
-          posture: headless ? 'headless-sandboxed' : 'tui-bypass'
+          posture: headless ? 'headless-sandboxed' : 'tui-bypass',
+          ...(!headless ? { combination: tuiWorkerCombination(spec) } : {})
         }
       }
       const caller = missionCaller(mission.coordinatorOrcaSessionId, worktreeId)
@@ -202,7 +206,9 @@ export function createAttemptLauncher(
                   worktree: created.worktree,
                   render,
                   audit: workerAudit,
-                  onPrepared: (id, after) => audit(attempt, 'attempt.headless_prepared', id, after)
+                  onPrepared: (id, after) => audit(attempt, 'attempt.headless_prepared', id, after),
+                  onMismatch: (id, reasons) =>
+                    audit(attempt, 'attempt.launch_mismatch', id, { reasons })
                 })
               }
             : {}),

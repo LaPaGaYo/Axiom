@@ -29,6 +29,22 @@ export class AgentFactory {
     private readonly listInstalledProviders: () => Promise<string[]>
   ) {}
 
+  async selectWorkerProvider(input: { missionId: string; taskId: string }): Promise<string> {
+    const { missionId, taskId } = z
+      .object({ missionId: AxiomIdSchema, taskId: AxiomIdSchema })
+      .parse(input)
+    const installed = await this.listInstalledProviders()
+    const policy = this.store.getPolicy(missionId)
+    if (!this.store.getMission(missionId) || !policy) {
+      throw new AgentFactoryError('mission_not_found', { missionId })
+    }
+    const task = this.store.getTaskStage(taskId)
+    if (!task || task.missionId !== missionId) {
+      throw new AgentFactoryError('task_not_found', { taskId })
+    }
+    return selectProvider(installed, policy.routing, 'worker', task.spec.risk, this.engine).chosen
+  }
+
   async build(input: z.input<typeof BuildParams>) {
     const p = BuildParams.parse(input)
     const installed = await this.listInstalledProviders()
@@ -128,24 +144,20 @@ export async function buildWorkerContracts(
   missionId: string,
   taskId: string
 ) {
-  let context = await contextBuilder.build({ missionId, taskId })
-  let agent = await agentFactory.build({
+  const provider = await agentFactory.selectWorkerProvider({ missionId, taskId })
+  const context = await contextBuilder.build({
+    missionId,
+    taskId,
+    channel: hasHeadlessWorkerBuilder(provider) ? 'headless' : 'tui'
+  })
+  const agent = await agentFactory.build({
     missionId,
     taskId,
     role: 'worker',
     contextPackageId: context.packageId
   })
-  if (hasHeadlessWorkerBuilder(agent.spec.provider)) {
-    context = await contextBuilder.build({ missionId, taskId, channel: 'headless' })
-    agent = await agentFactory.build({
-      missionId,
-      taskId,
-      role: 'worker',
-      contextPackageId: context.packageId
-    })
-    if (!hasHeadlessWorkerBuilder(agent.spec.provider)) {
-      throw new Error('Worker provider changed during admission')
-    }
+  if (agent.spec.provider !== provider) {
+    throw new Error('Worker provider changed during admission')
   }
   return { agentSpecId: agent.id, contextPackageId: context.packageId }
 }

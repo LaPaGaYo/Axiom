@@ -57,6 +57,10 @@ export class RecoveryService {
         const stage = this.store.getTaskStage(binding.taskId)?.stage
         if (
           this.store.getAgentSpec(binding.agentSpecId)?.spec.role === 'planner' ||
+          (binding.dispatchId &&
+            ['not_requested', 'retained', 'requested'].includes(
+              this.db.getWorkerTerminalResourceByOwner(binding.dispatchId)?.release_state ?? ''
+            )) ||
           (stage &&
             (!TERMINAL_TASK_STAGES.has(stage) ||
               stage === 'CANCELED' ||

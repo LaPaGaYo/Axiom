@@ -370,3 +370,20 @@ function createAuth(email: string, accountId: string, token: string, expiresAt: 
     }
   })}\n`
 }
+
+it('skips a refused account layout during quota polling and preserves the selection', async () => {
+  const account = createManagedAccount(
+    'account-quota',
+    'acct-quota',
+    createAuth('quota@example.invalid', 'acct-quota', 'synthetic-quota', 1000)
+  )
+  const { settings, store } = createStore([account], account.id)
+  const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the test store implements the account service's settings interface.
+  const service = new CodexRuntimeHomeService(store as never)
+  const config = join(account.managedHomePath, 'config.toml')
+  rmSync(config, { force: true })
+  mkdirSync(config)
+  expect(service.prepareForRateLimitFetch()).toEqual({ kind: 'skip' })
+  expect(settings.activeCodexManagedAccountId).toBe(account.id)
+})
