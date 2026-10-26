@@ -5,11 +5,13 @@ import { getDefaultWslDistro, getWslHome } from '../wsl'
 import { isWslDistroRunning } from '../wsl-background-distro-gate'
 import {
   getSystemCodexHomePath,
+  usesCodexAccountHomeLayout,
   resolveOrcaManagedCodexHomePath,
   syncCodexGlobalInstructionsIntoManagedHome,
   syncSystemCodexResourcesIntoManagedHome
 } from '../codex/codex-home-paths'
 import { syncSystemConfigIntoManagedCodexHome } from '../codex/codex-config-mirror'
+import { layoutCodexAccountHome } from '../codex/codex-account-home-layout'
 import {
   getWslSelectionKey,
   normalizeCodexRuntimeSelection,
@@ -275,8 +277,15 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     if (selfContainedAccount) {
       const resolved = this.resolveSelfContainedManagedHome(selfContainedAccount)
       if (resolved.kind === 'owned') {
-        // Why: the quota fetch reads the account's own auth.json in place; no
-        // shared-home hot-swap or per-poll resource relink (that is launch prep).
+        if (usesCodexAccountHomeLayout(resolved.homePath)) {
+          layoutCodexAccountHome({
+            homePath: resolved.homePath,
+            allowlist: this.store.getSettings().codexAccountHomeAllowlist ?? {
+              skills: [],
+              mcpServers: []
+            }
+          })
+        }
         return { kind: 'ready', codexHomePath: resolved.homePath }
       }
       if (resolved.kind === 'indeterminate') {

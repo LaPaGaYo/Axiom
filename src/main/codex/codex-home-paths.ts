@@ -11,7 +11,8 @@ import {
   unlinkSync
 } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
+import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
   clearCopiedResourceMarker,
   markCopiedResource,
@@ -21,7 +22,7 @@ import { observe, observeResolvedPathEntry } from './codex-path-observation'
 
 const CODEX_GLOBAL_INSTRUCTIONS_ENTRY = 'AGENTS.md'
 
-const CODEX_SYSTEM_RESOURCE_ENTRIES = [
+export const CODEX_SYSTEM_RESOURCE_ENTRIES = [
   'skills',
   'hooks',
   'plugins',
@@ -36,6 +37,16 @@ export function getSystemCodexHomePath(): string {
   return join(homedir(), '.codex')
 }
 
+/** D83 applies to ownership-checked account homes; mirror, system, Windows and WSL stay legacy. */
+export function usesCodexAccountHomeLayout(homePath: string): boolean {
+  return (
+    (process.platform === 'darwin' || process.platform === 'linux') &&
+    !parseWslUncPath(homePath) &&
+    resolve(homePath) !== resolve(resolveOrcaManagedCodexHomePath()) &&
+    resolve(homePath) !== resolve(getSystemCodexHomePath())
+  )
+}
+
 /** Path only; use when a read-only caller must not materialize the mirror. */
 export function resolveOrcaManagedCodexHomePath(): string {
   return join(getOrcaUserDataPath(), 'codex-runtime-home', 'home')
@@ -47,7 +58,7 @@ export function getOrcaManagedCodexHomePath(): string {
   return managedHomePath
 }
 
-/** Config files an Orca-launched local Codex reads trust from, in the hook installer's lock order. */
+/** Legacy system/mirror trust files, in the hook installer's lock order. */
 export function getLocalCodexTrustConfigFiles(agentHome: string): string[] {
   return [
     join(getOrcaManagedCodexHomePath(), 'config.toml'),
@@ -74,10 +85,8 @@ export function getOrcaUserDataPath(): string {
   return join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'orca')
 }
 
-// Why: each managed home (the shared runtime mirror, or a per-account
-// self-contained CODEX_HOME that the caller has already created) links the same
-// system resources with its own ownership markers, so a per-account launch home
-// is complete without ever symlinking into or mutating the user's real ~/.codex.
+// Legacy resource mirror for the shared home and Windows accounts. D83 host
+// account homes use layoutCodexAccountHome instead of linking system resources.
 export function syncSystemCodexResourcesIntoManagedHome(managedHomePath?: string): void {
   const targetHome = managedHomePath ?? getOrcaManagedCodexHomePath()
   const systemHomePath = getSystemCodexHomePath()
@@ -282,12 +291,15 @@ function removeCopiedResourceIfOwned(
   clearCopiedResourceMarker(managedHomePath, entryName)
 }
 
-function removeSymlinkedResourceIfOwned(targetPath: string, sourcePath: string): boolean {
+export function removeSymlinkedResourceIfOwned(targetPath: string, sourcePath: string): boolean {
   try {
     if (!lstatSync(targetPath).isSymbolicLink()) {
       return false
     }
-    if (!linkTargetsMatch(readlinkSync(targetPath), sourcePath)) {
+    const linkTarget = readlinkSync(targetPath)
+    const resolvedTarget =
+      process.platform === 'win32' ? linkTarget : resolve(dirname(targetPath), linkTarget)
+    if (!linkTargetsMatch(resolvedTarget, sourcePath)) {
       return false
     }
     return removeSymlinkEntry(targetPath)

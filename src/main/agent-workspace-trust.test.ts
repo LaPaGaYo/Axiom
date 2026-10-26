@@ -110,6 +110,15 @@ describe('applyAgentWorkspaceTrust on this machine', () => {
     warn.mockRestore()
   })
 
+  it('writes Codex trust only in the resolved host account launch home', async () => {
+    await applyAgentWorkspaceTrust('codex', WORKSPACE, {
+      ...local,
+      codexAccountHomePath: '/accounts/selected/home'
+    })
+    expect(mocks.codex).toHaveBeenCalledWith(WORKSPACE, ['/accounts/selected/home/config.toml'])
+    expect(mocks.codexConfigFiles).not.toHaveBeenCalled()
+  })
+
   it('gives only Codex the long deadline its shared config lane needs', async () => {
     vi.useFakeTimers()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})

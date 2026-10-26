@@ -10,6 +10,7 @@ import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../pty/legacy-terminal-
 import { PI_PROCESS_OWNER_ENV_KEYS } from '../../pty/pi-process-owner-env'
 import { planCodexNoDaemonLaunch } from '../../pty/codex-no-daemon-launch-command'
 import { applyAgentWorkspaceTrustToSpawn } from '../../agent-workspace-trust-spawn'
+import { usesCodexAccountHomeLayout } from '../../codex/codex-home-paths'
 import type { PtySpawnOptions } from '../../providers/pty-provider-contract'
 import type { CodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
 import { getStartupTerminalIngressIntent } from '../terminal-startup-color-query-replies'
@@ -193,6 +194,13 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
     claudeAuth: input.claudeAuth,
     wslDistro: input.expectedWslDistro,
     connectionId: connectionId ?? null,
+    // The launch already resolved/validated this path. Trust must use that same pinned account.
+    codexAccountHomePath:
+      input.codexRuntime !== 'wsl' &&
+      input.selectedCodexHomePath &&
+      usesCodexAccountHomeLayout(input.selectedCodexHomePath)
+        ? input.selectedCodexHomePath
+        : null,
     spawnOptions
   })
   if (trustWrite) {

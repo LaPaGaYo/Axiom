@@ -1,8 +1,4 @@
-import {
-  MANAGED_HOOK_TIMEOUT_SECONDS,
-  readHooksJson,
-  type HooksConfig
-} from '../agent-hooks/installer-utils'
+import { readHooksJson, type HooksConfig } from '../agent-hooks/installer-utils'
 import {
   computeTrustKey,
   getCodexExplicitHomeHookSourcePath,
@@ -20,12 +16,13 @@ import {
 } from './codex-hook-definition'
 import { readEveryKnownCodexHookHashes } from './codex-hook-hash-lookup'
 import { getSystemCodexHomePath } from './codex-home-paths'
-import { readLedgerOrcaHashes } from './codex-managed-trust-reconciliation'
 import {
   getRealHomeHookKeySourcePaths,
   getRealHomeHooksJsonPath
 } from './codex-real-home-hooks-json'
 import type { CodexHookHashes } from './codex-hook-trust-derivation'
+import { isKnownOrcaHash, readSavedOrcaHashes } from './codex-hook-orca-hashes'
+export { isKnownOrcaHash } from './codex-hook-orca-hashes'
 
 /** One Codex home's hook files, and every path Codex may key its entries by. */
 export type CodexHookHome = {
@@ -114,23 +111,7 @@ export function approvalsAtOrcaEntries(
  * an approval at Orca's key holding any other hash is a removed user hook's.
  */
 export function readKnownOrcaHashes(home: CodexHookHome, command: string): CodexHookHashes[] {
-  return [
-    computeOrcaCodexHookHashes(command),
-    ...readEveryKnownCodexHookHashes(),
-    ...readLedgerOrcaHashes(home.homePath, command, MANAGED_HOOK_TIMEOUT_SECONDS)
-  ]
-}
-
-/** The one rule for whether an approval's hash is Orca's. */
-export function isKnownOrcaHash(
-  knownOrcaHashes: readonly CodexHookHashes[],
-  eventLabel: CodexEventLabel,
-  trustedHash: string | undefined
-): boolean {
-  return (
-    trustedHash !== undefined &&
-    knownOrcaHashes.some((hashes) => hashes[eventLabel] === trustedHash)
-  )
+  return readSavedOrcaHashes(home.homePath, command, readEveryKnownCodexHookHashes())
 }
 
 /** Until Codex answers: Orca's own hash, overlaid with each event's approval at Orca's entry holding a known Orca hash. */

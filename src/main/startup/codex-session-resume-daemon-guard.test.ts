@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import type * as NodeOs from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { VerifiedCodexResumeSource } from '../codex/codex-session-resume-preparation'
@@ -16,7 +17,15 @@ const mocks = vi.hoisted(() => ({
   refreshRuntimeUserHooksForLaunchPrep: vi.fn(),
   reconcileCodexHooksForLaunch: vi.fn(async () => {}),
   prepareCodexSessionResume: vi.fn(),
-  prepareLegacySharedCodexSessionResume: vi.fn()
+  prepareLegacySharedCodexSessionResume: vi.fn(),
+  reconcileAccount: vi.fn(async () => {})
+}))
+vi.mock('node:os', async () => ({
+  ...(await vi.importActual<typeof NodeOs>('node:os')),
+  homedir: () => mocks.systemHomePath
+}))
+vi.mock('../codex/codex-account-home-hook', () => ({
+  reconcileCodexAccountHomeHook: mocks.reconcileAccount
 }))
 
 vi.mock('electron', () => ({ app: { getPath: vi.fn(() => '/tmp/orca-user-data') } }))
@@ -101,7 +110,7 @@ describe('Codex session resume daemon socket guard', () => {
     })
   }
 
-  it('guards the resumed account home when hook repair fails before mirroring config', async () => {
+  it('layouts the resumed account home before reconciling its status hook', async () => {
     expect(codexDaemonSocketPathExceedsLimit(accountHome)).toBe(true)
     writeFileSync(join(accountHome, 'config.toml'), 'model = "gpt-5"\n', 'utf-8')
     mocks.hooksEnabled = true
@@ -111,7 +120,10 @@ describe('Codex session resume daemon socket guard', () => {
 
     expect(preparation).toMatchObject({ outcome: 'resume', codexHomePath: accountHome })
     const config = readFileSync(join(accountHome, 'config.toml'), 'utf-8')
-    expect(config).toContain('model = "gpt-5"')
+    expect(config).not.toContain('model = "gpt-5"')
+    expect(config).toContain('Axiom (D83)')
+    expect(mocks.reconcileAccount).toHaveBeenCalledWith(accountHome, expect.any(Function), true)
+    expect(mocks.installForLaunchPrep).not.toHaveBeenCalled()
     expect(config).toContain(`daemon_auto_start = false ${CODEX_DAEMON_OVERRIDE_MARKER}`)
   })
 
@@ -124,7 +136,8 @@ describe('Codex session resume daemon socket guard', () => {
 
     await resume()
 
-    expect(mocks.refreshRuntimeUserHooksForLaunchPrep).toHaveBeenCalledWith(accountHome)
+    expect(mocks.refreshRuntimeUserHooksForLaunchPrep).not.toHaveBeenCalled()
+    expect(mocks.reconcileAccount).toHaveBeenCalledWith(accountHome, expect.any(Function), true)
     expect(readFileSync(join(accountHome, 'config.toml'), 'utf-8')).toContain(
       `daemon_auto_start = false ${CODEX_DAEMON_OVERRIDE_MARKER}`
     )

@@ -25,9 +25,12 @@ vi.mock('../codex/codex-hook-reconcile', () => ({ reconcileCodexHooksForLaunch: 
 vi.mock('../codex/codex-home-paths', () => ({
   getCodexSessionBackfillStateDirPath: () => join(homes.system, 'backfill'),
   getSystemCodexHomePath: () => homes.system,
+  usesCodexAccountHomeLayout: (home: string) => home === homes.original || home === homes.selected,
   getOrcaManagedCodexHomePath: () => join(homes.system, 'legacy')
 }))
 vi.mock('../codex/codex-config-mirror', () => ({ ensureCodexDaemonSocketGuard: vi.fn() }))
+vi.mock('../codex/codex-account-home-layout', () => ({ layoutCodexAccountHome: vi.fn() }))
+vi.mock('../codex/codex-account-home-hook', () => ({ reconcileCodexAccountHomeHook: vi.fn() }))
 
 import { prepareCodexSessionResumeForLaunch } from './codex-session-resume-launch'
 

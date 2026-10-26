@@ -8,6 +8,7 @@ import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import type * as NodeOs from 'node:os'
 import { readHookTrustEntries } from '../codex/config-toml-trust'
 import { writeCodexStateDbBackfillStatus } from '../codex/codex-state-db-test-fixture'
+import { snapshotAccountTestHome } from '../codex/codex-account-home-layout.test-support'
 
 const testState = { userData: '', home: '' }
 const previousEnv: Record<string, string | undefined> = {}
@@ -93,11 +94,15 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     writeFileSync(sharedAuthPath(), accountOneMigrated)
     const { settings, store } = createStore([accountOne, accountTwo], accountOne.id)
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    const { CodexHookService } = await import('../codex/hook-service')
+    const { createCodexRuntimeHomeLaunchPreparation } =
+      await import('../codex/codex-runtime-home-launch-preparation')
     const { startCodexHookHashLookup } = await import('../codex/codex-hook-hash-lookup')
     startCodexHookHashLookup(Promise.resolve())
     const service = new CodexRuntimeHomeService(store as never)
-    const hookService = new CodexHookService()
+    const prepare = createCodexRuntimeHomeLaunchPreparation({
+      getRuntimeHome: () => service,
+      getSettings: () => settings
+    })
 
     expect(readFileSync(join(accountOne.managedHomePath, 'auth.json'), 'utf8')).toBe(
       accountOneMigrated
@@ -108,16 +113,15 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
       selectManagedAccount(settings, account.id)
       service.syncForCurrentSelection()
       expect(service.prepareForCodexLaunch()).toBe(account.managedHomePath)
-      expect(
-        readFileSync(join(account.managedHomePath, 'skills', 'fixture-skill', 'SKILL.md'), 'utf8')
-      ).toBe('fixture skill\n')
-      expect(readFileSync(join(account.managedHomePath, 'hooks', 'user-hook.sh'), 'utf8')).toBe(
-        '#!/bin/sh\n'
-      )
+      expect(existsSync(join(account.managedHomePath, 'skills'))).toBe(false)
+      expect(existsSync(join(account.managedHomePath, 'hooks'))).toBe(false)
       const config = readFileSync(join(account.managedHomePath, 'config.toml'), 'utf8')
-      expect(config).toContain('model = "fixture-model"')
+      expect(config).toContain('Axiom (D83)')
+      expect(config).not.toContain('fixture-model')
       expect(config).not.toContain('[hooks.state')
-      expect((await hookService.install(account.managedHomePath)).state).toBe('installed')
+      const before = snapshotAccountTestHome(systemHome())
+      await prepare(undefined, undefined, { launchesCodex: true })
+      expect(snapshotAccountTestHome(systemHome())).toEqual(before)
       expect(readFileSync(join(account.managedHomePath, 'hooks.json'), 'utf8')).toContain(
         process.platform === 'win32' ? 'codex-hook.cmd' : 'codex-hook.sh'
       )
@@ -218,7 +222,7 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     expect(readFileSync(systemAuthPath(), 'utf-8')).toBe('system auth sentinel\n')
   })
 
-  it('bridges real-home and sibling-account history into the launched account home', async () => {
+  it('does not bridge real-home or sibling-account history on host selection or launch', async () => {
     const accountOne = createManagedAccount(
       'account-1',
       'acct-1',
@@ -239,24 +243,15 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     const { settings, store } = createStore([accountOne, accountTwo], accountOne.id)
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const bridge = await import('../codex/codex-account-session-bridge')
+    const startBridge = vi.spyOn(bridge, 'startCodexAccountSessionBridgeInBackground')
     const service = new CodexRuntimeHomeService(store as never)
 
     selectManagedAccount(settings, accountTwo.id)
     service.syncForCurrentSelection()
     expect(service.prepareForCodexLaunch()).toBe(accountTwo.managedHomePath)
-    await bridge.startCodexAccountSessionBridgeInBackground({
-      targetCodexHomePath: accountTwo.managedHomePath,
-      sourceCodexHomePaths: [systemHome(), accountOne.managedHomePath]
-    })
-
-    // Why: /resume reads only the launch CODEX_HOME, so both histories must be
-    // present under account two or the switch looks like data loss.
-    expect(readFileSync(join(accountTwo.managedHomePath, 'sessions', systemRollout), 'utf-8')).toBe(
-      '{"session":"real-home"}\n'
-    )
-    expect(
-      readFileSync(join(accountTwo.managedHomePath, 'sessions', siblingRollout), 'utf-8')
-    ).toBe('{"session":"account-one"}\n')
+    expect(startBridge).not.toHaveBeenCalled()
+    expect(existsSync(join(accountTwo.managedHomePath, 'sessions', systemRollout))).toBe(false)
+    expect(existsSync(join(accountTwo.managedHomePath, 'sessions', siblingRollout))).toBe(false)
     expect(existsSync(join(systemHome(), 'sessions', siblingRollout))).toBe(false)
   })
 

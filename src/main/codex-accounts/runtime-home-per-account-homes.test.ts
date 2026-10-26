@@ -3,11 +3,11 @@ import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-p
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createSettings } from './runtime-home-settings-test-fixtures'
+import { snapshotAccountTestHome } from '../codex/codex-account-home-layout.test-support'
 import {
   createCodexAuthJson,
   createManagedAuth,
   createStore,
-  expectResourceLinkedOrCopied,
   getRuntimeCodexAuthPath,
   getRuntimeCodexHomePath,
   getSystemCodexAuthPath,
@@ -151,7 +151,7 @@ describe('CodexRuntimeHomeService', () => {
     }
   )
 
-  it('materializes resources and config into the per-account home on launch', async () => {
+  it('lays out the per-account home without inheriting system resources or settings', async () => {
     writeFileSync(getSystemCodexAuthPath(), '{"account":"system"}\n', 'utf-8')
     mkdirSync(join(getSystemCodexHomePath(), 'skills', 'review'), { recursive: true })
     writeFileSync(
@@ -192,11 +192,13 @@ describe('CodexRuntimeHomeService', () => {
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
 
+    const systemBefore = snapshotAccountTestHome(getSystemCodexHomePath())
     expect(service.prepareForCodexLaunch()).toBe(home1)
-    // Resources link/copy into THIS home; config mirrors into it.
-    expectResourceLinkedOrCopied(join(home1, 'skills'), join(getSystemCodexHomePath(), 'skills'))
-    expect(readFileSync(join(home1, 'skills', 'review', 'SKILL.md'), 'utf-8')).toBe('skill\n')
-    expect(readFileSync(join(home1, 'config.toml'), 'utf-8')).toContain('approval_policy = "never"')
+    expect(snapshotAccountTestHome(getSystemCodexHomePath())).toEqual(systemBefore)
+    expect(existsSync(join(home1, 'skills'))).toBe(false)
+    const config = readFileSync(join(home1, 'config.toml'), 'utf-8')
+    expect(config).toContain('Axiom (D83)')
+    expect(config).not.toContain('approval_policy')
     // ~/.codex is never mutated: no auth churn, no per-account dir written back.
     expect(readFileSync(getSystemCodexAuthPath(), 'utf-8')).toBe('{"account":"system"}\n')
   })

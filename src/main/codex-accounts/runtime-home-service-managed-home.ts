@@ -4,9 +4,11 @@ import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import {
   syncSystemCodexResourcesIntoManagedHome,
   getSystemCodexHomePath,
+  usesCodexAccountHomeLayout,
   resolveOrcaManagedCodexHomePath
 } from '../codex/codex-home-paths'
 import { syncSystemConfigIntoManagedCodexHome } from '../codex/codex-config-mirror'
+import { layoutCodexAccountHome } from '../codex/codex-account-home-layout'
 import { startCodexAccountSessionBridgeInBackground } from '../codex/codex-account-session-bridge'
 import {
   resolveHostCodexSessionSourceHome,
@@ -124,19 +126,27 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
       // Why: a transient missing/unreadable auth.json is usually codex rotating
       // it; keep the selection and launch — the CLI re-reads the settled file.
     }
-    // Why: link the user's real ~/.codex resources and mirror config into THIS
-    // home (never symlinking into or mutating ~/.codex), so the per-account home
-    // is a complete CODEX_HOME. Hooks/trust are installed by the launch caller.
     this.lastSyncedAccountId = account.id
     this.lastHostAccountUsedSelfContainedHome = true
     this.sharedAuthRefreshBlockedByManagedTransition = true
     this.markSharedRuntimeAuthManaged(account.id)
-    syncSystemCodexResourcesIntoManagedHome(perAccountHome)
-    syncSystemConfigIntoManagedCodexHome({
-      runtimeHomePath: perAccountHome,
-      systemHomePath: getSystemCodexHomePath()
-    })
-    this.startSelfContainedSessionBridgeForLaunch(perAccountHome)
+    if (usesCodexAccountHomeLayout(perAccountHome)) {
+      layoutCodexAccountHome({
+        homePath: perAccountHome,
+        allowlist: this.store.getSettings().codexAccountHomeAllowlist ?? {
+          skills: [],
+          mcpServers: []
+        }
+      })
+    } else {
+      // D83 leaves Windows account homes on the existing resource/config mirror.
+      syncSystemCodexResourcesIntoManagedHome(resolved.homePath)
+      syncSystemConfigIntoManagedCodexHome({
+        runtimeHomePath: perAccountHome,
+        systemHomePath: getSystemCodexHomePath()
+      })
+      this.startSelfContainedSessionBridgeForLaunch(perAccountHome)
+    }
     return perAccountHome
   }
 
@@ -180,9 +190,9 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
       this.lastHostAccountUsedSelfContainedHome = true
       this.sharedAuthRefreshBlockedByManagedTransition = true
       this.markSharedRuntimeAuthManaged(account.id)
-      // Why: selection runs well before the user restarts a pane, so history is
-      // already linked in by the time the newly launched Codex opens /resume.
-      this.startSelfContainedSessionBridgeForLaunch(perAccountHome)
+      if (!usesCodexAccountHomeLayout(perAccountHome)) {
+        this.startSelfContainedSessionBridgeForLaunch(perAccountHome)
+      }
       return
     }
     this.clearSelfContainedManagedSelection(account)
