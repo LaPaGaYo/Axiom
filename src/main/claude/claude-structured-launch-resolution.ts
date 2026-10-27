@@ -11,6 +11,8 @@ import {
   agentSessionProviderHandleRoot
 } from '../../shared/agent-session-provider-handle'
 import { claudeProviderHandleLeafUuid } from '../../shared/agent-session-provider-handle-encoding'
+import { claudeMissionSessionPins } from './claude-mission-session-pins'
+import { ClaudeAccountRequiredError } from '../claude-accounts/claude-account-required-error'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
 import {
   claudeChildEnv,
@@ -44,6 +46,7 @@ export type ClaudeStructuredSdkOptions = Pick<
   | 'includePartialMessages'
   | 'systemPrompt'
   | 'settingSources'
+  | 'skills'
   | 'supportedDialogKinds'
   | 'extraArgs'
   | 'additionalDirectories'
@@ -110,6 +113,8 @@ export type ClaudeStructuredLaunch = {
   /** Lineage: the record's chain already heads this provider session, so the child continues it
    *  even when no transcript exists to `--resume`. Never derived from the launch mode. */
   continuesChain: boolean
+  /** The Control Plane owns this Planner's choices, including a policy-default model. */
+  missionPlanner?: true
   /** The head a rewind's fork leaves behind: this launch starts the session that replaces it. */
   forkedFromKey?: string
 }
@@ -169,6 +174,7 @@ export function claudeStructuredLaunchPart(
 ): StructuredAgentLaunchPartResolver<ClaudeStructuredLaunch> {
   return async (basis, identity) => {
     const { record } = basis
+    const missionPins = claudeMissionSessionPins(identity.sessionId)
     const accountHome = requireLegacyAgentSessionAccountHome(record.accountHome)
     const router = getClaudeProfileRouter()
     // A Claude record's chain holds only Claude handles; the launch admission refuses anything else.
@@ -205,18 +211,25 @@ export function claudeStructuredLaunchPart(
     // Asked as soon as the spawn's cwd and PATH are known, so it overlaps what is left to resolve.
     const probeLaunch = { command: sources.command, cwd, env: claudeProbeEnv(sources) }
     const launchFlags = resolveClaudeLaunchFlags(
-      { ...(deps.cliFlags ? { cliFlags: deps.cliFlags } : {}), prepareVisuals: basis.visuals },
+      {
+        ...(deps.cliFlags ? { cliFlags: deps.cliFlags } : {}),
+        ...(!missionPins ? { prepareVisuals: basis.visuals } : {})
+      },
       record.sessionId,
       probeLaunch
     )
-    const configured = claudeStructuredLaunchArgs(await deps.resolveLaunchArgs())
+    const configured = missionPins
+      ? { extraArgs: {}, additionalDirectories: [] }
+      : claudeStructuredLaunchArgs(await deps.resolveLaunchArgs())
     const { thinkingDisplayArgs, visuals } = await launchFlags
     const additionalDirectories = [
       ...configured.additionalDirectories,
-      ...(deps.attachmentDirectory ? [deps.attachmentDirectory] : []),
+      ...(!missionPins && deps.attachmentDirectory ? [deps.attachmentDirectory] : []),
       ...(visuals ? [visuals.visuals.folder] : [])
     ]
-    const permission = claudeStructuredPermissionOptions(basis.permissionMode ?? 'ask')
+    const permission = claudeStructuredPermissionOptions(
+      missionPins ? 'ask' : (basis.permissionMode ?? 'ask')
+    )
     // A start that failed before its first turn wrote no transcript, and `--resume` of an absent
     // one exits; launch that id fresh instead. With a transcript, `--session-id` would collide.
     const leafUuid = head && continuesChain ? claudeProviderHandleLeafUuid(head) : null
@@ -239,7 +252,8 @@ export function claudeStructuredLaunchPart(
           {
             ...base,
             // The turn translator relies on Claude's authoritative idle frame when no result arrives.
-            [CLAUDE_SESSION_STATE_EVENTS_ENV]: '1'
+            [CLAUDE_SESSION_STATE_EVENTS_ENV]: '1',
+            ...missionPins?.env
           },
           visuals?.visuals ?? null
         ),
@@ -247,6 +261,10 @@ export function claudeStructuredLaunchPart(
       { runtimeOnPath: false }
     )
     const launchHome = await resolveClaudeStructuredLaunchHome(router, env, accountHome.path)
+    if (missionPins && launchHome !== missionPins.accountHomePath) {
+      // The router's final account recheck must not substitute System default or another login.
+      throw new ClaudeAccountRequiredError()
+    }
     const resumesTranscript = resumedWithoutRouter ?? (await resumes(launchHome))
     if (fork?.throughEntryId && !resumesTranscript) {
       // The fork reads its source, so a source only another account holds is refused as a resume is.
@@ -265,6 +283,15 @@ export function claudeStructuredLaunchPart(
         options: {
           ...CLAUDE_STRUCTURED_BASE_OPTIONS,
           ...permission,
+          ...(missionPins
+            ? {
+                settingSources: [],
+                skills: [...missionPins.skills],
+                settings: missionPins.settingsPath,
+                ...(missionPins.model ? { model: missionPins.model } : {}),
+                effort: missionPins.effort
+              }
+            : {}),
           ...(additionalDirectories.length ? { additionalDirectories } : {}),
           ...(visuals?.pluginDir ? { plugins: [{ type: 'local', path: visuals.pluginDir }] } : {}),
           extraArgs: {
@@ -283,6 +310,7 @@ export function claudeStructuredLaunchPart(
         resumeLeafUuid: resumesTranscript ? leafUuid : null,
         resumesTranscript,
         continuesChain,
+        ...(missionPins ? { missionPlanner: true as const } : {}),
         ...(fork && head && !continuesChain
           ? { forkedFromKey: agentSessionProviderHandleKey(head) }
           : {})

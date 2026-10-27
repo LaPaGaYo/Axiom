@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { HeadlessSubmissionReportSchema } from '../../../shared/axiom-contract/submission-params'
+import { parseClaudeWorkerEvents } from './claude-worker-events'
 
 const Usage = z.object({
   input_tokens: z.number().nonnegative().optional(),
@@ -24,7 +25,13 @@ const Event = z.object({
   error: z.object({ message: z.string() }).optional(),
   usage: Usage.optional()
 })
-export function parseHeadlessWorkerEvents(text: string) {
+type HeadlessWorkerEvents = Omit<ReturnType<typeof parseClaudeWorkerEvents>, 'usage'> & {
+  usage?: z.infer<typeof Usage>
+}
+export function parseHeadlessWorkerEvents(text: string, provider = 'codex'): HeadlessWorkerEvents {
+  if (provider === 'claude') {
+    return parseClaudeWorkerEvents(text)
+  }
   let providerSessionId: string | undefined
   let usage: z.infer<typeof Usage> | undefined
   let lastError: string | undefined
@@ -76,7 +83,7 @@ export function parseHeadlessWorkerEvents(text: string) {
 
 export function headlessFailureKind(events: ReturnType<typeof parseHeadlessWorkerEvents>) {
   return !events.hasEvents ||
-    /auth(?:entication|orization)?|unauthori[sz]ed|login|log in|quota|rate.?limit|usage limit|insufficient.credit|429|401/i.test(
+    /auth(?:entication|orization)?|unauthori[sz]ed|login|log(?:ged)? in|invalid.token|quota|rate.?limit|usage limit|insufficient.credit|429|401/i.test(
       events.lastError ?? ''
     )
     ? ('interrupted' as const)

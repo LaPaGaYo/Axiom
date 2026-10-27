@@ -189,7 +189,13 @@ APPLYING / TESTING → QUEUED（应用重启时由 RecoveryService 丢弃临时�
 | 词汇 | 值与含义 |
 |---|---|
 | `TaskSpec.role` | 可选的非空字符串标签（M2-09 / DEF-4）；提案、批准物化与 Task spec 保留它，不参与 provider 路由、角色权限或 skills 物化。省略时保持既有行为。 |
-| `ProviderFilterReason` | `not_installed \| no_account \| not_certified \| disallowed \| tier_too_low`，按此顺序取首个命中原因（D57、D83 2026-10-26）；`no_account` = macOS / Linux 未选中 Axiom 管理的 Codex 账号目录。 |
+| `ProviderFilterReason` | `not_installed \| no_account \| not_certified \| disallowed \| tier_too_low`，按此顺序取首个命中原因（D57、D83）；`no_account` = macOS / Linux 未选中 Axiom 管理的对应 Codex / Claude 账号。 |
+| `RoleRouting` | `routing.roles.planner` / `routing.roles.worker` 的可选 `{ provider, model, effort }`（D82，2026-10-27）；角色模型优先于 `routing.models[provider]`，最后回退 `policy-default`（harness 默认模型，无写死型号）。 |
+| `Effort` | `low \| medium \| high \| xhigh`；角色配置优先，Planner 默认 `high`，Worker 按风险：high → `high`，其余 → `medium`（D82）。 |
+| `crossProvider` | `routing.crossProvider` 默认 `true`；Worker 在有至少两个合格 provider 时优先使用不同于 Planner 的 provider。Planner 来源先取已批准 PlanRevision 的 `provenance.actor`，再取最新 Planner AgentSpec；角色显式 provider 仍优先。只有一个合格 provider 时允许同家，选择理由与审计记录是否应用交叉（D82）。 |
+| `requireCertified` | `routing.requireCertified` 默认 `false`；打开后 provisional 组合在 `not_certified` 槽位过滤，V1 验收运行时打开（D57）。 |
+| `attempt.launch_observed` | Claude `system/init` 的实际启动证据：harnessVersion、model、permissionMode、skills、plugins、mcpServers、apiKeySource；超出请求的值另记 `attempt.launch_mismatch`（D83）。 |
+| `attempt.permission_denied` | Mission Claude Planner 未被允许规则放行的工具提示由宿主自动拒绝的审计，带 toolName 与不含输入内容的 summary（D63）。 |
 | `endpointProfile` | `subscription`（V1）：用户在 harness 中已有的登录或自行配置的凭据；进入 AgentSpec 的内容寻址，不包含凭据本身（D57）。 |
 | `caller_not_desktop` | 人工动作（`desktop_only` 方法）收到非桌面应用的调用（本机 CLI、配对设备或无法认定）时的拒绝码（D78）。 |
 | `caller_not_permitted_for_agent` | 宿主已解析为 Axiom Attempt / Planner / Reviewer dispatch 的会话调用非 `workspace` 方法、Agent 审批 / 回答或创建 Run / Worker / Orca Task 时的第二层拒绝码（D78）；不替代桌面传输边界。 |

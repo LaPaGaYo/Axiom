@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { AxiomIdSchema, TuiAgentIdSchema } from './mission-objects'
+import { AxiomIdSchema, EffortSchema, TuiAgentIdSchema } from './mission-objects'
 
 export const ProviderFilterReasonSchema = z.enum([
   'not_installed',
@@ -19,7 +19,7 @@ const common = {
   provider: TuiAgentIdSchema,
   model: z.string(),
   endpointProfile: z.enum(['subscription']),
-  reasoning: z.strictObject({ effort: z.enum(['medium', 'high']) }),
+  reasoning: z.strictObject({ effort: EffortSchema }),
   permissions: z.strictObject(permissions),
   budget: z.strictObject({
     maxRuntimeMinutes: z.number().positive(),
@@ -33,7 +33,11 @@ const common = {
     ),
     ranked: z.array(TuiAgentIdSchema).min(1),
     chosen: TuiAgentIdSchema,
-    rationale: z.string().min(1)
+    rationale: z.string().min(1),
+    crossProvider: z
+      .strictObject({ plannerProvider: TuiAgentIdSchema.nullable(), applied: z.boolean() })
+      .optional(),
+    roleProviderUnavailable: ProviderFilterReasonSchema.optional()
   })
 }
 

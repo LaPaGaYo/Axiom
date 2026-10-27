@@ -78,6 +78,52 @@ describe('structured worker session', () => {
     expect(dispose).toHaveBeenCalledTimes(1)
   })
 
+  it('prepares Control Plane launch pins before attaching and disposes them on release', async () => {
+    installHost()
+    const disposeLaunch = vi.fn()
+    const prepared: string[] = []
+    const prepareLaunch = vi.fn(
+      async ({ dispatchId, sessionId }: { dispatchId: string; sessionId: string }) => {
+        expect(dispatchId).toBe('d_pinned')
+        prepared.push(sessionId)
+        return disposeLaunch
+      }
+    )
+    createSpy.mockImplementation(async (args: { envelope: { sessionId: string } }) => {
+      expect(prepared).toEqual([args.envelope.sessionId])
+      return { ok: true, value: { sessionId: args.envelope.sessionId } }
+    })
+    await createStructuredWorkerSession({
+      runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
+      worktreeId: 'wt_1',
+      agent: 'claude',
+      dispatchId: 'd_pinned',
+      prepareLaunch,
+      onJournalActivity: () => {}
+    })
+    expect(disposeLaunch).not.toHaveBeenCalled()
+    releaseStructuredWorkerSession('d_pinned')
+    releaseStructuredWorkerSession('d_pinned')
+    expect(disposeLaunch).toHaveBeenCalledOnce()
+  })
+
+  it('disposes Control Plane launch pins when creating the session fails', async () => {
+    installHost()
+    const disposeLaunch = vi.fn()
+    createSpy.mockRejectedValueOnce(new Error('creation failed'))
+    await expect(
+      createStructuredWorkerSession({
+        runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
+        worktreeId: 'wt_1',
+        agent: 'claude',
+        dispatchId: 'd_pinned_fail',
+        prepareLaunch: async () => disposeLaunch,
+        onJournalActivity: () => {}
+      })
+    ).rejects.toThrow('creation failed')
+    expect(disposeLaunch).toHaveBeenCalledOnce()
+  })
+
   it('registers the identity BEFORE the session is created, so the child gets the handle', async () => {
     installHost()
     let envAtSpawn: Record<string, string> | undefined

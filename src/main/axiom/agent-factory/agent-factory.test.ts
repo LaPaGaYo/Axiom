@@ -218,7 +218,7 @@ describe('AgentFactory', () => {
       capabilities: ['planning'],
       provider: 'codex',
       endpointProfile: 'subscription',
-      reasoning: { effort: 'medium' },
+      reasoning: { effort: 'high' },
       permissions: { write: [] },
       workspace: { strategy: 'planner-worktree' }
     })
@@ -295,9 +295,146 @@ describe('AgentFactory', () => {
   })
 })
 
+describe('Mission role routing evidence', () => {
+  const planner = () => factory.build({ missionId, role: 'planner', goalRevisionId })
+
+  it('does not change a Planner contract by observing its own prior build', async () => {
+    const first = await planner()
+    expect(await planner()).toEqual(first)
+    expect(events()).toHaveLength(1)
+  })
+
+  it('resolves per-role model and effort ahead of provider defaults', async () => {
+    patchTask({ risk: 'high' })
+    routing({
+      roles: {
+        planner: { provider: 'codex', model: 'planner-model', effort: 'xhigh' },
+        worker: { provider: 'claude', model: 'worker-model', effort: 'low' }
+      },
+      models: { codex: 'legacy-codex', claude: 'legacy-claude' }
+    })
+    expect((await planner()).spec).toMatchObject({
+      provider: 'codex',
+      model: 'planner-model',
+      reasoning: { effort: 'xhigh' }
+    })
+    expect((await build()).spec).toMatchObject({
+      provider: 'claude',
+      model: 'worker-model',
+      reasoning: { effort: 'low' }
+    })
+  })
+
+  it('uses the active approved Plan provider ahead of newer Planner AgentSpecs', async () => {
+    routing({ roles: { planner: { provider: 'codex' } } })
+    await planner()
+    const planId = store.getMission(missionId)!.activePlanRevisionId
+    db.db
+      .prepare('UPDATE plan_revisions SET provenance = ? WHERE id = ?')
+      .run(JSON.stringify({ ...provenance, kind: 'planner', actor: 'claude' }), planId)
+    expect(await factory.selectWorkerProvider({ missionId, taskId })).toBe('codex')
+    const result = await build()
+    expect(result.spec.provider).toBe('codex')
+    expect(result.spec.selection.crossProvider).toEqual({
+      plannerProvider: 'claude',
+      applied: true
+    })
+    expect(events().at(-1)?.after).toEqual(result.spec.selection)
+  })
+
+  it.each(['PROPOSED', 'APPROVED'] as const)(
+    'falls back to the newest Planner AgentSpec when the %s Plan has no usable provider',
+    async (status) => {
+      routing({ roles: { planner: { provider: 'claude' } } })
+      const first = await planner()
+      routing({ roles: { planner: { provider: 'codex' } } })
+      const second = await planner()
+      db.db
+        .prepare('UPDATE agent_specs SET created_at = ? WHERE id = ?')
+        .run('2026-10-26 10:00:00', first.id)
+      db.db
+        .prepare('UPDATE agent_specs SET created_at = ? WHERE id = ?')
+        .run('2026-10-26 10:01:00', second.id)
+      const planId = store.getMission(missionId)!.activePlanRevisionId
+      db.db
+        .prepare('UPDATE plan_revisions SET status = ?, provenance = ? WHERE id = ?')
+        .run(
+          status,
+          JSON.stringify({ ...provenance, actor: status === 'PROPOSED' ? 'claude' : 'henry' }),
+          planId
+        )
+      expect(await factory.selectWorkerProvider({ missionId, taskId })).toBe('claude')
+      expect((await build()).spec.selection.crossProvider).toEqual({
+        plannerProvider: 'codex',
+        applied: true
+      })
+    }
+  )
+
+  it('records an unknown Planner provider when no Planner evidence exists', async () => {
+    const first = await build()
+    const second = await build()
+    expect(first).toEqual(second)
+    expect(first.spec.selection.crossProvider).toEqual({ plannerProvider: null, applied: false })
+    expect(events()[0].after).toEqual(first.spec.selection)
+  })
+
+  it('uses creation audit order when Planner spec timestamps tie', async () => {
+    routing({ roles: { planner: { provider: 'claude' } } })
+    const first = await planner()
+    routing({ roles: { planner: { provider: 'codex' } } })
+    const second = await planner()
+    const firstRecord = store.getAgentSpec(first.id)!
+    const secondRecord = store.getAgentSpec(second.id)!
+    // Opaque content hashes break timestamp ties in store order, not creation order.
+    vi.spyOn(store, 'listAgentSpecs').mockReturnValue([
+      { ...secondRecord, createdAt: firstRecord.createdAt },
+      firstRecord
+    ])
+    expect((await build()).spec.selection.crossProvider).toEqual({
+      plannerProvider: 'codex',
+      applied: true
+    })
+  })
+
+  it('audits why an explicit role provider was unavailable', async () => {
+    routing({ roles: { worker: { provider: 'claude' } } })
+    factory = new AgentFactory(
+      store,
+      engine,
+      async () => ['claude', 'codex'],
+      (provider) => provider !== 'claude'
+    )
+    expect(await factory.selectWorkerProvider({ missionId, taskId })).toBe('codex')
+    const { spec } = await build()
+    expect(spec.selection.roleProviderUnavailable).toBe('no_account')
+    expect(events()[0].after).toEqual(spec.selection)
+  })
+
+  it.each(['planner', 'worker'] as const)(
+    'refuses %s admission without a Claude account',
+    async (role) => {
+      factory = new AgentFactory(
+        store,
+        engine,
+        async () => ['claude'],
+        () => false
+      )
+      await expect(role === 'worker' ? build() : planner()).rejects.toMatchObject({
+        code: 'no_eligible_provider',
+        message: 'No Claude account selected. Add a Claude account in Settings › Accounts.',
+        data: { filtered: expect.arrayContaining([{ provider: 'claude', reason: 'no_account' }]) }
+      })
+      expect(store.listAgentSpecs(missionId)).toEqual([])
+      expect(events()).toEqual([])
+    }
+  )
+})
+
 it('chooses the worker channel without persisting a terminal contract first', async () => {
   installed = ['codex']
   const builder = new ContextBuilder(store, new ArtifactStore(store, path.join(root, 'artifacts')))
+  const buildContext = vi.spyOn(builder, 'build')
   const contexts = vi.spyOn(store, 'insertContextPackage')
   const specs = vi.spyOn(store, 'insertAgentSpec')
   const before = store.listAuditEvents({ missionId })
@@ -306,6 +443,12 @@ it('chooses the worker channel without persisting a terminal contract first', as
   expect(contexts).not.toHaveBeenCalled()
   expect(specs).not.toHaveBeenCalled()
   const result = await buildWorkerContracts(builder, factory, missionId, taskId)
+  expect(buildContext).toHaveBeenCalledWith({
+    missionId,
+    taskId,
+    channel: 'headless',
+    provider: 'codex'
+  })
   expect(contexts).toHaveBeenCalledOnce()
   expect(specs).toHaveBeenCalledOnce()
   expect(store.getAgentSpec(result.agentSpecId)?.spec).toMatchObject({

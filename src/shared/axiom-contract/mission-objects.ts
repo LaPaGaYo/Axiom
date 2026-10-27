@@ -129,12 +129,26 @@ export const AuditEventSchema = z.object({
 })
 
 export const TuiAgentIdSchema = z.string().refine(isTuiAgent, 'unknown provider')
+export const EffortSchema = z.enum(['low', 'medium', 'high', 'xhigh'])
+export const RoleRoutingSchema = z.strictObject({
+  provider: TuiAgentIdSchema.optional(),
+  model: z.string().optional(),
+  effort: EffortSchema.optional()
+})
+export type Effort = z.infer<typeof EffortSchema>
+export type RoleRouting = z.infer<typeof RoleRoutingSchema>
+
 export const RoutingPolicySchema = z.strictObject({
   preferredProviders: z.array(TuiAgentIdSchema).default([]),
   disallowedProviders: z.array(TuiAgentIdSchema).default([]),
   highRiskTier: z.enum(['A']).default('A'),
   providerConcurrency: z.record(z.string(), z.number().int().positive()).default({}),
-  models: z.record(z.string(), z.string()).default({})
+  models: z.record(z.string(), z.string()).default({}),
+  roles: z
+    .strictObject({ planner: RoleRoutingSchema.optional(), worker: RoleRoutingSchema.optional() })
+    .default({}),
+  crossProvider: z.boolean().default(true),
+  requireCertified: z.boolean().default(false)
 })
 export const DEFAULT_ROUTING_POLICY = RoutingPolicySchema.parse({})
 

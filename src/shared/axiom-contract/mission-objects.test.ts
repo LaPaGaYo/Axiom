@@ -184,3 +184,32 @@ it('validates wall-clock and provider concurrency limits with backward-compatibl
     false
   )
 })
+
+describe('role routing policy', () => {
+  it('adds defaults to legacy policies without changing provider model overrides', () => {
+    expect(RoutingPolicySchema.parse({ models: { codex: 'legacy-model' } })).toMatchObject({
+      models: { codex: 'legacy-model' },
+      roles: {},
+      crossProvider: true,
+      requireCertified: false
+    })
+  })
+
+  it.each(['low', 'medium', 'high', 'xhigh'])('accepts role overrides with %s effort', (effort) => {
+    const roles = { planner: { provider: 'claude', model: 'chosen-model', effort }, worker: {} }
+    expect(
+      RoutingPolicySchema.parse({ roles, crossProvider: false, requireCertified: true })
+    ).toMatchObject({ roles, crossProvider: false, requireCertified: true })
+  })
+
+  it.each([
+    { roles: { planner: { provider: 'unknown' } } },
+    { roles: { worker: { effort: 'max' } } },
+    { roles: { reviewer: {} } },
+    { roles: { planner: { unsupported: true } } },
+    { crossProvider: 'true' },
+    { requireCertified: 'false' }
+  ])('rejects malformed routing %j', (input) => {
+    expect(RoutingPolicySchema.safeParse(input).success).toBe(false)
+  })
+})

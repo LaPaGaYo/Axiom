@@ -8,6 +8,7 @@ import type { OrchestrationCallerIdentity } from '../../../../orchestration/orch
 import type { PreambleParams } from '../../../../orchestration/preamble'
 import path from 'node:path'
 import { quotePosixShell } from '../../../../../../shared/shell-argument-quoting'
+import type { StructuredWorkerLaunchPreparation } from '../../orchestration-structured-worker-session'
 
 // Why: D14 trusts these service-only inputs from the in-process Control Plane, never RPC params.
 export type ControlPlaneWorkerStart = {
@@ -17,6 +18,7 @@ export type ControlPlaneWorkerStart = {
   preambleBuilder?: (params: PreambleParams) => string
   dispatchMaxDepth?: number
   callerIdentity?: OrchestrationCallerIdentity
+  structured?: { prepare: StructuredWorkerLaunchPreparation }
   headless?: {
     prepare: (dispatchId: string) => Promise<{ command: string; env: Record<string, string> }>
   }

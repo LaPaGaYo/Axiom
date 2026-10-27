@@ -85,7 +85,7 @@ describe('headless Worker command', () => {
   })
   it.each([
     ['codex', 'win32'],
-    ['claude', 'darwin']
+    ['claude', 'win32']
   ] as const)('keeps %s / %s on the fallback', (provider, platform) => {
     expect(
       buildHeadlessWorkerCommand({

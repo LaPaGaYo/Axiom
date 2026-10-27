@@ -12,6 +12,7 @@ import { listedModels } from './claude-structured-model-catalog'
 import { setClaudeStructuredOption } from './claude-structured-options'
 import type { ClaudeSession } from './claude-structured-session-state'
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
+import { claudeMissionSessionPins } from './claude-mission-session-pins'
 
 const defaultLogger = createStructuredAgentSessionLogger()
 
@@ -84,7 +85,10 @@ export async function dispatchClaudeMessage(
   timeoutMs: number | undefined,
   logger: StructuredAgentSessionLogger = defaultLogger
 ): ReturnType<StructuredAgentSessionAdapter['dispatch']> {
-  const messageOptions = input.executionOptions
+  const missionPins = claudeMissionSessionPins(input.sessionId)
+  const messageOptions = missionPins
+    ? { ...(missionPins.model ? { model: missionPins.model } : {}), effort: missionPins.effort }
+    : input.executionOptions
   let ranOptions: Record<string, string> = {}
   const outcome = await dispatchClaudeTurn(session, input, async () => {
     await input.beforeDispatch?.()

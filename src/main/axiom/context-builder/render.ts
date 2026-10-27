@@ -17,7 +17,8 @@ export function markdownSection(section: string, content: string): string {
 export function workerProtocol(
   missionId: string,
   taskId: string,
-  channel: 'tui' | 'headless' = 'tui'
+  channel: 'tui' | 'headless' = 'tui',
+  provider = 'codex'
 ): string {
   if (channel === 'headless') {
     return markdownSection(
@@ -25,6 +26,11 @@ export function workerProtocol(
       [
         `Mission: ${missionId}\nTask: ${taskId}\nAttempt: {{attemptId}}`,
         'Work and test in the Attempt worktree. The host snapshots and submits your work after this process exits.',
+        ...(provider === 'claude'
+          ? [
+              'Read AGENTS.md and CLAUDE.md at the worktree root before changing anything; they are not auto-loaded in isolation mode. The Worker does not need the axiom CLI; the host submits on exit.'
+            ]
+          : []),
         'The sandbox has no network and an empty package store, so do not try to install dependencies; verification runs the Mission’s setup commands; list checks you could not run in checksRun with result: "fail" and a note.',
         'Never spawn Workers or mark Tasks verified, integrated, or complete. A submission is a report, not verification.',
         'Write non-code deliverables and required evidence under .axiom/artifacts/ and list their paths, kinds and media types in artifacts. The host stores and attributes them; .axiom/ is excluded from the Candidate.',
@@ -81,7 +87,8 @@ export async function mandatorySections(
   missionId: string,
   taskId: string,
   previousAttempt: { source: string; content: string },
-  channel: 'tui' | 'headless' = 'tui'
+  channel: 'tui' | 'headless' = 'tui',
+  provider = 'codex'
 ) {
   const mission = store.getMission(missionId)
   const task = store.getTaskStage(taskId)
@@ -120,7 +127,7 @@ export async function mandatorySections(
         .join('\n') || 'none configured'
     : 'Verification rules are invalid (policy_invalid); the independent verifier will escalate to a human.'
   const decisions = store.listDecisions({ missionId, status: 'ACCEPTED' })
-  const protocol = workerProtocol(missionId, taskId, channel)
+  const protocol = workerProtocol(missionId, taskId, channel, provider)
   const entries = [
     {
       section: 'Task spec',

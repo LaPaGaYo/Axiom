@@ -17,6 +17,7 @@ export const CERTIFIED_PROVIDER_COMBOS: readonly CertifiedProviderCombo[] = [
     model: 'launch-arg',
     endpointProfile: 'subscription',
     roles: ['planner', 'worker'],
+    // D57: high-risk Workers require sandbox.enabled and failIfUnavailable at launch.
     maxRisk: 'high',
     status: 'provisional'
   },

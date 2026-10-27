@@ -18,14 +18,16 @@ const BuildParams = z.object({
   missionId: AxiomIdSchema,
   taskId: AxiomIdSchema,
   tokenBudget: z.number().int().nonnegative().optional(),
-  channel: z.enum(['tui', 'headless']).optional()
+  channel: z.enum(['tui', 'headless']).optional(),
+  provider: z.string().optional()
 })
 const PlannerBuildParams = z.object({
   missionId: AxiomIdSchema,
   role: z.literal('planner'),
   goalRevisionId: AxiomIdSchema,
   repositoryRef: z.string().min(1).optional(),
-  tokenBudget: z.number().int().nonnegative().optional()
+  tokenBudget: z.number().int().nonnegative().optional(),
+  provider: z.string().optional()
 })
 
 export function estimateContextTokens(text: string): number {
@@ -64,7 +66,8 @@ export class ContextBuilder {
       p.missionId,
       p.taskId,
       previousAttempt,
-      p.channel
+      p.channel,
+      p.provider
     )
     const mandatory = sections.map(({ section, source, text }, index) => {
       // The protocol is rendered last but belongs to the mandatory submission contract.
