@@ -225,6 +225,26 @@ describe('Scheduler admission', () => {
     expect(f.store.getMission(f.missionId)?.status).toBe('EXECUTING')
     expect(events('scheduler.round')).toEqual([])
   })
+  it('records no_account and keeps ready Tasks unadmitted when Codex has no owned home', async () => {
+    factory = new AgentFactory(
+      f.store,
+      new RulesEngine(PROVIDER_SELECTION_RULES),
+      async () => ['codex'],
+      () => false
+    )
+    const result = await round(makeScheduler())
+    expect(result.admitted).toEqual([])
+    expect(launched).toEqual([])
+    expect(f.store.listAttemptBindings({ missionId: f.missionId })).toEqual([])
+    expect(task('T01').stage).toBe('READY')
+    const refusals = events('task.admission_refused')
+    expect(refusals).toHaveLength(3)
+    for (const refusal of refusals) {
+      expect(refusal.after).toMatchObject({
+        filtered: expect.arrayContaining([{ provider: 'codex', reason: 'no_account' }])
+      })
+    }
+  })
   it('resumes sequence allocation and RUNNING counts with a new Scheduler instance', async () => {
     policy({ concurrencyLimit: 2 })
     await round()

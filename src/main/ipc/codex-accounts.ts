@@ -1,6 +1,9 @@
 import { ipcMain } from 'electron'
 import type { CodexAccountAddTarget, CodexAccountService } from '../codex-accounts/service'
-import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
+import {
+  refuseRetiredCodexSelection,
+  type CodexAccountSelectionTarget
+} from '../codex-accounts/runtime-selection'
 import { broadcastCodexPendingLoginUrl } from './codex-pending-login-url-broadcast'
 import { openAccountSignInLink } from './account-sign-in-link-opener'
 import { listRecordedCodexPaneLanes } from '../codex/codex-pane-account-registry'
@@ -58,6 +61,7 @@ export function registerCodexAccountHandlers(
   ipcMain.handle(
     'codexAccounts:select',
     (_event, args: { accountId: string | null } & CodexAccountSelectionTarget) => {
+      refuseRetiredCodexSelection(args.accountId, args)
       if (!args.runtime) {
         // Why: older renderer surfaces selected by account id only. Let the
         // service infer the account's runtime instead of treating missing

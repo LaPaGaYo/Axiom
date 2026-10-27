@@ -31,7 +31,8 @@ vi.mock('node:os', async () => {
 describe('CodexAccountService config sync', () => {
   registerCodexAccountsTestHomes()
 
-  describe('system-default identity', () => {
+  describe('Windows system-default identity (D83 ruling ①)', () => {
+    beforeEach(() => vi.spyOn(process, 'platform', 'get').mockReturnValue('win32'))
     const systemCodexHomeDir = () => join(testState.fakeHomeDir, '.codex')
     const systemAuthPath = () => join(systemCodexHomeDir(), 'auth.json')
 
@@ -42,6 +43,18 @@ describe('CodexAccountService config sync', () => {
       const { CodexAccountService } = await import('./service')
       return new CodexAccountService(store as never, rateLimits as never, runtimeHome as never)
     }
+
+    it.each(['darwin', 'linux'] as const)(
+      'omits system identity on %s even with a system login',
+      async (platform) => {
+        vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+        writeFileSync(
+          systemAuthPath(),
+          createCodexAuthJson('synthetic@example.invalid', 'synthetic', 'synthetic')
+        )
+        expect((await newService()).listAccounts()).not.toHaveProperty('systemDefault')
+      }
+    )
 
     function withoutEnvApiKey<T>(run: () => T): T {
       const previous = process.env.OPENAI_API_KEY

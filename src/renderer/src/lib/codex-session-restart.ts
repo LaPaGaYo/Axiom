@@ -1,3 +1,4 @@
+import { getRendererAppPlatform } from './renderer-app-platform'
 import type { AppState } from '@/store'
 import { useAppStore } from '@/store'
 import {
@@ -331,7 +332,9 @@ export function resolveCodexRestartPromptAccountLabel(
   accountId: string | null | undefined
 ): string {
   if (accountId == null) {
-    return translate('auto.lib.codex.session.restart.4bd4a3a9c7', 'System default')
+    return getRendererAppPlatform() === 'win32'
+      ? translate('auto.lib.codex.session.restart.4bd4a3a9c7', 'System default')
+      : translate('accounts.codex.noSelection', 'No account')
   }
   const account = accounts.find((entry) => entry.id === accountId)
   if (!account) {

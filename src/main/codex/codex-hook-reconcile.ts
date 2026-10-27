@@ -131,6 +131,10 @@ async function runUntilSettled(): Promise<void> {
 }
 
 async function reconcileOnce(realHomeLaunch: boolean): Promise<void> {
+  // D83 ruling ③: Axiom never reconciles the user's macOS/Linux Codex home.
+  if (process.platform !== 'win32') {
+    return
+  }
   const current = config
   if (!current?.isEnabled() || !(realHomeLaunch || resolveHome(current).kind === 'real')) {
     return

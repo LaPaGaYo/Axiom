@@ -118,7 +118,10 @@ describe('layoutCodexAccountHome', () => {
     const config = readFileSync(join(input.homePath, 'config.toml'), 'utf8')
     const newKey = `${source}:stop:0:0`
     expect(parse(config)).toEqual({
-      features: { apps: false, plugins: false, daemon_auto_start: false },
+      check_for_update_on_startup: false,
+      analytics: { enabled: false },
+      feedback: { enabled: false },
+      features: { apps: false, plugins: false, remote_plugin: false, daemon_auto_start: false },
       projects: { '/repository': { trust_level: 'trusted' } },
       hooks: { state: { [newKey]: { trusted_hash: approvedHash, enabled: true } } }
     })

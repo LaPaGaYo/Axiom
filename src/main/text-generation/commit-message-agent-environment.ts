@@ -125,6 +125,17 @@ export async function prepareLocalCommitMessageAgentEnv(
   if (shellConfigEnv) {
     return shellConfigEnv
   }
+  if (
+    agentId === 'codex' &&
+    process.platform !== 'win32' &&
+    target?.runtime !== 'wsl' &&
+    !resolvers?.prepareForCodexLaunch
+  ) {
+    return {
+      ok: false,
+      error: 'No Codex account selected. Add a Codex account in Settings › Accounts.'
+    }
+  }
   if (!resolvers) {
     return { ok: true }
   }
@@ -133,6 +144,12 @@ export async function prepareLocalCommitMessageAgentEnv(
   try {
     if (agentId === 'codex' && resolvers.prepareForCodexLaunch) {
       const codexHomePath = await resolvers.prepareForCodexLaunch(target)
+      if (!codexHomePath && process.platform !== 'win32' && target?.runtime !== 'wsl') {
+        return {
+          ok: false,
+          error: 'No Codex account selected. Add a Codex account in Settings › Accounts.'
+        }
+      }
       const wslCodexHome = codexHomePath ? parseWslUncPath(codexHomePath) : null
       if (target?.runtime === 'wsl') {
         const codexHomeForTarget = wslCodexHome?.linuxPath ?? null

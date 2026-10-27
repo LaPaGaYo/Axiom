@@ -289,7 +289,8 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
       includeFallbackWsl:
         wslHostDistro !== null ||
         (!hasActiveRuntimeEnvironment && shouldIncludeSettingsWslRuntime(settings)),
-      hostLabel: providerAccountHostLabel
+      hostLabel: providerAccountHostLabel,
+      legacyHostDefault: hasActiveRuntimeEnvironment
     }
   )
   const selectedGroup =

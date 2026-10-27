@@ -33,6 +33,10 @@ function getLegacyCodexProfileTomlPath(): string {
 }
 
 export function cleanupLegacySystemManagedHooks(): Promise<void> {
+  // D83 ruling ①: only the recorded hook-entry migration may write on macOS/Linux.
+  if (process.platform !== 'win32') {
+    return Promise.resolve()
+  }
   // Why: shares the real-home lane with the ~/.codex reconcile; both
   // write the user's ~/.codex/hooks.json and its trust in config.toml.
   return runExclusivelyForCodexTrustConfig(
@@ -173,6 +177,9 @@ function cleanupLegacyCodexProfileHooks(): void {
 }
 
 export async function cleanupLegacyManagedHookRepresentations(): Promise<void> {
+  if (process.platform !== 'win32') {
+    return
+  } // D83 ruling ①, including legacy profile files.
   try {
     await cleanupLegacySystemManagedHooks()
     cleanupLegacyCodexProfileHooks()

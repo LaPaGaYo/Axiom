@@ -20,6 +20,13 @@ import {
 } from './codex-managed-home-resource-copy-marker'
 import { observe, observeResolvedPathEntry } from './codex-path-observation'
 
+export class CodexAccountRequiredError extends Error {
+  readonly code = 'no_account'
+  constructor() {
+    super('No Codex account selected. Add a Codex account in Settings › Accounts.')
+  }
+}
+
 const CODEX_GLOBAL_INSTRUCTIONS_ENTRY = 'AGENTS.md'
 
 export const CODEX_SYSTEM_RESOURCE_ENTRIES = [
@@ -54,7 +61,10 @@ export function resolveOrcaManagedCodexHomePath(): string {
 
 export function getOrcaManagedCodexHomePath(): string {
   const managedHomePath = resolveOrcaManagedCodexHomePath()
-  mkdirSync(managedHomePath, { recursive: true })
+  // D83 ruling ①: path reads must not recreate the retired macOS/Linux mirror.
+  if (process.platform === 'win32') {
+    mkdirSync(managedHomePath, { recursive: true })
+  }
   return managedHomePath
 }
 
@@ -88,6 +98,10 @@ export function getOrcaUserDataPath(): string {
 // Legacy resource mirror for the shared home and Windows accounts. D83 host
 // account homes use layoutCodexAccountHome instead of linking system resources.
 export function syncSystemCodexResourcesIntoManagedHome(managedHomePath?: string): void {
+  // D83 ruling ①: only Windows retains resource mirrors.
+  if (process.platform !== 'win32') {
+    return
+  }
   const targetHome = managedHomePath ?? getOrcaManagedCodexHomePath()
   const systemHomePath = getSystemCodexHomePath()
   for (const entryName of CODEX_SYSTEM_RESOURCE_ENTRIES) {

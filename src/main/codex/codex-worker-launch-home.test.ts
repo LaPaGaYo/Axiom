@@ -45,12 +45,17 @@ const auth = (lastRefresh?: number) =>
       ...(lastRefresh === undefined ? {} : { last_refresh: new Date(lastRefresh).toISOString() })
     })
   )
-it.each(['null', 'mirror'] as const)('leaves %s homes unmanaged', async (lane) => {
+it.each(['null', 'mirror'] as const)('refuses %s homes without an account', async (lane) => {
   const home = lane === 'null' ? null : paths.resolveOrcaManagedCodexHomePath()
-  expect(await prepareCodexWorkerLaunchHome({ ...input(), resolveHome: () => home })).toEqual({
-    kind: 'unmanaged',
-    homePath: home
-  })
+  await expect(
+    prepareCodexWorkerLaunchHome({ ...input(), resolveHome: () => home })
+  ).rejects.toMatchObject({ code: 'no_account' })
+})
+it('retains the unmanaged Windows launch lane', async () => {
+  vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+  await expect(
+    prepareCodexWorkerLaunchHome({ ...input(), resolveHome: () => null })
+  ).resolves.toEqual({ kind: 'unmanaged', homePath: null })
 })
 it.each([
   ['api', 'not_applicable'],

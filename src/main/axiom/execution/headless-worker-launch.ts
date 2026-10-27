@@ -1,3 +1,4 @@
+import { CodexAccountRequiredError } from '../../codex/codex-home-paths'
 import { readCodexAccountHomeAllowlist } from '../../codex/codex-worker-launch-home'
 import { headlessWorkerCombination } from './worker-launch-combination'
 import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
@@ -31,9 +32,9 @@ export function createHeadlessWorkerLaunch(input: {
       })
       const settings = deps.runtime.requireStore().getSettings()
       const allowlist = readCodexAccountHomeAllowlist(settings)
-      const home = (await deps.codexWorkerHome?.()) ?? {
-        kind: 'unmanaged' as const,
-        homePath: null
+      const home = await deps.codexWorkerHome?.()
+      if (!home || home.kind !== 'account') {
+        throw new CodexAccountRequiredError()
       }
       const launch = buildHeadlessWorkerCommand({
         provider: spec.provider,

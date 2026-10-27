@@ -114,7 +114,7 @@ describe('ContextBuilder', () => {
     const headless = await builder.build({ missionId, taskId, channel: 'headless' })
     const terminal = await builder.build({ missionId, taskId })
     expect(headless.packageId).toBe(
-      'ctx_b471fb5ff6cab6ed5671c82e6fd7e6e063b9ddafa8dfc09539ff89d6cb5932e3'
+      'ctx_31a48ef1f201d1e357012a2782259cb0cc05f0e2f745561ac5b9c14f6ec22dff'
     )
     expect(headless.packageId).not.toBe(terminal.packageId)
     expect(headless.renderTemplate).toContain('re-read .axiom/prompt.md before continuing')

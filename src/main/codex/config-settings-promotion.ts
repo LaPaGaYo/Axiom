@@ -113,6 +113,10 @@ function getHostPromotionHomes(): CodexSettingsPromotionHomes {
 export function promoteCodexRuntimeSettingsToSystem(
   homes?: CodexSettingsPromotionHomes
 ): CodexSettingsPromotionPlan | null {
+  // D83 ruling ①: promotion remains a Windows/WSL compatibility path.
+  if (process.platform !== 'win32' && !parseWslUncPath(homes?.runtimeHomePath ?? '')) {
+    return emptyPromotionPlan()
+  }
   try {
     return promoteCodexRuntimeSettingsToSystemUnsafe(homes ?? getHostPromotionHomes())
   } catch (error) {

@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { layoutCodexAccountHome, type CodexAccountHomeManifest } from './codex-account-home-layout'
-import { usesCodexAccountHomeLayout } from './codex-home-paths'
+import { CodexAccountRequiredError, usesCodexAccountHomeLayout } from './codex-home-paths'
 import { readCodexLastRefresh } from '../codex-accounts/runtime-home-service-auth-sync-identity'
 import {
   resolveCodexHomeProcessLockKey,
@@ -42,6 +42,10 @@ export async function prepareCodexWorkerLaunchHome(input: {
 }): Promise<CodexWorkerLaunchHome> {
   const homePath = input.resolveHome()
   if (homePath === null || !usesCodexAccountHomeLayout(homePath)) {
+    // D83 ruling ①: only Windows/WSL retain unmanaged launches.
+    if (process.platform !== 'win32') {
+      throw new CodexAccountRequiredError()
+    }
     return { kind: 'unmanaged', homePath }
   }
   const manifest = layoutCodexAccountHome({ ...input, homePath })

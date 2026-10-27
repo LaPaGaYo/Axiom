@@ -1,3 +1,5 @@
+import { setupLegacyWindowsCodexHome } from './legacy-windows-home.test-support'
+setupLegacyWindowsCodexHome()
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -25,6 +27,7 @@ import { getCodexConfigSyncStatus } from './config-sync-stall'
 import { getCodexSettingsBaselinePath } from './config-settings-baseline'
 import { extractOrdinaryCodexSettings } from './config-toml-runtime-owned-sections'
 
+const nativePlatform = process.platform
 const UUID = '9dd962e2-449d-44c4-9733-0633f255064a'
 const MAC_MANAGED_HOME = `/Users/john/Library/Application Support/orca/codex-accounts/${UUID}/home`
 const OVERRIDE_LINE = 'daemon_auto_start = false # orca: CODEX_HOME too long for the daemon socket'
@@ -141,7 +144,7 @@ describe('syncSystemConfigIntoManagedCodexHome daemon guard', () => {
 
   beforeEach(() => {
     // Why: /tmp keeps the short home under every sun_path limit on POSIX hosts.
-    root = mkdtempSync(join(process.platform === 'win32' ? tmpdir() : '/tmp', 'cx-'))
+    root = mkdtempSync(join(nativePlatform === 'win32' ? tmpdir() : '/tmp', 'cx-'))
     systemHomePath = join(root, 's')
     mkdirSync(systemHomePath)
   })

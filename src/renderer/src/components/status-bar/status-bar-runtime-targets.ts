@@ -42,6 +42,7 @@ export type ClaudeStatusSwitchGroup = {
 }
 
 export type StatusSwitchGroupOptions = {
+  legacyHostDefault?: boolean
   fallbackWslDistro?: string | null
   includeFallbackWsl?: boolean
   hostLabel?: string

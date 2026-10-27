@@ -25,6 +25,7 @@ export function workerProtocol(
       [
         `Mission: ${missionId}\nTask: ${taskId}\nAttempt: {{attemptId}}`,
         'Work and test in the Attempt worktree. The host snapshots and submits your work after this process exits.',
+        'The sandbox has no network and an empty package store, so do not try to install dependencies; verification runs the Mission’s setup commands; list checks you could not run in checksRun with result: "fail" and a note.',
         'Never spawn Workers or mark Tasks verified, integrated, or complete. A submission is a report, not verification.',
         'Write non-code deliverables and required evidence under .axiom/artifacts/ and list their paths, kinds and media types in artifacts. The host stores and attributes them; .axiom/ is excluded from the Candidate.',
         'If your context gets compacted, re-read .axiom/prompt.md before continuing: this prompt is the recovery point for this Attempt.',

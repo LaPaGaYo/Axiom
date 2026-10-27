@@ -1,3 +1,4 @@
+import { getRendererAppPlatform } from '../../lib/renderer-app-platform'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { CodexRateLimitAccountsState } from '../../../../shared/managed-account-types'
 import { translate } from '@/i18n/i18n'
@@ -85,12 +86,22 @@ export function buildCodexStatusSwitchGroups(
       label: getCodexStatusRuntimeLabel(target, options.hostLabel),
       runtimeTarget: target,
       targets: [
-        {
-          id: null,
-          label: translate('auto.components.status.bar.StatusBar.c676918adc', 'System default'),
-          active: activeId === null,
-          runtimeTarget: target
-        },
+        // D83 ruling ①: only Windows/WSL or a legacy remote snapshot exposes this lane.
+        ...(target.runtime === 'wsl' ||
+        getRendererAppPlatform() === 'win32' ||
+        options.legacyHostDefault
+          ? [
+              {
+                id: null,
+                label: translate(
+                  'auto.components.status.bar.StatusBar.c676918adc',
+                  'System default'
+                ),
+                active: activeId === null,
+                runtimeTarget: target
+              }
+            ]
+          : []),
         ...accountsForTarget.map((account) => ({
           id: account.id,
           label: getCodexAccountDisplayLabel(account, accountsForTarget),

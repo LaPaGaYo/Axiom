@@ -6,7 +6,11 @@ import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-p
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import type { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-service'
-import { getSystemCodexHomePath } from './codex-home-paths'
+import {
+  CodexAccountRequiredError,
+  getSystemCodexHomePath,
+  usesCodexAccountHomeLayout
+} from './codex-home-paths'
 import { prepareLegacySharedCodexSessionResume } from './codex-legacy-session-resume'
 import {
   resolveTrustedCodexSessionResumeHome,
@@ -50,6 +54,18 @@ export async function prepareCodexAiVaultSessionResume(
   args: AiVaultPrepareSessionResumeArgs,
   options: CodexAiVaultResumeOptions
 ): Promise<AiVaultPrepareSessionResumeResult> {
+  // D83 ruling ①: discovery remains read-only; a local resume/fork needs an account home.
+  if (
+    process.platform !== 'win32' &&
+    args.agent === 'codex' &&
+    args.executionHostId === LOCAL_EXECUTION_HOST_ID &&
+    !parseWslUncPath(args.codexHome ?? '')
+  ) {
+    const selected = options.runtimeHome?.resolveSelectedHostAccountCodexHomePathForResume()
+    if (!selected || !args.codexHome || !usesCodexAccountHomeLayout(args.codexHome)) {
+      throw new CodexAccountRequiredError()
+    }
+  }
   const result = await prepareLegacySharedCodexSessionResume(args, {
     isHostSystemDefaultRealHomeSelected: () =>
       options.runtimeHome?.isHostSystemDefaultRealHomeSelected() === true,

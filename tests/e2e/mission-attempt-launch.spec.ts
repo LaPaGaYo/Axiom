@@ -1,3 +1,4 @@
+import { seedCodexTestAccount } from './helpers/codex-test-account'
 import { desktopCall } from './helpers/axiom-desktop-call'
 import { readGoalFile } from '../../src/cli/handlers/axiom/input-files'
 import { DEFAULT_MISSION_POLICY } from '../../src/shared/axiom-contract/mission-objects'
@@ -160,6 +161,7 @@ test('M2-05: launches three fixture Attempts and preserves identity without rela
     git(['clone', '--no-hardlinks', '--branch', 'main', realpathSync(source), clone])
     expect(git(['-C', clone, 'rev-parse', 'HEAD'])).toBe(FIXTURE_COMMIT)
     expect(git(['-C', clone, 'rev-parse', 'fixture-v1^{commit}'])).toBe(FIXTURE_COMMIT)
+    seedCodexTestAccount(session.userDataDir)
     const first = await session.launch()
     app = first.app
     await waitForSessionReady(first.page)

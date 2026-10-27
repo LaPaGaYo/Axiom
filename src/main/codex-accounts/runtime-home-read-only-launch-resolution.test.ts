@@ -9,8 +9,6 @@ import {
   createCodexAuthJson,
   createManagedAuth,
   createStore,
-  getRuntimeCodexHomePath,
-  getSystemCodexHomePath,
   setupRuntimeHomeTest,
   teardownRuntimeHomeTest,
   testState
@@ -198,54 +196,41 @@ describe('resolveHostCodexHomePathForLaunchReadOnly', () => {
     expect(sideEffects.accountBridge).not.toHaveBeenCalled()
   })
 
-  it('system-default real home: answers null (real ~/.codex) with zero side effects, matching launch prep', async () => {
-    const { service, store, sideEffects } = await createServiceWithSpies(
-      createSettings({ realHomeRoutable: true })
-    )
+  it.each([true, false])(
+    'no account refuses both resolvers and skips quota (ambient override: %s)',
+    async (realHomeRoutable) => {
+      const { service, store, sideEffects } = await createServiceWithSpies(
+        createSettings({ realHomeRoutable })
+      )
+      expect(() => service.resolveHostCodexHomePathForLaunchReadOnly()).toThrow(
+        expect.objectContaining({ code: 'no_account' })
+      )
+      expect(() => service.prepareForCodexLaunch()).toThrow(
+        expect.objectContaining({ code: 'no_account' })
+      )
+      expect(service.prepareForRateLimitFetch()).toEqual({ kind: 'skip' })
+      expectNoSideEffects(sideEffects, store)
+    }
+  )
 
-    const readOnlyHome = service.resolveHostCodexHomePathForLaunchReadOnly()
-    expect(readOnlyHome).toBeNull()
-    expectNoSideEffects(sideEffects, store)
-
-    expect(service.prepareForCodexLaunch()).toBe(readOnlyHome)
-  })
-
-  it('shared runtime home: answers the mirror with zero side effects, then matches launch prep', async () => {
-    const { service, store, sideEffects } = await createServiceWithSpies(
-      createSettings({ realHomeRoutable: false })
-    )
-
-    const readOnlyHome = service.resolveHostCodexHomePathForLaunchReadOnly()
-    expect(readOnlyHome).toBe(getRuntimeCodexHomePath())
-    expectNoSideEffects(sideEffects, store)
-
-    expect(service.prepareForCodexLaunch()).toBe(readOnlyHome)
-    expect(sideEffects.syncResources).toHaveBeenCalled()
-    expect(sideEffects.systemBridge).toHaveBeenCalled()
-  })
-
-  it('untrusted managed home: predicts the launch-prep fall-through route but keeps the selection set', async () => {
-    const managedHomePath = createManagedAuth(
+  it('an untrusted home refuses the read without clearing; launch clears and refuses', async () => {
+    const home = createManagedAuth(
       testState.userDataDir,
       'account-1',
       createCodexAuthJson('user@example.com', 'acct-1', 'refresh-1')
     )
     const { service, store, sideEffects } = await createServiceWithSpies(
-      managedAccountSettings(managedHomePath)
+      managedAccountSettings(home)
     )
-    // The home turns untrusted only after construction (the constructor sync
-    // would otherwise clear the selection first): a foreign ownership marker.
-    writeFileSync(join(managedHomePath, '.orca-managed-home'), 'someone-else\n', 'utf-8')
-
-    const readOnlyHome = service.resolveHostCodexHomePathForLaunchReadOnly()
-    // The probe-supported lane routes a cleared selection to the real ~/.codex.
-    expect(readOnlyHome).toBeNull()
+    writeFileSync(join(home, '.orca-managed-home'), 'someone-else\n')
+    expect(() => service.resolveHostCodexHomePathForLaunchReadOnly()).toThrow(
+      expect.objectContaining({ code: 'no_account' })
+    )
     expectNoSideEffects(sideEffects, store)
     expect(store.getSettings().activeCodexManagedAccountId).toBe('account-1')
-
-    // Launch prep for the same settings lands on the same route — by clearing.
-    expect(service.prepareForCodexLaunch()).toBe(readOnlyHome)
-    expect(store.updateSettings).toHaveBeenCalled()
+    expect(() => service.prepareForCodexLaunch()).toThrow(
+      expect.objectContaining({ code: 'no_account' })
+    )
     expect(store.getSettings().activeCodexManagedAccountId).toBeNull()
   })
 
@@ -284,7 +269,7 @@ describe('resolveHostCodexHomePathForLaunchReadOnly', () => {
     expect(service.resolveHostCodexHomePathForLaunchReadOnly()).toBe(managedHomePath)
   })
 
-  it('shares the create-path null-to-system-home mapping', async () => {
+  it('refuses structured launches without an account', async () => {
     const { service } = await createServiceWithSpies(createSettings({ realHomeRoutable: true }))
     const { resolveStructuredCodexAccountHomePath } =
       await import('../runtime/structured-agent-account-home')
@@ -294,6 +279,6 @@ describe('resolveHostCodexHomePathForLaunchReadOnly', () => {
         resolveLaunchHome: (input) =>
           service.resolveHostCodexHomePathForLaunchReadOnly(input.launchEnv)
       })
-    ).resolves.toBe(getSystemCodexHomePath())
+    ).rejects.toMatchObject({ code: 'no_account' })
   })
 })

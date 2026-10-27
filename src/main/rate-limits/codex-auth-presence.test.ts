@@ -30,6 +30,7 @@ describe('probeCodexAuthPresence', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     if (originalCodexHome === undefined) {
       delete process.env.CODEX_HOME
     } else {
@@ -44,19 +45,25 @@ describe('probeCodexAuthPresence', () => {
     expect(accessMock).toHaveBeenCalledWith(join('/managed/home', 'auth.json'))
   })
 
-  it('falls back to CODEX_HOME when no home is provided', async () => {
-    process.env.CODEX_HOME = '/custom/codex'
-    accessMock.mockResolvedValue(undefined)
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'probes an ambient home only on Windows (%s)',
+    async (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      process.env.CODEX_HOME = '/custom/codex'
+      accessMock.mockResolvedValue(undefined)
 
-    await expect(probeCodexAuthPresence()).resolves.toBe('present')
-    expect(accessMock).toHaveBeenCalledWith(join('/custom/codex', 'auth.json'))
-  })
+      await expect(probeCodexAuthPresence()).resolves.toBe(
+        platform === 'win32' ? 'present' : 'absent'
+      )
+      expect(accessMock).toHaveBeenCalledTimes(platform === 'win32' ? 1 : 0)
+    }
+  )
 
-  it('falls back to ~/.codex when neither home nor CODEX_HOME is set', async () => {
+  it('does not probe ~/.codex without an account on macOS/Linux', async () => {
     accessMock.mockRejectedValue(fsError('ENOENT'))
 
     await expect(probeCodexAuthPresence()).resolves.toBe('absent')
-    expect(accessMock).toHaveBeenCalledWith(join('/home/alice', '.codex', 'auth.json'))
+    expect(accessMock).not.toHaveBeenCalled()
   })
 
   it('keeps an inaccessible auth path distinct from confirmed absence', async () => {

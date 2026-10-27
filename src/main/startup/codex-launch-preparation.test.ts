@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   trust: vi.fn(),
   runtimeHome: {
     isHostSystemDefaultRealHomeSelected: vi.fn(),
+    getSelectedHostAccountCodexHomePath: vi.fn(() => null),
     prepareForCodexLaunchAsync: vi.fn()
   },
   getSettings: vi.fn(),
@@ -52,14 +53,14 @@ describe('Codex launch activation', () => {
     expect(mocks.prepareHooks).not.toHaveBeenCalled()
     expect(mocks.updateSettings).not.toHaveBeenCalled()
   })
-  it('records an explicit Codex launch before granting real-home hooks', async () => {
-    mocks.ensure.mockImplementation(async () => {
-      expect(mocks.getSettings().providerActivations.codex.source).toBe('agent-launch')
-    })
-    await prepareCodexRuntimeHomeForLaunch(undefined, undefined, {
-      launchesCodex: true
-    })
-    expect(mocks.ensure).toHaveBeenCalledOnce()
+  it('refuses an explicit Codex launch without an account', async () => {
+    await expect(
+      prepareCodexRuntimeHomeForLaunch(undefined, undefined, {
+        launchesCodex: true
+      })
+    ).rejects.toMatchObject({ code: 'no_account' })
+    expect(mocks.ensure).not.toHaveBeenCalled()
+    expect(mocks.prepareHooks).not.toHaveBeenCalled()
   })
   it('records a WSL launch before preparing its managed hooks', async () => {
     mocks.runtimeHome.prepareForCodexLaunchAsync.mockResolvedValue('/wsl/home')

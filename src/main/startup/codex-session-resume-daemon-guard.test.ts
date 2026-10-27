@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   hooksEnabled: false,
   systemHomePath: '',
   sharedHomePath: '',
+  selectedHome: '',
   installForLaunchPrep: vi.fn(),
   refreshRuntimeUserHooksForLaunchPrep: vi.fn(),
   reconcileCodexHooksForLaunch: vi.fn(async () => {}),
@@ -44,7 +45,7 @@ vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
 vi.mock('../codex/codex-home-paths', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   getSystemCodexHomePath: () => mocks.systemHomePath,
-  getOrcaManagedCodexHomePath: () => mocks.sharedHomePath
+  resolveOrcaManagedCodexHomePath: () => mocks.sharedHomePath
 }))
 vi.mock('../codex/codex-session-resume-preparation', () => ({
   prepareCodexSessionResume: mocks.prepareCodexSessionResume
@@ -57,7 +58,7 @@ vi.mock('./main-process-state', () => ({
     codexRuntimeHome: {
       isHostSystemDefaultRealHomeSelected: () => false,
       getHostCodexHomePathsForSessionDiscovery: () => [],
-      resolveSelectedHostAccountCodexHomePathForResume: () => null
+      resolveSelectedHostAccountCodexHomePathForResume: () => mocks.selectedHome
     },
     store: { getSettings: () => ({}), updateSettings: vi.fn() }
   }
@@ -77,6 +78,7 @@ describe('Codex session resume daemon socket guard', () => {
     vi.clearAllMocks()
     root = mkdtempSync(join(tmpdir(), 'orca-resume-guard-'))
     accountHome = join(root, 'codex-accounts', LONG_SEGMENT, 'home')
+    mocks.selectedHome = accountHome
     mocks.systemHomePath = join(root, 'system', LONG_SEGMENT, '.codex')
     mocks.sharedHomePath = join(root, 'codex-runtime-home', 'home')
     for (const home of [accountHome, mocks.systemHomePath, mocks.sharedHomePath]) {
@@ -143,15 +145,13 @@ describe('Codex session resume daemon socket guard', () => {
     )
   })
 
-  it('never writes the guard into the real Codex home a migrated resume runs in', async () => {
+  it('refuses a legacy migration into the real Codex home', async () => {
     expect(codexDaemonSocketPathExceedsLimit(mocks.systemHomePath)).toBe(true)
     mocks.prepareLegacySharedCodexSessionResume.mockResolvedValue({ useRealCodexHome: true })
     mocks.hooksEnabled = true
 
-    const preparation = await resume()
-
-    expect(preparation).toMatchObject({ codexHomePath: mocks.systemHomePath })
-    expect(mocks.reconcileCodexHooksForLaunch).toHaveBeenCalledTimes(1)
+    await expect(resume()).rejects.toMatchObject({ code: 'no_account' })
+    expect(mocks.reconcileCodexHooksForLaunch).not.toHaveBeenCalled()
     expect(existsSync(join(mocks.systemHomePath, 'config.toml'))).toBe(false)
   })
 })

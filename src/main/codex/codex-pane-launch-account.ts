@@ -36,7 +36,10 @@ export function resolveCodexPaneLaunchAccount(args: {
   const accountId = args.pinnedByResume
     ? resolveCodexHomeOwnerAccountId(args)
     : getSelectedCodexAccountIdForTarget(args.settings, args.target)
-  if (accountId === undefined) {
+  if (
+    accountId === undefined ||
+    (accountId === null && process.platform !== 'win32' && args.target.runtime !== 'wsl')
+  ) {
     return null
   }
   return {

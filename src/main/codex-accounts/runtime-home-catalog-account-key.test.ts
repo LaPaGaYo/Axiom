@@ -12,8 +12,6 @@ import {
   createCodexAuthJson,
   createManagedAuth,
   createStore,
-  getRuntimeCodexHomePath,
-  getSystemCodexHomePath,
   setupRuntimeHomeTest,
   teardownRuntimeHomeTest,
   testState
@@ -103,13 +101,15 @@ describe('Codex catalog account key: picker read vs launch', () => {
     expect(wired.key(after)).toBe(wired.key(launched))
   }
 
-  it('system account on the real ~/.codex', async () => {
-    await expectOneKey(createSettings({ realHomeRoutable: true }), getSystemCodexHomePath())
-  })
-
-  it("system account on Orca's shared runtime home", async () => {
-    await expectOneKey(createSettings({ realHomeRoutable: false }), getRuntimeCodexHomePath())
-  })
+  it.each([true, false])(
+    'refuses the picker and launch without an account (legacy real-home route %s)',
+    async (realHomeRoutable) => {
+      const wired = await wireCodexAccountKey(createSettings({ realHomeRoutable }))
+      release = wired.release
+      await expect(wired.resolve('read')).rejects.toMatchObject({ code: 'no_account' })
+      await expect(wired.resolve('launch')).rejects.toMatchObject({ code: 'no_account' })
+    }
+  )
 
   it('a managed account in its own home', async () => {
     const managedHomePath = createManagedAuth(

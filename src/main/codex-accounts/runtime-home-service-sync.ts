@@ -25,6 +25,10 @@ export abstract class CodexRuntimeHomeSync extends CodexRuntimeHomeWsl {
       this.syncSelfContainedManagedSelection(selfContainedAccount)
       return
     }
+    // D83 ruling ①: Windows alone retains the shared mirror and auth sync.
+    if (process.platform !== 'win32') {
+      return
+    }
     const settings = this.store.getSettings()
     if (this.lastHostAccountUsedSelfContainedHome) {
       // Why: the account's auth is already canonical in its own home. Reset the

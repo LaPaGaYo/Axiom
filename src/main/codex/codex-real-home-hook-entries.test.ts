@@ -1,3 +1,5 @@
+import { setupLegacyWindowsCodexHome } from './legacy-windows-home.test-support'
+setupLegacyWindowsCodexHome()
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   chmodSync,
@@ -566,8 +568,9 @@ describe('reconcileRealHomeCodexHookEntries', () => {
   })
 
   it.skipIf(process.platform === 'win32')(
-    'updates a symlinked hooks.json in place, keeping its permissions',
+    'does not follow or modify a real-home hook symlink on macOS/Linux',
     async () => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
       const target = join(home, 'dotfiles', 'hooks.json')
       mkdirSync(join(home, 'dotfiles'), { recursive: true })
       mkdirSync(join(home, '.codex'), { recursive: true })
@@ -575,10 +578,10 @@ describe('reconcileRealHomeCodexHookEntries', () => {
       chmodSync(target, 0o600)
       symlinkSync(target, hooksPath())
 
-      expect(await reconcile()).toBe('written')
+      await reconcile()
 
       expect(lstatSync(hooksPath()).isSymbolicLink()).toBe(true)
-      expect(JSON.parse(readFileSync(target, 'utf-8')).hooks.Stop).toHaveLength(2)
+      expect(JSON.parse(readFileSync(target, 'utf-8')).hooks.Stop).toHaveLength(1)
       expect(statSync(target).mode & 0o777).toBe(0o600)
     }
   )

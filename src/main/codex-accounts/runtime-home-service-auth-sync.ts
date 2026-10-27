@@ -11,6 +11,9 @@ import type { CodexSystemDefaultSnapshot } from './runtime-home-service-types'
 
 export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
   protected captureSystemDefaultSnapshot(options: { force: boolean }): void {
+    if (process.platform !== 'win32') {
+      return
+    } // D83 ruling ①: no auth snapshots.
     const snapshotPath = this.getSystemDefaultSnapshotPath()
     if (!options.force && existsSync(snapshotPath)) {
       return
@@ -24,6 +27,9 @@ export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
   }
 
   protected syncRuntimeAuthWithSystemDefault(): void {
+    if (process.platform !== 'win32') {
+      return
+    } // D83 ruling ①: no auth copy-back.
     const runtimeAuthPath = this.getRuntimeAuthPath()
     const systemDefaultAuthPath = join(getSystemCodexHomePath(), 'auth.json')
     if (!existsSync(runtimeAuthPath)) {
@@ -213,6 +219,9 @@ export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
   }
 
   protected restoreSystemDefaultSnapshot(options: { detectExternalLogin: boolean }): void {
+    if (process.platform !== 'win32') {
+      return
+    } // D83 ruling ①: no auth snapshots.
     const snapshotPath = this.getSystemDefaultSnapshotPath()
     const runtimeAuthPath = this.getRuntimeAuthPath()
     const systemDefaultAuthPath = join(getSystemCodexHomePath(), 'auth.json')
@@ -280,6 +289,9 @@ export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
     options?: { expectedContents: string | null }
   ): boolean {
     const systemDefaultAuthPath = join(getSystemCodexHomePath(), 'auth.json')
+    if (process.platform !== 'win32') {
+      return false
+    } // D83 ruling ①.
     mkdirSync(dirname(systemDefaultAuthPath), { recursive: true })
     if (!options) {
       writeFileAtomically(systemDefaultAuthPath, contents, { mode: 0o600 })

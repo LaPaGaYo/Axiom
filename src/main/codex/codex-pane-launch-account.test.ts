@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import { resolveCodexPaneLaunchAccount } from './codex-pane-launch-account'
+
+afterEach(() => vi.restoreAllMocks())
 
 const SYSTEM_HOME = '/Users/example/.codex'
 
@@ -75,32 +77,51 @@ describe('resolveCodexPaneLaunchAccount', () => {
     })
   })
 
-  it('maps a resume redirected to the real system home to the system-default account', () => {
-    expect(
-      resolveCodexPaneLaunchAccount({
-        pinnedByResume: true,
-        launchCodexHomePath: SYSTEM_HOME,
-        systemCodexHomePath: SYSTEM_HOME,
-        settings: settings({
-          host: 'account-a',
-          accounts: [managedAccount({ id: 'account-a' })]
-        }),
-        target: { runtime: 'host' }
-      })
-    ).toEqual({ selectionKey: 'host', accountId: null, homeRoute: 'real-home' })
-  })
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'attributes a system home only on Windows (%s)',
+    (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      expect(
+        resolveCodexPaneLaunchAccount({
+          pinnedByResume: true,
+          launchCodexHomePath: SYSTEM_HOME,
+          systemCodexHomePath: SYSTEM_HOME,
+          settings: settings({
+            host: 'account-a',
+            accounts: [managedAccount({ id: 'account-a' })]
+          }),
+          target: { runtime: 'host' }
+        })
+      ).toEqual(
+        platform === 'win32'
+          ? { selectionKey: 'host', accountId: null, homeRoute: 'real-home' }
+          : null
+      )
+    }
+  )
 
-  it('maps a resume that injects no CODEX_HOME to the system-default account', () => {
-    expect(
-      resolveCodexPaneLaunchAccount({
-        pinnedByResume: true,
-        launchCodexHomePath: null,
-        systemCodexHomePath: SYSTEM_HOME,
-        settings: settings({ host: 'account-a', accounts: [managedAccount({ id: 'account-a' })] }),
-        target: { runtime: 'host' }
-      })
-    ).toEqual({ selectionKey: 'host', accountId: null, homeRoute: 'real-home' })
-  })
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'attributes a null home only on Windows (%s)',
+    (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      expect(
+        resolveCodexPaneLaunchAccount({
+          pinnedByResume: true,
+          launchCodexHomePath: null,
+          systemCodexHomePath: SYSTEM_HOME,
+          settings: settings({
+            host: 'account-a',
+            accounts: [managedAccount({ id: 'account-a' })]
+          }),
+          target: { runtime: 'host' }
+        })
+      ).toEqual(
+        platform === 'win32'
+          ? { selectionKey: 'host', accountId: null, homeRoute: 'real-home' }
+          : null
+      )
+    }
+  )
 
   it('refuses to attribute a resume home no account owns', () => {
     expect(

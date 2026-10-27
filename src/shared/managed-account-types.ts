@@ -59,8 +59,7 @@ export type CodexRateLimitAccountsState = {
   accounts: CodexManagedAccountSummary[]
   activeAccountId: string | null
   activeAccountIdsByRuntime?: CodexManagedAccountRuntimeSelection
-  /** Resolved identity of the host system-default (real ~/.codex) account.
-   *  Omitted for runtimes where it is not resolved (e.g. per-distro WSL). */
+  /** Legacy Windows host identity (D83 ruling ①); absent on macOS/Linux and per-distro WSL. */
   systemDefault?: CodexSystemDefaultIdentity
 }
 

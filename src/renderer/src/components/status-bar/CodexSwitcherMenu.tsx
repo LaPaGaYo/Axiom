@@ -192,8 +192,7 @@ export function CodexSwitcherMenu({
         <div className="flex min-w-0 flex-1 flex-col gap-0.5 py-0.5 text-[12px]">
           <div className="flex min-w-0 items-center gap-1.5">
             <span className="min-w-0 flex-1 truncate text-foreground">
-              {activeTarget?.label ??
-                translate('auto.components.status.bar.StatusBar.c676918adc', 'System default')}
+              {activeTarget?.label ?? translate('accounts.codex.noSelection', 'No account')}
             </span>
           </div>
         </div>

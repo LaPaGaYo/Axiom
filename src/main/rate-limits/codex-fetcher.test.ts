@@ -263,7 +263,7 @@ describe('fetchCodexRateLimits', () => {
     childSpawnMock.mockReturnValue(rpcChild)
     mockBackendUsage()
 
-    const resultPromise = fetchCodexRateLimits()
+    const resultPromise = fetchCodexRateLimits({ codexHomePath: '/fixture/codex-account' })
     await vi.advanceTimersByTimeAsync(0)
     rpcChild.emit('close')
 
@@ -309,7 +309,7 @@ describe('fetchCodexRateLimits', () => {
     mockBackendUsage()
     vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 401 }))
 
-    const resultPromise = fetchCodexRateLimits()
+    const resultPromise = fetchCodexRateLimits({ codexHomePath: '/fixture/codex-account' })
     await vi.advanceTimersByTimeAsync(0)
     rpcChild.emit('close', 1, null)
 
@@ -417,7 +417,7 @@ describe('fetchCodexRateLimits', () => {
       })
     } as Response)
 
-    const resultPromise = fetchCodexRateLimits()
+    const resultPromise = fetchCodexRateLimits({ codexHomePath: '/fixture/codex-account' })
     await vi.advanceTimersByTimeAsync(1)
     await vi.advanceTimersByTimeAsync(1)
 

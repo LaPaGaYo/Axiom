@@ -1,3 +1,5 @@
+import { setupLegacyWindowsCodexHome } from '../codex/legacy-windows-home.test-support'
+setupLegacyWindowsCodexHome()
 import { EventEmitter } from 'node:events'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 

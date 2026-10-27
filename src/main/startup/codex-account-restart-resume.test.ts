@@ -22,11 +22,12 @@ vi.mock('../codex/hook-service', () => ({
   }
 }))
 vi.mock('../codex/codex-hook-reconcile', () => ({ reconcileCodexHooksForLaunch: vi.fn() }))
-vi.mock('../codex/codex-home-paths', () => ({
+vi.mock('../codex/codex-home-paths', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   getCodexSessionBackfillStateDirPath: () => join(homes.system, 'backfill'),
   getSystemCodexHomePath: () => homes.system,
   usesCodexAccountHomeLayout: (home: string) => home === homes.original || home === homes.selected,
-  getOrcaManagedCodexHomePath: () => join(homes.system, 'legacy')
+  resolveOrcaManagedCodexHomePath: () => join(homes.system, 'legacy')
 }))
 vi.mock('../codex/codex-config-mirror', () => ({ ensureCodexDaemonSocketGuard: vi.fn() }))
 vi.mock('../codex/codex-account-home-layout', () => ({ layoutCodexAccountHome: vi.fn() }))
@@ -96,14 +97,15 @@ it('refuses a conflicting target rollout instead of restarting the old account',
   expect(readFileSync(target, 'utf8')).toBe('another session')
 })
 
-it('uses the system home when an explicit restart follows deselection', async () => {
+it('refuses an explicit restart after deselection', async () => {
   homes.selected = ''
-  const result = await prepareCodexSessionResumeForLaunch({
-    providerSession: { key: 'session_id', id: sessionId, transcriptPath },
-    target: { runtime: 'host' },
-    useSelectedAccount: true
-  })
-  expect(result).toMatchObject({ codexHomePath: homes.system })
+  await expect(
+    prepareCodexSessionResumeForLaunch({
+      providerSession: { key: 'session_id', id: sessionId, transcriptPath },
+      target: { runtime: 'host' },
+      useSelectedAccount: true
+    })
+  ).rejects.toMatchObject({ code: 'no_account' })
 })
 
 it('leaves WSL preparation on the execution host', async () => {

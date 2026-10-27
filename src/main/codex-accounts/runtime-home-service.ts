@@ -9,10 +9,13 @@ export type {
 export class CodexRuntimeHomeService extends CodexRuntimeHomeAuthSync {
   constructor(store: Store) {
     super(store)
-    this.safeRecoverInterruptedRuntimeAuthOperation()
-    this.safeMigrateLegacySharedAuth()
-    this.safeMigrateLegacyManagedState()
-    this.safeMigrateLegacyActiveHomePointer()
+    // D83 ruling ①: do not create or recover the retired host mirror.
+    if (process.platform === 'win32') {
+      this.safeRecoverInterruptedRuntimeAuthOperation()
+      this.safeMigrateLegacySharedAuth()
+      this.safeMigrateLegacyManagedState()
+      this.safeMigrateLegacyActiveHomePointer()
+    }
     this.initializeLastSyncedState()
     this.safeSyncForCurrentSelection()
   }

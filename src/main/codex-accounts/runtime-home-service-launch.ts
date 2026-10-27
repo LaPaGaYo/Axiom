@@ -1,6 +1,7 @@
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
 import { startSystemCodexSessionBridgeInBackground } from '../codex/codex-session-bridge'
 import {
+  CodexAccountRequiredError,
   resolveOrcaManagedCodexHomePath,
   syncSystemCodexResourcesIntoManagedHome
 } from '../codex/codex-home-paths'
@@ -58,8 +59,12 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
       if (perAccountHome) {
         return perAccountHome
       }
-      // Why: only an untrusted home clears the selection; fall through to the
-      // system default without injecting a path Orca cannot prove it owns.
+      // Only an untrusted home clears the selection; macOS/Linux then refuse,
+      // while Windows retains its legacy system-default route (D83 ruling ①).
+    }
+    // D83 ruling ①: no host fallback to ~/.codex or the mirror on macOS/Linux.
+    if (process.platform !== 'win32') {
+      throw new CodexAccountRequiredError()
     }
     if (this.isHostSystemDefaultRealHomeSelected(launchEnv)) {
       // Why: the system default runs Codex on the user's own ~/.codex.
@@ -86,8 +91,8 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
    * now, resolved with no side effects: no home/auth sync, no session bridge,
    * no backfill bookkeeping, no hook state, and never a cleared selection.
    * Record-less model catalog reads key on it — a picker open is a read and
-   * must not change account state. Same null contract as prepare: null means
-   * the system-default real ~/.codex.
+   * must not change account state. On Windows only, null means the legacy
+   * system-default real ~/.codex. macOS/Linux refuse with no_account.
    */
   resolveHostCodexHomePathForLaunchReadOnly(launchEnv?: NodeJS.ProcessEnv): string | null {
     const selfContainedAccount = this.getSelfContainedManagedHostAccount()
@@ -103,12 +108,18 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
       }
       // Why: launch prep deselects an UNTRUSTED home before routing onward, so
       // its next check sees no selection; predict that route, clearing nothing.
+      if (process.platform !== 'win32') {
+        throw new CodexAccountRequiredError()
+      }
       return !hasCustomCodexHomeOverrideForLaunch(launchEnv)
         ? null
         : resolveOrcaManagedCodexHomePath()
     }
     // Why the path-only resolver: getRuntimeHomePath() mkdirs the mirror, and
     // this lookup must not create directories either.
+    if (process.platform !== 'win32') {
+      throw new CodexAccountRequiredError()
+    }
     return this.isHostSystemDefaultRealHomeSelected(launchEnv)
       ? null
       : resolveOrcaManagedCodexHomePath()
@@ -152,6 +163,7 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
 
   isHostSystemDefaultSessionMigrationEligible(): boolean {
     return (
+      process.platform === 'win32' && // D83 ruling ①: legacy migration is Windows-only.
       normalizeCodexRuntimeSelection(this.store.getSettings()).host === null &&
       !hasCustomCodexHomeOverrideForLaunch()
     )

@@ -1,3 +1,4 @@
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { useEffect, useRef, useState } from 'react'
 import type {
   ClaudeRateLimitAccountsState,
@@ -192,16 +193,21 @@ export function AccountsPane({
     accountRuntime.runtime === 'host' ? codexAccounts.systemDefault : undefined
   // Why: remote snapshots own their system-default identity, but the desktop's
   // rate-limit poll must not be misattributed to a remote account owner.
-  const activeCodexAuthWarning = codexAccountsLoaded
-    ? getCodexAccountAuthWarning({
-        limits: isRemoteAccountScope ? null : codexRateLimits,
-        target: codexRateLimitTarget,
-        runtime: accountRuntime,
-        activeAccountId: activeCodexAccountId,
-        accountId: activeCodexAccountId,
-        authKind: activeCodexAccountId === null ? systemCodexIdentity?.authKind : undefined
-      })
-    : null
+  const activeCodexAuthWarning =
+    codexAccountsLoaded &&
+    (activeCodexAccountId !== null ||
+      isRemoteAccountScope ||
+      (accountOwnerPlatform ?? getRendererAppPlatform()) === 'win32' ||
+      accountRuntime.runtime === 'wsl')
+      ? getCodexAccountAuthWarning({
+          limits: isRemoteAccountScope ? null : codexRateLimits,
+          target: codexRateLimitTarget,
+          runtime: accountRuntime,
+          activeAccountId: activeCodexAccountId,
+          accountId: activeCodexAccountId,
+          authKind: activeCodexAccountId === null ? systemCodexIdentity?.authKind : undefined
+        })
+      : null
   // Why: the mirror keeps serving the last synced settings when ~/.codex is
   // unusable, so without this the user only sees their edits being ignored.
   const [codexConfigSync, setCodexConfigSync] = useState<CodexConfigSyncStatus | null>(null)

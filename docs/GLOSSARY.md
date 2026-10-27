@@ -189,7 +189,7 @@ APPLYING / TESTING → QUEUED（应用重启时由 RecoveryService 丢弃临时�
 | 词汇 | 值与含义 |
 |---|---|
 | `TaskSpec.role` | 可选的非空字符串标签（M2-09 / DEF-4）；提案、批准物化与 Task spec 保留它，不参与 provider 路由、角色权限或 skills 物化。省略时保持既有行为。 |
-| `ProviderFilterReason` | `not_installed \| not_certified \| disallowed \| tier_too_low`，按此顺序取首个命中原因（D57）。 |
+| `ProviderFilterReason` | `not_installed \| no_account \| not_certified \| disallowed \| tier_too_low`，按此顺序取首个命中原因（D57、D83 2026-10-26）；`no_account` = macOS / Linux 未选中 Axiom 管理的 Codex 账号目录。 |
 | `endpointProfile` | `subscription`（V1）：用户在 harness 中已有的登录或自行配置的凭据；进入 AgentSpec 的内容寻址，不包含凭据本身（D57）。 |
 | `caller_not_desktop` | 人工动作（`desktop_only` 方法）收到非桌面应用的调用（本机 CLI、配对设备或无法认定）时的拒绝码（D78）。 |
 | `caller_not_permitted_for_agent` | 宿主已解析为 Axiom Attempt / Planner / Reviewer dispatch 的会话调用非 `workspace` 方法、Agent 审批 / 回答或创建 Run / Worker / Orca Task 时的第二层拒绝码（D78）；不替代桌面传输边界。 |

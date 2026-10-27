@@ -47,7 +47,10 @@ export class CodexAccountSelection {
         .sort((a, b) => b.updatedAt - a.updatedAt),
       activeAccountId: normalizeCodexRuntimeSelection(settings).host,
       activeAccountIdsByRuntime: normalizeCodexRuntimeSelection(settings),
-      systemDefault: this.dependencies.resolveSystemDefault()
+      // D83 ruling ①: system identity exists only on the legacy Windows lane.
+      ...(process.platform === 'win32'
+        ? { systemDefault: this.dependencies.resolveSystemDefault() }
+        : {})
     }
   }
 
@@ -79,7 +82,9 @@ export class CodexAccountSelection {
     })
     this.dependencies.runtimeHome.syncForCurrentSelection()
     if (account.managedHomeRuntime === 'host' && nextSelection.host === null) {
-      this.dependencies.lifecycle.onHostSystemDefaultSelected?.()
+      if (process.platform === 'win32') {
+        this.dependencies.lifecycle.onHostSystemDefaultSelected?.()
+      } // D83 ruling ①.
     }
 
     this.dependencies.removeManagedHome(account.managedHomePath, account.id)
@@ -137,7 +142,9 @@ export class CodexAccountSelection {
       accountId === null &&
       normalizeCodexAccountSelectionTarget(effectiveTarget).runtime === 'host'
     ) {
-      this.dependencies.lifecycle.onHostSystemDefaultSelected?.()
+      if (process.platform === 'win32') {
+        this.dependencies.lifecycle.onHostSystemDefaultSelected?.()
+      } // D83 ruling ①.
     }
 
     this.startQuotaRefresh(outgoingAccountId, effectiveTarget)
@@ -162,7 +169,9 @@ export class CodexAccountSelection {
       activeCodexManagedAccountIdsByRuntime: nextSelection
     })
     if (selection.host !== null && nextSelection.host === null) {
-      this.dependencies.lifecycle.onHostSystemDefaultSelected?.()
+      if (process.platform === 'win32') {
+        this.dependencies.lifecycle.onHostSystemDefaultSelected?.()
+      } // D83 ruling ①.
     }
   }
 

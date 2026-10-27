@@ -1,3 +1,4 @@
+import { refuseRetiredCodexSelection } from '../../../codex-accounts/runtime-selection'
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../core'
 import { rpcCallerOperationKey } from '../rpc-caller-identity'
 import { HostAccountSignInFlows } from '../../host-account-sign-in-flows'
@@ -154,7 +155,11 @@ export const ACCOUNT_METHODS = [
     name: 'accounts.selectCodex',
     permission: 'accounts-admin',
     params: SelectAccountParams,
-    handler: async (params, { runtime }) => runtime.selectCodexAccount(params.accountId)
+    handler: async (params, { runtime }) => {
+      // Mixed-version null payloads keep their schema and receive system_default_retired.
+      refuseRetiredCodexSelection(params.accountId)
+      return runtime.selectCodexAccount(params.accountId)
+    }
   }),
   defineMethod({
     // Why: old hosts silently strip unknown target fields from selectCodex.
@@ -162,8 +167,10 @@ export const ACCOUNT_METHODS = [
     name: 'accounts.selectCodexForTarget',
     permission: 'accounts-admin',
     params: SelectCodexAccountForTargetParams,
-    handler: async (params, { runtime }) =>
-      runtime.selectCodexAccountForTarget(params.accountId, params.target)
+    handler: async (params, { runtime }) => {
+      refuseRetiredCodexSelection(params.accountId, params.target)
+      return runtime.selectCodexAccountForTarget(params.accountId, params.target)
+    }
   }),
   defineMethod({
     name: 'accounts.consumeCodexResetCredit',

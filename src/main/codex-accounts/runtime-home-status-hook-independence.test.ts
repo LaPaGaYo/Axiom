@@ -1,5 +1,6 @@
+import { snapshotAccountTestHome } from '../codex/codex-account-home-layout.test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, rmdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type * as NodeOs from 'node:os'
 import type * as CodexCommand from '../codex-cli/command'
@@ -36,7 +37,7 @@ vi.mock('../codex/codex-hook-trust-derivation', async (importOriginal) => ({
 }))
 
 // Why this file (#13746): a status-hook problem costs only Orca's status. The
-// system default must keep launching on ~/.codex, so its own login is used.
+// no-account launch must refuse without writing to the user home.
 
 const hooksPath = (): string => join(getSystemCodexHomePath(), 'hooks.json')
 const tomlPath = (): string => join(getSystemCodexHomePath(), 'config.toml')
@@ -67,6 +68,9 @@ const HOOK_PROBLEMS: readonly [string, () => void][] = [
 
 beforeEach(() => {
   setupRuntimeHomeTest()
+  // The legacy fixture creates an empty mirror; exercise a cold start without it.
+  rmdirSync(join(testState.userDataDir, 'codex-runtime-home', 'home'))
+  rmdirSync(join(testState.userDataDir, 'codex-runtime-home'))
   mocks.codexPath = join(testState.userDataDir, 'codex')
   writeFileSync(mocks.codexPath, 'codex')
   mocks.probeCodexVersion.mockResolvedValue('codex-cli 0.160.1')
@@ -82,7 +86,7 @@ afterEach(() => {
   teardownRuntimeHomeTest()
 })
 
-describe('a status-hook problem never moves the system default off ~/.codex', () => {
+describe('no-account launch refuses without modifying the user home', () => {
   it.each(HOOK_PROBLEMS)('when %s', async (_case, arrange) => {
     arrange()
     vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -91,7 +95,9 @@ describe('a status-hook problem never moves the system default off ~/.codex', ()
     )
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const { startCodexHooks, _internals } = await import('../codex/codex-hook-reconcile')
-    const { readCurrentCodexHookStatus } = await import('../codex/codex-hook-status')
+    const { scheduleCodexHookReconcile, reconcileCodexHooksForLaunch } =
+      await import('../codex/codex-hook-reconcile')
+    const treeBefore = snapshotAccountTestHome(testState.fakeHomeDir)
     const store = createStore(createSettings({ realHomeRoutable: true }))
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the service reads only getSettings/updateSettings, which the harness store implements.
     const service = new CodexRuntimeHomeService(store as never)
@@ -103,13 +109,16 @@ describe('a status-hook problem never moves the system default off ~/.codex', ()
     })
     await _internals.settledForTesting()
 
-    expect(service.isHostSystemDefaultRealHomeSelected()).toBe(true)
-    // The resolver headless serve and the PTY launch both use: null keeps CODEX_HOME unset.
-    expect(service.resolveHostCodexHomePathForLaunchReadOnly()).toBeNull()
-    await expect(service.prepareForCodexLaunchAsync()).resolves.toBeNull()
-    const status = readCurrentCodexHookStatus()
-    expect(status.configPath).toBe(hooksPath())
-    expect(status.detail).toBeTruthy()
+    expect(service.isHostSystemDefaultRealHomeSelected()).toBe(false)
+    expect(() => service.resolveHostCodexHomePathForLaunchReadOnly()).toThrow(
+      expect.objectContaining({ code: 'no_account' })
+    )
+    await expect(service.prepareForCodexLaunchAsync()).rejects.toMatchObject({ code: 'no_account' })
+    scheduleCodexHookReconcile()
+    await reconcileCodexHooksForLaunch()
+    await _internals.settledForTesting()
+    expect(snapshotAccountTestHome(testState.fakeHomeDir)).toEqual(treeBefore)
+    expect(existsSync(join(testState.userDataDir, 'codex-runtime-home'))).toBe(false)
     if (before.get(hooksPath()) !== null) {
       expect(readOptional(hooksPath())).toBe(before.get(hooksPath()))
     }
