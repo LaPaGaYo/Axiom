@@ -84,7 +84,10 @@ describe('mission policy CLI', () => {
             disallowedProviders: [],
             highRiskTier: 'A',
             providerConcurrency: {},
-            models: {}
+            models: {},
+            roles: {},
+            crossProvider: true,
+            requireCertified: false
           }
         }
       },
