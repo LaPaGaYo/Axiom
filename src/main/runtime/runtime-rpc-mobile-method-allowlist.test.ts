@@ -410,7 +410,7 @@ describe('OrcaRuntimeRpcServer', () => {
       id: 'req_select_codex',
       method: 'accounts.selectCodex',
       deviceToken: mobile.token,
-      params: { accountId: null }
+      params: { accountId: 'codex-account' }
     })
     await dispatch({
       id: 'req_consume_codex_reset',
@@ -622,7 +622,8 @@ describe('OrcaRuntimeRpcServer', () => {
       })
     )
     expect(mocks.selectClaudeAccount).toHaveBeenCalledWith('claude-account')
-    expect(mocks.selectCodexAccount).toHaveBeenCalledWith(null)
+    expect(mocks.selectCodexAccount).toHaveBeenCalledWith('codex-account')
+    expect(mocks.selectCodexAccount).toHaveBeenCalledTimes(1)
     expect(mocks.consumeCodexRateLimitResetCredit).toHaveBeenCalledWith(
       '11111111-1111-4111-8111-111111111111',
       expectedCodexResetScope
