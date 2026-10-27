@@ -26,7 +26,10 @@ export const CERTIFIED_PROVIDER_COMBOS: readonly CertifiedProviderCombo[] = [
     endpointProfile: 'subscription',
     roles: ['planner', 'worker'],
     maxRisk: 'high',
-    status: 'provisional'
+    // D57 revision 2026-10-26: sandboxed Worker RUNNING → SUBMITTED → VERIFIED and a structured-channel
+    // Planner proposal from the D83 account home, egress recorded.
+    status: 'certified',
+    evidence: '.axiom-work/verifications/M3-08-smoke-real-codex.md'
   },
   {
     provider: 'antigravity',
