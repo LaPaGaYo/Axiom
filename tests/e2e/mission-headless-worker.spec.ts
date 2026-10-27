@@ -1,12 +1,20 @@
 import { seedCodexTestAccount } from './helpers/codex-test-account'
 import { TaskListResponseSchema } from '../../src/shared/axiom-contract/task-params'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { z } from 'zod'
 import { test, expect } from './helpers/orca-app'
 import { cli, git, withFixtureMission } from './helpers/axiom-fixture-mission'
 import { inspectFixtureMission } from './helpers/axiom-fixture-inspection'
 import { ArtifactReadResponseSchema } from '../../src/shared/axiom-contract/artifact-params'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
+import { desktopCall } from './helpers/axiom-desktop-call'
+import {
+  AXIOM_TEST_CLAUDE_DENIED_TOOLS,
+  AXIOM_TEST_CLAUDE_MODEL,
+  AXIOM_TEST_CLAUDE_VERSION
+} from './helpers/axiom-test-claude-provider'
+import { AXIOM_T01_FIXTURE_FILES } from './helpers/axiom-t01-fixture'
 
 const source = process.env.AXIOM_FIXTURE_REPO
 test.skip(
@@ -273,5 +281,208 @@ test('no Codex account refuses admission without launching a Worker', async (// 
       expect(tasks.some((task) => task.stage === 'RUNNING')).toBe(false)
     },
     { noCodexAccount: true }
+  )
+})
+
+test('M3-08b: a claude headless Worker progresses RUNNING → SUBMITTED → VERIFIED with observed pins', async (// oxlint-disable-next-line no-empty-pattern -- Fixture owns the background app lifecycle.
+{}, testInfo) => {
+  test.setTimeout(600_000)
+  const dependencies = realpathSync(path.join(source!, 'node_modules'))
+  const dependencyLinks = readdirSync(dependencies)
+    .filter((name) => !['.vite', '.vite-temp', '.cache'].includes(name))
+    .map(
+      (name) =>
+        `ln -s ${quotePosixShell(path.join(dependencies, name))} ${quotePosixShell(path.join('node_modules', name))}`
+    )
+  await withFixtureMission(
+    testInfo,
+    source!,
+    async ({ page, userData, mission, ledgerPath, releaseWorkers, clone }) => {
+      const inspect = () => inspectFixtureMission(userData, mission.id)
+      await expect
+        .poll(() => inspect().tasks.filter((task) => task.stage === 'RUNNING').length, {
+          timeout: 120_000
+        })
+        .toBe(1)
+      const binding = inspect().bindings[0]!
+      const attemptId = binding.dispatch_id!
+      const attemptDir = path.join(userData, 'axiom', 'attempts', attemptId)
+      await expect.poll(() => existsSync(ledgerPath), { timeout: 60_000 }).toBe(true)
+      const launch = z
+        .object({
+          provider: z.literal('claude'),
+          cwd: z.string(),
+          attemptId: z.string(),
+          argv: z.array(z.string()),
+          promptPath: z.string(),
+          CLAUDE_CONFIG_DIR: z.string(),
+          settings: z.unknown(),
+          mcp: z.unknown()
+        })
+        .parse(JSON.parse(readFileSync(ledgerPath, 'utf8').trim().split('\n')[0]!))
+      expect(launch.attemptId).toBe(attemptId)
+      expect(launch.CLAUDE_CONFIG_DIR).toBe(
+        path.join(userData, 'claude-profiles', 'e2e-claude', 'home')
+      )
+      expect(launch.promptPath).toBe(path.join(attemptDir, 'prompt.md'))
+      expect(launch.argv).toEqual([
+        '-p',
+        '--output-format',
+        'stream-json',
+        '--verbose',
+        '--permission-mode',
+        'acceptEdits',
+        '--permission-prompts',
+        'none',
+        '--setting-sources=',
+        '--settings',
+        path.join(attemptDir, 'claude-settings.json'),
+        '--strict-mcp-config',
+        '--mcp-config',
+        path.join(attemptDir, 'claude-mcp.json'),
+        '--disallowedTools',
+        AXIOM_TEST_CLAUDE_DENIED_TOOLS.join(','),
+        '--model',
+        AXIOM_TEST_CLAUDE_MODEL,
+        '--effort',
+        'medium'
+      ])
+      expect(launch.settings).toEqual({
+        permissions: {
+          allow: [
+            'Read',
+            'Grep',
+            'Glob',
+            'LS',
+            'Edit',
+            'Write',
+            'MultiEdit',
+            'NotebookEdit',
+            'Bash'
+          ],
+          deny: AXIOM_TEST_CLAUDE_DENIED_TOOLS
+        },
+        sandbox: {
+          enabled: true,
+          failIfUnavailable: true,
+          autoAllowBashIfSandboxed: true,
+          allowUnsandboxedCommands: false,
+          network: { allowedDomains: [], strictAllowlist: true, allowLocalBinding: false },
+          filesystem: { allowWrite: [launch.cwd, attemptDir] }
+        },
+        syncClaudeAiSkills: false,
+        syncClaudeAiPlugins: false,
+        enabledPlugins: {}
+      })
+      expect(launch.mcp).toEqual({ mcpServers: {} })
+      expect(readFileSync(launch.promptPath, 'utf8')).toContain('CLAUDE.md')
+      expect(inspect().submissions).toEqual([])
+      // Link provisioned dependencies without installing; keep the parent local so Vite's
+      // caches stay in the independent verification worktree rather than the fixture source.
+      await desktopCall(page, 'axiom.policy.update', {
+        missionId: mission.id,
+        patch: {
+          verificationRules: {
+            setupCommands: ['mkdir node_modules', ...dependencyLinks]
+          }
+        }
+      })
+      releaseWorkers()
+      await expect.poll(() => inspect().submissions.length, { timeout: 120_000 }).toBe(1)
+      const submission = inspect().submissions[0]!
+      expect(submission.attemptId).toBe(attemptId)
+      expect(submission.report.summary).toBe('Frozen fixture T01: Sprint entity and validation')
+      expect(submission.report.filesChanged.slice().sort()).toEqual(
+        Object.keys(AXIOM_T01_FIXTURE_FILES).sort()
+      )
+      expect(readFileSync(path.join(attemptDir, 'last-message.md'), 'utf8')).toContain(
+        submission.report.summary
+      )
+      await expect
+        .poll(() => inspect().tasks.find((task) => task.task_id === binding.task_id)?.stage, {
+          timeout: 480_000
+        })
+        .toBe('VERIFIED')
+      const verified = inspect()
+      expect(verified.verification).toHaveLength(1)
+      expect(verified.verification[0]).toMatchObject({
+        candidateId: submission.candidateId,
+        status: 'PASS',
+        claimCount: 1,
+        verdictDetail: { verdict: 'PASS', diff: { scopeViolations: [] } }
+      })
+      const stages = verified.audits
+        .filter((row) => row.event === 'task.stage' && row.object_id === binding.task_id)
+        .map((row) => z.object({ stage: z.string() }).parse(JSON.parse(row.after!)).stage)
+      expect(stages.indexOf('RUNNING')).toBeGreaterThanOrEqual(0)
+      expect(stages.indexOf('SUBMITTED')).toBeGreaterThan(stages.indexOf('RUNNING'))
+      expect(stages.indexOf('VERIFIED')).toBeGreaterThan(stages.indexOf('SUBMITTED'))
+      const started = verified.audits.find(
+        (row) => row.event === 'attempt.started' && row.object_id === attemptId
+      )!
+      expect(JSON.parse(started.after!)).toMatchObject({
+        channel: 'headless',
+        posture: 'headless-sandboxed',
+        combination: {
+          requested: {
+            harness: 'claude',
+            channel: 'headless',
+            model: AXIOM_TEST_CLAUDE_MODEL,
+            effort: 'medium',
+            claudeConfigDir: 'selected-account',
+            settingSources: [],
+            syncedSkills: 'off',
+            bundledSkills: 'off',
+            plugins: 'off',
+            mcp: 'strict'
+          },
+          effective: {
+            harnessVersion: expect.stringContaining(AXIOM_TEST_CLAUDE_VERSION),
+            claudeConfigDir: { kind: 'account', path: launch.CLAUDE_CONFIG_DIR },
+            settingsSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+            mcpConfigSha256: expect.stringMatching(/^[a-f0-9]{64}$/)
+          }
+        }
+      })
+      const observed = verified.audits.filter(
+        (row) => row.event === 'attempt.launch_observed' && row.object_id === attemptId
+      )
+      expect(observed).toHaveLength(1)
+      expect(JSON.parse(observed[0]!.after!)).toMatchObject({
+        harnessVersion: AXIOM_TEST_CLAUDE_VERSION,
+        model: AXIOM_TEST_CLAUDE_MODEL,
+        permissionMode: 'acceptEdits',
+        skills: [],
+        plugins: [],
+        mcpServers: [],
+        apiKeySource: 'none'
+      })
+      const submitted = verified.audits.find(
+        (row) => row.event === 'attempt.submitted' && row.object_id === attemptId
+      )!
+      expect(JSON.parse(submitted.after!)).toMatchObject({
+        providerSessionId: `fixture-${attemptId}`,
+        usage: { input_tokens: 100, cached_input_tokens: 40, output_tokens: 25 },
+        total_cost_usd: 0.001,
+        num_turns: 1,
+        permission_denials: []
+      })
+      expect(
+        verified.audits.filter(
+          (row) => row.event === 'attempt.launch_mismatch' && row.object_id === attemptId
+        )
+      ).toEqual([])
+      const candidate = verified.candidates.find((row) => row.id === submission.candidateId)!
+      expect(git(['-C', clone, 'ls-tree', '-r', '--name-only', candidate.commitSha])).not.toMatch(
+        /^\.axiom\//m
+      )
+    },
+    {
+      provider: 'claude',
+      taskIds: ['T01'],
+      holdWorkers: true,
+      runVerification: true,
+      maxAttempts: 1
+    }
   )
 })

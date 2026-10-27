@@ -20,6 +20,7 @@ import { prepareCodexWorkerLaunchHome } from '../../codex/codex-worker-launch-ho
 import { headlessWorkerCombination } from './worker-launch-combination'
 import { observeSkillPackage } from '../../skills/skill-package-identity'
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../../codex-accounts/host-codex-managed-home-ownership'
+import * as claudeVersion from './claude-worker-version'
 
 let f: ReturnType<typeof planned>
 let root: string
@@ -32,6 +33,7 @@ beforeEach(async () => {
   homePath = path.join(root, 'account home')
   userHomePath = path.join(root, 'user')
   await mkdir(homePath)
+  await mkdir(path.join(root, 'attempt'))
   await mkdir(path.join(userHomePath, '.agents', 'skills', 'allowed'), { recursive: true })
   await writeFile(
     path.join(userHomePath, '.agents', 'skills', 'allowed', 'SKILL.md'),
@@ -47,6 +49,7 @@ beforeEach(async () => {
   vi.spyOn(files, 'prepareHeadlessAttemptFiles').mockResolvedValue(path.join(root, 'attempt'))
   vi.spyOn(version, 'fingerprintCodex').mockReturnValue(root)
   vi.spyOn(version, 'probeCodexVersion').mockResolvedValue('codex-cli test')
+  vi.spyOn(claudeVersion, 'claudeWorkerVersion').mockResolvedValue('2.1.309')
   f = planned(fixture())
   f.controller.startExecution(f.missionId)
   provider = 'codex'
@@ -70,11 +73,12 @@ async function launch(home = true, refusal = false) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake kernel only consumes the worktree id and path.
   const worktree = { worktree: { id: 'wt-created', path: root } } as CreateWorktreeResult
   const runtime = {
+    resolveClaudeHomeForWorkerLaunch: async () => (home ? homePath : null),
     createManagedWorktree: vi.fn(async () => worktree),
     requireStore: (): ReturnType<OrcaRuntimeService['requireStore']> => {
       const store = {
         getSettings: () => ({
-          agentCmdOverrides: { codex: '/fake/codex' },
+          agentCmdOverrides: { codex: '/fake/codex', claude: '/fake/claude' },
           codexAccountHomeAllowlist: allowlist
         })
       }
@@ -168,12 +172,44 @@ it('settles resolver refusals as launch failures', async () => {
   expect(events('attempt.launch_failed')).toHaveLength(1)
   expect(f.store.getTaskStage(attempt.taskId)?.stage).toBe('READY')
 })
-it('records TUI attempts without a harness adapter', async () => {
+it('launches Claude headlessly through its selected account and records pinned files', async () => {
   provider = 'claude'
+  const { command } = await launch()
+  expect(command).toContain('CLAUDE_CONFIG_DIR=')
+  expect(command).toContain('--setting-sources=')
+  expect(events('attempt.headless_prepared')).toMatchObject([
+    {
+      after: {
+        combination: {
+          requested: { harness: 'claude', channel: 'headless', settingSources: [], mcp: 'strict' },
+          effective: {
+            claudeConfigDir: { kind: 'account', path: homePath },
+            settingsSha256: expect.stringMatching(/^[a-f0-9]{64}$/)
+          }
+        }
+      }
+    }
+  ])
+})
+it('refuses a Claude headless launch without a managed account and returns the Task to READY', async () => {
+  provider = 'claude'
+  const { command, attempt } = await launch(false)
+  expect(command).toBeUndefined()
+  expect(events('attempt.started')).toEqual([])
+  expect(JSON.stringify(events('attempt.launch_failed'))).toContain('No Claude account selected')
+  expect(f.store.getTaskStage(attempt.taskId)?.stage).toBe('READY')
+})
+it('records TUI attempts without a harness adapter', async () => {
+  provider = 'antigravity'
   await launch(false)
   expect(events('attempt.started')[0].after).toMatchObject({
     combination: {
-      requested: { harness: 'claude', channel: 'tui', model: 'policy-default', effort: 'medium' },
+      requested: {
+        harness: 'antigravity',
+        channel: 'tui',
+        model: 'policy-default',
+        effort: 'medium'
+      },
       effective: null,
       adapter: 'none'
     }

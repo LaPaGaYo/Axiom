@@ -98,7 +98,7 @@ canonical manifest 无空白、对象键序固定，保留数组顺序，id = `c
 
 AgentFactory.build 接受 worker 的 missionId/taskId/contextPackageId，或 planner 的 missionId/goalRevisionId；引用必须存在且归属匹配。ContextPackage 是输入，不由 Factory 创建。主机安装集合由注入的 listInstalledProviders 提供，Control Plane 注入 detectInstalledAgentsWithShellPathHydration；此处不新增认证探测或网络调用。
 
-执行身份由 provider（harness）、model 与 endpointProfile 组成。D57 的允许清单在 `src/main/axiom/agent-factory/certified-providers.ts` 的 `CERTIFIED_PROVIDER_COMBOS`；V1 只有下列四个组合，`endpointProfile` 均为 `subscription`（用户在 harness 中已有的登录或自行配置），不存储凭据。当前状态均为 `provisional`：D57 的 2026-10-20 修订记录真实 Codex smoke 未产出提案（目录信任阻塞）；D58 的 2026-10-25 修订按 D82 ③ 选择 Worker headless exec，Planner 保持原通道；M3-08 实施 Codex 通道，真实 provider 认证仍待宿主证据。D49 测试通过不认证真实组合；后续逐组合按 D57 当前通道补宿主 evidence，Codex Worker 证明 stdin prompt → 沙盒执行 → exit-code → 宿主 Submission，terminal fallback 证明 preamble/CLI 通道，再改为 `certified`；V1 出口前所有用到的组合必须完成认证。
+执行身份由 provider（harness）、model 与 endpointProfile 组成。D57 的矩阵在 `src/main/axiom/agent-factory/certified-providers.ts` 的 `CERTIFIED_PROVIDER_COMBOS`；`endpointProfile` 均为 `subscription`，不存储凭据。D82 的 V1 真实 provider 为 Codex 与 Claude Code，均支持 planner、worker；保留的 Antigravity/OpenCode 条目不扩大 V1 范围。当前只有 Codex 为 `certified`（宿主证据见 `.axiom-work/verifications/M3-08-smoke-real-codex.md`），Claude 保持 `provisional`，由 verifier 的真实宿主 smoke 决定认证。确定性 fake 测试不认证真实组合。Claude Worker 的 `maxRisk: high` 以 OS sandbox 启用且 `failIfUnavailable: true` 为前提（D57 ④）；无 OS sandbox 的组合不得据此取得 high 风险资格。
 
 | Provider | 模型选择方式 | Tier | 角色 | 最高风险 |
 |---|---|---|---|---|
@@ -107,9 +107,11 @@ AgentFactory.build 接受 worker 的 missionId/taskId/contextPackageId，或 pla
 | antigravity | launch-arg | B | worker | medium |
 | opencode | harness-default | B | worker | low |
 
-先按 TUI_AGENT_CONFIG 的顺序规范安装集合，排除 claude-agent-teams（Claude launch mode）。只检查矩阵内或已安装的 harness，按首个命中原因过滤：`not_installed`（矩阵内但未安装）→ `no_account`（macOS / Linux 的 Codex 没有选中的受管账号目录；D83）→ `not_certified`（已安装但不在矩阵）→ `disallowed`（routing.disallowedProviders）→ `tier_too_low`（角色不在组合 roles、风险超过 maxRisk，或 highRiskTier=A 时高风险选择了非 A）。Planner 的筛选风险固定为 high；A 级仍由 structured-session enum 的 codex、claude 定义。filtered 按上述原因顺序排列，同原因保持配置顺序；未安装且未登记的 harness 不进入 filtered。无候选返回 no_eligible_provider，附 installed/filtered，Factory 不写 spec 或 audit；含 no_account 时错误提示指向 Settings › Accounts。Scheduler 捕获拒绝后写 `task.admission_refused {installed, filtered}`，Task 保持未准入，便于 UI 与验收审计。Windows / WSL 保留现有账号路径。
+先按 TUI_AGENT_CONFIG 的顺序规范安装集合，排除 claude-agent-teams（Claude launch mode）。只检查矩阵内或已安装的 harness，按首个命中原因过滤：`not_installed` → `no_account`（macOS/Linux 的 Codex 或 Claude 未选择受管账号；D83）→ `not_certified`（不在矩阵，或 `routing.requireCertified=true` 且 status 不是 certified）→ `disallowed` → `tier_too_low`（角色不在组合 roles、风险超过 maxRisk，或 highRiskTier=A 时高风险选择非 A）。Planner 的筛选风险固定为 high。filtered 按原因顺序排列，同原因保持配置顺序。无候选返回 no_eligible_provider，附 installed/filtered；配置的角色 provider 被过滤时还附 roleProviderUnavailable。Factory 不写 spec 或 audit；no_account 的 provider-specific 提示指向 Settings › Accounts。Scheduler 沿用 `task.admission_refused`，Task 保持 READY。Windows / WSL 保留既有路径。
 
-RulesEngine 只对过滤后的闭集排序：preferredProviders 首次匹配得分 100 − index，然后 A 在 B 前，同分保持配置顺序。preferredProviders / disallowedProviders 只在矩阵范围内生效，偏好不能放行未认证的 harness（包括 gemini、continue）。所有 verb 都从输入集合取结果，Factory 再检查返回值是 eligible 集合的完整排列。model = routing.models[provider] 或 policy-default；OpenCode 使用 harness 自身默认模型，V1 不新增模型配置物化。每份 AgentSpec 固定 endpointProfile=subscription；Worker 高风险 effort=high，否则 medium，Planner 保持 medium。selection 持久化 installed/filtered/ranked/chosen/rationale，并写入 agent_spec.created 审计；ranked 是后续 fallback 顺序。
+RulesEngine 只对 eligible 闭集排序：`routing.roles[role].provider` 最高，其次 Worker 的跨 provider 偏好，再次 preferredProviders（100 − index），然后 A 在 B 前，同分保持配置顺序。角色配置不能绕过过滤；不可用原因写入 selection 与 `agent_spec.created.roleProviderUnavailable`。`routing.crossProvider` 默认 true：Worker 以 active APPROVED PlanRevision 的 `provenance.actor` 为 planner provider，否则回退最新 Planner AgentSpec（同秒按 audit sequence），否则为空；有至少两个候选时优先不同 provider，只有一个时允许相同 provider。显式角色 provider 优先。selection.rationale 说明应用或回退原因，`agent_spec.created.crossProvider` 与执行组合保存 `{plannerProvider, applied}`。Factory 仍检查 DecisionEngine 返回的是 eligible 的完整排列。
+
+`routing.roles` 默认 `{}`，含可选 planner/worker `RoleRouting = {provider?, model?, effort?}`；`routing.requireCertified` 默认 false，保留 provisional 的开发流程。model 按 `roles[role].model ?? routing.models[provider] ?? 'policy-default'` 解析；不硬编码模型默认值，policy-default 使用订阅 harness 的默认模型。effort 支持 low/medium/high/xhigh，按角色显式值优先，否则 Planner=high、high 风险 Worker=high、其余 Worker=medium。OpenCode 仍使用 harness 默认模型。selection 的新增字段可选，历史 AgentSpec 可继续读取；routing 新字段有默认值，没有 RPC 参数形状变更。
 
 AgentSpec 的预算只含本次 Attempt 的 maxRuntimeMinutes（Task → Mission → 45）与可选 maxTokens（Task → Mission），不含 maxAttempts。worker 复制验收标准、scope.allowedPaths 写权限和首段路径去重排序后的 capabilities；planner 固定 planning、空写权限与 planner-worktree。规范 JSON 按 schema 键序生成并 sha256 寻址；INSERT OR IGNORE 只在插入时追加 agent_spec.created，两者同一事务。Factory 不改 Task stage、readiness、权限许可或 attempt_bindings，不创建 worktree、不启动 Worker。
 
@@ -192,7 +194,7 @@ HEAD 验证完成后、构造 WorkerStartParams 之前，Worker launcher 重新�
 
 Worker 的 `attempt.started`、`attempt.start_unknown`、receipt 后的 `attempt.launch_failed` 在既有 after 字段中增加 `baseline: {kind, reason?, candidateId?, commitSha?}`；发生重开时增加 `orcaTaskReopened: true`。receipt 前的异常审计也保留已解析的 baseline 与已完成的重开标记，message 仍脱敏。
 
-terminal fallback 只有显式配置 `routing.models[provider]`（AgentSpec 的 `model !== 'policy-default'`）时，launcher 才同时传 `model` 和 `reasoning.effort`；`reasoning.effort` 仅在此时生效。`policy-default` 时两者都省略，使用 provider 自身配置的模型与推理设置，避免内核拒绝 `--effort` 未配 `--model` 的组合。
+terminal fallback 只有 AgentSpec 的 `model !== 'policy-default'` 时，launcher 才同时传 `model` 和 `reasoning.effort`；`policy-default` 时两者都省略，避免内核拒绝 `--effort` 未配 `--model` 的组合。Claude Mission Planner 的 structured channel 另由下述 pins 直接消费 per-role model/effort。
 
 `timeoutMs = resolveWorkerStartReadinessTimeoutMs(undefined)`（当前 60,000ms）只限制 readiness wait；Attempt runtime cap 由 M2-08 按 admission 的 `created_at` 和 Task spec / Mission policy 预算执行。`ready` 保持 RUNNING；`failed` 经 M2-08 的共享 settlement 走 RUNNING → NEEDS_FIX → READY；预算耗尽则 NEEDS_FIX → BLOCKED (`retry_budget_exhausted`)；`outcome_unknown` 保持 RUNNING，交 M2-08。dispatch 铸造前抛错时保留 NULL binding，记录经脱敏的失败 message，按同一重试规则转 stage。未绑定的读投影为 LAUNCH_PENDING；M2-08 已接入该状态与 START_UNKNOWN 的恢复及 NEEDS_FIX → READY。
 
@@ -221,7 +223,7 @@ ContextBuilder 的 planner 形式为 `{missionId,role:'planner',goalRevisionId}`
 2. 仓库规则，沿用 Worker 的 `readRepositoryRules`，读取本次基线的根 AGENTS.md / CLAUDE.md，分别脱敏并限制为 16 KiB，缺失省略。
 3. `z.toJSONSchema(PlanProposalSchema.omit({provenance:true}))` 生成的 JSON Schema，以及唯一 Task id、合法边端点、V1 只允许 INTEGRATED（VERIFIED 边报 threshold_not_supported）、无环、至少一个 root、合法 milestoneId、kind/risk/maxAttempts 与可选 role 标签规则。
 4. 两个 Task、一条边的最小示例。
-5. `axiom plan propose --mission <id> --attempt {{attemptId}} --file <proposal.json> --json` 配方，要求 worktree 保持 clean，并明确将 proposal JSON 写到 worktree 外。
+5. Codex 保留 `axiom plan propose --mission <id> --attempt {{attemptId}} --file <proposal.json> --json` 配方，proposal JSON 写到 worktree 外；Claude 使用同一精确命令 prefix 的 `--file /dev/stdin --json` quoted heredoc 配方，不需要 Write。两者均要求 worktree 保持 clean。
 
 Planner 无 PlanRevision，因此只持久化 `context_package_manifest` 与 `context_package_render` 两个内容寻址 Artifacts，**不插入 context_packages**（其 plan_revision_id 为 NOT NULL）。binding.contextPackageId 为 render Artifact 的 `art_…` id；launcher 用 `artifacts.read` 取模板。preamble 由 preambleBuilder 交付时只替换 `{{attemptId}}`，D73 之后不含任何凭据。Planner dispatch 在该回调交付 preamble 前绑定，以支持快速 provider 在 readiness receipt 返回前提交。
 
@@ -239,7 +241,7 @@ M2 之后：D58 解决真实 Planner 通道/目录信任与权限映射；M3 复
 
 ### Headless Worker（M3-08；D82 ③ / D58 / D63）
 
-macOS / Linux 的 Codex Worker 默认走 `channel=headless`、`posture=headless-sandboxed`；Planner、其他 provider 与 Windows 保持现有 terminal 路径，Worker fallback 审计为 `channel=tui`、`posture=tui-bypass`。这不代表真实 provider 已认证。M3-08e 通过只读 runtime seam 解析账号目录，按 D83 布置后在包装壳的 `/usr/bin/env` 参数中显式设置 `CODEX_HOME`；系统默认与镜像目录保留当前行为。
+macOS / Linux 的 Codex 与 Claude Worker 走 `channel=headless`、`posture=headless-sandboxed`；其他 provider 与 Windows 保持既有路径，Worker fallback 审计为 `channel=tui`、`posture=tui-bypass`。认证状态独立于 adapter 存在。Codex 通过既有只读 home seam 与 D83 布置逻辑设置 `CODEX_HOME`；Claude 使用 registration 的 launch-purpose resolver，且解析结果必须等于被选中 managed profile 的 home，不能回退到用户 system home。未选账号或 system fallback 抛 `no_account`。
 
 `execution/headless-worker-command.ts` 通过既有 Codex executable resolver 或 `agentCmdOverrides.codex` 选可执行文件；不调用 shell 的 codex function。命令为 `exec --json --color never -s workspace-write -c sandbox_workspace_write.network_access=false -c approval_policy="never" -c features.hooks=false -C <worktree> -o <attemptDir>/last-message.md [model/effort] -`。model/effort 使用现有 option catalog；policy-default 省略 model，effort 仍来自 AgentSpec。prompt 从 `<attemptDir>/prompt.md` 重定向到 stdin，argv/audit 不含 prompt 内容。`<userData>/axiom/attempts/<attemptId>/` 是 worktree 外的宿主目录，保存 prompt、launch.json（基线 commit / branch / worktree binding）、events.jsonl、last-message.md 与 exit-code；worktree 的 `.axiom/prompt.md` 是相同 prompt 的恢复副本。context 被压缩后，Worker 必须先重读该文件。
 
@@ -250,6 +252,18 @@ D14 service-only `controlPlane.headless.prepare(dispatchId)` 在 dispatch 创建
 headless `snapshotCandidate` 使用临时私有 Git index，排除 `.axiom/`，不会删除已有 index.lock；commit-tree + 带旧值检查的 update-ref 只写 Attempt branch，并以空 hooksPath 禁用 hooks。filesChanged 从 launch baseline 到 Candidate commit 的 Git diff 计算。后续 Candidate / Submission / VerificationRun transaction、transcript archive 与 release 沿用现有实现，Worker 报告仍不等于独立验证。
 
 非零退出、缺报告、非法报告或非法 Artifact 通过 `settleAttemptWithoutSubmission` 处理。M3-08e 在失败结算后沿用 2 秒 grace 与 E2E hold，经 `releaseLocalWorker` 释放包装壳；恢复对账为满 60 秒且仍保留终端资源的失败 headless Attempt 补释放，即使其 Task 已完成。audit 保存 exitCode、脱敏 lastError / lastMessageExcerpt、reportError（适用时）及 D68 `settlement.kind`：无可识别 JSON event 或配额/认证错误为 interrupted，其他为 failed；重连 error 行本身不阻止有效成功报告。events 跳过未知类型和非 JSON 行，错误优先取 turn.failed.error.message，否则取最后 error.message；thread.started.thread_id 记为 providerSessionId，最后一次 turn.completed.usage 的数值原样记录，不累加事件、不把 cached/reasoning 重复加到 input/output。本任务增加 D68 退出分类与证据，复用现有 settlement 的 retry / attemptCount 规则；没有在此实现独立中断预算、退避或 provider fallback。
+
+### Claude channels and invocation pins（M3-08b）
+
+Channel A 的 Claude Worker 使用既有 executable resolver 或单 token `agentCmdOverrides.claude`，argv 为 `-p --output-format stream-json --verbose --permission-mode acceptEdits --permission-prompts none --setting-sources= --settings <attemptDir>/claude-settings.json --strict-mcp-config --mcp-config <attemptDir>/claude-mcp.json --disallowedTools <external-tools> [--model ...] [--effort ...]`。prompt 走同一个 PTY wrapper 的 stdin，不传 max-turns。model/effort 使用 `CLAUDE_SESSION_OPTION_CATALOG`，policy-default 不传 model。协议要求先读 worktree 根 AGENTS.md/CLAUDE.md，且由宿主退出结算，不需要 Worker 调用 axiom CLI。
+
+Attempt 的两个 Claude JSON 文件以 0600 写入。settings 允许文件工具与 Bash，拒绝 WebFetch/WebSearch、额外 Agent/Task、跨 Agent 消息、Computer、worktree 与定时任务等 external-effect 工具；启用 sandbox、failIfUnavailable、autoAllowBashIfSandboxed，关闭 allowUnsandboxedCommands；网络 `allowedDomains: []`、`strictAllowlist: true`、`allowLocalBinding: false`，filesystem.allowWrite 仅 worktree 与 Attempt scratch。`syncClaudeAiSkills`、`syncClaudeAiPlugins` 为 false，`enabledPlugins: {}`，不生成 hooks/env。MCP 文件默认 `{mcpServers:{}}`；非空 allowlist 只从账号 home 的 `.claude.json` 复制选中的 mcpServers，缺项记 `mcp_server_missing:<name>`。不读凭据。
+
+子进程以 `CLAUDE_CONFIG_DIR` 指向账号 home，并将 `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`、`DISABLE_AUTOUPDATER`、`DISABLE_TELEMETRY`、`DISABLE_ERROR_REPORTING`、`DISABLE_BUG_COMMAND`、`CLAUDE_CODE_DISABLE_BUNDLED_SKILLS` 固定为 1。requested combination 保存 model/effort、allowlist、settingSources=[]、synced/bundled skills off、plugins off、MCP strict 与跨 provider 结果；effective 保存按 binary fingerprint 缓存的 version、账号路径、platform-derived credentials 种类（不读内容）、settings/MCP SHA-256、账号 skills 的路径与 digest。版本未知和 skill 缺项均留 mismatch 证据。
+
+Claude `system/init` 首次到达即幂等追加 `attempt.launch_observed {harnessVersion,model,permissionMode,skills,plugins,mcpServers,apiKeySource}`，不必等退出。超出请求的 skills/plugins/MCP、permission mode/model/version 偏差另记 `attempt.launch_mismatch`。账号 home 的 profile-linked skills 在 M3-08f 前仍可能出现，不能把此阶段的观察当作 home 隔离已经完成。Claude final report 只取有效 `result.result`，写入 last-message.md；Worker 自写该文件不能替代 result。error_* / is_error 即使退出 0 也失败；认证错误按 D68 interrupted。usage 保存 input_tokens、cache-read → cached_input_tokens、output_tokens，另保留 cache writes、modelUsage、total_cost_usd、num_turns 与去掉 tool_input 的 permission_denials。
+
+Channel B 的 Claude Mission Planner 通过既有 createStructuredWorkerSession 路径运行。Control Plane 在 dispatch/session id 上注册 process-local pins：settingSources=[]、allowlist skills、0600 planner-settings.json、SDK default（Orca ask）permission mode，无 sandbox。settings 只允许 Read/Grep/Glob/LS、git log/diff/show 与 preamble 的精确 `axiom plan propose --mission <id> --attempt <dispatchId> --file` prefix；拒绝编辑、写文件与 web 工具，并关闭同步 skills/plugins。Claude 专用 recipe 用 `/dev/stdin` heredoc 提供提案，避免要求被禁止的 Write。saved model/effort/settings 不能覆写 Mission pins。prompt registry 对该 session 拒绝注册，既有 permission callback 返回 denySafeResult，并记录不含 tool input 的 `attempt.permission_denied {toolName,summary}`。release/失败清除 pins；进程重启不 resume Mission session，故 registry 无须持久化。普通 Claude 会话不变，Codex Planner 的 permission mode 仍来自用户保存选择，是另一个 follow-up。宿主明确不支持 structured create 时沿用内核 terminal fallback；SDK create 错误不会静默降级。
 
 ### Recovery（M2-08）
 
@@ -685,7 +699,7 @@ M2 出口证据以 [M2-exit-e2e.md](../review-evidence/axiom-m2/M2-exit-e2e.md) 
 | 后续责任 | M2 出口边界 |
 |---|---|
 | M2 出口复验 | M2-12 已合入；verifier 运行本候选的出口与五个既有宿主 spec，填写证据并决定验收；不再保留已修复的审计/boot 缺口为待办 |
-| D58（ACCEPTED）/ D57 | 按 B 首选、A 后备实施 Codex/Claude 执行通道与 AgentSpec 权限映射，补真实 provider smoke 与认证。当前仅 D49 确定性 provider 已有提交实证；不能宣布“三 provider”完成 |
+| D58（ACCEPTED）/ D57 / D82 | Worker channel A headless、Claude Planner channel B structured 已接入；Codex 已有认证宿主证据，Claude provisional 仍待 verifier smoke。V1 真实 provider 范围为 Codex + Claude Code |
 | M3 | 独立 VerificationService、Candidate worktree、deterministic verdict、Reviewer advisory、失败证据与 NEEDS_FIX 重试；复审 DEF-4/5/6/9/10 对应项 |
 | M4 | 串行 Integration、Approval、Delivery、完成门与全对象恢复；集成基线在此之前不前进 |
 | M5 / M6 | 替代 PlanRevision、完整 replanning / 决策模型；远端扩展与 mixed-version 验证 |

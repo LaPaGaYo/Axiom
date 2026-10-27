@@ -57,7 +57,7 @@ export async function acquireClaudeSession({
   callbacks: ClaudeAcquireCallbacks
 }): Promise<AgentSessionAcquisition> {
   const sessionId = input.identity.sessionId
-  const prompts = new ClaudePromptRegistry()
+  const prompts = new ClaudePromptRegistry(sessionId)
   const { previous, attempt } = acquisitions.start(sessionId, prompts)
   let unbindReadingControl: (() => void) | undefined
   let liveSession: ClaudeSession | null = null

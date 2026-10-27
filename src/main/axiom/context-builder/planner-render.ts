@@ -7,10 +7,21 @@ import { markdownSection } from './render'
 import { readRepositoryRules } from './repository-rules'
 import { redactContext } from './redaction'
 
+/** Shared with the Claude permission rule so its prefix cannot drift from the printed recipe. */
+export function plannerProposalCommandPrefix(missionId: string, attemptId: string): string {
+  return `axiom plan propose --mission ${missionId} --attempt ${attemptId} --file`
+}
+
 export async function buildPlannerContext(
   store: AxiomStore,
   artifacts: ArtifactStore,
-  p: { missionId: string; goalRevisionId: string; repositoryRef?: string; tokenBudget?: number }
+  p: {
+    missionId: string
+    goalRevisionId: string
+    repositoryRef?: string
+    tokenBudget?: number
+    provider?: string
+  }
 ) {
   const mission = store.getMission(p.missionId)
   const goal = store.getGoalRevision(p.goalRevisionId)
@@ -76,12 +87,24 @@ export async function buildPlannerContext(
     ['Minimal example', JSON.stringify(example, null, 2)],
     [
       'Planner proposal recipe',
-      [
-        `axiom plan propose --mission ${mission.id} --attempt {{attemptId}} --file <proposal.json> --json`,
-        'do not create, edit or commit any file in this worktree except the proposal JSON you pass with --file; the proposal is read from --file and the worktree must stay clean',
-        'Write the proposal JSON outside the worktree (for example in a temporary directory) so git status --porcelain is empty.',
-        'This is a read-only planning Attempt: permissions.write = []. Your only output channel is axiom plan propose.'
-      ].join('\n')
+      (p.provider === 'claude'
+        ? [
+            'Replace the example JSON below with your complete PlanProposal and run this single Bash command. Keep the quoted heredoc delimiter so the shell does not expand JSON content.',
+            '```bash',
+            `${plannerProposalCommandPrefix(mission.id, '{{attemptId}}')} /dev/stdin --json <<'AXIOM_PLAN_JSON'`,
+            JSON.stringify(example, null, 2),
+            'AXIOM_PLAN_JSON',
+            '```',
+            'Do not create, edit or commit any file. The CLI reads the proposal JSON from stdin; the worktree must stay clean.',
+            'This is a read-only planning Attempt: permissions.write = []. Your only output channel is axiom plan propose.'
+          ]
+        : [
+            `${plannerProposalCommandPrefix(mission.id, '{{attemptId}}')} <proposal.json> --json`,
+            'do not create, edit or commit any file in this worktree except the proposal JSON you pass with --file; the proposal is read from --file and the worktree must stay clean',
+            'Write the proposal JSON outside the worktree (for example in a temporary directory) so git status --porcelain is empty.',
+            'This is a read-only planning Attempt: permissions.write = []. Your only output channel is axiom plan propose.'
+          ]
+      ).join('\n')
     ]
   ].map(([section, content]) => ({
     section,

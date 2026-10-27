@@ -1,14 +1,15 @@
 import { CodexAccountRequiredError } from '../../codex/codex-home-paths'
 import { readCodexAccountHomeAllowlist } from '../../codex/codex-worker-launch-home'
-import { headlessWorkerCombination } from './worker-launch-combination'
+import { headlessWorkerCombination, headlessClaudeCombination } from './worker-launch-combination'
 import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
 import type { AgentSpec } from '../../../shared/axiom-contract/agent-spec'
 import type { AuditEvent } from '../../../shared/axiom-contract/mission-objects'
 import type { AdmittedAttempt } from '../scheduler/scheduler'
 import type { AttemptLauncherDependencies } from './attempt-launcher'
 import { buildHeadlessWorkerCommand } from './headless-worker-command'
-import { prepareHeadlessAttemptFiles } from './headless-attempt-files'
+import { prepareClaudeAttemptFiles, prepareHeadlessAttemptFiles } from './headless-attempt-files'
 import { buildHeadlessTerminalCommand } from '../../runtime/rpc/methods/orchestration/worker/control-plane-worker-start'
+import { ClaudeAccountRequiredError } from './claude-worker-home'
 
 export function createHeadlessWorkerLaunch(input: {
   deps: AttemptLauncherDependencies
@@ -28,13 +29,18 @@ export function createHeadlessWorkerLaunch(input: {
         worktree: worktree.path,
         worktreeId: worktree.id,
         branch: attempt.branch,
+        provider: spec.provider,
         prompt: input.render.replaceAll('{{attemptId}}', dispatchId)
       })
       const settings = deps.runtime.requireStore().getSettings()
       const allowlist = readCodexAccountHomeAllowlist(settings)
-      const home = await deps.codexWorkerHome?.()
-      if (!home || home.kind !== 'account') {
-        throw new CodexAccountRequiredError()
+      const claude = spec.provider === 'claude'
+      const home = claude ? undefined : await deps.codexWorkerHome?.()
+      const homePath = claude
+        ? await deps.runtime.resolveClaudeHomeForWorkerLaunch?.()
+        : home?.homePath
+      if (claude ? !homePath : !home || home.kind !== 'account') {
+        throw claude ? new ClaudeAccountRequiredError() : new CodexAccountRequiredError()
       }
       const launch = buildHeadlessWorkerCommand({
         provider: spec.provider,
@@ -42,18 +48,29 @@ export function createHeadlessWorkerLaunch(input: {
         effort: spec.reasoning.effort,
         worktree: worktree.path,
         attemptDir,
-        commandOverride: settings.agentCmdOverrides?.codex,
-        accountHomePath: home.kind === 'account' ? home.homePath : undefined
+        commandOverride: claude
+          ? settings.agentCmdOverrides?.claude
+          : settings.agentCmdOverrides?.codex,
+        accountHomePath: homePath ?? undefined
       })
       if (!launch) {
         throw new Error('Headless builder unavailable')
       }
-      const { combination, reasons } = await headlessWorkerCombination(
-        spec,
-        home,
-        allowlist,
-        launch.argv[0]
-      )
+      const { combination, reasons } =
+        claude && homePath
+          ? await headlessClaudeCombination({
+              spec,
+              homePath,
+              allowlist,
+              command: launch.argv[0],
+              files: await prepareClaudeAttemptFiles({
+                directory: attemptDir,
+                worktree: worktree.path,
+                accountHomePath: homePath,
+                allowlist
+              })
+            })
+          : await headlessWorkerCombination(spec, home!, allowlist, launch.argv[0])
       if (
         !deps.store.bindAttemptDispatch(attempt.taskId, attempt.seq, dispatchId) &&
         deps.store.getAttemptBinding(attempt.taskId, attempt.seq)?.dispatchId !== dispatchId

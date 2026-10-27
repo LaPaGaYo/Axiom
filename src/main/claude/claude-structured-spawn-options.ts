@@ -47,9 +47,22 @@ export type ClaudeStructuredSpawnOptions = {
  * the SDK's types, not the installed binary's: one that binary rejects fails its start.
  */
 export function claudeStructuredSpawnOptions(input: {
-  launch: Pick<ClaudeStructuredLaunch, 'options' | 'resumesTranscript'>
+  launch: Pick<ClaudeStructuredLaunch, 'options' | 'resumesTranscript' | 'missionPlanner'>
   saved: Readonly<Record<string, string>> | undefined
 }): ClaudeStructuredSpawnOptions {
+  if (input.launch.missionPlanner) {
+    // Saved Fast can replace the whole settings file; neither it nor saved model choices may
+    // rewrite a Control Plane invocation. Absence of a model deliberately means harness default.
+    const { model, effort } = input.launch.options
+    const options = new Map<string, string>()
+    if (model) {
+      options.set('model', model)
+    }
+    if (effort) {
+      options.set('effort', effort)
+    }
+    return { sdkOptions: input.launch.options, options, fastModeAtStart: false }
+  }
   const saved = restoredClaudeStructuredSessionOptions(input.saved)
   const options = new Map<string, string>()
   let sdkOptions: ClaudeStructuredSdkOptions = { ...input.launch.options }

@@ -60,7 +60,10 @@ describe('certified provider selection', () => {
       ])
       expect(rank).toHaveBeenCalledWith({
         candidates: ['claude'],
-        context: { preferredProviders: preferred, filtered: selection.filtered }
+        context: expect.objectContaining({
+          preferredProviders: preferred,
+          filtered: selection.filtered
+        })
       })
     }
   )
@@ -175,7 +178,7 @@ it.each(['planner', 'worker'] as const)(
       role,
       'high',
       makeEngine(),
-      false
+      (provider) => provider !== 'codex'
     )
     expect(selection.chosen).toBe('claude')
     expect(selection.filtered).toEqual([
@@ -185,7 +188,193 @@ it.each(['planner', 'worker'] as const)(
       { provider: 'gemini', reason: 'not_certified' }
     ])
     expect(
-      selectProvider(['claude'], routing, role, 'high', makeEngine(), false).filtered
+      selectProvider(
+        ['claude'],
+        routing,
+        role,
+        'high',
+        makeEngine(),
+        (provider) => provider !== 'codex'
+      ).filtered
     ).toContainEqual({ provider: 'codex', reason: 'not_installed' })
   }
 )
+
+describe('role and cross-provider routing', () => {
+  it.each([
+    { available: ['codex'], reason: 'not_installed' },
+    { available: ['codex', 'claude-agent-teams'], reason: 'not_certified' }
+  ])('refuses a role launch mode with $reason precedence', ({ available, reason }) => {
+    const selection = selectProvider(
+      available,
+      { ...routing, roles: { worker: { provider: 'claude-agent-teams' } } },
+      'worker',
+      'high',
+      makeEngine()
+    )
+    expect(selection.chosen).toBe('codex')
+    expect(selection.installed).toEqual(['codex'])
+    expect(selection.roleProviderUnavailable).toBe(reason)
+    expect(selection.filtered).toContainEqual({ provider: 'claude-agent-teams', reason })
+  })
+
+  it.each(['planner', 'worker'] as const)('prefers the explicit %s provider', (role) => {
+    const selection = selectProvider(
+      ['claude', 'codex'],
+      { ...routing, roles: { [role]: { provider: 'codex' } }, preferredProviders: ['claude'] },
+      role,
+      'high',
+      makeEngine()
+    )
+    expect(selection.ranked).toEqual(['codex', 'claude'])
+    expect(selection.rationale).toContain('role provider')
+  })
+
+  it('prefers a different Worker provider over preferredProviders', () => {
+    const selection = selectProvider(
+      ['claude', 'codex'],
+      { ...routing, preferredProviders: ['claude'] },
+      'worker',
+      'high',
+      makeEngine(),
+      () => true,
+      'claude'
+    )
+    expect(selection.ranked).toEqual(['codex', 'claude'])
+    expect(selection.crossProvider).toEqual({ plannerProvider: 'claude', applied: true })
+    expect(selection.rationale).toContain('cross-provider')
+  })
+
+  it('retains configured preference among providers different from the Planner', () => {
+    const selection = selectProvider(
+      ['claude', 'codex', 'antigravity'],
+      { ...routing, preferredProviders: ['claude', 'antigravity'] },
+      'worker',
+      'low',
+      makeEngine(),
+      () => true,
+      'claude'
+    )
+    expect(selection.ranked).toEqual(['antigravity', 'codex', 'claude'])
+  })
+
+  it.each([
+    {
+      available: ['claude'],
+      crossProvider: true,
+      planner: 'claude' as const,
+      reason: 'one eligible'
+    },
+    {
+      available: ['claude', 'codex'],
+      crossProvider: false,
+      planner: 'claude' as const,
+      reason: 'disabled'
+    },
+    { available: ['claude', 'codex'], crossProvider: true, planner: null, reason: 'unknown' }
+  ])('records why cross-provider was not applied: $reason', (input) => {
+    const selection = selectProvider(
+      input.available,
+      { ...routing, crossProvider: input.crossProvider },
+      'worker',
+      'high',
+      makeEngine(),
+      () => true,
+      input.planner
+    )
+    expect(selection.chosen).toBe('claude')
+    expect(selection.crossProvider).toEqual({ plannerProvider: input.planner, applied: false })
+    expect(selection.rationale).toContain(input.reason)
+  })
+
+  it('does not apply Worker cross-provider preference to a Planner', () => {
+    const selection = selectProvider(
+      ['claude', 'codex'],
+      routing,
+      'planner',
+      'high',
+      makeEngine(),
+      () => true,
+      'claude'
+    )
+    expect(selection.chosen).toBe('claude')
+    expect(selection.crossProvider?.applied).toBe(false)
+  })
+
+  it('lets an explicit eligible role provider override cross-provider preference', () => {
+    const selection = selectProvider(
+      ['claude', 'codex'],
+      { ...routing, roles: { worker: { provider: 'claude' } } },
+      'worker',
+      'high',
+      makeEngine(),
+      () => true,
+      'claude'
+    )
+    expect(selection.chosen).toBe('claude')
+    expect(selection.crossProvider).toEqual({ plannerProvider: 'claude', applied: false })
+    expect(selection.rationale).toContain('role provider')
+  })
+
+  it('records the unavailable role provider and applies cross-provider fallback', () => {
+    const selection = selectProvider(
+      ['claude', 'codex', 'antigravity'],
+      { ...routing, roles: { worker: { provider: 'codex' } }, disallowedProviders: ['codex'] },
+      'worker',
+      'medium',
+      makeEngine(),
+      () => true,
+      'claude'
+    )
+    expect(selection.chosen).toBe('antigravity')
+    expect(selection.roleProviderUnavailable).toBe('disallowed')
+    expect(selection.filtered).toContainEqual({ provider: 'codex', reason: 'disallowed' })
+    expect(selection.crossProvider?.applied).toBe(true)
+  })
+})
+
+describe('certification and account policy', () => {
+  it('requires certified combinations before considering disallowed providers', () => {
+    const selection = selectProvider(
+      ['claude', 'codex'],
+      { ...routing, requireCertified: true, disallowedProviders: ['claude'] },
+      'worker',
+      'high',
+      makeEngine()
+    )
+    expect(selection.ranked).toEqual(['codex'])
+    expect(selection.filtered).toContainEqual({ provider: 'claude', reason: 'not_certified' })
+  })
+
+  it.each(['planner', 'worker'] as const)(
+    'filters a Claude account before certification for %s',
+    (role) => {
+      const hasAccount = vi.fn((provider: string) => provider !== 'claude')
+      const selection = selectProvider(
+        ['claude', 'codex', 'gemini'],
+        { ...routing, requireCertified: true, disallowedProviders: ['claude'] },
+        role,
+        'high',
+        makeEngine(),
+        hasAccount
+      )
+      expect(selection.chosen).toBe('codex')
+      expect(selection.filtered).toEqual([
+        { provider: 'opencode', reason: 'not_installed' },
+        { provider: 'antigravity', reason: 'not_installed' },
+        { provider: 'claude', reason: 'no_account' },
+        { provider: 'gemini', reason: 'not_certified' }
+      ])
+      expect(hasAccount.mock.calls).toEqual([['claude'], ['codex']])
+    }
+  )
+
+  it.each([
+    ['claude', 'Claude'],
+    ['codex', 'Codex']
+  ])('names the missing %s account in admission errors', (provider, name) => {
+    expect(() =>
+      selectProvider([provider], routing, 'worker', 'high', makeEngine(), () => false)
+    ).toThrow(`No ${name} account selected. Add a ${name} account in Settings › Accounts.`)
+  })
+})

@@ -30,6 +30,26 @@ const worker = {
 }
 
 describe('AgentSpec execution contract', () => {
+  it.each(['low', 'medium', 'high', 'xhigh'])('preserves %s effort in stored specs', (effort) => {
+    expect(AgentSpecSchema.parse({ ...worker, reasoning: { effort } }).reasoning).toEqual({
+      effort
+    })
+  })
+  it('preserves optional routing evidence while keeping legacy spec identities stable', () => {
+    expect(JSON.parse(canonicalAgentSpec(worker)).selection).toEqual(common.selection)
+    const selection = {
+      ...common.selection,
+      crossProvider: { plannerProvider: 'codex', applied: true },
+      roleProviderUnavailable: 'no_account'
+    }
+    expect(AgentSpecSchema.parse({ ...worker, selection }).selection).toEqual(selection)
+    expect(
+      AgentSpecSchema.safeParse({
+        ...worker,
+        selection: { ...selection, roleProviderUnavailable: 'unsupported' }
+      }).success
+    ).toBe(false)
+  })
   it('canonicalizes schema key order and preserves selection identity', () => {
     const canonical = canonicalAgentSpec(worker)
     expect(canonical).toBe(JSON.stringify(AgentSpecSchema.parse(worker)))

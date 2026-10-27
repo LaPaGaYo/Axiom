@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { recordClaudeLaunchObservation } from './claude-worker-combination'
 import { scheduleFailedWorkerRelease } from './attempt-worker-release'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { WorkerDispatchRow } from '../../runtime/orchestration/types'
@@ -19,7 +20,8 @@ import {
   headlessAttemptDirectory,
   HeadlessLaunchSchema,
   readHeadlessFile,
-  ingestHeadlessArtifacts
+  ingestHeadlessArtifacts,
+  persistClaudeLastMessage
 } from './headless-attempt-files'
 
 export function isHeadlessAttempt(
@@ -54,6 +56,26 @@ async function submitExit(runtime: OrcaRuntimeService, attemptId: string) {
     return 'unchanged'
   }
   const directory = headlessAttemptDirectory(attemptId)
+  const launch = HeadlessLaunchSchema.parse(
+    JSON.parse((await readHeadlessFile(directory, 'launch.json')) ?? '{}')
+  )
+  // Scratch files are Worker-writable. Provider authority comes from the bound spec or
+  // the kernel's durable start options (legacy Codex rows may omit agent).
+  const provider =
+    store.getAgentSpec(authority.binding.agentSpecId)?.spec.provider ??
+    z
+      .object({ agent: z.enum(['codex', 'claude']).default('codex') })
+      .parse(JSON.parse(worker?.start_options ?? '{}')).agent
+  const claudeEvents =
+    provider === 'claude'
+      ? parseHeadlessWorkerEvents(
+          (await readHeadlessFile(directory, 'events.jsonl')) ?? '',
+          'claude'
+        )
+      : undefined
+  if (claudeEvents?.claudeInit) {
+    recordClaudeLaunchObservation(store, authority.mission.id, attemptId, claudeEvents.claudeInit)
+  }
   const exit = await readHeadlessFile(directory, 'exit-code')
   if (exit === undefined || !/^-?\d+\s*$/.test(exit)) {
     return 'pending'
@@ -63,21 +85,27 @@ async function submitExit(runtime: OrcaRuntimeService, attemptId: string) {
     return 'pending'
   }
   const exitCode = Number(exit.trim())
-  const events = parseHeadlessWorkerEvents(
-    (await readHeadlessFile(directory, 'events.jsonl')) ?? ''
-  )
-  const lastMessage = (await readHeadlessFile(directory, 'last-message.md')) ?? ''
+  const events =
+    claudeEvents ??
+    parseHeadlessWorkerEvents((await readHeadlessFile(directory, 'events.jsonl')) ?? '')
+  await persistClaudeLastMessage(directory, provider, events)
+  // A Claude report must originate in its terminal result, never a Worker-written file.
+  const lastMessage =
+    provider === 'claude'
+      ? (events.lastMessage ?? '')
+      : ((await readHeadlessFile(directory, 'last-message.md')) ?? '')
   const { providerSessionId, usage } = events
   const eventAudit = {
     ...(providerSessionId ? { providerSessionId } : {}),
-    ...(usage ? { usage } : {})
+    ...(usage ? { usage } : {}),
+    ...(events.total_cost_usd !== undefined ? { total_cost_usd: events.total_cost_usd } : {}),
+    ...(events.permission_denials ? { permission_denials: events.permission_denials } : {}),
+    ...(events.modelUsage ? { modelUsage: events.modelUsage } : {}),
+    ...(events.num_turns !== undefined ? { num_turns: events.num_turns } : {})
   }
   let reportError: string | undefined
   let report: ReturnType<typeof parseHeadlessReport> | undefined
   let artifactIds: string[] = []
-  const launch = HeadlessLaunchSchema.parse(
-    JSON.parse((await readHeadlessFile(directory, 'launch.json')) ?? '{}')
-  )
   const worktree = splitWorktreeIdForFilesystem(launch.worktreeId)?.worktreePath
   if (
     !worktree ||
@@ -86,7 +114,8 @@ async function submitExit(runtime: OrcaRuntimeService, attemptId: string) {
   ) {
     throw new Error('Headless launch binding mismatch')
   }
-  if (exitCode === 0) {
+  const failedResult = provider === 'claude' && events.turnFailed
+  if (exitCode === 0 && !failedResult) {
     try {
       report = parseHeadlessReport(redactContext(lastMessage).content)
       artifactIds = await ingestHeadlessArtifacts({
@@ -101,7 +130,7 @@ async function submitExit(runtime: OrcaRuntimeService, attemptId: string) {
       reportError = redactContext(error instanceof Error ? error.message : 'Invalid report').content
     }
   }
-  if (exitCode !== 0 || !report || reportError) {
+  if (exitCode !== 0 || failedResult || !report || reportError) {
     const kind = headlessFailureKind(events)
     store.transaction('headless_exit_failure', () => {
       resolveHostAttempt(db, store, attemptId)

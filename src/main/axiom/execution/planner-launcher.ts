@@ -86,7 +86,8 @@ export function createPlannerLauncher(deps: Dependencies) {
           missionId,
           role: 'planner',
           goalRevisionId,
-          repositoryRef: baseBranch
+          repositoryRef: baseBranch,
+          provider: agent.spec.provider
         })
         const { attempt, runSeq } = store.transaction('planner_admission', () => {
           const current = preflight(missionId)

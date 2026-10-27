@@ -8,10 +8,7 @@ import type { OrchestrationDb } from '../../runtime/orchestration/db'
 import { OrchestrationError } from '../../runtime/orchestration/orchestration-error'
 import type { startLocalWorker } from '../../runtime/rpc/methods/orchestration/worker/local-worker-start'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from '../../runtime/rpc/methods/orchestration/worker/worker-start-prompt-budget'
-import {
-  decideWorkerStartMode,
-  readWorkerStartModeSettings
-} from '../../runtime/rpc/methods/orchestration-worker-start-mode'
+import { plannerAwareStartMode } from './planner-launch-mode'
 import { WorkerStartParams } from '../../../shared/rpc-contract/orchestration-worker-start-params'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
@@ -29,8 +26,10 @@ import { hasHeadlessWorkerBuilder } from './headless-worker-command'
 import { createHeadlessWorkerLaunch } from './headless-worker-launch'
 import { watchHeadlessAttempt } from './attempt-exit-submission'
 import { createAttemptLaunchAudit } from './attempt-launch-audit'
+import { claudePlannerLaunchPolicy } from './planner-claude-launch'
 
-type LauncherRuntime = Pick<OrcaRuntimeService, 'createManagedWorktree' | 'requireStore'>
+type LauncherRuntime = Pick<OrcaRuntimeService, 'createManagedWorktree' | 'requireStore'> &
+  Partial<Pick<OrcaRuntimeService, 'resolveClaudeHomeForWorkerLaunch'>>
 export type AttemptWorkerStartArgs = Omit<Parameters<typeof startLocalWorker>[0], 'runtime'> & {
   runtime: LauncherRuntime
 }
@@ -188,15 +187,13 @@ export function createAttemptLauncher(
         coordinator: caller,
         callerSession: caller,
         existingTask,
-        mode: decideWorkerStartMode({
-          params,
-          settings: readWorkerStartModeSettings(deps.runtime)
-        }),
+        mode: plannerAwareStartMode(deps.runtime, params, Boolean(planner)),
         controlPlane: {
           dispatchCreator: { kind: 'system' },
           worktreeId,
           dispatchMaxDepth: 1,
           callerIdentity: caller,
+          ...(planner ? claudePlannerLaunchPolicy(deps, spec) : {}),
           ...(headless
             ? {
                 headless: createHeadlessWorkerLaunch({

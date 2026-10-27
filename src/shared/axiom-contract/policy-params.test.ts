@@ -45,7 +45,10 @@ describe('Mission routing policy', () => {
       disallowedProviders: [],
       highRiskTier: 'A',
       providerConcurrency: {},
-      models: {}
+      models: {},
+      roles: {},
+      crossProvider: true,
+      requireCertified: false
     })
     expect(BudgetSchema.parse({ contextTokens: 42 })).toEqual({ contextTokens: 42 })
     expect(BudgetSchema.safeParse({ contextTokens: 0 }).success).toBe(false)

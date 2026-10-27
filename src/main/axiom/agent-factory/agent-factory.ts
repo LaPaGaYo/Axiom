@@ -2,7 +2,8 @@ import type { ContextBuilder } from '../context-builder/context-builder'
 import { hasHeadlessWorkerBuilder } from '../execution/headless-worker-command'
 import { z } from 'zod'
 import { AxiomIdSchema } from '../../../shared/axiom-contract/mission-objects'
-import { AgentSpecSchema } from '../../../shared/axiom-contract/agent-spec'
+import { AgentSpecSchema, type AgentSpec } from '../../../shared/axiom-contract/agent-spec'
+import { isTuiAgent } from '../../../shared/tui-agent-config'
 import type { AxiomStore } from '../db/axiom-store'
 import type { DecisionEngine } from '../decision-engine/decision-engine'
 import { AgentFactoryError, selectProvider } from './provider-selection'
@@ -22,12 +23,43 @@ const BuildParams = z.discriminatedUnion('role', [
   })
 ])
 
+function plannerProvider(store: AxiomStore, missionId: string): AgentSpec['provider'] | null {
+  const mission = store.getMission(missionId)
+  const plan = mission?.activePlanRevisionId
+    ? store.getPlanRevision(mission.activePlanRevisionId)
+    : undefined
+  if (
+    plan?.missionId === missionId &&
+    plan.status === 'APPROVED' &&
+    isTuiAgent(plan.provenance.actor)
+  ) {
+    return plan.provenance.actor
+  }
+  const specs = store.listAgentSpecs(missionId).filter((record) => record.spec.role === 'planner')
+  const newest = specs.at(-1)
+  const tied = specs.filter((record) => record.createdAt === newest?.createdAt)
+  // SQLite timestamps have second precision; creation audits break ties without trusting hash order.
+  const latestAudit =
+    tied.length > 1
+      ? store
+          .listAuditEvents({ missionId })
+          .findLast(
+            (event) =>
+              event.event === 'agent_spec.created' &&
+              tied.some((record) => record.id === event.objectId)
+          )
+      : undefined
+  return (
+    (tied.find((record) => record.id === latestAudit?.objectId) ?? newest)?.spec.provider ?? null
+  )
+}
+
 export class AgentFactory {
   constructor(
     private readonly store: AxiomStore,
     private readonly engine: DecisionEngine,
     private readonly listInstalledProviders: () => Promise<string[]>,
-    private readonly hasCodexAccount: () => boolean = () => true
+    private readonly hasAccount: (provider: string) => boolean = () => true
   ) {}
 
   async selectWorkerProvider(input: { missionId: string; taskId: string }): Promise<string> {
@@ -49,7 +81,8 @@ export class AgentFactory {
       'worker',
       task.spec.risk,
       this.engine,
-      this.hasCodexAccount()
+      this.hasAccount,
+      plannerProvider(this.store, missionId)
     ).chosen
   }
 
@@ -86,16 +119,20 @@ export class AgentFactory {
         p.role,
         task?.spec.risk ?? 'high',
         this.engine,
-        this.hasCodexAccount()
+        this.hasAccount,
+        p.role === 'worker' ? plannerProvider(this.store, p.missionId) : null
       )
+      const roleRouting = policy.routing.roles[p.role]
       const maxTokens = task?.spec.budget?.maxTokens ?? policy.budget.maxTokens
       const spec = AgentSpecSchema.parse({
         version: 1,
         missionId: p.missionId,
         provider: selection.chosen,
-        model: policy.routing.models[selection.chosen] ?? 'policy-default',
+        model: roleRouting?.model ?? policy.routing.models[selection.chosen] ?? 'policy-default',
         endpointProfile: 'subscription',
-        reasoning: { effort: highRisk ? 'high' : 'medium' },
+        reasoning: {
+          effort: roleRouting?.effort ?? (p.role === 'planner' || highRisk ? 'high' : 'medium')
+        },
         permissions: {
           write: task?.spec.scope.allowedPaths ?? [],
           network: 'restricted',
@@ -157,6 +194,7 @@ export async function buildWorkerContracts(
   const context = await contextBuilder.build({
     missionId,
     taskId,
+    provider,
     channel: hasHeadlessWorkerBuilder(provider) ? 'headless' : 'tui'
   })
   const agent = await agentFactory.build({

@@ -185,6 +185,7 @@ export async function startLocalWorker(args: LocalWorkerStartInput): Promise<unk
       agent,
       launchPreferences: launch.preferences,
       headless,
+      structured: args.controlPlane?.structured,
       effects,
       onStage: (stage) => {
         failedStage = stage

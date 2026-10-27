@@ -3,7 +3,10 @@ import { narrowStructuredLaunchSeedOptions } from '../../../../../../shared/nati
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
-import { createStructuredWorkerSession } from '../../orchestration-structured-worker-session'
+import {
+  createStructuredWorkerSession,
+  type StructuredWorkerLaunchPreparation
+} from '../../orchestration-structured-worker-session'
 import { dispatchReportMailbox } from '../../../../orchestration/dispatch-report-mailbox'
 
 export type WorkerEffect = {
@@ -98,6 +101,7 @@ export async function createStructuredWorkerSessionForWorktree(args: {
   worktreeId: string
   agent: TuiAgent
   dispatchId: string
+  prepareLaunch?: StructuredWorkerLaunchPreparation
   /** `--model`/`--effort`; the session seeds them exactly as a saved selection is seeded. */
   launchPreferences?: AgentLaunchPreferences
   effects: WorkerEffect[]
@@ -108,6 +112,7 @@ export async function createStructuredWorkerSessionForWorktree(args: {
     worktreeId: args.worktreeId,
     agent: args.agent,
     dispatchId: args.dispatchId,
+    ...(args.prepareLaunch ? { prepareLaunch: args.prepareLaunch } : {}),
     ...(options ? { options } : {}),
     onJournalActivity: (sessionId) =>
       args.runtime.notifyStructuredSessionJournalActivity?.(sessionId)

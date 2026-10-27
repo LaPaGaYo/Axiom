@@ -40,7 +40,10 @@ describe('Mission creation and plans', () => {
         disallowedProviders: [],
         highRiskTier: 'A',
         models: {},
-        providerConcurrency: {}
+        providerConcurrency: {},
+        roles: {},
+        crossProvider: true,
+        requireCertified: false
       },
       concurrencyLimit: 3,
       budget: {},

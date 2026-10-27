@@ -1,9 +1,10 @@
 import { seedCodexTestAccount } from './codex-test-account'
+import { seedClaudeTestAccount } from './claude-test-account'
 import { desktopCall } from './axiom-desktop-call'
 import { readGoalFile } from '../../../src/cli/handlers/axiom/input-files'
 import { DEFAULT_MISSION_POLICY } from '../../../src/shared/axiom-contract/mission-objects'
 import { spawnSync } from 'node:child_process'
-import { chmodSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { ElectronApplication, Page, TestInfo } from '@stablyai/playwright-test'
@@ -12,12 +13,13 @@ import { expect } from './orca-app'
 import { createRestartSession } from './orca-restart'
 import { waitForSessionReady } from './store'
 import { fixturePlanProposal } from './fixture-plan-proposal'
-import { AXIOM_TEST_PROVIDER_SOURCE } from './axiom-test-provider'
-import { recordHeadlessFixtureReceipts } from './axiom-fixture-inspection'
 import {
-  buildFakeAgentCommandOverride,
-  FAKE_AGENT_WINDOWS_SHELL
-} from './fake-agent-command-override'
+  axiomFixtureRouting,
+  configureAxiomFixtureProvider,
+  createAxiomFixtureProvider,
+  type AxiomFixtureProvider
+} from './axiom-fixture-provider'
+import { recordHeadlessFixtureReceipts } from './axiom-fixture-inspection'
 import {
   MissionResponseSchema,
   MissionPlanResponseSchema,
@@ -99,17 +101,13 @@ export async function withFixtureMission(
     extraAllowedPaths?: string[]
     noCodexAccount?: boolean
     holdExitSubmission?: boolean
+    provider?: AxiomFixtureProvider
+    taskIds?: string[]
   } = {}
 ) {
+  const provider = options.provider ?? 'codex'
   const temp = mkdtempSync(path.join(os.tmpdir(), 'axiom-fixture-mission-'))
-  const executable = path.join(temp, process.platform === 'win32' ? 'codex.cmd' : 'codex')
-  if (process.platform === 'win32') {
-    writeFileSync(path.join(temp, 'fake-codex.js'), AXIOM_TEST_PROVIDER_SOURCE)
-    writeFileSync(executable, '@echo off\r\nnode "%~dp0\\fake-codex.js" %*\r\n')
-  } else {
-    writeFileSync(executable, `#!/usr/bin/env node\n${AXIOM_TEST_PROVIDER_SOURCE}`)
-    chmodSync(executable, 0o755)
-  }
+  const executable = createAxiomFixtureProvider(temp, provider)
   const ledgerPath = path.join(temp, 'submissions.jsonl')
   const holdPath = `${ledgerPath}.hold`
   let cliEntry = path.join(process.cwd(), 'out', 'cli', 'index.js')
@@ -147,20 +145,15 @@ process.exit(result.status ?? 1)
     git(['clone', '--no-hardlinks', '--branch', 'main', realpathSync(source), clone])
     expect(git(['-C', clone, 'rev-parse', 'HEAD'])).toBe(FIXTURE_COMMIT)
     expect(git(['-C', clone, 'rev-parse', 'fixture-v1^{commit}'])).toBe(FIXTURE_COMMIT)
-    if (!options.noCodexAccount) {
+    if (provider === 'claude') {
+      seedClaudeTestAccount(session.userDataDir)
+    } else if (!options.noCodexAccount) {
       seedCodexTestAccount(session.userDataDir)
     }
     const first = await session.launch()
     app = first.app
     await waitForSessionReady(first.page)
-    await first.page.evaluate(
-      async ({ command, shell }) => {
-        await window.__store
-          ?.getState()
-          .updateSettings({ agentCmdOverrides: { codex: command }, terminalWindowsShell: shell })
-      },
-      { command: buildFakeAgentCommandOverride(executable), shell: FAKE_AGENT_WINDOWS_SHELL }
-    )
+    await configureAxiomFixtureProvider(first.page, executable, provider)
     const userData = await app.evaluate(({ app }) => app.getPath('userData'))
     const { repo } = z
       .object({ repo: z.object({ id: z.string() }) })
@@ -172,11 +165,7 @@ process.exit(result.status ?? 1)
         goal: await readGoalFile(clone, 'GOAL.md'),
         policy: {
           ...DEFAULT_MISSION_POLICY,
-          routing: {
-            ...DEFAULT_MISSION_POLICY.routing,
-            preferredProviders: ['codex'],
-            disallowedProviders: options.noCodexAccount ? ['claude', 'opencode', 'antigravity'] : []
-          }
+          routing: axiomFixtureRouting(provider)
         }
       })
     )
@@ -188,6 +177,14 @@ process.exit(result.status ?? 1)
       mission.activeGoalRevisionId
     )
     if (!options.planner) {
+      if (options.taskIds) {
+        proposal.tasks = proposal.tasks.filter((task) => options.taskIds!.includes(task.id))
+        proposal.edges = proposal.edges.filter(
+          (edge) =>
+            options.taskIds!.includes(edge.fromTaskId) && options.taskIds!.includes(edge.toTaskId)
+        )
+        proposal.milestones[0]!.exitCriteria = options.taskIds.map((id) => `${id} integrated`)
+      }
       for (const task of proposal.tasks) {
         if (options.maxAttempts !== undefined) {
           task.retryPolicy.maxAttempts = options.maxAttempts
@@ -200,7 +197,7 @@ process.exit(result.status ?? 1)
       const { attempt } = MissionPlanResponseSchema.parse(
         await desktopCall(first.page, 'axiom.mission.plan', { missionId: mission.id })
       )
-      expect(attempt.provider).toBe('codex')
+      expect(attempt.provider).toBe(provider)
       expect(attempt.branch).toBe(`axiom/planner/${mission.id}/1`)
       await expect
         .poll(
@@ -216,7 +213,7 @@ process.exit(result.status ?? 1)
       expect(planRevisions).toHaveLength(1)
       planRevision = planRevisions[0]!
       expect(planRevision.status).toBe('PROPOSED')
-      expect(planRevision.provenance).toMatchObject({ kind: 'planner', actor: 'codex' })
+      expect(planRevision.provenance).toMatchObject({ kind: 'planner', actor: provider })
       expect(planRevision.tasks).toEqual(proposal.tasks)
       expect(planRevision.edges).toEqual(proposal.edges)
       expect(planRevision.tasks).toHaveLength(12)
@@ -268,18 +265,7 @@ process.exit(result.status ?? 1)
               })
               app = next.app
               await waitForSessionReady(next.page)
-              await next.page.evaluate(
-                async ({ command, shell }) => {
-                  await window.__store?.getState().updateSettings({
-                    agentCmdOverrides: { codex: command },
-                    terminalWindowsShell: shell
-                  })
-                },
-                {
-                  command: buildFakeAgentCommandOverride(executable),
-                  shell: FAKE_AGENT_WINDOWS_SHELL
-                }
-              )
+              await configureAxiomFixtureProvider(next.page, executable, provider)
               return next.page
             }
           }

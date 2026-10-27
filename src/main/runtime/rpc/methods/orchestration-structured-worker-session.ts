@@ -45,7 +45,14 @@ type StructuredWorkerBinding = {
   sessionId: string
   handle: string
   disposeSubscription: () => void
+  disposeLaunch?: () => void
 }
+
+/** Service-only launch policy, installed before attach can spawn the provider child. */
+export type StructuredWorkerLaunchPreparation = (identity: {
+  dispatchId: string
+  sessionId: string
+}) => Promise<() => void>
 
 const bindingsByDispatchId = new Map<string, StructuredWorkerBinding>()
 
@@ -69,6 +76,7 @@ export function releaseStructuredWorkerSession(
     bindingsByDispatchId.delete(dispatchId)
     binding.disposeSubscription()
     structuredWorkerIdentities.forget(binding.handle)
+    binding.disposeLaunch?.()
   }
   const rootSessionId = binding?.sessionId ?? workerSessionId
   if (!rootSessionId || !runtime?.forgetStructuredSessionMail) {
@@ -86,6 +94,7 @@ export async function createStructuredWorkerSession(args: {
   dispatchId: string
   /** The dispatch's own `--model`/`--effort`, already narrowed to the seedable string subset. */
   options?: Readonly<Record<string, string>>
+  prepareLaunch?: StructuredWorkerLaunchPreparation
   /** Retried whenever the session's journal moves, which is the structured idle edge. */
   onJournalActivity: (sessionId: string) => void
 }): Promise<{
@@ -112,7 +121,9 @@ export async function createStructuredWorkerSession(args: {
     hostScope: { kind: 'local', hostId: 'local' }
   })
   let created: Awaited<ReturnType<typeof createStructuredAgentSessionForWorktree>> | undefined
+  let disposeLaunch: (() => void) | undefined
   try {
+    disposeLaunch = await args.prepareLaunch?.({ dispatchId: args.dispatchId, sessionId })
     created = await createStructuredAgentSessionForWorktree({
       runtime: args.runtime,
       ensureHost: async () => {
@@ -154,7 +165,8 @@ export async function createStructuredWorkerSession(args: {
     bindingsByDispatchId.set(args.dispatchId, {
       sessionId,
       handle: identity.handle,
-      disposeSubscription
+      disposeSubscription,
+      ...(disposeLaunch ? { disposeLaunch } : {})
     })
     return { identity, host, fence: created.value.fence }
   } catch (error) {
@@ -164,6 +176,7 @@ export async function createStructuredWorkerSession(args: {
     if (structuredCreateMayHaveCommitted(created)) {
       await discardStructuredWorkerSession(sessionId, args.runtime)
     }
+    disposeLaunch?.()
     throw error
   }
 }

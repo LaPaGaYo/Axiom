@@ -23,6 +23,7 @@ import { AxiomStore } from './db/axiom-store'
 import { MissionController } from './mission-controller/mission-controller'
 import { RunMailboxConsumer } from './mission-controller/run-mailbox-consumer'
 import { RecoveryService } from './recovery/recovery-service'
+import { getSelectedClaudeAccountIdForTarget } from '../claude-accounts/runtime-selection'
 
 const instances = new WeakMap<OrchestrationDb, ReturnType<typeof createControlPlane>>()
 
@@ -48,13 +49,16 @@ function createControlPlane(runtime: OrcaRuntimeService, db: OrchestrationDb) {
     store,
     decisionEngine,
     detectInstalledAgentsWithShellPathHydration,
-    () => {
+    (provider) => {
       // D83 ruling ① leaves Windows/WSL routing unchanged.
       if (process.platform === 'win32') {
         return true
       }
       try {
-        return runtime.resolveCodexHomeForWorkerLaunch() !== null
+        if (provider === 'claude') {
+          return getSelectedClaudeAccountIdForTarget(runtime.requireStore().getSettings(), { runtime: 'host' }) !== null
+        }
+        return provider !== 'codex' || runtime.resolveCodexHomeForWorkerLaunch() !== null
       } catch {
         return false
       }

@@ -68,6 +68,7 @@ type WorkerAgentPlacementArgs = {
   agent: TuiAgent | undefined
   launchPreferences: AgentLaunchPreferences | undefined
   headless?: ControlPlaneWorkerStart['headless']
+  structured?: ControlPlaneWorkerStart['structured']
   effects: WorkerEffect[]
   /** Attributes a throw to the step that was running, the way the caller's own stages do. */
   onStage: (stage: string) => void
@@ -241,6 +242,7 @@ function workerSurfaceFactory(
         worktreeId,
         agent,
         dispatchId: args.dispatchId,
+        ...(args.structured ? { prepareLaunch: args.structured.prepare } : {}),
         ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
         effects: args.effects
       })
