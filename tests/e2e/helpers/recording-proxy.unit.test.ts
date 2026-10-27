@@ -1,6 +1,5 @@
 import { request } from 'node:http'
-import { connect, createServer, type AddressInfo } from 'node:net'
-import type { Duplex } from 'node:stream'
+import { connect, createServer, type Socket } from 'node:net'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as childProcess from '@orca/process-host'
 import { RecordingProxy, resolvePeerProcess } from './recording-proxy'
@@ -299,14 +298,14 @@ describe('recording proxy forward policy', () => {
   function tunnel(
     proxyUrl: string,
     target: string
-  ): Promise<{ status: number | undefined; socket: Duplex | null }> {
+  ): Promise<{ status: number | undefined; socket: Socket }> {
     return new Promise((resolve, reject) => {
       const outgoing = request(proxyUrl, { method: 'CONNECT', path: target, agent: false })
       outgoing.on('error', reject)
+      // Node answers a CONNECT request with 'connect' for every status code, so 502s land here too.
       outgoing.on('connect', (response, socket) => resolve({ status: response.statusCode, socket }))
       outgoing.on('response', (response) => {
-        response.resume()
-        response.on('end', () => resolve({ status: response.statusCode, socket: null }))
+        reject(new Error(`unexpected response ${response.statusCode} to CONNECT ${target}`))
       })
       outgoing.end()
     })
@@ -314,7 +313,11 @@ describe('recording proxy forward policy', () => {
 
   async function listen(server: ReturnType<typeof createServer>): Promise<number> {
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
-    return (server.address() as AddressInfo).port
+    const address = server.address()
+    if (!address || typeof address === 'string') {
+      throw new Error('test server did not bind a TCP port')
+    }
+    return address.port
   }
 
   it('tunnels only CONNECT targets the policy allows and records every request', async () => {
@@ -330,17 +333,17 @@ describe('recording proxy forward policy', () => {
       const allowed = await tunnel(proxyUrl, `127.0.0.1:${echoPort}`)
       expect(allowed.status).toBe(200)
       const echoed = await new Promise<string>((resolve, reject) => {
-        allowed.socket?.on('error', reject)
-        allowed.socket?.once('data', (chunk) => resolve(String(chunk)))
-        allowed.socket?.write('ping')
+        allowed.socket.on('error', reject)
+        allowed.socket.once('data', (chunk) => resolve(String(chunk)))
+        allowed.socket.write('ping')
       })
       expect(echoed).toBe('ping')
-      allowed.socket?.destroy()
+      allowed.socket.destroy()
       const byHost = await tunnel(proxyUrl, 'example.invalid:443')
-      byHost.socket?.destroy()
+      byHost.socket.destroy()
       expect(byHost.status).toBe(502)
       const unreachable = await tunnel(proxyUrl, `127.0.0.1:${closedPort}`)
-      unreachable.socket?.destroy()
+      unreachable.socket.destroy()
       expect(unreachable.status).toBe(502)
       expect(proxy.hostTally()).toEqual(
         new Map([
