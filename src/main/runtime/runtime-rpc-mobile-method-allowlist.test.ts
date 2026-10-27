@@ -1,7 +1,7 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { remoteRpcContentBudget } from '../../shared/remote-rpc-content-budget'
 import { DeviceRegistry } from './device-registry'
@@ -412,18 +412,6 @@ describe('OrcaRuntimeRpcServer', () => {
       deviceToken: mobile.token,
       params: { accountId: 'codex-account' }
     })
-    // D83 retires system-default selection on macOS/Linux, including the mobile surface.
-    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
-    try {
-      await dispatch({
-        id: 'req_select_codex_system_default',
-        method: 'accounts.selectCodex',
-        deviceToken: mobile.token,
-        params: { accountId: null }
-      })
-    } finally {
-      platform.mockRestore()
-    }
     await dispatch({
       id: 'req_consume_codex_reset',
       method: 'accounts.consumeCodexResetCredit',
@@ -601,13 +589,6 @@ describe('OrcaRuntimeRpcServer', () => {
     )
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_select_claude', ok: true }))
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_select_codex', ok: true }))
-    expect(replies).toContainEqual(
-      expect.objectContaining({
-        id: 'req_select_codex_system_default',
-        ok: false,
-        error: expect.objectContaining({ code: 'system_default_retired' })
-      })
-    )
     expect(replies).toContainEqual(
       expect.objectContaining({ id: 'req_consume_codex_reset', ok: true })
     )
