@@ -1,5 +1,6 @@
 import { request } from 'node:http'
-import { connect } from 'node:net'
+import { connect, createServer, type AddressInfo } from 'node:net'
+import type { Duplex } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as childProcess from '@orca/process-host'
 import { RecordingProxy, resolvePeerProcess } from './recording-proxy'
@@ -286,6 +287,71 @@ describe('recording proxy', () => {
         ]
       ])
     )
+  })
+})
+
+describe('recording proxy forward policy', () => {
+  // Why: the spy's call history must not leak into the attribution suite's exact call assertions.
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  function tunnel(
+    proxyUrl: string,
+    target: string
+  ): Promise<{ status: number | undefined; socket: Duplex | null }> {
+    return new Promise((resolve, reject) => {
+      const outgoing = request(proxyUrl, { method: 'CONNECT', path: target, agent: false })
+      outgoing.on('error', reject)
+      outgoing.on('connect', (response, socket) => resolve({ status: response.statusCode, socket }))
+      outgoing.on('response', (response) => {
+        response.resume()
+        response.on('end', () => resolve({ status: response.statusCode, socket: null }))
+      })
+      outgoing.end()
+    })
+  }
+
+  async function listen(server: ReturnType<typeof createServer>): Promise<number> {
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    return (server.address() as AddressInfo).port
+  }
+
+  it('tunnels only CONNECT targets the policy allows and records every request', async () => {
+    vi.spyOn(childProcess, 'runProcess').mockRejectedValue(new Error('lsof unavailable'))
+    const echo = createServer((socket) => socket.pipe(socket))
+    const echoPort = await listen(echo)
+    const closed = createServer()
+    const closedPort = await listen(closed)
+    await new Promise<void>((resolve) => closed.close(() => resolve()))
+    const proxy = new RecordingProxy({ forward: (host) => host === '127.0.0.1' })
+    const proxyUrl = await proxy.start()
+    try {
+      const allowed = await tunnel(proxyUrl, `127.0.0.1:${echoPort}`)
+      expect(allowed.status).toBe(200)
+      const echoed = await new Promise<string>((resolve, reject) => {
+        allowed.socket?.on('error', reject)
+        allowed.socket?.once('data', (chunk) => resolve(String(chunk)))
+        allowed.socket?.write('ping')
+      })
+      expect(echoed).toBe('ping')
+      allowed.socket?.destroy()
+      const byHost = await tunnel(proxyUrl, 'example.invalid:443')
+      byHost.socket?.destroy()
+      expect(byHost.status).toBe(502)
+      const unreachable = await tunnel(proxyUrl, `127.0.0.1:${closedPort}`)
+      unreachable.socket?.destroy()
+      expect(unreachable.status).toBe(502)
+      expect(proxy.hostTally()).toEqual(
+        new Map([
+          ['127.0.0.1', 2],
+          ['example.invalid', 1]
+        ])
+      )
+    } finally {
+      await proxy.close()
+      await new Promise<void>((resolve) => echo.close(() => resolve()))
+    }
   })
 })
 

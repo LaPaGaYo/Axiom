@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage } from 'node:http'
-import type { Socket } from 'node:net'
+import { connect as connectTcp, type Socket } from 'node:net'
 import { redactString } from '../../../src/main/observability/redactor'
 import { runProcess } from '@orca/process-host'
 
@@ -138,9 +138,15 @@ function requestHost({ method, url }: RecordedRequest): string {
   return target?.hostname.toLowerCase().replace(/\.$/, '') || url
 }
 
-/** Records attempted destinations without opening any upstream connection. */
+/** Which CONNECT targets a RecordingProxy tunnels; everything else is recorded and refused. */
+export type RecordingProxyForwardPolicy = (host: string, port: number) => boolean
+
+/** Records attempted destinations; tunnels only the CONNECT targets its forward policy allows. */
 export class RecordingProxy {
   readonly recorded: RecordedRequest[] = []
+  // Why: the egress tests prove zero egress by refusing everything; a smoke that must reach a
+  // provider records the same way but tunnels the hosts its policy allows (no TLS interception).
+  private readonly forward: RecordingProxyForwardPolicy
   private readonly sockets = new Set<IncomingMessage['socket']>()
   private readonly attribution = new WeakMap<
     IncomingMessage['socket'],
@@ -152,10 +158,43 @@ export class RecordingProxy {
     response.end()
   })
 
-  constructor() {
-    this.server.on('connect', async (request, socket) => {
+  constructor(options: { forward?: RecordingProxyForwardPolicy } = {}) {
+    this.forward = options.forward ?? (() => false)
+    this.server.on('connect', async (request, socket, head) => {
       await this.record(request)
-      socket.end('HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\nContent-Length: 0\r\n\r\n')
+      const url = request.url ?? ''
+      const host = requestHost({ method: 'CONNECT', url, remotePort: null, process: null })
+      // Why not URL.parse: it elides the scheme's default port, and CONNECT host:80 must stay 80.
+      const port = Number(/:(\d+)$/.exec(url)?.[1] ?? 443)
+      if (!this.forward(host, port)) {
+        socket.end('HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\nContent-Length: 0\r\n\r\n')
+        return
+      }
+      const upstream = connectTcp(port, host)
+      let established = false
+      upstream.once('connect', () => {
+        established = true
+        socket.write('HTTP/1.1 200 Connection Established\r\n\r\n')
+        if (head.length) {
+          upstream.write(head)
+        }
+        socket.pipe(upstream)
+        upstream.pipe(socket)
+      })
+      upstream.on('error', () => {
+        if (established || socket.destroyed) {
+          socket.destroy()
+        } else {
+          socket.end('HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\nContent-Length: 0\r\n\r\n')
+        }
+      })
+      upstream.on('close', () => {
+        if (established) {
+          socket.destroy()
+        }
+      })
+      socket.on('error', () => upstream.destroy())
+      socket.on('close', () => upstream.destroy())
     })
     this.server.on('upgrade', async (request, socket) => {
       await this.record(request)
