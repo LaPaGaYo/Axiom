@@ -1,7 +1,7 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { remoteRpcContentBudget } from '../../shared/remote-rpc-content-budget'
 import { DeviceRegistry } from './device-registry'
@@ -410,8 +410,20 @@ describe('OrcaRuntimeRpcServer', () => {
       id: 'req_select_codex',
       method: 'accounts.selectCodex',
       deviceToken: mobile.token,
-      params: { accountId: null }
+      params: { accountId: 'codex-account' }
     })
+    // D83 retires system-default selection on macOS/Linux, including the mobile surface.
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    try {
+      await dispatch({
+        id: 'req_select_codex_system_default',
+        method: 'accounts.selectCodex',
+        deviceToken: mobile.token,
+        params: { accountId: null }
+      })
+    } finally {
+      platform.mockRestore()
+    }
     await dispatch({
       id: 'req_consume_codex_reset',
       method: 'accounts.consumeCodexResetCredit',
@@ -590,6 +602,13 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_select_claude', ok: true }))
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_select_codex', ok: true }))
     expect(replies).toContainEqual(
+      expect.objectContaining({
+        id: 'req_select_codex_system_default',
+        ok: false,
+        error: expect.objectContaining({ code: 'system_default_retired' })
+      })
+    )
+    expect(replies).toContainEqual(
       expect.objectContaining({ id: 'req_consume_codex_reset', ok: true })
     )
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_terminal_read', ok: true }))
@@ -622,7 +641,8 @@ describe('OrcaRuntimeRpcServer', () => {
       })
     )
     expect(mocks.selectClaudeAccount).toHaveBeenCalledWith('claude-account')
-    expect(mocks.selectCodexAccount).toHaveBeenCalledWith(null)
+    expect(mocks.selectCodexAccount).toHaveBeenCalledWith('codex-account')
+    expect(mocks.selectCodexAccount).toHaveBeenCalledTimes(1)
     expect(mocks.consumeCodexRateLimitResetCredit).toHaveBeenCalledWith(
       '11111111-1111-4111-8111-111111111111',
       expectedCodexResetScope

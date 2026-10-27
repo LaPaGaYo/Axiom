@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -275,7 +275,40 @@ it('checks canonical provider metadata during the existing import, including Cod
   })
 })
 
-it('materializes legacy Codex into the system home and pins a verified selected account alias', async () => {
+it.each(['darwin', 'linux'] as const)(
+  'refuses legacy Codex adoption without an account on %s and leaves the system home untouched',
+  async (platform) => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+    const legacy = codexHomes.getOrcaManagedCodexHomePath()
+    const system = join(root, 'system')
+    await mkdir(system)
+    const transcriptPath = await file(
+      join(legacy, 'sessions', '2026', '10', '15', `rollout-stamp-${id}.jsonl`),
+      [{ type: 'session_meta', payload: { id } }]
+    )
+    vi.spyOn(codexHomes, 'getSystemCodexHomePath').mockReturnValue(system)
+    const source = {
+      accountHome: { variable: 'CODEX_HOME' as const, path: legacy },
+      transcriptPath
+    }
+    const prepare = codexAiVaultSessionResumePreparation(() => ({
+      runtimeHome: {
+        isHostSystemDefaultRealHomeSelected: () => false,
+        resolveSelectedHostAccountCodexHomePathForResume: () => null,
+        getHostCodexHomePathsForSessionDiscovery: () => [legacy]
+      },
+      systemCodexHomePath: system,
+      preparePinnedLaunchHome: async () => {}
+    }))
+
+    await expect(prepareCodexAdoption(source, id, prepare, [source.accountHome])).rejects.toThrow(
+      codexHomes.CodexAccountRequiredError
+    )
+    expect(await readdir(system, { recursive: true })).toEqual([])
+  }
+)
+
+it('materializes legacy Codex into the system home on Windows and pins a verified selected account alias', async () => {
   const legacy = codexHomes.getOrcaManagedCodexHomePath()
   const system = join(root, 'system')
   const historyOnly = join(root, 'history-only')
@@ -286,7 +319,7 @@ it('materializes legacy Codex into the system home and pins a verified selected 
   ])
   vi.spyOn(codexHomes, 'getSystemCodexHomePath').mockReturnValue(system)
   const source = { accountHome: { variable: 'CODEX_HOME' as const, path: legacy }, transcriptPath }
-  const prepare = codexAiVaultSessionResumePreparation(() => ({
+  const prepareLegacy = codexAiVaultSessionResumePreparation(() => ({
     runtimeHome: {
       isHostSystemDefaultRealHomeSelected: () => true,
       resolveSelectedHostAccountCodexHomePathForResume: () => null,
@@ -295,6 +328,15 @@ it('materializes legacy Codex into the system home and pins a verified selected 
     systemCodexHomePath: historyOnly,
     preparePinnedLaunchHome: async () => {}
   }))
+  const prepare: typeof prepareLegacy = async (...args) => {
+    // Only materialization is Windows-only; containment must use the temp path's native host.
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    try {
+      return await prepareLegacy(...args)
+    } finally {
+      platform.mockRestore()
+    }
+  }
   const migrated = await prepareCodexAdoption(source, id, prepare, [source.accountHome])
   expect(migrated).toEqual({
     accountHome: { variable: 'CODEX_HOME', path: system },
