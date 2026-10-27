@@ -48,6 +48,7 @@
 | DEF-42 | 其余 harness 的账号目录迁移（D83 ⑤）：Cursor、Grok、OpenCode、Gemini、Amp、Droid 等按 D83 的适配器形态逐个迁移——指向 Axiom 管理的目录、凭据位置、最小配置与允许名单、列出实际启用项并算 hash；迁移前在用户终端里保持 Orca 现有做法，不能承担 Attempt；WSL 账号随 Windows（V1.x，D67） | 某个 harness 要承担 Attempt 时（随 D57 认证）；Antigravity 随 DEF-37 | D83 | OPEN |
 | DEF-43 | 远程主机的账号与运行环境（D83 修订）：设置页的账号按机器分组（这台 Mac、各远程主机）；远程主机加账号沿用 Orca 的主机登录流程（`accounts.hostSignIn*`：登录在那台主机上运行，Codex 用设备码，需先在 ChatGPT 设置的 Security 里开启；凭据只存在那台主机上）；远程主机的账号目录用 D83 的布置代码（M3-08c 起已共用）；skills 由 Axiom 从 Registry 装过去（DEF-4），本地程序型 MCP 由各机器自己安装、Axiom 检查；凭据怎么到位按 harness 适配器定（订阅登录只能在那台机器上登；API key 与不轮换的长期令牌可在桌面存一份、启动时注入）；Attempt 的执行组合记录机器与账号 | 远程执行进入路线时（V2）；WSL 随 Windows（V1.x，D67） | D83 修订 | OPEN |
 | DEF-44 | 规划前的快速只读扫描（D82 修订行）：大仓库在规划前用快速模型只读扫描，产出仓库地图与风险清单 Artifact 交给 Planner；Planner / Worker 的 harness 内部自己的并行探索不算 | V2，规划质量数据显示大仓库需要时 | D82 修订 | OPEN |
+| DEF-45 | harness 一键升级 + Approval（D57 / D37 2026-10-26 修订行）：V1 由用户在终端升级（`brew upgrade codex` / `npm i -g @openai/codex@latest`），Axiom 只显示版本、按用户点击检查更新并给出命令；V2 在 harness 页提供"升级"按钮——Approval 绑定精确动作（harness、目标版本、包管理器命令、预期效果），由 Axiom 代为执行包管理器命令并记录结果；升级后该组合自动标"需要复验"并可一键重跑协议一致性 smoke（DEF-8）；定时的"有新版本"提示作为默认关的开关一并做 | **V2 规划时**，排进 V2 的 harness 选档 / 定时整合一批（DEF-18） | D57、D37、DEF-8；Henry 2026-10-26 | OPEN（2026-10-26 登记） |
 
 ## M2 出口核对（2026-10-20，D61）
 
