@@ -7,10 +7,10 @@ import type { ControlPlaneWorkerStart } from '../../runtime/rpc/methods/orchestr
 import { readCodexAccountHomeAllowlist } from '../../codex/codex-worker-launch-home'
 import { plannerProposalCommandPrefix } from '../context-builder/planner-render'
 import { headlessAttemptDirectory } from './headless-attempt-files'
-import { claudeIsolationSettings } from './claude-launch-policy'
-import { registerClaudePlannerSession } from './planner-claude-session'
+import { claudeIsolationSettings, CLAUDE_LAUNCH_ENV } from './claude-launch-policy'
+import { registerClaudeMissionSessionPins } from '../../claude/claude-mission-session-pins'
 import type { AttemptLauncherDependencies } from './attempt-launcher'
-import { ClaudeAccountRequiredError } from './claude-worker-home'
+import { ClaudeAccountRequiredError } from '../../claude-accounts/claude-account-required-error'
 
 export function claudePlannerLaunchPolicy(
   deps: Pick<AttemptLauncherDependencies, 'store' | 'runtime'>,
@@ -73,8 +73,9 @@ export function createClaudePlannerLaunch(input: {
         }),
         { mode: 0o600, flag: 'wx' }
       )
-      return registerClaudePlannerSession(dispatchId, sessionId, {
+      return registerClaudeMissionSessionPins(dispatchId, sessionId, {
         settingsPath,
+        env: CLAUDE_LAUNCH_ENV,
         accountHomePath,
         skills,
         ...(input.model === 'policy-default' ? {} : { model: input.model }),

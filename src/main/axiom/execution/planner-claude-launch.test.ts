@@ -4,7 +4,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import { createClaudePlannerLaunch } from './planner-claude-launch'
-import { claudePlannerSessionPins } from './planner-claude-session'
+import { claudeMissionSessionPins } from '../../claude/claude-mission-session-pins'
 import { plannerFixture } from './planner-fixture.test-support'
 import { createPlannerLauncher } from './planner-launcher'
 import { ClaudePromptRegistry } from '../../claude/claude-prompt-registry'
@@ -37,7 +37,7 @@ async function prepare() {
   })
   const dispose = await launch.prepare({ dispatchId: 'ctx_planner', sessionId: 's_planner' })
   cleanup.push(dispose)
-  return { dispose, pins: claudePlannerSessionPins('s_planner')! }
+  return { dispose, pins: claudeMissionSessionPins('s_planner')! }
 }
 
 describe('Claude Planner isolation', () => {
@@ -115,7 +115,7 @@ describe('Claude Planner isolation', () => {
     const { dispose } = await prepare()
     const prompts = new ClaudePromptRegistry('s_planner')
     dispose()
-    expect(claudePlannerSessionPins('s_planner')).toBeUndefined()
+    expect(claudeMissionSessionPins('s_planner')).toBeUndefined()
     expect(
       prompts.register({
         requestId: 'late',
@@ -177,6 +177,6 @@ describe('Claude Planner isolation', () => {
     await expect(
       launch.prepare({ dispatchId: 'no_account', sessionId: 'no_account' })
     ).rejects.toMatchObject({ code: 'no_account' })
-    expect(claudePlannerSessionPins('no_account')).toBeUndefined()
+    expect(claudeMissionSessionPins('no_account')).toBeUndefined()
   })
 })

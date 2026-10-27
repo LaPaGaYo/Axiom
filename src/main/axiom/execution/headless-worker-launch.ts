@@ -9,7 +9,7 @@ import type { AttemptLauncherDependencies } from './attempt-launcher'
 import { buildHeadlessWorkerCommand } from './headless-worker-command'
 import { prepareClaudeAttemptFiles, prepareHeadlessAttemptFiles } from './headless-attempt-files'
 import { buildHeadlessTerminalCommand } from '../../runtime/rpc/methods/orchestration/worker/control-plane-worker-start'
-import { ClaudeAccountRequiredError } from './claude-worker-home'
+import { ClaudeAccountRequiredError } from '../../claude-accounts/claude-account-required-error'
 
 export function createHeadlessWorkerLaunch(input: {
   deps: AttemptLauncherDependencies
@@ -56,21 +56,29 @@ export function createHeadlessWorkerLaunch(input: {
       if (!launch) {
         throw new Error('Headless builder unavailable')
       }
-      const { combination, reasons } =
-        claude && homePath
-          ? await headlessClaudeCombination({
-              spec,
-              homePath,
-              allowlist,
-              command: launch.argv[0],
-              files: await prepareClaudeAttemptFiles({
-                directory: attemptDir,
-                worktree: worktree.path,
-                accountHomePath: homePath,
-                allowlist
-              })
-            })
-          : await headlessWorkerCombination(spec, home!, allowlist, launch.argv[0])
+      let prepared:
+        | Awaited<ReturnType<typeof headlessClaudeCombination>>
+        | Awaited<ReturnType<typeof headlessWorkerCombination>>
+      if (claude && homePath) {
+        prepared = await headlessClaudeCombination({
+          spec,
+          homePath,
+          allowlist,
+          command: launch.argv[0],
+          files: await prepareClaudeAttemptFiles({
+            directory: attemptDir,
+            worktree: worktree.path,
+            accountHomePath: homePath,
+            allowlist
+          })
+        })
+      } else {
+        if (!home || home.kind !== 'account') {
+          throw new CodexAccountRequiredError()
+        }
+        prepared = await headlessWorkerCombination(spec, home, allowlist, launch.argv[0])
+      }
+      const { combination, reasons } = prepared
       if (
         !deps.store.bindAttemptDispatch(attempt.taskId, attempt.seq, dispatchId) &&
         deps.store.getAttemptBinding(attempt.taskId, attempt.seq)?.dispatchId !== dispatchId

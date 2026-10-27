@@ -28,7 +28,7 @@ export const AXIOM_TEST_CLAUDE_ENV = {
   CLAUDE_CODE_DISABLE_BUNDLED_SKILLS: '1'
 }
 
-/** No Agent SDK handshake: Planner exercises Orca's existing terminal fallback. */
+/** Headless Worker fake. Mission Planner specs use the separate SDK-protocol stub. */
 export const AXIOM_TEST_CLAUDE_PROVIDER_SOURCE = `
 if (process.argv[2] === '--version') {
   process.stdout.write('${AXIOM_TEST_CLAUDE_VERSION} (Claude Code)\\n')
@@ -69,7 +69,12 @@ if (process.argv.slice(2).includes('-p')) {
     assert.ok(flag('--disallowedTools').split(',').includes(tool), 'Missing disallowed tool ' + tool)
     assert.ok(settings.permissions.deny.includes(tool), 'Missing denied tool ' + tool)
   }
-  for (const tool of ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash']) assert.ok(settings.permissions.allow.includes(tool), 'Missing allowed tool ' + tool)
+  assert.deepEqual(settings.permissions.allow, [
+    'Read', 'Grep', 'Glob', 'LS',
+    ...['Edit', 'Write', 'MultiEdit', 'NotebookEdit'].flatMap(tool =>
+      [process.cwd(), attemptDir].map(directory => tool + '(/' + path.join(directory, '**') + ')')),
+    'Bash'
+  ])
   assert.deepEqual(settings.sandbox, {
     enabled: true, failIfUnavailable: true, autoAllowBashIfSandboxed: true, allowUnsandboxedCommands: false,
     network: { allowedDomains: [], allowLocalBinding: false, strictAllowlist: true },

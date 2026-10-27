@@ -87,7 +87,21 @@ it('writes private isolation settings and only allowlisted MCP definitions witho
   const settings = JSON.parse(await readFile(path.join(root, 'claude-settings.json'), 'utf8'))
   expect(settings).toMatchObject({
     permissions: {
-      allow: expect.arrayContaining(['Read', 'Edit', 'Write', 'Bash']),
+      allow: [
+        'Read',
+        'Grep',
+        'Glob',
+        'LS',
+        'Edit(//work/**)',
+        `Edit(/${root}/**)`,
+        'Write(//work/**)',
+        `Write(/${root}/**)`,
+        'MultiEdit(//work/**)',
+        `MultiEdit(/${root}/**)`,
+        'NotebookEdit(//work/**)',
+        `NotebookEdit(/${root}/**)`,
+        'Bash'
+      ],
       deny: expect.arrayContaining(['WebFetch', 'WebSearch', 'Agent'])
     },
     sandbox: {

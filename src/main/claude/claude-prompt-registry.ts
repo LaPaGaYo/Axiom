@@ -1,5 +1,5 @@
 import type { PermissionResult, PermissionUpdate } from '@anthropic-ai/claude-agent-sdk'
-import { claudePlannerSessionPins } from '../axiom/execution/planner-claude-session'
+import { claudeMissionSessionPins } from './claude-mission-session-pins'
 import type {
   AgentJournalApprovalMatchedAskRule,
   AgentJournalApprovalSubject
@@ -69,7 +69,7 @@ function questionId(question: Record<string, unknown>, index: number): string {
 
 /** Session-local callback ownership; none of this state is reconstructed from the transcript. */
 export class ClaudePromptRegistry {
-  private readonly missionPins: ReturnType<typeof claudePlannerSessionPins>
+  private readonly missionPins: ReturnType<typeof claudeMissionSessionPins>
   private readonly prompts = new Map<string, ClaudePendingPrompt>()
   /** Journal item id to the prompt key it shows. */
   private readonly journalBindings = new Map<string, string>()
@@ -77,7 +77,7 @@ export class ClaudePromptRegistry {
 
   constructor(sessionId?: string) {
     // Capture the policy at acquisition: a late request remains denied during release cleanup.
-    this.missionPins = sessionId ? claudePlannerSessionPins(sessionId) : undefined
+    this.missionPins = sessionId ? claudeMissionSessionPins(sessionId) : undefined
   }
 
   register(registration: ClaudePromptRegistration): ClaudePendingPrompt | null {

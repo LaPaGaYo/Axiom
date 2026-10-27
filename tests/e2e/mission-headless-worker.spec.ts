@@ -304,8 +304,13 @@ test('M3-08b: a claude headless Worker progresses RUNNING → SUBMITTED → VERI
           timeout: 120_000
         })
         .toBe(1)
+      await expect
+        .poll(() => inspect().bindings.filter((row) => row.dispatch_id).length, {
+          timeout: 60_000
+        })
+        .toBe(1)
       const binding = inspect().bindings[0]!
-      const attemptId = binding.dispatch_id!
+      const attemptId = z.string().parse(binding.dispatch_id)
       const attemptDir = path.join(userData, 'axiom', 'attempts', attemptId)
       await expect.poll(() => existsSync(ledgerPath), { timeout: 60_000 }).toBe(true)
       const launch = z
@@ -354,10 +359,14 @@ test('M3-08b: a claude headless Worker progresses RUNNING → SUBMITTED → VERI
             'Grep',
             'Glob',
             'LS',
-            'Edit',
-            'Write',
-            'MultiEdit',
-            'NotebookEdit',
+            `Edit(/${launch.cwd}/**)`,
+            `Edit(/${attemptDir}/**)`,
+            `Write(/${launch.cwd}/**)`,
+            `Write(/${attemptDir}/**)`,
+            `MultiEdit(/${launch.cwd}/**)`,
+            `MultiEdit(/${attemptDir}/**)`,
+            `NotebookEdit(/${launch.cwd}/**)`,
+            `NotebookEdit(/${attemptDir}/**)`,
             'Bash'
           ],
           deny: AXIOM_TEST_CLAUDE_DENIED_TOOLS

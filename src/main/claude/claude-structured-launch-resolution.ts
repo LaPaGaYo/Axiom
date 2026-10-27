@@ -11,9 +11,8 @@ import {
   agentSessionProviderHandleRoot
 } from '../../shared/agent-session-provider-handle'
 import { claudeProviderHandleLeafUuid } from '../../shared/agent-session-provider-handle-encoding'
-import { claudePlannerSessionPins } from '../axiom/execution/planner-claude-session'
-import { CLAUDE_LAUNCH_ENV } from '../axiom/execution/claude-launch-policy'
-import { ClaudeAccountRequiredError } from '../axiom/execution/claude-worker-home'
+import { claudeMissionSessionPins } from './claude-mission-session-pins'
+import { ClaudeAccountRequiredError } from '../claude-accounts/claude-account-required-error'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
 import {
   claudeChildEnv,
@@ -175,7 +174,7 @@ export function claudeStructuredLaunchPart(
 ): StructuredAgentLaunchPartResolver<ClaudeStructuredLaunch> {
   return async (basis, identity) => {
     const { record } = basis
-    const missionPins = claudePlannerSessionPins(identity.sessionId)
+    const missionPins = claudeMissionSessionPins(identity.sessionId)
     const accountHome = requireLegacyAgentSessionAccountHome(record.accountHome)
     const router = getClaudeProfileRouter()
     // A Claude record's chain holds only Claude handles; the launch admission refuses anything else.
@@ -254,7 +253,7 @@ export function claudeStructuredLaunchPart(
             ...base,
             // The turn translator relies on Claude's authoritative idle frame when no result arrives.
             [CLAUDE_SESSION_STATE_EVENTS_ENV]: '1',
-            ...(missionPins ? CLAUDE_LAUNCH_ENV : {})
+            ...missionPins?.env
           },
           visuals?.visuals ?? null
         ),

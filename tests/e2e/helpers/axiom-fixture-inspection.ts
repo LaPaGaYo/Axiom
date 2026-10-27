@@ -2,6 +2,7 @@ import { appendFileSync, existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { z } from 'zod'
 import Database from '../../../src/main/sqlite/sync-database'
+import { isTransientSqliteContention } from '../../../src/main/sqlite/sqlite-read-failure'
 
 /** The exec provider exits before submission. The harness records only observed host receipts. */
 export function recordHeadlessFixtureReceipts(
@@ -10,7 +11,14 @@ export function recordHeadlessFixtureReceipts(
   ledgerPath: string
 ) {
   const ledger = fixtureLedger(ledgerPath)
-  const state = inspectFixtureMission(userData, missionId)
+  let state: ReturnType<typeof inspectFixtureMission>
+  try {
+    state = inspectFixtureMission(userData, missionId)
+  } catch (error) {
+    // Restart can briefly lock SQLite; the receipt timer retries on its next tick.
+    if (isTransientSqliteContention(error)) {return}
+    throw error
+  }
   for (const submission of state.submissions) {
     if (
       ledger.some(

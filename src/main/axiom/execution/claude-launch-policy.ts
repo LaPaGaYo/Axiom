@@ -1,4 +1,5 @@
 import type { Settings } from '@anthropic-ai/claude-agent-sdk'
+import path from 'node:path'
 
 // D83: invocation pins, never written into the selected account home.
 export const CLAUDE_LAUNCH_ENV = {
@@ -40,7 +41,17 @@ export function claudeWorkerSettings(worktree: string, scratch: string) {
   return {
     ...claudeIsolationSettings(),
     permissions: {
-      allow: ['Read', 'Grep', 'Glob', 'LS', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash'],
+      allow: [
+        'Read',
+        'Grep',
+        'Glob',
+        'LS',
+        // File tools run outside the Bash sandbox. A leading // makes these rules absolute.
+        ...['Edit', 'Write', 'MultiEdit', 'NotebookEdit'].flatMap((tool) =>
+          [worktree, scratch].map((directory) => `${tool}(/${path.join(directory, '**')})`)
+        ),
+        'Bash'
+      ],
       deny: [...CLAUDE_EXTERNAL_TOOLS]
     },
     sandbox: {

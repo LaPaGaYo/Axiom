@@ -2,8 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
 import { createClaudeStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
-import { registerClaudePlannerSession } from '../axiom/execution/planner-claude-session'
-import { CLAUDE_LAUNCH_ENV } from '../axiom/execution/claude-launch-policy'
+import { registerClaudeMissionSessionPins } from './claude-mission-session-pins'
 import { claudeStructuredSpawnOptions } from './claude-structured-spawn-options'
 import {
   acquired,
@@ -11,6 +10,8 @@ import {
   identityFor,
   USER_MESSAGE
 } from './claude-structured-session-test-support'
+
+const launchEnv = { DISABLE_TELEMETRY: '1', CLAUDE_CODE_DISABLE_BUNDLED_SKILLS: '1' }
 
 const cleanup: (() => void)[] = []
 afterEach(() => {
@@ -38,7 +39,7 @@ function resolve(sessionId: string) {
     resolveCommand: () => '/usr/local/bin/claude',
     resolveInheritedEnv: async () => ({ PATH: '/usr/bin' }),
     resolveAuthPolicy: () => ({ account: 'managed' }),
-    resolveEnv: () => Object.fromEntries(Object.keys(CLAUDE_LAUNCH_ENV).map((key) => [key, '0'])),
+    resolveEnv: () => Object.fromEntries(Object.keys(launchEnv).map((key) => [key, '0'])),
     resolveLaunchArgs: () => [
       '--settings',
       '/user/settings.json',
@@ -56,8 +57,9 @@ function resolve(sessionId: string) {
 
 function register(model?: string, accountHomePath = '/account/claude') {
   cleanup.push(
-    registerClaudePlannerSession('dispatch-pins', 'mission-planner', {
+    registerClaudeMissionSessionPins('dispatch-pins', 'mission-planner', {
       settingsPath: '/attempt/planner-settings.json',
+      env: launchEnv,
       skills: ['review'],
       effort: 'high',
       accountHomePath,
@@ -86,7 +88,7 @@ describe('Mission Claude Planner launch pins', () => {
     expect(launch.options.extraArgs).toEqual({ 'replay-user-messages': null })
     expect(launch.options).not.toHaveProperty('plugins')
     expect(launch.options).not.toHaveProperty('additionalDirectories')
-    expect(launch.env).toMatchObject(CLAUDE_LAUNCH_ENV)
+    expect(launch.env).toMatchObject(launchEnv)
   })
 
   it.each([undefined, 'policy-model'])(
@@ -121,8 +123,9 @@ describe('Mission Claude Planner launch pins', () => {
 
   it('keeps saved message choices from changing the Planner model after spawn', async () => {
     cleanup.push(
-      registerClaudePlannerSession('dispatch-message', 'session-1', {
+      registerClaudeMissionSessionPins('dispatch-message', 'session-1', {
         settingsPath: '/attempt/planner-settings.json',
+        env: launchEnv,
         skills: [],
         model: 'policy-model',
         effort: 'high',

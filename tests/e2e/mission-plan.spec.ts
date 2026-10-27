@@ -1,9 +1,7 @@
 import { seedCodexTestAccount } from './helpers/codex-test-account'
 import { seedClaudeTestAccount } from './helpers/claude-test-account'
-import {
-  claudePlannerFallbackCalls,
-  installClaudePlannerTerminalFallback
-} from './helpers/claude-planner-terminal-fallback'
+import { createAxiomClaudePlannerStub } from './helpers/axiom-claude-planner-stub'
+import { AXIOM_TEST_CLAUDE_ENV } from './helpers/axiom-test-claude-provider'
 import { desktopCall } from './helpers/axiom-desktop-call'
 import { readGoalFile } from '../../src/cli/handlers/axiom/input-files'
 import { DEFAULT_MISSION_POLICY } from '../../src/shared/axiom-contract/mission-objects'
@@ -99,7 +97,7 @@ function inspect(userData: string, missionId: string) {
         .parse(
           db
             .prepare(
-              "SELECT event, object_id, after FROM audit_events WHERE mission_id = ? AND event LIKE 'planner.%' ORDER BY sequence"
+              'SELECT event, object_id, after FROM audit_events WHERE mission_id = ? ORDER BY sequence'
             )
             .all(missionId)
         )
@@ -120,6 +118,7 @@ function ledger(file: string) {
               kind: z.string().optional(),
               response: z.object({ ok: z.boolean() }).optional()
             })
+            .passthrough()
             .parse(JSON.parse(line))
         )
     : []
@@ -129,7 +128,7 @@ for (const provider of ['codex', 'claude'] as const) {
   test(
     provider === 'codex'
       ? 'M2-09: a read-only Planner proposes the fixture DAG and releases after PLAN_REVIEW'
-      : 'M3-08b: a claude Planner terminal fallback proposes the fixture DAG and releases after PLAN_REVIEW',
+      : 'M3-08b: a claude structured Planner proposes the fixture DAG and releases after PLAN_REVIEW',
     async (
       // oxlint-disable-next-line no-empty-pattern -- Restart helper owns the background app lifecycle.
       {},
@@ -146,7 +145,10 @@ for (const provider of ['codex', 'claude'] as const) {
         return
       }
       const temp = mkdtempSync(path.join(os.tmpdir(), 'axiom-m2-09-'))
-      const executable = createAxiomFixtureProvider(temp, provider)
+      const executable =
+        provider === 'claude'
+          ? createAxiomClaudePlannerStub(temp)
+          : createAxiomFixtureProvider(temp, provider)
       const ledgerPath = path.join(temp, 'planner.jsonl')
       const session = createRestartSession(testInfo, {
         ORCA_BACKGROUND_LAUNCH: '1',
@@ -191,15 +193,9 @@ for (const provider of ['codex', 'claude'] as const) {
           ok: false,
           error: { code: 'caller_not_desktop' }
         })
-        if (provider === 'claude') {
-          await installClaudePlannerTerminalFallback(app)
-        }
         const { attempt } = MissionPlanResponseSchema.parse(
           await desktopCall(first.page, 'axiom.mission.plan', { missionId: mission.id })
         )
-        if (provider === 'claude') {
-          expect(await claudePlannerFallbackCalls(app)).toBeGreaterThan(0)
-        }
         expect(attempt.provider).toBe(provider)
         expect(attempt.branch).toBe(`axiom/planner/${mission.id}/1`)
         await expect
@@ -263,6 +259,53 @@ for (const provider of ['codex', 'claude'] as const) {
           .poll(() => ledger(ledgerPath).find((e) => e.kind === 'proposal')?.response?.ok)
           .toBe(true)
         expect(ledger(ledgerPath).filter((e) => e.kind === 'error')).toEqual([])
+        if (provider === 'claude') {
+          const settingsPath = path.join(
+            userData,
+            'axiom',
+            'attempts',
+            z.string().parse(attempt.attemptId),
+            'planner-settings.json'
+          )
+          const launch = ledger(ledgerPath).find((entry) => entry.kind === 'planner_launch')
+          expect(launch).toMatchObject({
+            argv: expect.arrayContaining([
+              '--settings',
+              settingsPath,
+              '--setting-sources=',
+              '--permission-mode',
+              'default'
+            ]),
+            settingsPath,
+            // The pinned SDK sends sources via argv and skills via initialize.
+            initialize: { settingSources: null, skills: [] },
+            env: {
+              ...AXIOM_TEST_CLAUDE_ENV,
+              CLAUDE_CONFIG_DIR: path.join(userData, 'claude-profiles', 'e2e-claude', 'home')
+            }
+          })
+          expect(launch?.settings).toEqual({
+            syncClaudeAiSkills: false,
+            syncClaudeAiPlugins: false,
+            enabledPlugins: {},
+            permissions: {
+              allow: [
+                'Read',
+                'Grep',
+                'Glob',
+                'LS',
+                'Bash(git log:*)',
+                'Bash(git diff:*)',
+                'Bash(git show:*)',
+                `Bash(axiom plan propose --mission ${mission.id} --attempt ${attempt.attemptId} --file:*)`
+              ],
+              deny: ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'WebFetch', 'WebSearch']
+            }
+          })
+          expect(
+            settled.audits.filter((entry) => entry.event === 'attempt.permission_denied')
+          ).toEqual([])
+        }
         const approved = MissionResponseSchema.parse(
           cli(userData, ['mission', 'show', '--mission', mission.id])
         )

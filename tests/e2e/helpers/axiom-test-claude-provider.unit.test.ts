@@ -72,7 +72,21 @@ it.skipIf(!source)(
       settingsPath,
       JSON.stringify({
         permissions: {
-          allow: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash'],
+          allow: [
+            'Read',
+            'Grep',
+            'Glob',
+            'LS',
+            `Edit(/${worktree}/**)`,
+            `Edit(/${attemptDir}/**)`,
+            `Write(/${worktree}/**)`,
+            `Write(/${attemptDir}/**)`,
+            `MultiEdit(/${worktree}/**)`,
+            `MultiEdit(/${attemptDir}/**)`,
+            `NotebookEdit(/${worktree}/**)`,
+            `NotebookEdit(/${attemptDir}/**)`,
+            'Bash'
+          ],
           deny: AXIOM_TEST_CLAUDE_DENIED_TOOLS
         },
         sandbox: {

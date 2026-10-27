@@ -1,28 +1,33 @@
-import type { AgentSpec } from '../../../shared/axiom-contract/agent-spec'
+import type { Options } from '@anthropic-ai/claude-agent-sdk'
 
-export type ClaudePlannerSessionPins = {
+export type ClaudeMissionSessionPins = {
   settingsPath: string
   accountHomePath: string
   skills: readonly string[]
   model?: string
-  effort: AgentSpec['reasoning']['effort']
+  effort: NonNullable<Options['effort']>
+  env: Readonly<Record<string, string>>
   denyPermission: (toolName: string) => void
 }
 
-const bySession = new Map<string, ClaudePlannerSessionPins>()
+const bySession = new Map<string, ClaudeMissionSessionPins>()
 const byDispatch = new Map<string, string>()
 
-/** Control Plane-owned invocation policy. Mission sessions are never resumed after a process
+/** Kernel extension point for caller-owned invocation policy. Mission sessions never resume after a process
  * restart: recovery settles their old dispatch, so these pins deliberately are not durable. */
-export function registerClaudePlannerSession(
+export function registerClaudeMissionSessionPins(
   dispatchId: string,
   sessionId: string,
-  pins: ClaudePlannerSessionPins
+  pins: ClaudeMissionSessionPins
 ): () => void {
   if (bySession.has(sessionId) || byDispatch.has(dispatchId)) {
     throw new Error('Claude Planner launch policy already registered')
   }
-  const entry = Object.freeze({ ...pins, skills: Object.freeze([...pins.skills]) })
+  const entry = Object.freeze({
+    ...pins,
+    skills: Object.freeze([...pins.skills]),
+    env: Object.freeze({ ...pins.env })
+  })
   bySession.set(sessionId, entry)
   byDispatch.set(dispatchId, sessionId)
   return () => {
@@ -33,6 +38,6 @@ export function registerClaudePlannerSession(
   }
 }
 
-export function claudePlannerSessionPins(sessionId: string): ClaudePlannerSessionPins | undefined {
+export function claudeMissionSessionPins(sessionId: string): ClaudeMissionSessionPins | undefined {
   return bySession.get(sessionId)
 }
