@@ -6,7 +6,7 @@ import {
   type AgentSpec
 } from '../../../shared/axiom-contract/agent-spec'
 import { RISK_LEVELS, type RiskLevel } from '../../../shared/axiom-contract/lifecycle'
-import type { Policy } from '../../../shared/axiom-contract/mission-objects'
+import type { AuditEvent, Policy } from '../../../shared/axiom-contract/mission-objects'
 import type { DecisionEngine } from '../decision-engine/decision-engine'
 import type { DecisionRule } from '../decision-engine/rules-engine'
 import { certifiedCombo } from './certified-providers'
@@ -26,9 +26,20 @@ export class AgentFactoryError extends Error {
       | 'mission_not_found'
       | 'task_not_found'
       | 'goal_revision_not_found',
-    readonly data: Record<string, unknown> = {}
+    readonly data: Record<string, AuditEvent['after']> = {}
   ) {
-    super(code)
+    super(
+      Array.isArray(data.filtered) &&
+        data.filtered.some(
+          (entry) =>
+            typeof entry === 'object' &&
+            entry !== null &&
+            'reason' in entry &&
+            entry.reason === 'no_account'
+        )
+        ? 'No Codex account selected. Add a Codex account in Settings › Accounts.'
+        : code
+    )
     this.name = 'AgentFactoryError'
   }
 }
@@ -53,7 +64,8 @@ export function selectProvider(
   routing: Policy['routing'],
   role: AgentSpec['role'],
   risk: RiskLevel,
-  engine: DecisionEngine
+  engine: DecisionEngine,
+  codexAccountAvailable = true
 ): AgentSpec['selection'] {
   const installed = DEFAULT_ORDER.filter((id) => available.includes(id))
   const filtered: AgentSpec['selection']['filtered'] = []
@@ -64,15 +76,17 @@ export function selectProvider(
     }
     const reason = !installed.includes(provider)
       ? 'not_installed'
-      : !combo
-        ? 'not_certified'
-        : routing.disallowedProviders.includes(provider)
-          ? 'disallowed'
-          : !combo.roles.includes(role) ||
-              RISK_LEVELS.indexOf(risk) > RISK_LEVELS.indexOf(combo.maxRisk) ||
-              (risk === 'high' && routing.highRiskTier === 'A' && !isTierA(provider))
-            ? 'tier_too_low'
-            : undefined
+      : provider === 'codex' && !codexAccountAvailable
+        ? 'no_account'
+        : !combo
+          ? 'not_certified'
+          : routing.disallowedProviders.includes(provider)
+            ? 'disallowed'
+            : !combo.roles.includes(role) ||
+                RISK_LEVELS.indexOf(risk) > RISK_LEVELS.indexOf(combo.maxRisk) ||
+                (risk === 'high' && routing.highRiskTier === 'A' && !isTierA(provider))
+              ? 'tier_too_low'
+              : undefined
     if (reason) {
       filtered.push({ provider, reason })
     }

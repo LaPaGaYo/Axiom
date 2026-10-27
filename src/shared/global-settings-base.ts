@@ -7,4 +7,7 @@ import type { WorktreeDeletionPreferences } from './worktree-deletion-preference
 export type GlobalSettingsBase = NativeChatGlobalSettings &
   WorktreeDeletionPreferences &
   ClaudeAccountSwitchSettings &
-  ExternalConversationSettings
+  ExternalConversationSettings & {
+    /** D83 ruling ①: one-time real-home hook and account-side hardlink cleanup. */
+    codexRealHomeCleanupDone?: boolean
+  }

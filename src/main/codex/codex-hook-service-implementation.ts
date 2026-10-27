@@ -5,7 +5,8 @@ import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-p
 import { dedupeInFlightRun } from '../in-flight-run-dedupe'
 import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import { writeManagedScript } from '../agent-hooks/installer-utils'
-import { getOrcaManagedCodexHomePath } from './codex-home-paths'
+import { reconcileCodexAccountHomeHook } from './codex-account-home-hook'
+import { usesCodexAccountHomeLayout, getOrcaManagedCodexHomePath } from './codex-home-paths'
 import { getManagedCommand, getManagedScriptPath } from './codex-hook-definition'
 import { installCodexHooksExclusively } from './codex-hook-local-install'
 import { getManagedCodexHookHome, readStopgapOrcaHashes } from './codex-hook-orca-approvals'
@@ -234,6 +235,13 @@ export class CodexHookService {
     launchesCodex = true,
     isHooksEnabled: () => boolean = () => true
   ): Promise<AgentHookInstallStatus> {
+    // D83 ruling ①: legacy installers can still be called by settings/startup.
+    if (process.platform !== 'win32') {
+      if (usesCodexAccountHomeLayout(runtimeHomePath)) {
+        await reconcileCodexAccountHomeHook(runtimeHomePath, isHooksEnabled, launchesCodex)
+      }
+      return this.getStatus(runtimeHomePath)
+    }
     const answer =
       (await resolveCodexHookAnswerForLaunch(launchesCodex ? CODEX_HOOK_LAUNCH_WAIT_MS : 0)) ??
       CODEX_ANSWER_AWAITED
@@ -303,6 +311,9 @@ export class CodexHookService {
   refreshRuntimeUserHooks(
     runtimeHomePath: string = getOrcaManagedCodexHomePath()
   ): Promise<AgentHookInstallStatus> {
+    if (process.platform !== 'win32') {
+      return Promise.resolve(this.getStatus(runtimeHomePath))
+    } // D83 ruling ①.
     return runExclusivelyForRuntimeAndSystemTrustConfig(runtimeHomePath, () =>
       this.refreshRuntimeUserHooksExclusively(runtimeHomePath)
     )
@@ -317,6 +328,9 @@ export class CodexHookService {
   }
 
   remove(): Promise<AgentHookInstallStatus> {
+    if (process.platform !== 'win32') {
+      return Promise.resolve(this.getStatus())
+    } // D83 ruling ①: cleanup is recorded separately.
     return runExclusivelyForRuntimeAndSystemTrustConfig(getOrcaManagedCodexHomePath(), () =>
       this.removeExclusively()
     )

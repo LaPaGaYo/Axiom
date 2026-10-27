@@ -35,6 +35,10 @@ export async function prepareLegacySharedCodexSessionResume(
     systemCodexHomePath?: string
   }
 ): Promise<AiVaultPrepareSessionResumeResult> {
+  // D83 ruling ①: no migration or linked-history resume outside Windows/WSL.
+  if (process.platform !== 'win32') {
+    return { useRealCodexHome: false }
+  }
   const substituteCodexHome = await resolveSelectedAccountCodexHomeForResume(args, options)
   if (substituteCodexHome) {
     return { useRealCodexHome: false, substituteCodexHome }
@@ -93,6 +97,13 @@ export async function prepareCodexAccountRestartResume(args: {
   targetHome: string
   systemCodexHomePath: string
 }): Promise<string> {
+  if (
+    process.platform !== 'win32' &&
+    (sameRuntimePath(args.sourceHome, args.systemCodexHomePath) ||
+      sameRuntimePath(args.targetHome, args.systemCodexHomePath))
+  ) {
+    throw new Error('System Codex history is view only (D83).')
+  }
   if (sameRuntimePath(args.sourceHome, args.targetHome)) {
     return args.targetHome
   }

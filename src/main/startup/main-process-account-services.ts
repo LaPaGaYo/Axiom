@@ -1,3 +1,4 @@
+import { retireCodexRealHome } from '../codex/codex-real-home-retirement'
 import { configurePreflightProviderActivation } from '../preflight/agent-detection'
 import { app } from 'electron'
 import { KeybindingService } from '../keybindings/keybinding-service'
@@ -43,21 +44,27 @@ export function initializeMainProcessAccountServices(): void {
   ) {
     throw new Error('Usage stores must be initialized before account services')
   }
+  retireCodexRealHome({ store, userHome: app.getPath('home'), userData: app.getPath('userData') })
   configurePreflightProviderActivation(store)
-  state.codexSessionMigration = createCodexSessionMigrationScheduler({
-    isEligible: () =>
-      state.codexRuntimeHome?.isHostSystemDefaultSessionMigrationEligible() === true,
-    isQuitting: () => state.isQuitting,
-    resolveSystemCodexHomePathOverride: () =>
-      resolveHostCodexSessionSourceHome(store.getSettings()),
-    prepareScheduledRun: (scanDates) =>
-      state.codexRuntimeHome?.prepareHostSystemDefaultSessionMigrationPass(scanDates),
-    finishScheduledRun: () => state.codexRuntimeHome?.finishHostSystemDefaultSessionMigrationPass(),
-    startBackfill: startCodexSessionBackfillInBackground,
-    startIndexHeal: startCodexSessionIndexHealInBackground
-  })
+  // D83 ruling ①: Windows/WSL retain the legacy migration scheduler.
+  state.codexSessionMigration =
+    process.platform === 'win32'
+      ? createCodexSessionMigrationScheduler({
+          isEligible: () =>
+            state.codexRuntimeHome?.isHostSystemDefaultSessionMigrationEligible() === true,
+          isQuitting: () => state.isQuitting,
+          resolveSystemCodexHomePathOverride: () =>
+            resolveHostCodexSessionSourceHome(store.getSettings()),
+          prepareScheduledRun: (scanDates) =>
+            state.codexRuntimeHome?.prepareHostSystemDefaultSessionMigrationPass(scanDates),
+          finishScheduledRun: () =>
+            state.codexRuntimeHome?.finishHostSystemDefaultSessionMigrationPass(),
+          startBackfill: startCodexSessionBackfillInBackground,
+          startIndexHeal: startCodexSessionIndexHealInBackground
+        })
+      : null
   const services = createProviderAccountServices(store, {
-    codexAccountLifecycle: { onHostSystemDefaultSelected: state.codexSessionMigration.requestRun },
+    codexAccountLifecycle: { onHostSystemDefaultSelected: state.codexSessionMigration?.requestRun },
     setClaudeStatusLineListener: (listener) => agentHookServer.setClaudeStatusLineListener(listener)
   })
   state.rateLimits = services.rateLimits
@@ -65,10 +72,12 @@ export function initializeMainProcessAccountServices(): void {
   state.codexAccounts = services.codexAccounts
   state.claudeRuntimeAuth = services.claudeRuntimeAuth
   state.claudeAccounts = services.claudeAccounts
-  void startCodexStateDbBackfillRecoveryInBackground(getOrcaManagedCodexHomePath())
+  if (process.platform === 'win32') {
+    void startCodexStateDbBackfillRecoveryInBackground(getOrcaManagedCodexHomePath())
+  }
   // Why: migrate historical shared-home sessions after startup; compatibility
   // launches re-arm the non-destructive pass for new rollouts (#4444, #8612, #12480).
-  state.codexSessionMigration.scheduleInitialRun()
+  state.codexSessionMigration?.scheduleInitialRun()
   const expireModelCatalogs = createAgentModelCatalogSettingsExpiry(
     agentModelCatalogStore,
     store.getSettings()

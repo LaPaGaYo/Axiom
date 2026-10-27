@@ -69,7 +69,7 @@ afterEach(() => {
 })
 
 describe('CodexRuntimeHomeService per-account takeover composition', () => {
-  it('upgrades a realistic two-account shared-home fixture without losing auth or sessions', async () => {
+  it('leaves legacy auth and sessions untouched while launching owned accounts', async () => {
     const accountOneStale = createAuth('one@example.com', 'acct-1', 'one-stale', 1_000)
     const accountOneMigrated = createAuth('one@example.com', 'acct-1', 'one-migrated', 2_000)
     const accountTwoAuth = createAuth('two@example.com', 'acct-2', 'two-current', 3_000)
@@ -105,7 +105,7 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     })
 
     expect(readFileSync(join(accountOne.managedHomePath, 'auth.json'), 'utf8')).toBe(
-      accountOneMigrated
+      accountOneStale
     )
     expect(readFileSync(join(accountTwo.managedHomePath, 'auth.json'), 'utf8')).toBe(accountTwoAuth)
 
@@ -147,7 +147,7 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     expect(readFileSync(join(accountTwo.managedHomePath, 'auth.json'), 'utf8')).toBe(accountTwoAuth)
   })
 
-  it('migrates the one proven C-era refresh, launches E home, then ignores shared auth', async () => {
+  it('never imports a legacy refresh into the selected account home', async () => {
     const stale = createAuth('one@example.com', 'acct-1', 'stale', 1_000)
     const migrated = createAuth('one@example.com', 'acct-1', 'migrated', 2_000)
     const laterShared = createAuth('one@example.com', 'acct-1', 'later-shared', 3_000)
@@ -159,7 +159,7 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
 
     const service = new CodexRuntimeHomeService(store as never)
 
-    expect(readFileSync(join(account.managedHomePath, 'auth.json'), 'utf-8')).toBe(migrated)
+    expect(readFileSync(join(account.managedHomePath, 'auth.json'), 'utf-8')).toBe(stale)
     expect(service.prepareForCodexLaunch()).toBe(account.managedHomePath)
     writeFileSync(sharedAuthPath(), laterShared, 'utf-8')
     expect(service.prepareForRateLimitFetch()).toEqual({
@@ -167,12 +167,12 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
       codexHomePath: account.managedHomePath
     })
     expect(service.prepareForCodexLaunch()).toBe(account.managedHomePath)
-    expect(readFileSync(join(account.managedHomePath, 'auth.json'), 'utf-8')).toBe(migrated)
+    expect(readFileSync(join(account.managedHomePath, 'auth.json'), 'utf-8')).toBe(stale)
     expect(readFileSync(systemAuthPath(), 'utf-8')).toBe('system auth sentinel\n')
     expect(settings.activeCodexManagedAccountId).toBe(account.id)
   })
 
-  it('keeps E in-place auth when selection becomes real-home without an explicit sync', async () => {
+  it('keeps account auth and refuses launch after deselection', async () => {
     const fresh = createAuth('one@example.com', 'acct-1', 'e-refresh', 3_000)
     const mismatch = createAuth('other@example.com', 'acct-other', 'stale-shared', 4_000)
     const account = createManagedAccount('account-1', 'acct-1', fresh)
@@ -185,11 +185,10 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     settings.activeCodexManagedAccountId = null
     settings.activeCodexManagedAccountIdsByRuntime = { host: null, wsl: {} }
 
-    expect(service.prepareForCodexLaunch()).toBeNull()
-    expect(service.prepareForRateLimitFetch()).toEqual({
-      kind: 'ready',
-      codexHomePath: systemHome()
-    })
+    expect(() => service.prepareForCodexLaunch()).toThrow(
+      expect.objectContaining({ code: 'no_account' })
+    )
+    expect(service.prepareForRateLimitFetch()).toEqual({ kind: 'skip' })
     expect(readFileSync(join(account.managedHomePath, 'auth.json'), 'utf-8')).toBe(fresh)
     expect(readFileSync(sharedAuthPath(), 'utf-8')).toBe(mismatch)
     expect(readFileSync(systemAuthPath(), 'utf-8')).toBe('system auth sentinel\n')
@@ -206,7 +205,7 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
     const accountAuthPath = join(account.managedHomePath, 'auth.json')
-    expect(readFileSync(accountAuthPath, 'utf-8')).toBe(takeover)
+    expect(readFileSync(accountAuthPath, 'utf-8')).toBe(stale)
 
     rmSync(accountAuthPath)
     writeFileSync(sharedAuthPath(), laterShared, 'utf-8')

@@ -26,7 +26,8 @@ export class AgentFactory {
   constructor(
     private readonly store: AxiomStore,
     private readonly engine: DecisionEngine,
-    private readonly listInstalledProviders: () => Promise<string[]>
+    private readonly listInstalledProviders: () => Promise<string[]>,
+    private readonly hasCodexAccount: () => boolean = () => true
   ) {}
 
   async selectWorkerProvider(input: { missionId: string; taskId: string }): Promise<string> {
@@ -42,7 +43,14 @@ export class AgentFactory {
     if (!task || task.missionId !== missionId) {
       throw new AgentFactoryError('task_not_found', { taskId })
     }
-    return selectProvider(installed, policy.routing, 'worker', task.spec.risk, this.engine).chosen
+    return selectProvider(
+      installed,
+      policy.routing,
+      'worker',
+      task.spec.risk,
+      this.engine,
+      this.hasCodexAccount()
+    ).chosen
   }
 
   async build(input: z.input<typeof BuildParams>) {
@@ -77,7 +85,8 @@ export class AgentFactory {
         policy.routing,
         p.role,
         task?.spec.risk ?? 'high',
-        this.engine
+        this.engine,
+        this.hasCodexAccount()
       )
       const maxTokens = task?.spec.budget?.maxTokens ?? policy.budget.maxTokens
       const spec = AgentSpecSchema.parse({

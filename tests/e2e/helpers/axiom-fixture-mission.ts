@@ -1,3 +1,4 @@
+import { seedCodexTestAccount } from './codex-test-account'
 import { desktopCall } from './axiom-desktop-call'
 import { readGoalFile } from '../../../src/cli/handlers/axiom/input-files'
 import { DEFAULT_MISSION_POLICY } from '../../../src/shared/axiom-contract/mission-objects'
@@ -96,6 +97,7 @@ export async function withFixtureMission(
     releaseTerminals?: boolean
     maxAttempts?: number
     extraAllowedPaths?: string[]
+    noCodexAccount?: boolean
     holdExitSubmission?: boolean
   } = {}
 ) {
@@ -145,6 +147,9 @@ process.exit(result.status ?? 1)
     git(['clone', '--no-hardlinks', '--branch', 'main', realpathSync(source), clone])
     expect(git(['-C', clone, 'rev-parse', 'HEAD'])).toBe(FIXTURE_COMMIT)
     expect(git(['-C', clone, 'rev-parse', 'fixture-v1^{commit}'])).toBe(FIXTURE_COMMIT)
+    if (!options.noCodexAccount) {
+      seedCodexTestAccount(session.userDataDir)
+    }
     const first = await session.launch()
     app = first.app
     await waitForSessionReady(first.page)
@@ -165,13 +170,16 @@ process.exit(result.status ?? 1)
         repo: `id:${repo.id}`,
         targetBranch: 'main',
         goal: await readGoalFile(clone, 'GOAL.md'),
-        policy: DEFAULT_MISSION_POLICY
+        policy: {
+          ...DEFAULT_MISSION_POLICY,
+          routing: {
+            ...DEFAULT_MISSION_POLICY.routing,
+            preferredProviders: ['codex'],
+            disallowedProviders: options.noCodexAccount ? ['claude', 'opencode', 'antigravity'] : []
+          }
+        }
       })
     )
-    await desktopCall(first.page, 'axiom.policy.update', {
-      missionId: mission.id,
-      patch: { routing: { preferredProviders: ['codex'] } }
-    })
     if (!mission.activeGoalRevisionId) {
       throw new Error('Missing GoalRevision')
     }

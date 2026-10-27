@@ -67,7 +67,8 @@ export async function getCodexBackendAuthHeaders(
   options: CodexRateLimitFetchOptions | { codexHomePath?: string | null } | undefined,
   signal: AbortSignal
 ): Promise<Record<string, string> | null> {
-  if (signal.aborted) {
+  // D83 ruling ②: no implicit user-home authentication on macOS/Linux.
+  if (signal.aborted || (process.platform !== 'win32' && !options?.codexHomePath)) {
     return null
   }
   const authPath = join(getCodexHomePath(options?.codexHomePath), 'auth.json')

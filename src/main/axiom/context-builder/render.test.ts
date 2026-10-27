@@ -8,6 +8,9 @@ it('renders the headless report contract and compaction recovery point without C
   expect(text).toContain('.axiom/artifacts/')
   expect(text).toContain('```json')
   expect(text).toContain('checksRun')
+  expect(text).toContain('no network and an empty package store')
+  expect(text).toContain('do not try to install dependencies')
+  expect(text).toContain('result: "fail"')
   expect(text).not.toContain('axiom attempt')
 })
 it('keeps the terminal protocol as the default fallback', () => {

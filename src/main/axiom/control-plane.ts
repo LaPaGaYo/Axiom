@@ -47,7 +47,18 @@ function createControlPlane(runtime: OrcaRuntimeService, db: OrchestrationDb) {
   const agentFactory = new AgentFactory(
     store,
     decisionEngine,
-    detectInstalledAgentsWithShellPathHydration
+    detectInstalledAgentsWithShellPathHydration,
+    () => {
+      // D83 ruling ① leaves Windows/WSL routing unchanged.
+      if (process.platform === 'win32') {
+        return true
+      }
+      try {
+        return runtime.resolveCodexHomeForWorkerLaunch() !== null
+      } catch {
+        return false
+      }
+    }
   )
   const missions = new MissionController(db, store, {
     onScheduleTrigger: (missionId, trigger) => {

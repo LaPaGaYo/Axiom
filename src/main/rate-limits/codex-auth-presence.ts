@@ -58,6 +58,9 @@ export async function probeCodexAuthPresence(
   codexHomePath?: string | null,
   options: CodexAuthPresenceOptions = {}
 ): Promise<CodexAuthPresence> {
+  if (process.platform !== 'win32' && !codexHomePath) {
+    return 'absent'
+  } // D83 ruling ②.
   // Mirror Codex's own home resolution: an explicit managed-account home wins,
   // then CODEX_HOME, then the default ~/.codex.
   const home = codexHomePath ?? process.env.CODEX_HOME ?? join(homedir(), '.codex')

@@ -1,5 +1,6 @@
 import { AlertTriangle, Loader2, Plus, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { selectCodexProviderAccount } from '@/runtime/runtime-provider-accounts-client'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
@@ -40,6 +41,11 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
     visibleCodexAccounts,
     wslCapabilitiesLoading
   } = model
+  // D83 ruling ①: remote hosts and Windows/WSL retain their legacy UI.
+  const legacyDefault =
+    isRemoteAccountScope ||
+    accountRuntime.runtime === 'wsl' ||
+    (model.accountVisibilityOptions.ownerPlatform ?? getRendererAppPlatform()) === 'win32'
   return (
     <section key="codex-accounts" id="accounts-codex" className="space-y-4 scroll-mt-6">
       <div className="space-y-1">
@@ -48,10 +54,15 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
           {translate('auto.components.settings.AccountsPane.ef91cfa06b', 'Codex')}
         </h3>
         <p className="text-xs text-muted-foreground">
-          {translate(
-            'auto.components.settings.AccountsPane.cedfab35ab',
-            'Optional. Axiom can use your normal Codex login; add accounts only if you want quick switching in Axiom.'
-          )}
+          {legacyDefault
+            ? translate(
+                'auto.components.settings.AccountsPane.cedfab35ab',
+                'Optional. Axiom can use your normal Codex login; add accounts only if you want quick switching in Axiom.'
+              )
+            : translate(
+                'accounts.codex.accountRequired',
+                'Add a Codex account in Settings › Accounts to run Codex in Axiom.'
+              )}
         </p>
         <p className="text-xs text-muted-foreground">
           {isRemoteAccountScope
@@ -147,17 +158,22 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
               {translate('auto.components.settings.AccountsPane.94d351af4a', 'Accounts')}
             </Label>
             <p className="text-xs text-muted-foreground">
-              {isRemoteAccountScope
+              {!legacyDefault
                 ? translate(
-                    'accounts.remoteScopeAccountsAddHere',
-                    'Showing accounts managed by {{value0}}. New accounts sign in there; you finish in this device’s browser.',
-                    { value0: accountRuntimeSentenceLabel }
+                    'accounts.codex.noAccount',
+                    'No Codex account selected. Add an account here to get started.'
                   )
-                : translate(
-                    'auto.components.settings.AccountsPane.c0a52abfc5',
-                    'Showing accounts for {{value0}}. New accounts are added there.',
-                    { value0: accountRuntimeSentenceLabel }
-                  )}
+                : isRemoteAccountScope
+                  ? translate(
+                      'accounts.remoteScopeAccountsAddHere',
+                      'Showing accounts managed by {{value0}}. New accounts sign in there; you finish in this device’s browser.',
+                      { value0: accountRuntimeSentenceLabel }
+                    )
+                  : translate(
+                      'auto.components.settings.AccountsPane.c0a52abfc5',
+                      'Showing accounts for {{value0}}. New accounts are added there.',
+                      { value0: accountRuntimeSentenceLabel }
+                    )}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
@@ -221,82 +237,98 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
         )}
 
         <div className="space-y-2">
-          <button
-            type="button"
-            onClick={() =>
-              void runCodexAccountAction('select:system', () =>
-                selectCodexProviderAccount(accountOwner, {
-                  accountId: null,
-                  runtime: accountRuntime.runtime,
-                  wslDistro: accountRuntime.wslDistro
-                })
-              )
-            }
-            disabled={codexAction !== 'idle' || accountRuntimeUnavailable}
-            className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
-              systemCodexNeedsSignIn
-                ? 'border-destructive/50 bg-destructive/5'
-                : systemCodexActive
-                  ? 'border-foreground/20 bg-accent/15'
-                  : 'border-border/70 hover:border-border hover:bg-accent/8'
-            } disabled:cursor-default disabled:opacity-100`}
-          >
-            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="truncate text-sm font-medium">
-                  {translate('auto.components.settings.AccountsPane.f2a265f8c7', 'System default')}
+          {legacyDefault ? (
+            <button
+              type="button"
+              onClick={() =>
+                void runCodexAccountAction('select:system', () =>
+                  selectCodexProviderAccount(accountOwner, {
+                    accountId: null,
+                    runtime: accountRuntime.runtime,
+                    wslDistro: accountRuntime.wslDistro
+                  })
+                )
+              }
+              disabled={codexAction !== 'idle' || accountRuntimeUnavailable}
+              className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
+                systemCodexNeedsSignIn
+                  ? 'border-destructive/50 bg-destructive/5'
+                  : systemCodexActive
+                    ? 'border-foreground/20 bg-accent/15'
+                    : 'border-border/70 hover:border-border hover:bg-accent/8'
+              } disabled:cursor-default disabled:opacity-100`}
+            >
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="truncate text-sm font-medium">
+                    {translate(
+                      'auto.components.settings.AccountsPane.f2a265f8c7',
+                      'System default'
+                    )}
+                  </span>
+                  {systemCodexActive ? (
+                    <Badge
+                      variant="outline"
+                      className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/80"
+                    >
+                      {translate('auto.components.settings.AccountsPane.e74831fb6b', 'Active')}
+                    </Badge>
+                  ) : null}
+                  {systemCodexNeedsSignIn ? (
+                    <Badge
+                      variant="destructive"
+                      className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none"
+                    >
+                      {translate(
+                        'auto.components.settings.AccountsPane.93c47b333a',
+                        'Needs sign-in'
+                      )}
+                    </Badge>
+                  ) : null}
+                </div>
+                <span
+                  className={`truncate text-[11px] ${
+                    systemCodexNeedsSignIn ? 'text-destructive' : 'text-muted-foreground'
+                  }`}
+                >
+                  {systemCodexNeedsSignIn
+                    ? systemCodexMissingSignIn
+                      ? translate(
+                          'auto.components.settings.AccountsPane.codexSystemDefaultNeedsSignIn',
+                          'No Codex sign-in was found for {{value0}}.',
+                          { value0: accountRuntimeSentenceLabel }
+                        )
+                      : translate(
+                          'auto.components.settings.AccountsPane.fd62f37c24',
+                          'Codex reported this {{value0}} login is out of date.',
+                          { value0: accountRuntimeSentenceLabel }
+                        )
+                    : getCodexSystemDefaultSubtitle(
+                        systemCodexIdentity,
+                        accountRuntimeSentenceLabel
+                      )}
                 </span>
-                {systemCodexActive ? (
-                  <Badge
-                    variant="outline"
-                    className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/80"
-                  >
-                    {translate('auto.components.settings.AccountsPane.e74831fb6b', 'Active')}
-                  </Badge>
-                ) : null}
-                {systemCodexNeedsSignIn ? (
-                  <Badge
-                    variant="destructive"
-                    className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none"
-                  >
-                    {translate('auto.components.settings.AccountsPane.93c47b333a', 'Needs sign-in')}
-                  </Badge>
-                ) : null}
               </div>
-              <span
-                className={`truncate text-[11px] ${
-                  systemCodexNeedsSignIn ? 'text-destructive' : 'text-muted-foreground'
-                }`}
-              >
-                {systemCodexNeedsSignIn
-                  ? systemCodexMissingSignIn
-                    ? translate(
-                        'auto.components.settings.AccountsPane.codexSystemDefaultNeedsSignIn',
-                        'No Codex sign-in was found for {{value0}}.',
-                        { value0: accountRuntimeSentenceLabel }
-                      )
-                    : translate(
-                        'auto.components.settings.AccountsPane.fd62f37c24',
-                        'Codex reported this {{value0}} login is out of date.',
-                        { value0: accountRuntimeSentenceLabel }
-                      )
-                  : getCodexSystemDefaultSubtitle(systemCodexIdentity, accountRuntimeSentenceLabel)}
-              </span>
-            </div>
-          </button>
+            </button>
+          ) : null}
           {visibleCodexAccounts.length === 0 ? (
             <div className="rounded-md border border-dashed border-border/70 px-3 py-4 text-xs text-muted-foreground">
-              {isRemoteAccountScope
+              {!legacyDefault
                 ? translate(
-                    'auto.components.settings.AccountsPane.remoteEmptyCodexAccounts',
-                    'No managed Codex accounts on {{value0}}. It uses its system default Codex login; add accounts on that server.',
-                    { value0: accountRuntimeSentenceLabel }
+                    'accounts.codex.noAccount',
+                    'No Codex account selected. Add an account here to get started.'
                   )
-                : translate(
-                    'auto.components.settings.AccountsPane.b4c9450319',
-                    "No managed Codex accounts for {{value0}}. Axiom will use that environment's system default Codex login until you add one here.",
-                    { value0: accountRuntimeSentenceLabel }
-                  )}
+                : isRemoteAccountScope
+                  ? translate(
+                      'auto.components.settings.AccountsPane.remoteEmptyCodexAccounts',
+                      'No managed Codex accounts on {{value0}}. It uses its system default Codex login; add accounts on that server.',
+                      { value0: accountRuntimeSentenceLabel }
+                    )
+                  : translate(
+                      'auto.components.settings.AccountsPane.b4c9450319',
+                      "No managed Codex accounts for {{value0}}. Axiom will use that environment's system default Codex login until you add one here.",
+                      { value0: accountRuntimeSentenceLabel }
+                    )}
             </div>
           ) : (
             visibleCodexAccounts.map((account) => renderCodexAccountRow(account, model))

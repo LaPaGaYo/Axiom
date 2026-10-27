@@ -32,7 +32,11 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
   getHostCodexHomePathsForSessionDiscovery(): string[] {
     // Why the path-only resolver: transcript lookups poll this on a miss; launch creates the mirror.
     const homes = [resolveOrcaManagedCodexHomePath()]
-    if (this.isHostSystemDefaultRealHomeSelected() || this.getSelfContainedManagedHostAccount()) {
+    if (
+      process.platform !== 'win32' ||
+      this.isHostSystemDefaultRealHomeSelected() ||
+      this.getSelfContainedManagedHostAccount()
+    ) {
       // Why: nested Orca processes can retain an ambient managed CODEX_HOME.
       // Per-account lanes no longer bridge real-home history into the shared
       // mirror, so include the real root for both directly-routed host lanes.
@@ -131,13 +135,19 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
   // mirror until cleanup can be tracked across old homes.
   isHostSystemDefaultRealHomeSelected(launchEnv?: NodeJS.ProcessEnv): boolean {
     return (
+      process.platform === 'win32' && // D83 ruling ①: null no longer denotes a host identity.
       normalizeCodexRuntimeSelection(this.store.getSettings()).host === null &&
       !hasCustomCodexHomeOverrideForLaunch(launchEnv)
     )
   }
 
   reconcileLegacySharedHomeForRetainedPanes(): void {
-    if (!this.isHostSystemDefaultRealHomeSelected() || !hasRecordedLegacySharedCodexPane()) {
+    // D83 ruling ① retains legacy reconciliation only on Windows.
+    if (
+      process.platform !== 'win32' ||
+      !this.isHostSystemDefaultRealHomeSelected() ||
+      !hasRecordedLegacySharedCodexPane()
+    ) {
       return
     }
     this.syncLegacySharedSystemDefaultAuthForRetainedPanes()
@@ -300,6 +310,10 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
       }
       this.clearSelfContainedManagedSelection(selfContainedAccount)
     }
+    // D83 ruling ②: null is no account, never a token-refreshing real-home probe.
+    if (process.platform !== 'win32') {
+      return { kind: 'skip' }
+    }
     if (this.isHostSystemDefaultRealHomeSelected()) {
       this.copyMirrorLoginIntoEmptySystemHome()
       if (hasRecordedLegacySharedCodexPane()) {
@@ -322,6 +336,7 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
    */
   prepareHostCodexHomeForReadOnlyAppServer(homePath: string, launchEnv?: NodeJS.ProcessEnv): void {
     if (
+      process.platform !== 'win32' || // D83 ruling ①: no mirror on macOS/Linux.
       this.getSelfContainedManagedHostAccount() ||
       normalizeRuntimePathForComparison(homePath) !==
         normalizeRuntimePathForComparison(resolveOrcaManagedCodexHomePath())

@@ -15,7 +15,8 @@ import { reconcileCodexHooksForLaunch } from './codex-hook-reconcile'
 import { ensureCodexDaemonSocketGuard } from './codex-config-mirror'
 import { isAgentStatusHooksEnabledForAgent } from '../agent-hooks/managed-agent-hook-controls'
 import {
-  getOrcaManagedCodexHomePath,
+  resolveOrcaManagedCodexHomePath,
+  CodexAccountRequiredError,
   getSystemCodexHomePath,
   usesCodexAccountHomeLayout
 } from './codex-home-paths'
@@ -39,6 +40,10 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
   ): Promise<void> {
     const isSystemHome =
       normalizeRuntimePathForComparison(home) === normalizeRuntimePathForComparison(systemHomePath)
+    // D83 ruling ①: system/mirror history is view-only on macOS/Linux.
+    if (process.platform !== 'win32' && (isSystemHome || !usesCodexAccountHomeLayout(home))) {
+      throw new CodexAccountRequiredError()
+    }
     const isHooksEnabled = (): boolean =>
       isAgentStatusHooksEnabledForAgent(deps.getSettings(), 'codex')
     if (!isSystemHome && usesCodexAccountHomeLayout(home)) {
@@ -101,8 +106,14 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
       systemCodexHomePath: systemHomePath,
       // Why: the mirror winning is what triggers the migration into ~/.codex below, so it must
       // outrank the path-sorted account homes or a system-default selection resumes as an account.
-      sharedRuntimeCodexHomePath: getOrcaManagedCodexHomePath(),
+      sharedRuntimeCodexHomePath: resolveOrcaManagedCodexHomePath(),
       resolveVerifiedResumeHome: async (sessionSource) => {
+        if (
+          process.platform !== 'win32' &&
+          (!selectedAccountCodexHome || !usesCodexAccountHomeLayout(sessionSource.homePath))
+        ) {
+          throw new CodexAccountRequiredError()
+        }
         deps.onCodexLaunch?.()
         let migrated = { useRealCodexHome: false }
         try {
@@ -149,7 +160,7 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
           ...preparation,
           reconcileSharedRuntimeAuth:
             normalizeRuntimePathForComparison(preparation.codexHomePath) ===
-            normalizeRuntimePathForComparison(getOrcaManagedCodexHomePath())
+            normalizeRuntimePathForComparison(resolveOrcaManagedCodexHomePath())
         }
       : preparation
   }

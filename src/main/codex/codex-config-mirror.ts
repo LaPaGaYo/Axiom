@@ -32,6 +32,10 @@ export function syncSystemConfigIntoManagedCodexHome(
     systemHomePath: getSystemCodexHomePath()
   }
 ): void {
+  // D83 ruling ①: retain the config mirror/write-back only for Windows/WSL.
+  if (process.platform !== 'win32' && !parseWslUncPath(homes.runtimeHomePath)) {
+    return
+  }
   if (!mirrorSystemConfigIntoManagedCodexHome(homes)) {
     // Why: a stalled settings mirror must not also withhold the daemon guard,
     // or Codex cannot start at all in a long home.
@@ -150,6 +154,10 @@ export function syncSystemConfigIntoLegacySharedCodexHome(
     systemHomePath: getSystemCodexHomePath()
   }
 ): void {
+  // D83 ruling ①: retained panes no longer sync the macOS/Linux mirror.
+  if (process.platform !== 'win32' && !parseWslUncPath(homes.runtimeHomePath)) {
+    return
+  }
   const systemConfigPath = join(homes.systemHomePath, 'config.toml')
   const runtimeConfigPath = join(homes.runtimeHomePath, 'config.toml')
   recoverInterruptedGuardedFileOperation(runtimeConfigPath)

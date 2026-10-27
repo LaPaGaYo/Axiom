@@ -20,7 +20,7 @@ import { createCanonicalHookTrustFixture } from './service-hook-trust-test-fixtu
 import { snapshotAccountTestHome } from '../codex/codex-account-home-layout.test-support'
 
 const ACCOUNT_CONFIG =
-  '# Written by Axiom (D83). Edits are replaced at the next layout.\n\n[features]\napps = false\nplugins = false\n'
+  '# Written by Axiom (D83). Edits are replaced at the next layout.\n\ncheck_for_update_on_startup = false\n\n[features]\napps = false\nplugins = false\nremote_plugin = false\n\n[analytics]\nenabled = false\n\n[feedback]\nenabled = false\n'
 
 // Why: temp homes exceed sun_path on macOS but not on Linux; keep asserted config bytes host-independent.
 vi.mock('../codex/codex-daemon-socket-path-guard', async (importOriginal) => ({

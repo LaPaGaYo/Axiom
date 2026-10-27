@@ -196,6 +196,7 @@ export class Scheduler {
           if (!(error instanceof AgentFactoryError) || error.code !== 'no_eligible_provider') {
             throw error
           }
+          this.audit(missionId, 'task.admission_refused', 'task', candidate.taskId, error.data)
           result.skipped.push({ taskId: candidate.taskId, reason: 'no_eligible_provider' })
           continue
         }

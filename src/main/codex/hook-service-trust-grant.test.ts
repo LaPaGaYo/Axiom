@@ -1,3 +1,5 @@
+import { setupLegacyWindowsCodexHome } from './legacy-windows-home.test-support'
+setupLegacyWindowsCodexHome()
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   chmodSync,
@@ -178,8 +180,9 @@ describe('CodexHookService opt-out of the real-home entry', () => {
   )
 
   it.skipIf(process.platform === 'win32')(
-    'preserves restrictive real-home hooks permissions during an explicit opt-out',
+    'leaves real-home hooks untouched during macOS/Linux opt-out',
     async () => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
       prepareSystemHome()
       const hooksPath = join(tmpHome, '.codex', 'hooks.json')
       const material = getCodexManagedHookInstallMaterial()
@@ -188,12 +191,14 @@ describe('CodexHookService opt-out of the real-home entry', () => {
         `${JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command: material.command }] }] } }, null, 2)}\n`
       )
       chmodSync(hooksPath, 0o600)
+      const before = readFileSync(hooksPath, 'utf8')
       const grantSession = forbidGrantSessions()
 
       await new CodexHookService().remove()
 
       expect(grantSession).not.toHaveBeenCalled()
 
+      expect(readFileSync(hooksPath, 'utf8')).toBe(before)
       expect(statSync(hooksPath).mode & 0o777).toBe(0o600)
     }
   )

@@ -425,8 +425,10 @@ describe('CodexRuntimeHomeService', () => {
     // syncForCurrentSelection), then Codex launches on the real home.
     settings.activeCodexManagedAccountId = null
     settings.activeCodexManagedAccountIdsByRuntime = { host: null, wsl: {} }
-    expect(service.isHostSystemDefaultRealHomeSelected()).toBe(true)
-    expect(service.prepareForCodexLaunch()).toBeNull()
+    expect(service.isHostSystemDefaultRealHomeSelected()).toBe(false)
+    expect(() => service.prepareForCodexLaunch()).toThrow(
+      expect.objectContaining({ code: 'no_account' })
+    )
 
     // E owns refreshes in place, so takeover ignores later shared-mirror bytes.
     expect(readFileSync(join(managedHomePath, 'auth.json'), 'utf-8')).toBe(managedAuth)
@@ -471,19 +473,15 @@ describe('CodexRuntimeHomeService', () => {
     settings.activeCodexManagedAccountIdsByRuntime = { host: null, wsl: {} }
     const syncSpy = vi.spyOn(service, 'syncForCurrentSelection')
 
-    expect(service.prepareForRateLimitFetch()).toEqual({
-      kind: 'ready',
-      codexHomePath: getSystemCodexHomePath()
-    })
+    expect(service.prepareForRateLimitFetch()).toEqual({ kind: 'skip' })
     expect(readFileSync(join(managedHomePath, 'auth.json'), 'utf-8')).toBe(managedAuth)
     expect(readFileSync(getSystemCodexAuthPath(), 'utf-8')).toBe(systemAuth)
     expect(syncSpy).not.toHaveBeenCalled()
 
-    expect(service.prepareForRateLimitFetch()).toEqual({
-      kind: 'ready',
-      codexHomePath: getSystemCodexHomePath()
-    })
-    expect(service.prepareForCodexLaunch()).toBeNull()
+    expect(service.prepareForRateLimitFetch()).toEqual({ kind: 'skip' })
+    expect(() => service.prepareForCodexLaunch()).toThrow(
+      expect.objectContaining({ code: 'no_account' })
+    )
     expect(syncSpy).not.toHaveBeenCalled()
   })
 })

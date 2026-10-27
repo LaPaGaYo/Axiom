@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => {
   const settings: Partial<GlobalSettings> = {}
   return {
     settings,
+    selectedHome: '',
     prepareForCodexLaunchAsync: vi.fn(async (): Promise<string | null> => null),
     isHostSystemDefaultRealHomeSelected: vi.fn(() => false),
     prepareRuntimeHomeForLaunch: vi.fn(async () => ({ state: 'ok' as const })),
@@ -47,10 +48,11 @@ vi.mock(
   async () => await import('../../shared/agent-status-hooks-setting')
 )
 vi.mock('../wsl', () => ({ getDefaultWslDistro: () => 'Ubuntu' }))
-vi.mock('../codex/codex-home-paths', () => ({
+vi.mock('../codex/codex-home-paths', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   getSystemCodexHomePath: () => SYSTEM_HOME,
   usesCodexAccountHomeLayout: (home: string) => home === ACCOUNT_HOME,
-  getOrcaManagedCodexHomePath: () => '/managed/.codex'
+  resolveOrcaManagedCodexHomePath: () => '/managed/.codex'
 }))
 vi.mock('../codex/codex-session-resume-preparation', () => ({
   prepareCodexSessionResume: mocks.prepareCodexSessionResume
@@ -64,7 +66,8 @@ vi.mock('./main-process-state', () => ({
       prepareForCodexLaunchAsync: mocks.prepareForCodexLaunchAsync,
       isHostSystemDefaultRealHomeSelected: mocks.isHostSystemDefaultRealHomeSelected,
       getHostCodexHomePathsForSessionDiscovery: () => [],
-      resolveSelectedHostAccountCodexHomePathForResume: () => null
+      resolveSelectedHostAccountCodexHomePathForResume: () => mocks.selectedHome || null,
+      getSelectedHostAccountCodexHomePath: () => mocks.selectedHome || null
     },
     store: {
       getSettings: () => mocks.settings,
@@ -129,25 +132,23 @@ function resumeFrom(homePath: string): Promise<unknown> {
 describe('Codex launch prep honours the per-agent hook opt-out', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.selectedHome = ACCOUNT_HOME
     mocks.isHostSystemDefaultRealHomeSelected.mockReturnValue(false)
     mocks.prepareForCodexLaunchAsync.mockResolvedValue(null)
   })
 
-  it.each(HOOK_SETTINGS)(
-    'real ~/.codex launch with $name: the reconcile reads the opt-out',
-    async ({ settings }) => {
-      mocks.settings = settings
-      mocks.isHostSystemDefaultRealHomeSelected.mockReturnValue(true)
+  it.each(HOOK_SETTINGS)('no-account launch refuses with $name', async ({ settings }) => {
+    mocks.settings = settings
+    mocks.isHostSystemDefaultRealHomeSelected.mockReturnValue(true)
 
-      await expect(
-        prepareCodexRuntimeHomeForLaunch(undefined, undefined, { launchesCodex: true })
-      ).resolves.toBeNull()
+    await expect(
+      prepareCodexRuntimeHomeForLaunch(undefined, undefined, { launchesCodex: true })
+    ).rejects.toMatchObject({ code: 'no_account' })
 
-      // Why either way: the reconcile reads the opt-out itself, before it writes.
-      expect(mocks.reconcileCodexHooksForLaunch).toHaveBeenCalledTimes(1)
-      expect(mocks.prepareRuntimeHomeForLaunch).not.toHaveBeenCalled()
-    }
-  )
+    // D83: a missing account is refused before any real-home hook reconciliation.
+    expect(mocks.reconcileCodexHooksForLaunch).not.toHaveBeenCalled()
+    expect(mocks.prepareRuntimeHomeForLaunch).not.toHaveBeenCalled()
+  })
 
   it.each(HOOK_SETTINGS)(
     'managed account home launch with $name: hooks on = $codexHooksOn',
@@ -169,19 +170,16 @@ describe('Codex launch prep honours the per-agent hook opt-out', () => {
     }
   )
 
-  it.each(HOOK_SETTINGS)(
-    'resume into the real ~/.codex with $name: the reconcile reads the opt-out',
-    async ({ settings }) => {
-      mocks.settings = settings
+  it.each(HOOK_SETTINGS)('real-home history stays view only with $name', async ({ settings }) => {
+    mocks.settings = settings
 
-      await resumeFrom(SYSTEM_HOME)
+    await expect(resumeFrom(SYSTEM_HOME)).rejects.toMatchObject({ code: 'no_account' })
 
-      // Why: a resume of a ~/.codex session reconciles there whatever the selection.
-      expect(mocks.reconcileCodexHooksForLaunch).toHaveBeenCalledTimes(1)
-      expect(mocks.installForLaunchPrep).not.toHaveBeenCalled()
-      expect(mocks.refreshRuntimeUserHooksForLaunchPrep).not.toHaveBeenCalled()
-    }
-  )
+    // D83: real-home sessions remain discoverable but cannot resume.
+    expect(mocks.reconcileCodexHooksForLaunch).not.toHaveBeenCalled()
+    expect(mocks.installForLaunchPrep).not.toHaveBeenCalled()
+    expect(mocks.refreshRuntimeUserHooksForLaunchPrep).not.toHaveBeenCalled()
+  })
 
   it.each(HOOK_SETTINGS)(
     'resume into a managed account home with $name: hooks on = $codexHooksOn',
@@ -214,6 +212,7 @@ describe('Codex launch prep honours the per-agent hook opt-out', () => {
     await prepareCodexRuntimeHomeForLaunch()
     await prepareCodexRuntimeHomeForLaunch(undefined, undefined, { launchesCodex: false })
     mocks.prepareForCodexLaunchAsync.mockResolvedValue(null)
+    mocks.selectedHome = ''
     await prepareCodexRuntimeHomeForLaunch()
 
     expect(mocks.reconcileAccount.mock.calls).toEqual([

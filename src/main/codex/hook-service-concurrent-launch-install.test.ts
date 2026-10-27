@@ -1,3 +1,5 @@
+import { setupLegacyWindowsCodexHome } from './legacy-windows-home.test-support'
+setupLegacyWindowsCodexHome()
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as CodexHookHashLookup from './codex-hook-hash-lookup'
 import type * as CodexHookLocalInstall from './codex-hook-local-install'

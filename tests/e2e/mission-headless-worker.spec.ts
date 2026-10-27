@@ -1,4 +1,6 @@
-import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { seedCodexTestAccount } from './helpers/codex-test-account'
+import { TaskListResponseSchema } from '../../src/shared/axiom-contract/task-params'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { z } from 'zod'
 import { test, expect } from './helpers/orca-app'
@@ -55,6 +57,7 @@ test('three sandboxed exec Workers produce host submissions with Attempt attribu
           CODEX_HOME: z.string().nullable()
         })
         .parse(launch)
+      expect(entry.CODEX_HOME).toBe(path.join(userData, 'codex-accounts', 'e2e-codex', 'home'))
       expect(entry.argv.slice(0, 2)).toEqual(['exec', '--json'])
       expect(entry.argv).toEqual(
         expect.arrayContaining([
@@ -84,6 +87,19 @@ for (const scenario of ['exit-nonzero', 'bad-report'] as const) {
             timeout: 60_000
           })
           .toBe(3)
+        // Why poll: a binding gets its dispatch id before the provider appends its ledger line.
+        const readLaunches = () =>
+          readFileSync(ledgerPath, 'utf8')
+            .trim()
+            .split('\n')
+            .filter(Boolean)
+            .map((line) => JSON.parse(line))
+            .filter((row) => !row.kind)
+        await expect.poll(() => readLaunches().length, { timeout: 60_000 }).toBe(3)
+        const launches = readLaunches()
+        for (const launch of launches) {
+          expect(launch.CODEX_HOME).toBe(path.join(userData, 'codex-accounts', 'e2e-codex', 'home'))
+        }
         const first = inspect().bindings[0]
         writeFileSync(`${ledgerPath}.scenario-${first.task_id}`, scenario)
         releaseWorkers()
@@ -190,33 +206,13 @@ test('a retry resolves the selected account and pins its home in the Worker wrap
         .poll(() => inspect().bindings.filter((row) => row.dispatch_id).length, { timeout: 60_000 })
         .toBe(3)
       const first = inspect().bindings[0]
-      const accountId = 'e2e-headless-home'
-      const managedHomePath = path.join(userData, 'codex-accounts', accountId, 'home')
-      mkdirSync(managedHomePath, { recursive: true })
-      writeFileSync(path.join(managedHomePath, '.orca-managed-home'), `${accountId}\n`)
-      writeFileSync(
-        path.join(managedHomePath, 'auth.json'),
-        JSON.stringify({ OPENAI_API_KEY: 'e2e-placeholder' })
-      )
-      await page.evaluate(
-        async ({ accountId, managedHomePath }) => {
-          await window.__store!.getState().updateSettings({
-            codexManagedAccounts: [
-              {
-                id: accountId,
-                email: 'headless-home@example.invalid',
-                managedHomePath,
-                createdAt: 1,
-                updatedAt: 1,
-                lastAuthenticatedAt: 1
-              }
-            ],
-            activeCodexManagedAccountId: accountId,
-            activeCodexManagedAccountIdsByRuntime: { host: accountId, wsl: {} }
-          })
-        },
-        { accountId, managedHomePath }
-      )
+      const { homePath: managedHomePath, settings } = seedCodexTestAccount(userData, {
+        accountId: 'e2e-headless-home',
+        persistSettings: false
+      })
+      await page.evaluate(async (settings) => {
+        await window.__store!.getState().updateSettings(settings)
+      }, settings)
       // The first Attempt was already prepared; its retry must read the new account selection.
       writeFileSync(`${ledgerPath}.scenario-${first.task_id}`, 'exit-nonzero')
       releaseWorkers()
@@ -248,5 +244,34 @@ test('a retry resolves the selected account and pins its home in the Worker wrap
       })
     },
     { holdWorkers: true, maxAttempts: 2 }
+  )
+})
+
+test('no Codex account refuses admission without launching a Worker', async (// oxlint-disable-next-line no-empty-pattern -- Fixture owns the background app lifecycle.
+{}, testInfo) => {
+  test.setTimeout(120_000)
+  await withFixtureMission(
+    testInfo,
+    source!,
+    async ({ userData, mission, ledgerPath }) => {
+      const inspect = () => inspectFixtureMission(userData, mission.id)
+      await expect
+        .poll(() => inspect().audits.some((row) => row.event === 'task.admission_refused'), {
+          timeout: 30_000
+        })
+        .toBe(true)
+      const event = inspect().audits.find((row) => row.event === 'task.admission_refused')!
+      expect(JSON.parse(event.after!).filtered).toContainEqual({
+        provider: 'codex',
+        reason: 'no_account'
+      })
+      expect(inspect().bindings).toHaveLength(0)
+      expect(existsSync(ledgerPath) ? readFileSync(ledgerPath, 'utf8').trim() : '').toBe('')
+      const { tasks } = TaskListResponseSchema.parse(
+        cli(userData, ['task', 'list', '--mission', mission.id])
+      )
+      expect(tasks.some((task) => task.stage === 'RUNNING')).toBe(false)
+    },
+    { noCodexAccount: true }
   )
 })

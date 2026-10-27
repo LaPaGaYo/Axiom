@@ -922,7 +922,7 @@ describe('markRestoredStaleCodexSessionsForRestart', () => {
     })
   })
 
-  it('labels the system default when a pane launched without a managed account', async () => {
+  it('labels a pane launched without a managed account as no account', async () => {
     vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([
       { ptyId: 'pty-1', launchAccountId: null, activeAccountId: 'account-b' }
     ])
@@ -930,7 +930,7 @@ describe('markRestoredStaleCodexSessionsForRestart', () => {
     await markRestoredStaleCodexSessionsForRestart()
 
     expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']?.previousAccountLabel).toBe(
-      'System default'
+      'No account'
     )
   })
 

@@ -1,3 +1,5 @@
+import { setupLegacyWindowsCodexHome } from '../codex/legacy-windows-home.test-support'
+setupLegacyWindowsCodexHome()
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -135,7 +137,7 @@ describe('copying a login made inside Orca into an empty ~/.codex on Windows', (
     await launchOnMirror()
     writeFileSync(getRuntimeCodexAuthPath(), paneLogin, 'utf-8')
 
-    await launchOnRealHome('darwin')
+    await expect(launchOnRealHome('darwin')).rejects.toMatchObject({ code: 'no_account' })
 
     expect(existsSync(getSystemCodexAuthPath())).toBe(false)
   })

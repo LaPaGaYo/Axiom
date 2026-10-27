@@ -1,3 +1,5 @@
+import { setupLegacyWindowsCodexHome } from './legacy-windows-home.test-support'
+setupLegacyWindowsCodexHome()
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -45,9 +47,7 @@ function getSystemCodexHomePath(): string {
   return join(fakeHomeDir, '.codex')
 }
 
-function getSystemConfigPath(): string {
-  return join(getSystemCodexHomePath(), 'config.toml')
-}
+const getSystemConfigPath = (): string => join(getSystemCodexHomePath(), 'config.toml')
 
 function getRuntimeConfigPath(): string {
   return join(userDataDir, 'codex-runtime-home', 'home', 'config.toml')

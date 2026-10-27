@@ -1,3 +1,5 @@
+import { setupLegacyWindowsCodexHome } from '../codex/legacy-windows-home.test-support'
+setupLegacyWindowsCodexHome()
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import type * as NodeOs from 'node:os'

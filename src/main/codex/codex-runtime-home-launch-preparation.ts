@@ -8,7 +8,7 @@ import { getDefaultWslDistro } from '../wsl'
 import { isAgentStatusHooksEnabledForAgent } from '../agent-hooks/managed-agent-hook-controls'
 import { reconcileCodexHooksForLaunch } from './codex-hook-reconcile'
 import { reconcileCodexAccountHomeHook } from './codex-account-home-hook'
-import { usesCodexAccountHomeLayout } from './codex-home-paths'
+import { CodexAccountRequiredError, usesCodexAccountHomeLayout } from './codex-home-paths'
 
 /** Codex launch prep against a host's runtime-home service; the desktop and orcad share it. */
 export function createCodexRuntimeHomeLaunchPreparation(deps: {
@@ -29,6 +29,15 @@ export function createCodexRuntimeHomeLaunchPreparation(deps: {
     if (launchesCodex) {
       deps.onCodexLaunch?.()
     }
+    // D83 ruling ③: a plain shell without a selected account keeps the user's home.
+    if (
+      process.platform !== 'win32' &&
+      target?.runtime !== 'wsl' &&
+      !launchesCodex &&
+      !runtimeHome.getSelectedHostAccountCodexHomePath()
+    ) {
+      return null
+    }
     const mayPrepareHooks = launchesCodex || isProviderActivated(deps.getSettings(), 'codex')
     // Why: a ManagedCodexHomeTemporarilyUnavailableError must escape uncaught —
     // the fallbacks below all key off `null`, which means "system default", so
@@ -36,6 +45,9 @@ export function createCodexRuntimeHomeLaunchPreparation(deps: {
     const runtimeHomePath = await runtimeHome.prepareForCodexLaunchAsync(target, launchEnv, {
       unavailableManagedHomePath: launchContext?.unavailableManagedHomePath
     })
+    if (runtimeHomePath === null && process.platform !== 'win32' && target?.runtime !== 'wsl') {
+      throw new CodexAccountRequiredError()
+    }
     if (!mayPrepareHooks) {
       return runtimeHomePath
     }

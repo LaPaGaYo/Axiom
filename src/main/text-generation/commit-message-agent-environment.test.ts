@@ -102,9 +102,10 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
     })
   })
 
-  it('falls back to inherited env when managed account resolvers are unavailable', async () => {
-    await expect(prepareLocalCommitMessageAgentEnv('codex', undefined)).resolves.toEqual({
-      ok: true
+  it('refuses Codex without an account resolver and retains Claude behavior', async () => {
+    await expect(prepareLocalCommitMessageAgentEnv('codex', undefined)).resolves.toMatchObject({
+      ok: false,
+      error: expect.stringContaining('Settings › Accounts')
     })
     await expect(prepareLocalCommitMessageAgentEnv('claude', undefined)).resolves.toEqual({
       ok: true
@@ -146,6 +147,8 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
   })
 
   it('strips a nested-Orca CODEX_HOME override when the launch resolves to the real home', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32') // D83 ruling ①: legacy Windows behavior.
+
     process.env.CODEX_HOME = '/managed/runtime/home'
     process.env.ORCA_CODEX_HOME = '/managed/runtime/home'
 
@@ -161,6 +164,8 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
   })
 
   it('preserves a user-owned CODEX_HOME when the launch resolves to the real home', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32') // D83 ruling ①: legacy Windows behavior.
+
     process.env.CODEX_HOME = '/home/me/.config/codex'
     delete process.env.ORCA_CODEX_HOME
 

@@ -3,6 +3,7 @@ import { AxiomIdSchema, TuiAgentIdSchema } from './mission-objects'
 
 export const ProviderFilterReasonSchema = z.enum([
   'not_installed',
+  'no_account',
   'not_certified',
   'disallowed',
   'tier_too_low'

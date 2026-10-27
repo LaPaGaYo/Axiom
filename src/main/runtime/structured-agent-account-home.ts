@@ -3,7 +3,12 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
 import { normalizeCodexRuntimeSelection } from '../codex-accounts/runtime-selection'
-import { resolveOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
+import {
+  CodexAccountRequiredError,
+  usesCodexAccountHomeLayout,
+  resolveOrcaManagedCodexHomePath,
+  getSystemCodexHomePath
+} from '../codex/codex-home-paths'
 import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -45,8 +50,8 @@ export type StructuredCodexAccountHomeDeps = {
   /**
    * The home a host launch would pin: launch preparation on the create path,
    * the read-only sibling for record-less reads (a read must not sync homes or
-   * clear selections). Null falls back to env/system default. Both share the
-   * null → system-home mapping below, so the two paths cannot drift.
+   * clear selections). Null refuses on macOS/Linux; Windows retains the
+   * legacy env/system fallback (D83 ruling ①).
    */
   resolveLaunchHome:
     | ((input: { launchEnv: NodeJS.ProcessEnv }) => string | null | Promise<string | null>)
@@ -58,6 +63,13 @@ export async function resolveStructuredCodexAccountHomePath(
 ): Promise<string> {
   // A create has no process yet, so the current selection is what it must follow.
   const resolvedHome = await deps.resolveLaunchHome?.({ launchEnv: deps.launchEnv })
+  // D83 ruling ②: an ambient CODEX_HOME cannot substitute for the selected account.
+  if (
+    process.platform !== 'win32' &&
+    (!resolvedHome || !usesCodexAccountHomeLayout(resolvedHome))
+  ) {
+    throw new CodexAccountRequiredError()
+  }
   const configuredHome = deps.launchEnv.CODEX_HOME
   return (
     resolvedHome?.trim() ||
@@ -86,6 +98,9 @@ export function resolveStructuredCodexAccountKind(
   ) {
     return 'managed'
   }
+  if (process.platform !== 'win32') {
+    return undefined
+  } // D83 ruling ①.
   if (same(getSystemCodexHomePath())) {
     return 'system'
   }

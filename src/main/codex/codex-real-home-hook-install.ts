@@ -69,6 +69,9 @@ const MAX_PASSES = 4
  * entry write fails. Never throws.
  */
 export async function reconcileRealHomeCodexHookEntries(args: ReconcileArgs): Promise<void> {
+  if (process.platform !== 'win32') {
+    return
+  } // D83 ruling ③: real-home hooks are retired.
   await reconcileCodexHookEntriesInHome(getRealHomeCodexHookHome(), args, { pristineBackup: true })
 }
 

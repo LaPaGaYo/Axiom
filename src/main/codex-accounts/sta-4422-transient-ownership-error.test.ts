@@ -208,10 +208,7 @@ describe('STA-4422 Codex sessions keep logging out', () => {
 
     // Why this case matters: the fix must not make the gate toothless. A
     // successful observation that fails a trust check still deselects.
-    expect(service.prepareForRateLimitFetch()).toEqual({
-      kind: 'ready',
-      codexHomePath: getSystemCodexHomePath()
-    })
+    expect(service.prepareForRateLimitFetch()).toEqual({ kind: 'skip' })
     expect(store.getSettings().activeCodexManagedAccountId).toBeNull()
     expect(store.updateSettings).toHaveBeenCalledTimes(1)
     expect(

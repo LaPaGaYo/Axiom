@@ -92,17 +92,15 @@ describe('CodexRuntimeHomeService.getMirroredHostHomePathForStatus', () => {
     })
   })
 
-  it('returns the shared runtime home when a custom CODEX_HOME keeps the mirror lane', async () => {
+  it('does not expose a mirror for an ambient CODEX_HOME without an account', async () => {
     process.env.CODEX_HOME = join(testState.home, 'custom-codex-home')
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    const { getOrcaManagedCodexHomePath } = await import('../codex/codex-home-paths')
     const service = new CodexRuntimeHomeService(createStore([], null) as never)
 
-    // Why: compare against the real helper, not a repeated literal, so the
-    // status cannot silently drift if the managed home layout ever moves.
+    // D83: ambient CODEX_HOME cannot re-enable the mirror on macOS/Linux.
     expect(service.getMirroredHostHomePathForStatus()).toEqual({
       kind: 'ready',
-      homePath: getOrcaManagedCodexHomePath()
+      homePath: null
     })
   })
 })

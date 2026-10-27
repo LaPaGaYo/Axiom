@@ -41,7 +41,7 @@ describe('status bar runtime switch groups', () => {
       const group = buildCodexStatusSwitchGroups(state, target).find(
         (entry) => entry.runtimeTarget.runtime === runtime
       )!
-      expect(group.targets.slice(1)).toEqual([
+      expect(group.targets.filter((target) => target.id !== null)).toEqual([
         {
           id: 'account-a',
           label: 'same@example.com (account-a)',
@@ -86,9 +86,11 @@ describe('status bar runtime switch groups', () => {
       activeAccountIdsByRuntime: { host: null, wsl: { Ubuntu: null } }
     }
     const groups = buildCodexStatusSwitchGroups(state, { runtime: 'host', wslDistro: null })
-    expect(groups.flatMap((group) => group.targets.slice(1).map((target) => target.label))).toEqual(
-      ['same@example.com (Personal (Plus))', 'same@example.com (Personal (Plus))']
-    )
+    expect(
+      groups.flatMap((group) =>
+        group.targets.filter((target) => target.id !== null).map((target) => target.label)
+      )
+    ).toEqual(['same@example.com (Personal (Plus))', 'same@example.com (Personal (Plus))'])
   })
 
   it('collapses WSL default into the single concrete Codex distro', () => {

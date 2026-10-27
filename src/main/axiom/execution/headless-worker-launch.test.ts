@@ -155,16 +155,12 @@ it('records the account combination on prepared and started, and one mismatch on
     'synthetic-private-value'
   )
 })
-it('leaves an omitted home seam unmanaged, without a mismatch even if the version is unknown', async () => {
-  vi.mocked(version.probeCodexVersion).mockResolvedValue(null)
-  const { command } = await launch(false)
-  expect(events('attempt.started')[0].after).toMatchObject({
-    combination: {
-      effective: { harnessVersion: null, codexHome: { kind: 'unmanaged', path: null } }
-    }
-  })
-  expect(events('attempt.launch_mismatch')).toEqual([])
-  expect(command).not.toContain('CODEX_HOME=')
+it('refuses an omitted account-home seam before launching', async () => {
+  const { command, attempt } = await launch(false)
+  expect(events('attempt.started')).toEqual([])
+  expect(events('attempt.launch_failed')).toHaveLength(1)
+  expect(command).toBeUndefined()
+  expect(f.store.getTaskStage(attempt.taskId)?.stage).toBe('READY')
 })
 it('settles resolver refusals as launch failures', async () => {
   const { attempt } = await launch(true, true)

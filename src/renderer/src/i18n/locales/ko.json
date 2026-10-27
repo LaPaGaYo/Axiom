@@ -20307,6 +20307,11 @@
       "title": "{{distro}}에서 계정 선택이 적용되지 않았습니다",
       "description": "WSL의 Axiom가 업데이트될 때까지 해당 에이전트는 배포판의 기본 Claude 및 Codex 계정을 사용합니다."
     },
+    "codex": {
+      "accountRequired": "Axiom에서 Codex를 실행하려면 설정 › 계정에서 Codex 계정을 추가하세요.",
+      "noAccount": "선택된 Codex 계정이 없습니다. 여기에서 계정을 추가하고 시작하세요.",
+      "noSelection": "선택된 계정 없음"
+    },
     "managedData": {
       "description": "Axiom 호스트의 터미널에서 이 명령을 실행하여 계정을 추가하세요. 선택은 해당 호스트에서 새로 시작하는 에이전트에 적용됩니다. 직접 SSH 연결과 Windows에서 호스팅하는 WSL은 자체 자격 증명을 사용합니다.",
       "copied": "복사됨",

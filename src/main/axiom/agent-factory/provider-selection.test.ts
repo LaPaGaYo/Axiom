@@ -165,3 +165,27 @@ describe('certified provider selection', () => {
     ).toThrow(new AgentFactoryError('invalid_argument', { reason: 'invalid_provider_ranking' }))
   })
 })
+
+it.each(['planner', 'worker'] as const)(
+  'filters no_account for %s after installation and before certification',
+  (role) => {
+    const selection = selectProvider(
+      ['claude', 'codex', 'gemini'],
+      routing,
+      role,
+      'high',
+      makeEngine(),
+      false
+    )
+    expect(selection.chosen).toBe('claude')
+    expect(selection.filtered).toEqual([
+      { provider: 'opencode', reason: 'not_installed' },
+      { provider: 'antigravity', reason: 'not_installed' },
+      { provider: 'codex', reason: 'no_account' },
+      { provider: 'gemini', reason: 'not_certified' }
+    ])
+    expect(
+      selectProvider(['claude'], routing, role, 'high', makeEngine(), false).filtered
+    ).toContainEqual({ provider: 'codex', reason: 'not_installed' })
+  }
+)

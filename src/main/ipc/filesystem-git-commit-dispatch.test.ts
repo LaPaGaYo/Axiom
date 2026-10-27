@@ -1,5 +1,8 @@
 import path from 'node:path'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createManagedAuth } from '../codex-accounts/runtime-home-service-test-harness'
 import * as gitRunner from '../git/runner'
 import {
   handlers,
@@ -145,12 +148,18 @@ describe('registerFilesystemHandlers', () => {
 })
 
 describe('registerFilesystemHandlers pull request field generation', () => {
+  let accountRoot: string
+  let selectedCodexHome: string
+  const accountResolver = { prepareForCodexLaunch: () => selectedCodexHome }
   beforeEach(() => {
     resetFilesystemIpcMocks()
     // Reset module-level auth cache so each test starts with a fresh dirty
     // flag — prevents stale worktree data from a prior test's cache rebuild.
     invalidateAuthorizedRootsCache()
+    accountRoot = mkdtempSync(path.join(tmpdir(), 'axiom-pr-account-'))
+    selectedCodexHome = createManagedAuth(accountRoot, 'test-account', '{}')
   })
+  afterEach(() => rmSync(accountRoot, { recursive: true, force: true }))
 
   describe('git:generatePullRequestFields linked issue', () => {
     const PULL_REQUEST_CONTEXT = {
@@ -188,7 +197,8 @@ describe('registerFilesystemHandlers pull request field generation', () => {
         getWorktreeMeta: (id: string) => (id === worktreeId ? { linkedIssue: 123 } : undefined)
       }
 
-      registerFilesystemHandlers(linkedStore as never)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements the Store methods used by these filesystem handlers.
+      registerFilesystemHandlers(linkedStore as never, accountResolver)
 
       await handlers.get('git:generatePullRequestFields')!(null, {
         ...PULL_REQUEST_ARGS,
@@ -205,7 +215,10 @@ describe('registerFilesystemHandlers pull request field generation', () => {
           linkedIssueDetails
         },
         params,
-        expect.objectContaining({ kind: 'local' })
+        expect.objectContaining({
+          kind: 'local',
+          env: expect.objectContaining({ CODEX_HOME: selectedCodexHome })
+        })
       )
     })
 
@@ -226,7 +239,8 @@ describe('registerFilesystemHandlers pull request field generation', () => {
     it('ignores a pull-request worktree id that does not own the requested path', async () => {
       const getWorktreeMeta = vi.fn(() => ({ linkedIssue: 123 }))
 
-      registerFilesystemHandlers({ ...store, getWorktreeMeta } as never)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements the Store methods used by these filesystem handlers.
+      registerFilesystemHandlers({ ...store, getWorktreeMeta } as never, accountResolver)
 
       await handlers.get('git:generatePullRequestFields')!(null, {
         ...PULL_REQUEST_ARGS,

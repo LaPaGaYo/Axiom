@@ -21,6 +21,16 @@ export type {
   NormalizedCodexAccountSelectionTarget
 } from '../../shared/codex-selection-lane'
 
+export function refuseRetiredCodexSelection(
+  accountId: string | null,
+  target?: CodexAccountSelectionTarget
+): void {
+  // D83 ruling ①: null remains valid on Windows/WSL, including older clients.
+  if (accountId === null && process.platform !== 'win32' && target?.runtime !== 'wsl') {
+    throw Object.assign(new Error('system_default_retired'), { code: 'system_default_retired' })
+  }
+}
+
 export function normalizeCodexRuntimeSelection(
   settings: Partial<
     Pick<GlobalSettings, 'activeCodexManagedAccountId' | 'activeCodexManagedAccountIdsByRuntime'>

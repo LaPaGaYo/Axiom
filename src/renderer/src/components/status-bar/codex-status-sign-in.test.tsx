@@ -219,7 +219,7 @@ describe('status bar Codex sign-in action', () => {
         activeAccountIdsByRuntime: { host: 'account-2', wsl: {} }
       })
 
-      await renderSwitcherAndOpenAccounts('System default')
+      await renderSwitcherAndOpenAccounts('No account')
       const detail = workspaceLabel ? `${workspaceLabel} · ` : ''
       expect(screen.getByText(`same@example.com (${detail}account-1)`)).toBeTruthy()
       fireEvent.click(screen.getByText(`same@example.com (${detail}account-2)`))
@@ -245,7 +245,7 @@ describe('status bar Codex sign-in action', () => {
   it('activates the signed-in account and runs the same restart workflow a switch runs', async () => {
     reauthenticate.mockResolvedValue(codexSnapshot('account-2'))
 
-    await renderSwitcherAndOpenAccounts('System default')
+    await renderSwitcherAndOpenAccounts('No account')
     fireEvent.click(screen.getByRole('button', { name: /Sign in/ }))
 
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(1))
@@ -286,7 +286,7 @@ describe('status bar Codex sign-in action', () => {
     reauthenticate.mockRejectedValue(new Error('Codex login exited with code 1.'))
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    await renderSwitcherAndOpenAccounts('System default')
+    await renderSwitcherAndOpenAccounts('No account')
     fireEvent.click(screen.getByRole('button', { name: /Sign in/ }))
 
     await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1))

@@ -20745,6 +20745,11 @@
         "restartingOther": "Restarting {{count}} Claude sessions on {{account}}"
       }
     },
+    "codex": {
+      "accountRequired": "Add a Codex account in Settings › Accounts to run Codex in Axiom.",
+      "noAccount": "No Codex account selected. Add an account here to get started.",
+      "noSelection": "No account"
+    },
     "managedData": {
       "description": "Add accounts by running this command in a terminal on the Axiom host. Selection applies to new explicit agent launches on that host; direct SSH relay and Windows-hosted WSL launches use their own credentials.",
       "copied": "Copied",

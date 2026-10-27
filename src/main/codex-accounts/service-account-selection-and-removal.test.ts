@@ -72,7 +72,8 @@ describe('CodexAccountService config sync', () => {
     expect(result.activeAccountId).toBe(null)
     expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalled()
     expect(rateLimits.refreshForCodexAccountChange).toHaveBeenCalled()
-    expect(onHostSystemDefaultSelected).toHaveBeenCalledOnce()
+    expect(onHostSystemDefaultSelected).not.toHaveBeenCalled()
+    expect(result).not.toHaveProperty('systemDefault')
   })
 
   it('selectAccount switches managed accounts without routing auth through the shared mirror', async () => {

@@ -115,8 +115,11 @@ export function layoutCodexAccountHome({
   const generated =
     joinTomlBlocks([
       '# Written by Axiom (D83). Edits are replaced at the next layout.',
+      'check_for_update_on_startup = false',
       ...runtime,
-      '[features]\napps = false\nplugins = false',
+      '[features]\napps = false\nplugins = false\nremote_plugin = false',
+      '[analytics]\nenabled = false',
+      '[feedback]\nenabled = false',
       ...disabledSkills.map((skill) => `[[skills.config]]\npath = ${quote(skill)}\nenabled = false`)
     ]) + servers.map((server) => server.contents).join('')
   const config = applyCodexDaemonSocketGuard(generated, homePath)

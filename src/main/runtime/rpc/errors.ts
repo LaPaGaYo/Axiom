@@ -111,6 +111,7 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
 const COMPUTER_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(Object.values(COMPUTER_ERROR_CODES))
 const LINEAR_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(LINEAR_ERROR_CODES)
 const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
+  'system_default_retired',
   'caller_not_desktop',
   'caller_not_permitted_for_agent',
   'not_found',

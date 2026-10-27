@@ -1,3 +1,5 @@
+import { setupLegacyWindowsCodexHome } from './legacy-windows-home.test-support'
+setupLegacyWindowsCodexHome()
 import { describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import type * as Os from 'node:os'
@@ -30,6 +32,7 @@ vi.mock('os', async (importOriginal) => {
 })
 
 import { CodexHookService } from './hook-service'
+import { getManagedScriptPath } from './codex-hook-definition'
 
 const homes = setupCodexHookHomes(homedirMock, getPathMock)
 
@@ -54,13 +57,11 @@ function legacyManagedHookCommand(): string {
 }
 
 function currentManagedHookCommand(): string {
-  const scriptPath = join(
-    homes.tmpHome,
-    'retired-user-data',
-    'agent-hooks',
-    process.platform === 'win32' ? 'codex-hook.cmd' : 'codex-hook.sh'
-  )
-  return process.platform === 'win32' ? scriptPath : wrapPosixHookCommand(scriptPath)
+  if (process.platform === 'win32') {
+    return getManagedScriptPath()
+  }
+  const scriptPath = join(homes.tmpHome, 'retired-user-data', 'agent-hooks', 'codex-hook.sh')
+  return wrapPosixHookCommand(scriptPath)
 }
 
 describe('CodexHookService', () => {

@@ -21,6 +21,10 @@ export abstract class CodexRuntimeHomeAuthProvenance extends CodexRuntimeHomeAut
   }
 
   protected markSharedRuntimeAuthManaged(accountId: string): void {
+    // D83 ruling ①: no mirror metadata (or credential baseline) on macOS/Linux.
+    if (process.platform !== 'win32') {
+      return
+    }
     const status = this.resolveSharedRuntimeAuthProvenanceStatus()
     if (
       status.kind === 'committed' &&

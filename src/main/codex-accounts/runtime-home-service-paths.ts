@@ -39,7 +39,8 @@ export abstract class CodexRuntimeHomePaths extends CodexRuntimeHomeState {
       }
       return { kind: 'ready', homePath: resolved.kind === 'owned' ? resolved.homePath : null }
     }
-    if (this.isHostSystemDefaultRealHomeSelected()) {
+    // D83 ruling ①: an empty macOS/Linux selection has no mirror to report.
+    if (process.platform !== 'win32' || this.isHostSystemDefaultRealHomeSelected()) {
       return { kind: 'ready', homePath: null }
     }
     return {

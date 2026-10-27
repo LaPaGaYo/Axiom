@@ -8,7 +8,11 @@ import {
 import { TEST_CODEX_HOME, TEST_CODEX_AUTH_JSON, TEST_MANAGED_ROOT } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerPtyHandlers } from './pty/register-handlers'
-import { setLocalPtyProvider } from './pty/provider/registry'
+import { getLocalPtyProvider, setLocalPtyProvider } from './pty/provider/registry'
+import { createCodexAccountSettings } from '../codex-accounts/codex-account-settings-fixture'
+import { createStore } from '../codex-accounts/runtime-home-service-test-harness'
+import { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-service'
+import { createCodexRuntimeHomeLaunchPreparation } from '../codex/codex-runtime-home-launch-preparation'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -63,7 +67,7 @@ const SHARED_ROLLOUT = join(MANAGED_SHARED_HOME, 'sessions', '2026', '07', '20',
 describe('registerPtyHandlers', () => {
   const { handlers, mainWindow } = setupPtyIpcSuite()
 
-  it('records a launch env CODEX_HOME pane under the shared home', async () => {
+  it('does not attribute a plain shell with no account to the retired shared home', async () => {
     const previousCodexHome = process.env.CODEX_HOME
     process.env.CODEX_HOME = '/process/custom-codex-home'
     try {
@@ -92,11 +96,8 @@ describe('registerPtyHandlers', () => {
         env: { CODEX_HOME: '/process/custom-codex-home' }
       })
 
-      expect(recordCodexPaneAccountMock).toHaveBeenCalledWith('pty-process-home', {
-        selectionKey: 'host',
-        accountId: null,
-        homeRoute: 'shared-home'
-      })
+      expect(recordCodexPaneAccountMock).not.toHaveBeenCalled()
+      expect(forgetCodexPaneAccountMock).toHaveBeenCalledWith('pty-process-home')
     } finally {
       if (previousCodexHome === undefined) {
         delete process.env.CODEX_HOME
@@ -105,6 +106,36 @@ describe('registerPtyHandlers', () => {
       }
     }
   })
+  it.each(['darwin', 'linux'] as const)(
+    'returns the Settings hint to the pane spawn error handler without an account on %s',
+    async (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      const settingsStore = createStore(createCodexAccountSettings('/tmp/axiom-no-account'))
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: no-account launch only reads the settings methods implemented by this fixture.
+      const runtimeHome = new CodexRuntimeHomeService(settingsStore as never)
+      const prepare = createCodexRuntimeHomeLaunchPreparation({
+        getRuntimeHome: () => runtimeHome,
+        getSettings: settingsStore.getSettings
+      })
+      const spawn = vi.spyOn(getLocalPtyProvider(), 'spawn')
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared IPC fixture implements the BrowserWindow methods this registration uses.
+      registerPtyHandlers(mainWindow as never, undefined, prepare, settingsStore.getSettings)
+
+      await expect(
+        handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          command: 'codex',
+          launchAgent: 'codex'
+        })
+      ).rejects.toMatchObject({
+        code: 'no_account',
+        message: 'No Codex account selected. Add a Codex account in Settings › Accounts.'
+      })
+      expect(spawn).not.toHaveBeenCalled()
+      expect(recordCodexPaneAccountMock).not.toHaveBeenCalled()
+    }
+  )
   it('does not resume under another account when the origin auth stays unavailable', async () => {
     vi.useFakeTimers()
     const spawn = vi.fn(async () => ({ id: 'pty-must-not-spawn' }))
