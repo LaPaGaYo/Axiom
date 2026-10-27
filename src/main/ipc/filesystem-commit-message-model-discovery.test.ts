@@ -1,5 +1,8 @@
 import path from 'node:path'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createManagedAuth } from '../codex-accounts/runtime-home-service-test-harness'
 import {
   handlers,
   store,
@@ -50,12 +53,17 @@ import { registerFilesystemHandlers } from './filesystem'
 import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
 
 describe('registerFilesystemHandlers', () => {
+  let accountRoot: string
+  let selectedCodexHome: string
   beforeEach(() => {
     resetFilesystemIpcMocks()
     // Reset module-level auth cache so each test starts with a fresh dirty
     // flag — prevents stale worktree data from a prior test's cache rebuild.
     invalidateAuthorizedRootsCache()
+    accountRoot = mkdtempSync(path.join(tmpdir(), 'axiom-model-account-'))
+    selectedCodexHome = createManagedAuth(accountRoot, 'test-account', '{}')
   })
+  afterEach(() => rmSync(accountRoot, { recursive: true, force: true }))
 
   it('passes per-agent command overrides into local model discovery', async () => {
     discoverCommitMessageModelsLocalMock.mockResolvedValue({
@@ -78,13 +86,16 @@ describe('registerFilesystemHandlers', () => {
       })
     }
 
-    registerFilesystemHandlers(storeWithOverride as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements the Store methods used by these filesystem handlers.
+    registerFilesystemHandlers(storeWithOverride as never, {
+      prepareForCodexLaunch: () => selectedCodexHome
+    })
 
     await handlers.get('git:discoverCommitMessageModels')!(null, { agentId: 'codex' })
 
     expect(discoverCommitMessageModelsLocalMock).toHaveBeenCalledWith(
       'codex',
-      undefined,
+      expect.objectContaining({ CODEX_HOME: selectedCodexHome }),
       'npx codex'
     )
   })

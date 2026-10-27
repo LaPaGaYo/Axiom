@@ -20307,6 +20307,11 @@
       "title": "{{distro}} ではアカウントの選択が適用されていません",
       "description": "WSL 内の Axiom が更新されるまで、そこの Agent はディストリビューションの既定の Claude と Codex アカウントを使用します。"
     },
+    "codex": {
+      "accountRequired": "Axiom で Codex を実行するには、設定 › アカウントで Codex アカウントを追加してください。",
+      "noAccount": "Codex アカウントが選択されていません。ここでアカウントを追加して開始してください。",
+      "noSelection": "アカウント未選択"
+    },
     "managedData": {
       "description": "Axiom ホストのターミナルでこのコマンドを実行してアカウントを追加します。選択はそのホストでの新規 Agent 起動に適用されます。直接 SSH 接続とWindows上の WSL は独自の認証情報を使用します。",
       "copied": "コピーしました",

@@ -36,7 +36,6 @@ it.each(['accounts.selectCodex', 'accounts.selectCodexForTarget'])(
 )
 
 it('preserves system_default_retired through the RPC transport', () => {
-  // Scope blocker: ../errors.ts needs this code in its passthrough set (outside M3-08d scope).
   expect(
     mapRuntimeError(
       'r',

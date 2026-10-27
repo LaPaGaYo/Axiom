@@ -20494,6 +20494,11 @@
         "restartingOther": "Reiniciando {{count}} sessões do Claude em {{account}}"
       }
     },
+    "codex": {
+      "accountRequired": "Adicione uma conta do Codex em Configurações › Contas para executar o Codex no Axiom.",
+      "noAccount": "Nenhuma conta do Codex selecionada. Adicione uma conta aqui para começar.",
+      "noSelection": "Nenhuma conta"
+    },
     "managedData": {
       "description": "Adicione contas executando este comando em um terminal no host do Axiom. A seleção se aplica a novos agentes iniciados explicitamente nesse host; relay SSH direto e agentes iniciados no WSL hospedado no Windows usam suas próprias credenciais.",
       "copied": "Copiado",

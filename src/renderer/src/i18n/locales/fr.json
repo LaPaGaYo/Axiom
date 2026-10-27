@@ -20294,6 +20294,11 @@
       "title": "Sélection de compte non appliquée dans {{distro}}",
       "description": "Les agents y utilisent les comptes Claude et Codex par défaut de la distribution jusqu'à la mise à jour d'Axiom dans WSL."
     },
+    "codex": {
+      "accountRequired": "Ajoutez un compte Codex dans Paramètres › Comptes pour utiliser Codex dans Axiom.",
+      "noAccount": "Aucun compte Codex sélectionné. Ajoutez un compte ici pour commencer.",
+      "noSelection": "Aucun compte"
+    },
     "managedData": {
       "description": "Ajoutez des comptes en exécutant cette commande dans un terminal sur l’hôte Axiom. La sélection s’applique aux nouveaux lancements sur cet hôte ; les connexions SSH directes et WSL sous Windows utilisent leurs propres identifiants.",
       "copied": "Copié",

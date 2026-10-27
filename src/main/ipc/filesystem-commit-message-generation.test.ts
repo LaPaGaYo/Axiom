@@ -1,5 +1,8 @@
 import path from 'node:path'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createManagedAuth } from '../codex-accounts/runtime-home-service-test-harness'
 import {
   handlers,
   store,
@@ -55,12 +58,18 @@ import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cach
 import { SSH_HOST_NOT_SERVED_MESSAGE } from '../providers/ssh-host-not-served-error'
 
 describe('registerFilesystemHandlers', () => {
+  let accountRoot: string
+  let selectedCodexHome: string
+  const accountResolver = { prepareForCodexLaunch: () => selectedCodexHome }
   beforeEach(() => {
     resetFilesystemIpcMocks()
     // Reset module-level auth cache so each test starts with a fresh dirty
     // flag — prevents stale worktree data from a prior test's cache rebuild.
     invalidateAuthorizedRootsCache()
+    accountRoot = mkdtempSync(path.join(tmpdir(), 'axiom-commit-account-'))
+    selectedCodexHome = createManagedAuth(accountRoot, 'test-account', '{}')
   })
+  afterEach(() => rmSync(accountRoot, { recursive: true, force: true }))
 
   it('generates a local commit message from main-process staged context', async () => {
     const context = {
@@ -76,7 +85,8 @@ describe('registerFilesystemHandlers', () => {
       message: 'Update README'
     })
 
-    registerFilesystemHandlers(store as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements the Store methods used by these filesystem handlers.
+    registerFilesystemHandlers(store as never, accountResolver)
 
     await expect(
       handlers.get('git:generateCommitMessage')!(null, {
@@ -89,7 +99,8 @@ describe('registerFilesystemHandlers', () => {
     })
     expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(context, params, {
       kind: 'local',
-      cwd: WORKTREE_FEATURE_PATH
+      cwd: WORKTREE_FEATURE_PATH,
+      env: expect.objectContaining({ CODEX_HOME: selectedCodexHome })
     })
   })
 
@@ -111,7 +122,8 @@ describe('registerFilesystemHandlers', () => {
       message: 'feat: update readme'
     })
 
-    registerFilesystemHandlers(store as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements the Store methods used by these filesystem handlers.
+    registerFilesystemHandlers(store as never, accountResolver)
 
     await expect(
       handlers.get('git:generateCommitMessage')!(null, {
@@ -126,7 +138,8 @@ describe('registerFilesystemHandlers', () => {
       sourceControlAiResolvedParams,
       {
         kind: 'local',
-        cwd: WORKTREE_FEATURE_PATH
+        cwd: WORKTREE_FEATURE_PATH,
+        env: expect.objectContaining({ CODEX_HOME: selectedCodexHome })
       }
     )
   })
@@ -145,9 +158,8 @@ describe('registerFilesystemHandlers', () => {
       message: 'Update README'
     })
 
-    registerFilesystemHandlers(store as never, {
-      prepareForCodexLaunch: () => '/managed/codex-home'
-    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements the Store methods used by these filesystem handlers.
+    registerFilesystemHandlers(store as never, accountResolver)
 
     await handlers.get('git:generateCommitMessage')!(null, {
       worktreePath: WORKTREE_FEATURE_PATH
@@ -159,7 +171,7 @@ describe('registerFilesystemHandlers', () => {
       expect.objectContaining({
         kind: 'local',
         cwd: WORKTREE_FEATURE_PATH,
-        env: expect.objectContaining({ CODEX_HOME: '/managed/codex-home' })
+        env: expect.objectContaining({ CODEX_HOME: selectedCodexHome })
       })
     )
   })
@@ -246,7 +258,8 @@ describe('registerFilesystemHandlers', () => {
       getWorktreeMeta: (id: string) => (id === worktreeId ? { linkedIssue: 123 } : undefined)
     }
 
-    registerFilesystemHandlers(linkedStore as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements the Store methods used by these filesystem handlers.
+    registerFilesystemHandlers(linkedStore as never, accountResolver)
 
     await handlers.get('git:generateCommitMessage')!(null, {
       worktreePath: WORKTREE_FEATURE_PATH,
@@ -278,7 +291,8 @@ describe('registerFilesystemHandlers', () => {
       id === instanceId ? { linkedIssue: 9 } : undefined
     )
 
-    registerFilesystemHandlers({ ...store, getWorktreeMeta } as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements the Store methods used by these filesystem handlers.
+    registerFilesystemHandlers({ ...store, getWorktreeMeta } as never, accountResolver)
 
     await handlers.get('git:generateCommitMessage')!(null, {
       worktreePath: WORKTREE_FEATURE_PATH,
@@ -307,7 +321,8 @@ describe('registerFilesystemHandlers', () => {
     getStagedCommitContextMock.mockResolvedValue(context)
     generateCommitMessageFromContextMock.mockResolvedValue({ success: true, message: 'Update' })
 
-    registerFilesystemHandlers({ ...store, getWorktreeMeta } as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements the Store methods used by these filesystem handlers.
+    registerFilesystemHandlers({ ...store, getWorktreeMeta } as never, accountResolver)
 
     await handlers.get('git:generateCommitMessage')!(null, {
       worktreePath: WORKTREE_FEATURE_PATH,

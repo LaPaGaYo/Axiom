@@ -20132,6 +20132,11 @@
       "title": "No se aplicó la selección de cuenta en {{distro}}",
       "description": "Los agentes allí usan las cuentas predeterminadas de Claude y Codex de la distribución hasta que se actualice Axiom en WSL."
     },
+    "codex": {
+      "accountRequired": "Añade una cuenta de Codex en Ajustes › Cuentas para ejecutar Codex en Axiom.",
+      "noAccount": "No hay ninguna cuenta de Codex seleccionada. Añade una cuenta aquí para empezar.",
+      "noSelection": "Sin cuenta"
+    },
     "managedData": {
       "description": "Añade cuentas ejecutando este comando en una terminal del host de Axiom. La selección se aplica a nuevos inicios del agente en ese host; las conexiones SSH directas y WSL alojado en Windows usan sus propias credenciales.",
       "copied": "Copiado",
