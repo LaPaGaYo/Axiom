@@ -87,12 +87,16 @@ for (const scenario of ['exit-nonzero', 'bad-report'] as const) {
             timeout: 60_000
           })
           .toBe(3)
-        const launches = readFileSync(ledgerPath, 'utf8')
-          .trim()
-          .split('\n')
-          .map((line) => JSON.parse(line))
-          .filter((row) => !row.kind)
-        expect(launches).toHaveLength(3)
+        // Why poll: a binding gets its dispatch id before the provider appends its ledger line.
+        const readLaunches = () =>
+          readFileSync(ledgerPath, 'utf8')
+            .trim()
+            .split('\n')
+            .filter(Boolean)
+            .map((line) => JSON.parse(line))
+            .filter((row) => !row.kind)
+        await expect.poll(() => readLaunches().length, { timeout: 60_000 }).toBe(3)
+        const launches = readLaunches()
         for (const launch of launches) {
           expect(launch.CODEX_HOME).toBe(path.join(userData, 'codex-accounts', 'e2e-codex', 'home'))
         }
