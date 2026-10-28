@@ -56,6 +56,7 @@ export type ClaudeStructuredSdkOptions = Pick<
   | 'permissionMode'
   | 'allowDangerouslySkipPermissions'
   | 'settings'
+  | 'managedSettings'
   | 'sessionId'
   | 'resume'
   | 'resumeSessionAt'
@@ -260,7 +261,12 @@ export function claudeStructuredLaunchPart(
       sources,
       { runtimeOnPath: false }
     )
-    const launchHome = await resolveClaudeStructuredLaunchHome(router, env, accountHome.path)
+    const launchHome = await resolveClaudeStructuredLaunchHome(
+      router,
+      env,
+      accountHome.path,
+      missionPins ? { refresh: false } : undefined
+    )
     if (missionPins && launchHome !== missionPins.accountHomePath) {
       // The router's final account recheck must not substitute System default or another login.
       throw new ClaudeAccountRequiredError()
@@ -288,6 +294,7 @@ export function claudeStructuredLaunchPart(
                 settingSources: [],
                 skills: [...missionPins.skills],
                 settings: missionPins.settingsPath,
+                managedSettings: missionPins.managedSettings,
                 ...(missionPins.model ? { model: missionPins.model } : {}),
                 effort: missionPins.effort
               }

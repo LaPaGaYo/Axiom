@@ -7,6 +7,7 @@ export type ClaudeMissionSessionPins = {
   model?: string
   effort: NonNullable<Options['effort']>
   env: Readonly<Record<string, string>>
+  managedSettings: Readonly<Record<string, unknown>>
   denyPermission: (toolName: string) => void
 }
 
@@ -26,6 +27,7 @@ export function registerClaudeMissionSessionPins(
   const entry = Object.freeze({
     ...pins,
     skills: Object.freeze([...pins.skills]),
+    managedSettings: Object.freeze({ ...pins.managedSettings }),
     env: Object.freeze({ ...pins.env })
   })
   bySession.set(sessionId, entry)

@@ -1,9 +1,10 @@
-import { readdir, stat } from 'node:fs/promises'
+import { lstat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
 import type { AgentSpec } from '../../../shared/axiom-contract/agent-spec'
 import { CLAUDE_SESSION_OPTION_CATALOG } from '../../../shared/agent-session-option-catalog-claude-codex'
-import { observeSkillPackage } from '../../skills/skill-package-identity'
+import { certifiedCombo } from '../agent-factory/certified-providers'
+import { claudeManagedSettingsSha256 } from './claude-launch-policy'
 import type { AxiomStore } from '../db/axiom-store'
 import { redactContext } from '../context-builder/redaction'
 import { claudeWorkerVersion } from './claude-worker-version'
@@ -19,36 +20,41 @@ export async function headlessClaudeCombination(input: {
   platform?: NodeJS.Platform
 }) {
   const { spec, homePath, allowlist, files } = input
-  const skillsRoot = join(homePath, 'skills')
-  const names = await readdir(skillsRoot).catch((error: unknown) => {
-    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-      return []
-    }
-    throw error
-  })
-  const accountSkills: { name: string; path: string; digest: string | null }[] = []
-  const reasons = files.missingMcpServers.map((name) => `mcp_server_missing:${name}`)
-  for (const name of names.sort()) {
-    const path = join(skillsRoot, name)
-    if (!(await stat(join(path, 'SKILL.md')).catch(() => null))?.isFile()) {
-      continue
-    }
-    const observed = await observeSkillPackage(path).catch(() => null)
-    accountSkills.push({ name, path, digest: observed?.observedDigest ?? null })
-    if (!observed) {
-      reasons.push(`skill_unreadable:${name}`)
-    }
-  }
-  reasons.push(
-    ...[...new Set(allowlist.skills)]
-      .filter((name) => !accountSkills.some((skill) => skill.name === name))
-      .map((name) => `skill_missing:${name}`)
+  const surfaces = await Promise.all(
+    [
+      'skills',
+      'commands',
+      'agents',
+      'plugins',
+      'hooks',
+      'settings.json',
+      '.claude.json',
+      '.mcp.json'
+    ].map(async (name) => {
+      const entry = await lstat(join(homePath, name)).catch((error: unknown) => {
+        if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+          return null
+        }
+        throw error
+      })
+      // Inspect the directory entry only: no link targets, children or file contents.
+      const kind: 'dir' | 'file' | 'link' | 'absent' = !entry
+        ? 'absent'
+        : entry.isSymbolicLink()
+          ? 'link'
+          : entry.isDirectory()
+            ? 'dir'
+            : 'file'
+      return { name, kind }
+    })
   )
+  const reasons = files.missingMcpServers.map((name) => `mcp_server_missing:${name}`)
   const harnessVersion = await claudeWorkerVersion(input.command)
   if (harnessVersion === null) {
     reasons.push('harness_version_unknown')
   }
   const platform = input.platform ?? process.platform
+  const launchBaseline = certifiedCombo('claude')?.launchBaseline ?? null
   return {
     combination: {
       requested: {
@@ -57,7 +63,11 @@ export async function headlessClaudeCombination(input: {
         model: spec.model,
         effort: spec.reasoning.effort,
         claudeConfigDir: 'selected-account',
-        allowlist,
+        allowlist: { skills: [], mcpServers: allowlist.mcpServers },
+        policyTier: 'axiom',
+        launchBaseline: launchBaseline
+          ? { ...launchBaseline, skills: [...launchBaseline.skills] }
+          : null,
         settingSources: [],
         syncedSkills: 'off',
         bundledSkills: 'off',
@@ -71,7 +81,8 @@ export async function headlessClaudeCombination(input: {
         credentials: platform === 'darwin' ? 'keychain' : platform === 'linux' ? 'file' : 'unknown',
         settingsSha256: files.settingsSha256,
         mcpConfigSha256: files.mcpConfigSha256,
-        accountSkills
+        managedSettingsSha256: claudeManagedSettingsSha256('worker'),
+        accountHome: { surfaces }
       }
     },
     reasons
@@ -81,6 +92,14 @@ export async function headlessClaudeCombination(input: {
 const ObservationBaseline = z.object({
   requested: z.object({
     model: z.string(),
+    launchBaseline: z
+      .object({
+        harnessVersion: z.string(),
+        skills: z.array(z.string()),
+        evidence: z.string()
+      })
+      .nullable()
+      .optional(),
     allowlist: z.object({ skills: z.array(z.string()), mcpServers: z.array(z.string()) })
   }),
   effective: z.object({ harnessVersion: z.string().nullable() })
@@ -101,11 +120,16 @@ export function claudeLaunchMismatches(
 ): string[] {
   const { requested, effective } = baseline
   const version = (value: string) => value.replace(/\s*\(Claude Code\)\s*$/, '').trim()
+  const observedVersion = init.claude_code_version ? version(init.claude_code_version) : null
+  const skills = new Set([
+    ...requested.allowlist.skills,
+    ...(requested.launchBaseline?.skills ?? [])
+  ])
   return [
-    ...init.skills
-      .filter((name) => !requested.allowlist.skills.includes(name))
-      .map((name) => `skill_unexpected:${name}`),
-    ...init.plugins.map(({ name }) => `plugin_unexpected:${name}`),
+    ...init.skills.filter((name) => !skills.has(name)).map((name) => `skill_unexpected:${name}`),
+    ...init.plugins
+      .filter(({ path }) => path !== 'builtin')
+      .map(({ name }) => `plugin_unexpected:${name}`),
     ...init.mcp_servers
       .filter(({ name }) => !requested.allowlist.mcpServers.includes(name))
       .map(({ name }) => `mcp_server_unexpected:${name}`),
@@ -115,7 +139,12 @@ export function claudeLaunchMismatches(
     effective.harnessVersion &&
     version(init.claude_code_version) !== version(effective.harnessVersion)
       ? ['harness_version_changed']
-      : [])
+      : []),
+    ...(!requested.launchBaseline
+      ? ['harness_baseline_missing']
+      : observedVersion && observedVersion !== requested.launchBaseline.harnessVersion
+        ? [`harness_baseline_stale:${observedVersion}`]
+        : [])
   ]
 }
 

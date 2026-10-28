@@ -194,7 +194,10 @@ APPLYING / TESTING → QUEUED（应用重启时由 RecoveryService 丢弃临时�
 | `Effort` | `low \| medium \| high \| xhigh`；角色配置优先，Planner 默认 `high`，Worker 按风险：high → `high`，其余 → `medium`（D82）。 |
 | `crossProvider` | `routing.crossProvider` 默认 `true`；Worker 在有至少两个合格 provider 时优先使用不同于 Planner 的 provider。Planner 来源先取已批准 PlanRevision 的 `provenance.actor`，再取最新 Planner AgentSpec；角色显式 provider 仍优先。只有一个合格 provider 时允许同家，选择理由与审计记录是否应用交叉（D82）。 |
 | `requireCertified` | `routing.requireCertified` 默认 `false`；打开后 provisional 组合在 `not_certified` 槽位过滤，V1 验收运行时打开（D57）。 |
-| `attempt.launch_observed` | Claude `system/init` 的实际启动证据：harnessVersion、model、permissionMode、skills、plugins、mcpServers、apiKeySource；超出请求的值另记 `attempt.launch_mismatch`（D83）。 |
+| `attempt.launch_observed` | Claude `system/init` 的实际启动证据：harnessVersion、model、permissionMode、skills、plugins、mcpServers、apiKeySource；超出请求与 launchBaseline 的值另记 `attempt.launch_mismatch`（D83）。 |
+| `launchBaseline` | Claude 组合的可选、版本固定的 harness 启动基线：`harnessVersion`、内建 `skills` 名称与 `evidence` 路径；复制到 `requested.launchBaseline`，缺失时为 null 并记 `harness_baseline_missing`（D83，M3-08f）。 |
+| Axiom policy tier（`--managed-settings`） | Mission Claude 启动的 Axiom 策略层：Worker argv 传单行内联 JSON，Planner SDK 传 `managedSettings` 对象；模型不能覆写。文件路径形式会被 harness 静默忽略，不使用（D83）。 |
+| `harness_baseline_stale:<version>` | `system/init` 的 Claude 版本（去掉 `(Claude Code)` 后缀）与记录的 `launchBaseline.harnessVersion` 不同的信息性 mismatch；升级需重新验证，运行时不自动重写基线（D57、D83、DEF-8）。 |
 | `attempt.permission_denied` | Mission Claude Planner 未被允许规则放行的工具提示由宿主自动拒绝的审计，带 toolName 与不含输入内容的 summary（D63）。 |
 | `endpointProfile` | `subscription`（V1）：用户在 harness 中已有的登录或自行配置的凭据；进入 AgentSpec 的内容寻址，不包含凭据本身（D57）。 |
 | `caller_not_desktop` | 人工动作（`desktop_only` 方法）收到非桌面应用的调用（本机 CLI、配对设备或无法认定）时的拒绝码（D78）。 |

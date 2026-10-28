@@ -1,7 +1,10 @@
 import { seedCodexTestAccount } from './helpers/codex-test-account'
 import { seedClaudeTestAccount } from './helpers/claude-test-account'
 import { createAxiomClaudePlannerStub } from './helpers/axiom-claude-planner-stub'
-import { AXIOM_TEST_CLAUDE_ENV } from './helpers/axiom-test-claude-provider'
+import {
+  AXIOM_TEST_CLAUDE_ENV,
+  AXIOM_TEST_CLAUDE_PLANNER_POLICY
+} from './helpers/axiom-test-claude-provider'
 import { desktopCall } from './helpers/axiom-desktop-call'
 import { readGoalFile } from '../../src/cli/handlers/axiom/input-files'
 import { DEFAULT_MISSION_POLICY } from '../../src/shared/axiom-contract/mission-objects'
@@ -273,10 +276,13 @@ for (const provider of ['codex', 'claude'] as const) {
               '--settings',
               settingsPath,
               '--setting-sources=',
+              '--managed-settings',
+              JSON.stringify(AXIOM_TEST_CLAUDE_PLANNER_POLICY),
               '--permission-mode',
               'default'
             ]),
             settingsPath,
+            managedSettings: AXIOM_TEST_CLAUDE_PLANNER_POLICY,
             // The pinned SDK sends sources via argv and skills via initialize.
             initialize: { settingSources: null, skills: [] },
             env: {

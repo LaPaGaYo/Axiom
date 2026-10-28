@@ -39,6 +39,23 @@ it.each(['darwin', 'linux'] as const)('pins the Claude headless command on %s', 
   expect(launch.argv).toContain('--setting-sources=')
   expect(launch.argv).toContain('--strict-mcp-config')
   expect(launch.argv).toContain('/host/attempt/claude-settings.json')
+  expect(
+    launch.argv.slice(launch.argv.indexOf('--settings'), launch.argv.indexOf('--strict-mcp-config'))
+  ).toEqual([
+    '--settings',
+    '/host/attempt/claude-settings.json',
+    '--managed-settings',
+    JSON.stringify({
+      strictPluginOnlyCustomization: true,
+      disableAllHooks: true,
+      disableSkillShellExecution: true,
+      disableClaudeAiConnectors: true,
+      disableRemoteControl: true,
+      isolatePeerMachines: true,
+      permissions: { disableBypassPermissionsMode: 'disable' },
+      sandbox: { enabled: true }
+    })
+  ])
   expect(launch.argv).toContain('/host/attempt/claude-mcp.json')
   expect(launch.argv).toContain('--disallowedTools')
   expect(launch.argv).toContain('xhigh')

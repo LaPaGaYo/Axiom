@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import {
+  AXIOM_TEST_CLAUDE_WORKER_POLICY,
   AXIOM_TEST_CLAUDE_DENIED_TOOLS,
   AXIOM_TEST_CLAUDE_ENV,
   AXIOM_TEST_CLAUDE_MODEL,
@@ -116,6 +117,8 @@ it.skipIf(!source)(
       '--setting-sources=',
       '--settings',
       settingsPath,
+      '--managed-settings',
+      JSON.stringify(AXIOM_TEST_CLAUDE_WORKER_POLICY),
       '--strict-mcp-config',
       '--mcp-config',
       mcpPath,
@@ -142,8 +145,24 @@ it.skipIf(!source)(
     )
     expect(missingPin.status).not.toBe(0)
     expect(String(missingPin.stderr)).toContain('Missing pin --strict-mcp-config')
+    const missingPolicy = run(
+      argv.filter((arg) => arg !== '--managed-settings'),
+      options
+    )
+    expect(missingPolicy.status).not.toBe(0)
+    expect(String(missingPolicy.stderr)).toContain('Missing pin --managed-settings')
+    const filePolicy = run(
+      argv.map((arg) =>
+        arg === JSON.stringify(AXIOM_TEST_CLAUDE_WORKER_POLICY) ? settingsPath : arg
+      ),
+      options
+    )
+    expect(filePolicy.status).not.toBe(0)
+    expect(String(filePolicy.stderr)).toContain('Managed settings must be inline single-line JSON')
     const result = run(argv, options)
     expect(result.status, String(result.stderr)).toBe(0)
+    const ledger = JSON.parse(readFileSync(options.env.AXIOM_E2E_LEDGER, 'utf8').trim())
+    expect(ledger.managedSettings).toEqual(AXIOM_TEST_CLAUDE_WORKER_POLICY)
     const events = String(result.stdout)
       .trim()
       .split('\n')
@@ -151,7 +170,11 @@ it.skipIf(!source)(
     expect(events.map((event) => event.type)).toEqual(['system', 'assistant', 'result'])
     expect(events[0]).toMatchObject({
       subtype: 'init',
-      claude_code_version: AXIOM_TEST_CLAUDE_VERSION,
+      claude_code_version: `${AXIOM_TEST_CLAUDE_VERSION} (Claude Code)`,
+      skills: ['doctor', 'plugin-authoring'],
+      plugins: [
+        { name: 'cc-plugin-agents-md', path: 'builtin', source: 'cc-plugin-agents-md@builtin' }
+      ],
       model: AXIOM_TEST_CLAUDE_MODEL
     })
     expect(events[2]).toMatchObject({

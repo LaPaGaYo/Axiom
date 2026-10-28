@@ -39,13 +39,17 @@ if (args.includes('--help')) {
 
 function argValue(name) {
   const joined = args.find((arg) => arg.startsWith(`${name}=`))
-  if (joined !== undefined) {return joined.slice(name.length + 1)}
+  if (joined !== undefined) {
+    return joined.slice(name.length + 1)
+  }
   const index = args.indexOf(name)
   return index === -1 ? undefined : args[index + 1]
 }
 const sessionId = argValue('--session-id') ?? randomUUID()
 const model = argValue('--model') ?? 'claude-fixture-default'
 const effort = argValue('--effort') ?? 'high'
+const managedSettingsArg = argValue('--managed-settings')
+const managedSettings = managedSettingsArg ? JSON.parse(managedSettingsArg) : null
 const settingsPath = argValue('--settings')
 const settings = settingsPath ? JSON.parse(readFileSync(settingsPath, 'utf8')) : null
 const write = (frame) => process.stdout.write(`${JSON.stringify(frame)}\n`)
@@ -60,7 +64,9 @@ function proposalRecipe(preamble) {
     /^axiom plan propose --mission ([\w-]+) --attempt ([\w-]+) --file \/dev\/stdin --json <<'AXIOM_PLAN_JSON'$/m
   )
   const goalRevisionId = preamble.match(/"goalRevisionId":\s*"([^"]+)"/)?.[1]
-  if (!command || !goalRevisionId) {throw new Error('Missing Planner stdin proposal recipe')}
+  if (!command || !goalRevisionId) {
+    throw new Error('Missing Planner stdin proposal recipe')
+  }
   const { tasks } = JSON.parse(
     readFileSync(path.join(process.cwd(), 'scenarios', 'goal', 'decomposition.json'), 'utf8')
   )
@@ -96,7 +102,9 @@ function proposalRecipe(preamble) {
 
 function startTurn(frame) {
   write({ ...frame, isReplay: true })
-  if (submitted) {return}
+  if (submitted) {
+    return
+  }
   submitted = true
   const content = frame.message?.content
   const preamble =
@@ -145,14 +153,20 @@ function startTurn(frame) {
       permission_denials: []
     })
     // An SDK multi-turn session stays idle until the host closes it.
-    if (inputEnded) {process.exit(code === 0 ? 0 : 1)}
+    if (inputEnded) {
+      process.exit(code === 0 ? 0 : 1)
+    }
   })
   reporter.unref()
 }
 
 function handle(frame) {
-  if (frame.type === 'user') {return startTurn(frame)}
-  if (frame.type !== 'control_request') {return}
+  if (frame.type === 'user') {
+    return startTurn(frame)
+  }
+  if (frame.type !== 'control_request') {
+    return
+  }
   const subtype = frame.request?.subtype
   const response =
     subtype === 'initialize'
@@ -180,6 +194,7 @@ function handle(frame) {
       argv: args,
       settingsPath,
       settings,
+      managedSettings,
       // This SDK generation puts settingSources on argv, not in initialize. Record absence.
       initialize: {
         settingSources: frame.request.settingSources ?? null,
@@ -222,12 +237,16 @@ function fail(error) {
 const input = readline.createInterface({ input: process.stdin })
 input.on('line', (line) => {
   try {
-    if (line.trim()) {handle(JSON.parse(line))}
+    if (line.trim()) {
+      handle(JSON.parse(line))
+    }
   } catch (error) {
     fail(error)
   }
 })
 input.on('close', () => {
   inputEnded = true
-  if (!pending) {process.exit(0)}
+  if (!pending) {
+    process.exit(0)
+  }
 })
