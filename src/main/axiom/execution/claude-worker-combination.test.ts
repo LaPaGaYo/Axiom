@@ -9,6 +9,7 @@ import {
   recordClaudeLaunchObservation
 } from './claude-worker-combination'
 import * as version from './claude-worker-version'
+import { claudeManagedSettingsSha256 } from './claude-launch-policy'
 import { prepareClaudeAttemptFiles, persistClaudeLastMessage } from './headless-attempt-files'
 import { ClaudeInitSchema } from './claude-worker-events'
 import { fixture, planned } from '../mission-controller/controller-fixture.test-support'
@@ -47,10 +48,7 @@ const spec = AgentSpecSchema.parse({
   }
 })
 async function combination() {
-  const skill = path.join(root, 'skills', 'allowed')
-  await mkdir(skill, { recursive: true })
-  await writeFile(path.join(skill, 'SKILL.md'), '# Allowed\n')
-  const allowlist = { skills: ['allowed', 'missing'], mcpServers: [] }
+  const allowlist = { skills: ['ignored-home-skill'], mcpServers: [] }
   const files = await prepareClaudeAttemptFiles({
     directory: root,
     worktree: '/work',
@@ -66,40 +64,52 @@ async function combination() {
     platform: 'darwin'
   })
 }
-it('records account skill identities, invocation hashes and credential location without reading credentials', async () => {
+const launchBaseline = {
+  harnessVersion: '2.1.309',
+  skills: ['doctor', 'plugin-authoring'],
+  evidence: '.axiom-work/verifications/M3-08f-isolation-probe.md'
+}
+it('snapshots only surface names and kinds without following links or scanning packages', async () => {
+  // A dangling link must remain a link; no child contents or linked paths enter the evidence.
+  await symlink(path.join(root, 'absent-target'), path.join(root, 'skills'))
+  await mkdir(path.join(root, 'commands'))
+  await writeFile(path.join(root, 'settings.json'), 'not parsed')
   const { combination: value, reasons } = await combination()
-  expect(value).toMatchObject({
-    requested: {
-      harness: 'claude',
-      channel: 'headless',
-      model: 'policy-default',
-      effort: 'medium',
-      claudeConfigDir: 'selected-account',
-      settingSources: [],
-      syncedSkills: 'off',
-      bundledSkills: 'off',
-      plugins: 'off',
-      mcp: 'strict'
-    },
-    effective: {
-      harnessVersion: '2.1.309 (Claude Code)',
-      claudeConfigDir: { kind: 'account', path: root },
-      credentials: 'keychain',
-      settingsSha256: expect.any(String),
-      mcpConfigSha256: expect.any(String),
-      accountSkills: [
-        {
-          name: 'allowed',
-          path: path.join(root, 'skills', 'allowed'),
-          digest: expect.stringMatching(/^[a-f0-9]{64}$/)
-        }
-      ]
-    }
+  expect(value.requested).toMatchObject({
+    harness: 'claude',
+    channel: 'headless',
+    policyTier: 'axiom',
+    launchBaseline,
+    allowlist: { skills: [], mcpServers: [] },
+    settingSources: []
   })
-  expect(reasons).toEqual(['skill_missing:missing'])
+  expect(value.effective).toMatchObject({
+    harnessVersion: '2.1.309 (Claude Code)',
+    claudeConfigDir: { kind: 'account', path: root },
+    credentials: 'keychain',
+    managedSettingsSha256: claudeManagedSettingsSha256('worker'),
+    settingsSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+    mcpConfigSha256: expect.stringMatching(/^[a-f0-9]{64}$/)
+  })
+  expect(value.effective.accountHome.surfaces).toEqual([
+    { name: 'skills', kind: 'link' },
+    { name: 'commands', kind: 'dir' },
+    { name: 'agents', kind: 'absent' },
+    { name: 'plugins', kind: 'absent' },
+    { name: 'hooks', kind: 'absent' },
+    { name: 'settings.json', kind: 'file' },
+    { name: '.claude.json', kind: 'absent' },
+    { name: '.mcp.json', kind: 'absent' }
+  ])
+  expect(value.effective).not.toHaveProperty('accountSkills')
+  expect(reasons).toEqual([])
 })
 it('compares init with the request and prelaunch version, including aliases', () => {
-  const requested = { model: 'opus', allowlist: { skills: ['allowed'], mcpServers: ['safe'] } }
+  const requested = {
+    model: 'opus',
+    launchBaseline,
+    allowlist: { skills: ['allowed'], mcpServers: ['safe'] }
+  }
   const effective = { harnessVersion: '2.1.309 (Claude Code)' }
   const init = ClaudeInitSchema.parse({
     type: 'system',
@@ -107,7 +117,11 @@ it('compares init with the request and prelaunch version, including aliases', ()
     claude_code_version: '2.1.309',
     model: 'claude-opus-5',
     permissionMode: 'acceptEdits',
-    skills: ['allowed'],
+    skills: ['allowed', 'doctor', 'plugin-authoring'],
+    plugins: [
+      { name: 'cc-plugin-agents-md', path: 'builtin' },
+      { name: 'cc-plugin-sec-default', path: 'builtin' }
+    ],
     mcp_servers: [{ name: 'safe' }]
   })
   expect(claudeLaunchMismatches(init, { requested, effective })).toEqual([])
@@ -119,7 +133,7 @@ it('compares init with the request and prelaunch version, including aliases', ()
         model: 'claude-sonnet-5',
         permissionMode: 'auto',
         skills: ['unlisted'],
-        plugins: [{ name: 'plugin' }],
+        plugins: [{ name: 'plugin', path: '/outside/plugin' }],
         mcp_servers: [{ name: 'other' }]
       },
       { requested, effective }
@@ -130,42 +144,68 @@ it('compares init with the request and prelaunch version, including aliases', ()
     'mcp_server_unexpected:other',
     'permission_mode_unexpected',
     'model_unexpected',
-    'harness_version_changed'
+    'harness_version_changed',
+    'harness_baseline_stale:2.2.0'
   ])
 })
-it('records init observations once across polling/recovery', async () => {
-  const f = planned(fixture())
-  try {
-    const { combination: value } = await combination()
-    f.store.appendAuditEvent({
-      missionId: f.missionId,
-      actor: 'test',
-      objectKind: 'attempt',
-      objectId: 'dispatch',
-      event: 'attempt.headless_prepared',
-      before: null,
-      after: { combination: value }
-    })
-    const init = ClaudeInitSchema.parse({
-      type: 'system',
-      subtype: 'init',
-      model: 'claude-opus-5',
-      permissionMode: 'acceptEdits',
-      claude_code_version: '2.1.309',
-      skills: ['unexpected']
-    })
-    for (let i = 0; i < 2; i++) {
-      recordClaudeLaunchObservation(f.store, f.missionId, 'dispatch', init)
-    }
-    const events = f.store.listAuditEvents({ missionId: f.missionId })
-    expect(events.filter((event) => event.event === 'attempt.launch_observed')).toHaveLength(1)
-    expect(events.filter((event) => event.event === 'attempt.launch_mismatch')).toMatchObject([
-      { after: { reasons: ['skill_unexpected:unexpected'] } }
+it('reports a stale or missing recorded baseline without changing the prelaunch version check', () => {
+  const init = ClaudeInitSchema.parse({
+    type: 'system',
+    subtype: 'init',
+    model: 'opus',
+    permissionMode: 'acceptEdits',
+    claude_code_version: '2.1.312 (Claude Code)'
+  })
+  const requested = { model: 'opus', allowlist: { skills: [], mcpServers: [] } }
+  const effective = { harnessVersion: '2.1.312 (Claude Code)' }
+  expect(
+    claudeLaunchMismatches(init, { requested: { ...requested, launchBaseline }, effective })
+  ).toEqual(['harness_baseline_stale:2.1.312'])
+  for (const baseline of [requested, { ...requested, launchBaseline: null }]) {
+    expect(claudeLaunchMismatches(init, { requested: baseline, effective })).toEqual([
+      'harness_baseline_missing'
     ])
-  } finally {
-    f.db.close()
   }
 })
+it.each([false, true])(
+  'records init once across polling/recovery; custom plugin = %s',
+  async (customPlugin) => {
+    const f = planned(fixture())
+    try {
+      const { combination: value } = await combination()
+      f.store.appendAuditEvent({
+        missionId: f.missionId,
+        actor: 'test',
+        objectKind: 'attempt',
+        objectId: 'dispatch',
+        event: 'attempt.headless_prepared',
+        before: null,
+        after: { combination: value }
+      })
+      const init = ClaudeInitSchema.parse({
+        type: 'system',
+        subtype: 'init',
+        model: 'claude-opus-5',
+        permissionMode: 'acceptEdits',
+        claude_code_version: '2.1.309',
+        skills: ['doctor', 'plugin-authoring'],
+        plugins: customPlugin
+          ? [{ name: 'external-plugin', path: '/outside/plugin' }]
+          : [{ name: 'cc-plugin-agents-md', path: 'builtin' }]
+      })
+      for (let i = 0; i < 2; i++) {
+        recordClaudeLaunchObservation(f.store, f.missionId, 'dispatch', init)
+      }
+      const events = f.store.listAuditEvents({ missionId: f.missionId })
+      expect(events.filter((event) => event.event === 'attempt.launch_observed')).toHaveLength(1)
+      expect(events.filter((event) => event.event === 'attempt.launch_mismatch')).toMatchObject(
+        customPlugin ? [{ after: { reasons: ['plugin_unexpected:external-plugin'] } }] : []
+      )
+    } finally {
+      f.db.close()
+    }
+  }
+)
 it('extracts only the Claude result into a private last-message file', async () => {
   await persistClaudeLastMessage(root, 'claude', { lastMessage: 'final report' })
   expect(await readFile(path.join(root, 'last-message.md'), 'utf8')).toBe('final report')

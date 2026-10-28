@@ -5,7 +5,10 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createAxiomClaudePlannerStub } from './axiom-claude-planner-stub'
-import { AXIOM_TEST_CLAUDE_ENV } from './axiom-test-claude-provider'
+import {
+  AXIOM_TEST_CLAUDE_ENV,
+  AXIOM_TEST_CLAUDE_PLANNER_POLICY
+} from './axiom-test-claude-provider'
 import { fixturePlanProposal } from './fixture-plan-proposal'
 
 const source = process.env.AXIOM_FIXTURE_REPO
@@ -70,7 +73,8 @@ AXIOM_PLAN_JSON`
         pathToClaudeCodeExecutable: executable,
         cwd: worktree,
         settingSources: [],
-        skills: ['review'],
+        skills: [],
+        managedSettings: AXIOM_TEST_CLAUDE_PLANNER_POLICY,
         settings: settingsPath,
         permissionMode: 'default',
         effort: 'high',
@@ -100,10 +104,17 @@ AXIOM_PLAN_JSON`
         .split('\n')
         .map((line) => JSON.parse(line))
       expect(rows.find((row) => row.kind === 'planner_launch')).toMatchObject({
-        argv: expect.arrayContaining(['--settings', settingsPath, '--setting-sources=']),
+        argv: expect.arrayContaining([
+          '--settings',
+          settingsPath,
+          '--setting-sources=',
+          '--managed-settings',
+          JSON.stringify(AXIOM_TEST_CLAUDE_PLANNER_POLICY)
+        ]),
+        managedSettings: AXIOM_TEST_CLAUDE_PLANNER_POLICY,
         settingsPath,
         settings,
-        initialize: { settingSources: null, skills: ['review'] },
+        initialize: { settingSources: null, skills: [] },
         env: { ...AXIOM_TEST_CLAUDE_ENV, CLAUDE_CONFIG_DIR: path.join(directory, 'account-home') }
       })
       expect(rows.find((row) => row.kind === 'proposal')).toMatchObject({

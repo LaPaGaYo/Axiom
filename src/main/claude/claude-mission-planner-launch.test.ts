@@ -3,6 +3,7 @@ import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
 import { createClaudeStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { registerClaudeMissionSessionPins } from './claude-mission-session-pins'
+import * as launchHome from './claude-structured-launch-home'
 import { claudeStructuredSpawnOptions } from './claude-structured-spawn-options'
 import {
   acquired,
@@ -13,8 +14,14 @@ import {
 
 const launchEnv = { DISABLE_TELEMETRY: '1', CLAUDE_CODE_DISABLE_BUNDLED_SKILLS: '1' }
 
+const managedSettings = {
+  disableAllHooks: true,
+  permissions: { disableBypassPermissionsMode: 'disable' }
+}
+
 const cleanup: (() => void)[] = []
 afterEach(() => {
+  vi.restoreAllMocks()
   for (const dispose of cleanup.splice(0)) {
     dispose()
   }
@@ -60,6 +67,7 @@ function register(model?: string, accountHomePath = '/account/claude') {
     registerClaudeMissionSessionPins('dispatch-pins', 'mission-planner', {
       settingsPath: '/attempt/planner-settings.json',
       env: launchEnv,
+      managedSettings,
       skills: ['review'],
       effort: 'high',
       accountHomePath,
@@ -76,14 +84,19 @@ describe('Mission Claude Planner launch pins', () => {
   })
   it('owns permission mode, settings, skills and env over saved arguments and host overlay', async () => {
     register('policy-model')
+    const home = vi.spyOn(launchHome, 'resolveClaudeStructuredLaunchHome')
     const launch = await resolve('mission-planner')
     expect(launch.options).toMatchObject({
       settingSources: [],
+      managedSettings,
       skills: ['review'],
       permissionMode: 'default',
       settings: '/attempt/planner-settings.json',
       model: 'policy-model',
       effort: 'high'
+    })
+    expect(home).toHaveBeenCalledWith(undefined, expect.any(Object), '/account/claude', {
+      refresh: false
     })
     expect(launch.options.extraArgs).toEqual({ 'replay-user-messages': null })
     expect(launch.options).not.toHaveProperty('plugins')
@@ -109,8 +122,11 @@ describe('Mission Claude Planner launch pins', () => {
   )
 
   it('keeps ordinary Claude session arguments, settings sources and saved model behavior', async () => {
+    const home = vi.spyOn(launchHome, 'resolveClaudeStructuredLaunchHome')
     const launch = await resolve('ordinary')
     const spawn = claudeStructuredSpawnOptions({ launch, saved: { model: 'saved-model' } })
+    expect(home).toHaveBeenCalledWith(undefined, expect.any(Object), '/account/claude', undefined)
+    expect(launch.options.managedSettings).toBeUndefined()
     expect(launch.options.settingSources).toEqual(['user', 'project', 'local'])
     expect(launch.options.extraArgs).toMatchObject({
       settings: '/user/settings.json',
@@ -126,6 +142,7 @@ describe('Mission Claude Planner launch pins', () => {
       registerClaudeMissionSessionPins('dispatch-message', 'session-1', {
         settingsPath: '/attempt/planner-settings.json',
         env: launchEnv,
+        managedSettings,
         skills: [],
         model: 'policy-model',
         effort: 'high',

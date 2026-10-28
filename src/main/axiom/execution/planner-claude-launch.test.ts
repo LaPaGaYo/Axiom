@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getAppEnvironment } from '../../../shared/app-environment'
+import { claudeManagedSettings } from './claude-launch-policy'
 import { createClaudePlannerLaunch } from './planner-claude-launch'
 import { claudeMissionSessionPins } from '../../claude/claude-mission-session-pins'
 import { plannerFixture } from './planner-fixture.test-support'
@@ -32,8 +33,7 @@ async function prepare() {
     missionId: f.mission.id,
     model: 'policy-default',
     effort: 'high',
-    resolveAccountHome: async () => '/account/claude',
-    settings: () => ({ codexAccountHomeAllowlist: { skills: ['review'], mcpServers: [] } })
+    resolveAccountHome: async () => '/account/claude'
   })
   const dispose = await launch.prepare({ dispatchId: 'ctx_planner', sessionId: 's_planner' })
   cleanup.push(dispose)
@@ -41,7 +41,7 @@ async function prepare() {
 }
 
 describe('Claude Planner isolation', () => {
-  it('writes only the invocation read/propose rules and registers the skill allowlist', async () => {
+  it('writes only the invocation read/propose rules and registers the managed policy without home skills', async () => {
     const { pins } = await prepare()
     const settingsPath = path.join(
       directory,
@@ -52,7 +52,8 @@ describe('Claude Planner isolation', () => {
     )
     expect(pins).toMatchObject({
       settingsPath,
-      skills: ['review'],
+      skills: [],
+      managedSettings: claudeManagedSettings('planner'),
       effort: 'high',
       accountHomePath: '/account/claude'
     })
@@ -171,7 +172,6 @@ describe('Claude Planner isolation', () => {
       missionId: f.mission.id,
       model: 'policy-default',
       effort: 'high',
-      settings: () => ({}),
       resolveAccountHome: async () => null
     })
     await expect(

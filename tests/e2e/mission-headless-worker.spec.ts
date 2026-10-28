@@ -10,6 +10,7 @@ import { ArtifactReadResponseSchema } from '../../src/shared/axiom-contract/arti
 import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 import { desktopCall } from './helpers/axiom-desktop-call'
 import {
+  AXIOM_TEST_CLAUDE_WORKER_POLICY,
   AXIOM_TEST_CLAUDE_DENIED_TOOLS,
   AXIOM_TEST_CLAUDE_MODEL,
   AXIOM_TEST_CLAUDE_VERSION
@@ -322,6 +323,7 @@ test('M3-08b: a claude headless Worker progresses RUNNING → SUBMITTED → VERI
           promptPath: z.string(),
           CLAUDE_CONFIG_DIR: z.string(),
           settings: z.unknown(),
+          managedSettings: z.unknown(),
           mcp: z.unknown()
         })
         .parse(JSON.parse(readFileSync(ledgerPath, 'utf8').trim().split('\n')[0]!))
@@ -342,6 +344,8 @@ test('M3-08b: a claude headless Worker progresses RUNNING → SUBMITTED → VERI
         '--setting-sources=',
         '--settings',
         path.join(attemptDir, 'claude-settings.json'),
+        '--managed-settings',
+        JSON.stringify(AXIOM_TEST_CLAUDE_WORKER_POLICY),
         '--strict-mcp-config',
         '--mcp-config',
         path.join(attemptDir, 'claude-mcp.json'),
@@ -352,6 +356,7 @@ test('M3-08b: a claude headless Worker progresses RUNNING → SUBMITTED → VERI
         '--effort',
         'medium'
       ])
+      expect(launch.managedSettings).toEqual(AXIOM_TEST_CLAUDE_WORKER_POLICY)
       expect(launch.settings).toEqual({
         permissions: {
           allow: [
@@ -439,6 +444,13 @@ test('M3-08b: a claude headless Worker progresses RUNNING → SUBMITTED → VERI
             model: AXIOM_TEST_CLAUDE_MODEL,
             effort: 'medium',
             claudeConfigDir: 'selected-account',
+            policyTier: 'axiom',
+            allowlist: { skills: [], mcpServers: [] },
+            launchBaseline: {
+              harnessVersion: '2.1.309',
+              skills: ['doctor', 'plugin-authoring'],
+              evidence: '.axiom-work/verifications/M3-08f-isolation-probe.md'
+            },
             settingSources: [],
             syncedSkills: 'off',
             bundledSkills: 'off',
@@ -449,7 +461,9 @@ test('M3-08b: a claude headless Worker progresses RUNNING → SUBMITTED → VERI
             harnessVersion: expect.stringContaining(AXIOM_TEST_CLAUDE_VERSION),
             claudeConfigDir: { kind: 'account', path: launch.CLAUDE_CONFIG_DIR },
             settingsSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
-            mcpConfigSha256: expect.stringMatching(/^[a-f0-9]{64}$/)
+            mcpConfigSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+            managedSettingsSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+            accountHome: { surfaces: expect.any(Array) }
           }
         }
       })
@@ -458,11 +472,13 @@ test('M3-08b: a claude headless Worker progresses RUNNING → SUBMITTED → VERI
       )
       expect(observed).toHaveLength(1)
       expect(JSON.parse(observed[0]!.after!)).toMatchObject({
-        harnessVersion: AXIOM_TEST_CLAUDE_VERSION,
+        harnessVersion: `${AXIOM_TEST_CLAUDE_VERSION} (Claude Code)`,
         model: AXIOM_TEST_CLAUDE_MODEL,
         permissionMode: 'acceptEdits',
-        skills: [],
-        plugins: [],
+        skills: ['doctor', 'plugin-authoring'],
+        plugins: [
+          { name: 'cc-plugin-agents-md', path: 'builtin', source: 'cc-plugin-agents-md@builtin' }
+        ],
         mcpServers: [],
         apiKeySource: 'none'
       })

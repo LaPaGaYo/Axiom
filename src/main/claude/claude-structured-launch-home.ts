@@ -12,12 +12,13 @@ import { resolveStructuredClaudeAccountHomePath } from '../runtime/structured-ag
 export async function resolveClaudeStructuredLaunchHome(
   router: ClaudeProfileRouter | undefined,
   env: Record<string, string>,
-  recordHome: string
+  recordHome: string,
+  options?: Parameters<ClaudeProfileRouter['prepareLaunch']>[0]
 ): Promise<string> {
   if (!router) {
     return recordHome
   }
-  const preparation = await router.prepareLaunch()
+  const preparation = await router.prepareLaunch(options)
   // Why read before the patch: System default keeps the launch env's own CLAUDE_CONFIG_DIR.
   const launchHome =
     preparation.provenance === 'system'

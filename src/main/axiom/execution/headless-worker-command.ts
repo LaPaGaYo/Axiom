@@ -5,7 +5,11 @@ import {
   CODEX_SESSION_OPTION_CATALOG
 } from '../../../shared/agent-session-option-catalog-claude-codex'
 import { structuredAgentCommandToken } from '../../../shared/tui-agent-launch-command-override'
-import { CLAUDE_EXTERNAL_TOOLS, CLAUDE_LAUNCH_ENV } from './claude-launch-policy'
+import {
+  CLAUDE_EXTERNAL_TOOLS,
+  CLAUDE_LAUNCH_ENV,
+  claudeManagedSettingsArg
+} from './claude-launch-policy'
 
 export function hasHeadlessWorkerBuilder(provider: string, platform = process.platform): boolean {
   return ['codex', 'claude'].includes(provider) && (platform === 'darwin' || platform === 'linux')
@@ -58,6 +62,8 @@ export function buildHeadlessWorkerCommand(input: {
         '--setting-sources=',
         '--settings',
         path.join(input.attemptDir, 'claude-settings.json'),
+        '--managed-settings',
+        claudeManagedSettingsArg('worker'),
         '--strict-mcp-config',
         '--mcp-config',
         path.join(input.attemptDir, 'claude-mcp.json'),

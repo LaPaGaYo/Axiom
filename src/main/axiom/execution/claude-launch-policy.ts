@@ -1,4 +1,5 @@
 import type { Settings } from '@anthropic-ai/claude-agent-sdk'
+import { createHash } from 'node:crypto'
 import path from 'node:path'
 
 // D83: invocation pins, never written into the selected account home.
@@ -35,6 +36,28 @@ export function claudeIsolationSettings() {
     syncClaudeAiPlugins: false,
     enabledPlugins: {}
   } satisfies Settings
+}
+
+// The CLI accepts this policy tier only as inline JSON; a file path is silently ignored.
+export function claudeManagedSettings(role: 'planner' | 'worker') {
+  return {
+    strictPluginOnlyCustomization: true,
+    disableAllHooks: true,
+    disableSkillShellExecution: true,
+    disableClaudeAiConnectors: true,
+    disableRemoteControl: true,
+    isolatePeerMachines: true,
+    permissions: { disableBypassPermissionsMode: 'disable' },
+    ...(role === 'worker' ? { sandbox: { enabled: true } } : {})
+  } satisfies Settings
+}
+
+export function claudeManagedSettingsArg(role: 'planner' | 'worker'): string {
+  return JSON.stringify(claudeManagedSettings(role))
+}
+
+export function claudeManagedSettingsSha256(role: 'planner' | 'worker'): string {
+  return createHash('sha256').update(claudeManagedSettingsArg(role)).digest('hex')
 }
 
 export function claudeWorkerSettings(worktree: string, scratch: string) {

@@ -179,8 +179,8 @@ export class ClaudeProfileRouter {
     })
   }
 
-  /** Refreshes the routed folder first; only a first setup that fails stops the launch. */
-  async prepareLaunch(): Promise<ClaudeRuntimeAuthPreparation> {
+  /** Refreshes unless disabled by the caller; first setup and pointer publication always run. */
+  async prepareLaunch(options?: { refresh?: boolean }): Promise<ClaudeRuntimeAuthPreparation> {
     const selected = this.selectedProfile()
     // Why wait only without the account's own login: System default, and whether it covers the
     // account, depend on the login shell's CLAUDE_CONFIG_DIR; setup awaits it itself.
@@ -199,6 +199,9 @@ export class ClaudeProfileRouter {
       if (report?.outcome !== 'prepared') {
         throw claudeProfileSetupFailed()
       }
+      return this.preparation()
+    }
+    if (options?.refresh === false) {
       return this.preparation()
     }
     // Why capped and never thrown: a set-up folder runs on its last refresh rather than not at all.

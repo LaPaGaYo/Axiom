@@ -8,6 +8,7 @@ export type CertifiedProviderCombo = {
   maxRisk: 'low' | 'medium' | 'high'
   status: 'provisional' | 'certified'
   evidence?: string
+  launchBaseline?: { harnessVersion: string; skills: readonly string[]; evidence: string }
 }
 
 // Why: D57 limits Attempts to these combos; evidence is added per combo after M2-07's host conformance e2e.
@@ -19,7 +20,12 @@ export const CERTIFIED_PROVIDER_COMBOS: readonly CertifiedProviderCombo[] = [
     roles: ['planner', 'worker'],
     // D57: high-risk Workers require sandbox.enabled and failIfUnavailable at launch.
     maxRisk: 'high',
-    status: 'provisional'
+    status: 'provisional',
+    launchBaseline: {
+      harnessVersion: '2.1.309',
+      skills: ['doctor', 'plugin-authoring'],
+      evidence: '.axiom-work/verifications/M3-08f-isolation-probe.md'
+    }
   },
   {
     provider: 'codex',

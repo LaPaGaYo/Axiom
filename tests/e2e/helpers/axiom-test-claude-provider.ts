@@ -1,8 +1,21 @@
 import { AXIOM_TEST_PROVIDER_SOURCE } from './axiom-test-provider'
 import { AXIOM_T01_FIXTURE_FILES } from './axiom-t01-fixture'
 
-export const AXIOM_TEST_CLAUDE_VERSION = '2.1.280'
+export const AXIOM_TEST_CLAUDE_VERSION = '2.1.309'
 export const AXIOM_TEST_CLAUDE_MODEL = 'sonnet'
+export const AXIOM_TEST_CLAUDE_PLANNER_POLICY = {
+  strictPluginOnlyCustomization: true,
+  disableAllHooks: true,
+  disableSkillShellExecution: true,
+  disableClaudeAiConnectors: true,
+  disableRemoteControl: true,
+  isolatePeerMachines: true,
+  permissions: { disableBypassPermissionsMode: 'disable' }
+} as const
+export const AXIOM_TEST_CLAUDE_WORKER_POLICY = {
+  ...AXIOM_TEST_CLAUDE_PLANNER_POLICY,
+  sandbox: { enabled: true }
+} as const
 export const AXIOM_TEST_CLAUDE_DENIED_TOOLS = [
   'WebFetch',
   'WebSearch',
@@ -53,7 +66,11 @@ if (process.argv.slice(2).includes('-p')) {
   const missionId = prompt.match(/^Mission: (\\S+)/m)?.[1]
   const taskId = prompt.match(/^Task: (\\S+)/m)?.[1]
   assert.ok(attemptId && missionId && taskId, 'Missing headless prompt attribution')
-  for (const pin of ['-p', '--verbose', '--setting-sources=', '--strict-mcp-config']) assert.ok(argv.includes(pin), 'Missing pin ' + pin)
+  for (const pin of ['-p', '--verbose', '--setting-sources=', '--strict-mcp-config', '--managed-settings']) assert.ok(argv.includes(pin), 'Missing pin ' + pin)
+  const managedSettingsArg = flag('--managed-settings')
+  assert.ok(managedSettingsArg.startsWith('{') && !/[\\r\\n]/.test(managedSettingsArg), 'Managed settings must be inline single-line JSON')
+  const managedSettings = JSON.parse(managedSettingsArg)
+  assert.deepEqual(managedSettings, ${JSON.stringify(AXIOM_TEST_CLAUDE_WORKER_POLICY)})
   assert.equal(flag('--output-format'), 'stream-json')
   assert.equal(flag('--permission-mode'), 'acceptEdits')
   assert.equal(flag('--permission-prompts'), 'none')
@@ -91,14 +108,15 @@ if (process.argv.slice(2).includes('-p')) {
     provider: 'claude', cwd: process.cwd(), attemptId, taskId,
     terminalHandle: process.env.ORCA_TERMINAL_HANDLE, paneKey: process.env.ORCA_PANE_KEY,
     preambleSha256: createHash('sha256').update(prompt).digest('hex'), preambleBytes: Buffer.byteLength(prompt),
-    argv, promptPath: path.join(attemptDir, 'prompt.md'), settings, mcp: { mcpServers: {} },
+    argv, promptPath: path.join(attemptDir, 'prompt.md'), settings, managedSettings, mcp: { mcpServers: {} },
     CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR
   }) + '\\n')
   const emit = event => process.stdout.write(JSON.stringify(event) + '\\n')
   const sessionId = 'fixture-' + attemptId
-  emit({ type: 'system', subtype: 'init', session_id: sessionId, claude_code_version: '${AXIOM_TEST_CLAUDE_VERSION}',
+  emit({ type: 'system', subtype: 'init', session_id: sessionId, claude_code_version: '${AXIOM_TEST_CLAUDE_VERSION} (Claude Code)',
     model: '${AXIOM_TEST_CLAUDE_MODEL}', permissionMode: 'acceptEdits', tools: settings.permissions.allow,
-    mcp_servers: [], skills: [], plugins: [], apiKeySource: 'none' })
+    mcp_servers: [], skills: ['doctor', 'plugin-authoring'],
+    plugins: [{ name: 'cc-plugin-agents-md', path: 'builtin', source: 'cc-plugin-agents-md@builtin' }], apiKeySource: 'none' })
   async function completeFixture() {
     while (existsSync(process.env.AXIOM_E2E_LEDGER + '.hold')) await new Promise(resolve => setTimeout(resolve, 50))
     const files = ${JSON.stringify(AXIOM_T01_FIXTURE_FILES)}

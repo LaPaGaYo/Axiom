@@ -4,10 +4,13 @@ import { z } from 'zod'
 import type { AgentSpec } from '../../../shared/axiom-contract/agent-spec'
 import type { AxiomStore } from '../db/axiom-store'
 import type { ControlPlaneWorkerStart } from '../../runtime/rpc/methods/orchestration/worker/control-plane-worker-start'
-import { readCodexAccountHomeAllowlist } from '../../codex/codex-worker-launch-home'
 import { plannerProposalCommandPrefix } from '../context-builder/planner-render'
 import { headlessAttemptDirectory } from './headless-attempt-files'
-import { claudeIsolationSettings, CLAUDE_LAUNCH_ENV } from './claude-launch-policy'
+import {
+  claudeIsolationSettings,
+  claudeManagedSettings,
+  CLAUDE_LAUNCH_ENV
+} from './claude-launch-policy'
 import { registerClaudeMissionSessionPins } from '../../claude/claude-mission-session-pins'
 import type { AttemptLauncherDependencies } from './attempt-launcher'
 import { ClaudeAccountRequiredError } from '../../claude-accounts/claude-account-required-error'
@@ -24,8 +27,7 @@ export function claudePlannerLaunchPolicy(
           model: spec.model,
           effort: spec.reasoning.effort,
           resolveAccountHome: async () =>
-            (await deps.runtime.resolveClaudeHomeForWorkerLaunch?.()) ?? null,
-          settings: () => deps.runtime.requireStore().getSettings()
+            (await deps.runtime.resolveClaudeHomeForWorkerLaunch?.()) ?? null
         })
       }
     : {}
@@ -36,7 +38,6 @@ export function createClaudePlannerLaunch(input: {
   missionId: string
   model: string
   effort: AgentSpec['reasoning']['effort']
-  settings: () => unknown
   resolveAccountHome: () => Promise<string | null>
 }): NonNullable<ControlPlaneWorkerStart['structured']> {
   return {
@@ -51,7 +52,6 @@ export function createClaudePlannerLaunch(input: {
       }
       const directory = headlessAttemptDirectory(dispatchId)
       const settingsPath = path.join(directory, 'planner-settings.json')
-      const { skills } = readCodexAccountHomeAllowlist(input.settings())
       await mkdir(directory, { recursive: true, mode: 0o700 })
       await writeFile(
         settingsPath,
@@ -77,7 +77,8 @@ export function createClaudePlannerLaunch(input: {
         settingsPath,
         env: CLAUDE_LAUNCH_ENV,
         accountHomePath,
-        skills,
+        skills: [],
+        managedSettings: claudeManagedSettings('planner'),
         ...(input.model === 'policy-default' ? {} : { model: input.model }),
         effort: input.effort,
         denyPermission: (toolName) => {
