@@ -49,6 +49,7 @@
 | DEF-43 | 远程主机的账号与运行环境（D83 修订）：设置页的账号按机器分组（这台 Mac、各远程主机）；远程主机加账号沿用 Orca 的主机登录流程（`accounts.hostSignIn*`：登录在那台主机上运行，Codex 用设备码，需先在 ChatGPT 设置的 Security 里开启；凭据只存在那台主机上）；远程主机的账号目录用 D83 的布置代码（M3-08c 起已共用）；skills 由 Axiom 从 Registry 装过去（DEF-4），本地程序型 MCP 由各机器自己安装、Axiom 检查；凭据怎么到位按 harness 适配器定（订阅登录只能在那台机器上登；API key 与不轮换的长期令牌可在桌面存一份、启动时注入）；Attempt 的执行组合记录机器与账号 | 远程执行进入路线时（V2）；WSL 随 Windows（V1.x，D67） | D83 修订 | OPEN |
 | DEF-44 | 规划前的快速只读扫描（D82 修订行）：大仓库在规划前用快速模型只读扫描，产出仓库地图与风险清单 Artifact 交给 Planner；Planner / Worker 的 harness 内部自己的并行探索不算 | V2，规划质量数据显示大仓库需要时 | D82 修订 | OPEN |
 | DEF-45 | harness 一键升级 + Approval（D57 / D37 2026-10-26 修订行）：V1 由用户在终端升级（`brew upgrade codex` / `npm i -g @openai/codex@latest`），Axiom 只显示版本、按用户点击检查更新并给出命令；V2 在 harness 页提供"升级"按钮——Approval 绑定精确动作（harness、目标版本、包管理器命令、预期效果），由 Axiom 代为执行包管理器命令并记录结果；升级后该组合自动标"需要复验"并可一键重跑协议一致性 smoke（DEF-8）；定时的"有新版本"提示作为默认关的开关一并做 | **V2 规划时**，排进 V2 的 harness 选档 / 定时整合一批（DEF-18） | D57、D37、DEF-8；Henry 2026-10-26 | OPEN（2026-10-26 登记） |
+| DEF-46 | V2 由 Axiom 执行 harness 出站策略：执行宿主上每台一个本机转发代理（只做 CONNECT 隧道、不解 TLS），harness 进程的 `HTTPS_PROXY` 指向它、`NO_PROXY` 清空；按 Attempt 定名单，逐条记录 host:port 与 Attempt id（不记请求体、不记令牌）；代理挂了算 `unverifiable` 不算失败；Windows / 远端宿主各一份；起点是 e2e 的 `RecordingProxy`（已有按策略放行、其余记录并 502）。V1 只做 M3-08g（环境变量名单：`HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` 指向本机死端口 + `NO_PROXY` 放行 harness 自己的域），拿到堵截价值的大头 | 以下任一：接入 Codex / Claude 之外的 harness；发现某个 harness 不遵守 `NO_PROXY`；M4 把逐 Attempt 出站记录列为验收项；V2 规划时复审 | D83 ⑥ 复录修订行与 2026-10-28 修订行、D37；Henry 2026-10-28 | OPEN（2026-10-28 登记） |
 
 ## M2 出口核对（2026-10-20，D61）
 
@@ -173,3 +174,7 @@ M3-08b 加按角色选模型与默认交叉；新增 **DEF-44**（规划前的�
 ## 2026-10-26 路线复审（`claude/roadmap-review-v1.md`；Henry 2026-10-26："同意你的建议，ABC可以按照你的建议修正"）
 
 D60 / D68 修订行（确定性规则可自动结算；超时 / 超预算 / 停滞计入重试）、D82 修订行（开 PR 复用 Orca hosted-review；出口 3 改写；BLOCKED 与后续建议转对象归 M3-04b）、D83 修订行（V1 只有全局名单）。补 DEF-11 表格行；DEF-2 / 4 / 6 / 12 / 13 / 14 / 17 / 20 / 21 / 22 / 34 / 36 / 38 / 39 / 40 加状态注或交叉引用（触发点已过或指向 V1 已移出的 Reviewer、D58 通道、M3-07、手机端）。
+
+## 2026-10-28 Claude Mission 启动隔离、出站名单与 V2 本机代理（D83 修订；Henry 2026-10-28："同意"）
+
+M3-08f 从"Claude 账号目录由 Axiom 布置"改为"Mission 启动时的隔离"（策略层 + 不刷新 + 启动基线，见 D83 2026-10-28 修订行与 `.axiom-work/verifications/M3-08f-isolation-probe.md`）；M3-08g（harness 出站环境变量名单）排在 M3-08f 之后、真实 Claude 冒烟之前；新增 **DEF-46**（V2 本机出站代理，条件触发）。
