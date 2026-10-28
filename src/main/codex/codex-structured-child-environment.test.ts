@@ -4,6 +4,7 @@ import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session-c
 import { sealStructuredSessionChild } from '../runtime/structured-session-child-env'
 import { createCodexStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
+import { registerCodexMissionSessionPins } from './codex-mission-session-pins'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import {
   mintStructuredWorkerHandle,
@@ -50,6 +51,31 @@ function sealed(sessionId: string): Record<string, string> {
 }
 
 describe('the Codex child environment', () => {
+  it('applies Mission env after the shell and account home without affecting ordinary chats', async () => {
+    const inherited = { HTTPS_PROXY: 'inherited', NO_PROXY: '*', CODEX_HOME: '/shell/home' }
+    const pins = {
+      HTTPS_PROXY: 'http://127.0.0.1:9',
+      NO_PROXY: 'chatgpt.com',
+      CODEX_HOME: '/mission/home'
+    }
+    const release = registerCodexMissionSessionPins('mission-dispatch', 'mission-session', {
+      env: pins
+    })
+    try {
+      expect(await codexChildEnv(inherited, 'mission-session')).toMatchObject(pins)
+      expect(await codexChildEnv(inherited, 'ordinary-session')).toMatchObject({
+        ...inherited,
+        CODEX_HOME: '/pinned/home'
+      })
+    } finally {
+      release()
+    }
+    expect(await codexChildEnv(inherited, 'mission-session')).toMatchObject({
+      ...inherited,
+      CODEX_HOME: '/pinned/home'
+    })
+  })
+
   it('keeps shell exports while pinned launch values win', async () => {
     expect(
       await codexChildEnv(

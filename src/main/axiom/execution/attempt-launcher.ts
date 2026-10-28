@@ -1,12 +1,8 @@
 import { tuiWorkerCombination } from './worker-launch-combination'
-import type { CodexWorkerLaunchHome } from '../../codex/codex-worker-launch-home'
 import { settleAttemptWithoutSubmission } from './attempt-settlement'
 import { z } from 'zod'
 import type { AuditEvent } from '../../../shared/axiom-contract/mission-objects'
-import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import type { OrchestrationDb } from '../../runtime/orchestration/db'
 import { OrchestrationError } from '../../runtime/orchestration/orchestration-error'
-import type { startLocalWorker } from '../../runtime/rpc/methods/orchestration/worker/local-worker-start'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from '../../runtime/rpc/methods/orchestration/worker/worker-start-prompt-budget'
 import { plannerAwareStartMode } from './planner-launch-mode'
 import { WorkerStartParams } from '../../../shared/rpc-contract/orchestration-worker-start-params'
@@ -14,9 +10,6 @@ import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartReadinessTimeoutMs
 } from '../../../shared/orchestration-timing-budgets'
-import type { AxiomStore } from '../db/axiom-store'
-import type { MissionController } from '../mission-controller/mission-controller'
-import type { ArtifactStore } from '../artifacts/artifact-store'
 import type { AdmittedAttempt, AttemptLaunch } from '../scheduler/scheduler'
 import { redactContext } from '../context-builder/redaction'
 import { missionCaller } from './mission-caller'
@@ -27,27 +20,14 @@ import { createHeadlessWorkerLaunch } from './headless-worker-launch'
 import { watchHeadlessAttempt } from './attempt-exit-submission'
 import { createAttemptLaunchAudit } from './attempt-launch-audit'
 import { claudePlannerLaunchPolicy } from './planner-claude-launch'
-
-type LauncherRuntime = Pick<OrcaRuntimeService, 'createManagedWorktree' | 'requireStore'> &
-  Partial<Pick<OrcaRuntimeService, 'resolveClaudeHomeForWorkerLaunch'>>
-export type AttemptWorkerStartArgs = Omit<Parameters<typeof startLocalWorker>[0], 'runtime'> & {
-  runtime: LauncherRuntime
-}
-export type AttemptLauncherDependencies = {
-  db: OrchestrationDb
-  store: AxiomStore
-  missions: MissionController
-  artifacts: ArtifactStore
-  now?: () => string
-  codexWorkerHome?: () => Promise<CodexWorkerLaunchHome>
-} & (
-  | { runtime: OrcaRuntimeService; startWorker?: undefined }
-  | { runtime: LauncherRuntime; startWorker: (args: AttemptWorkerStartArgs) => Promise<unknown> }
-)
+import { codexPlannerLaunchPolicy, recordCodexPlannerTerminalEgress } from './planner-codex-launch'
+import type { AttemptLauncherDependencies, AttemptWorkerStartArgs } from './attempt-launch-contract'
+export type { AttemptLauncherDependencies, AttemptWorkerStartArgs } from './attempt-launch-contract'
 const Receipt = z.object({
   taskId: z.string().min(1),
   dispatchId: z.string().min(1),
-  state: z.enum(['ready', 'failed', 'outcome_unknown'])
+  state: z.enum(['ready', 'failed', 'outcome_unknown']),
+  mode: z.object({ mode: z.enum(['terminal', 'structured']) }).optional()
 })
 
 export function createAttemptLauncher(
@@ -180,6 +160,7 @@ export function createAttemptLauncher(
           ? db.getDispatchContext(attempt.taskId)?.id
           : undefined
       })
+      const mode = plannerAwareStartMode(deps.runtime, params, Boolean(planner))
       const args: Omit<AttemptWorkerStartArgs, 'runtime'> = {
         params,
         db,
@@ -187,13 +168,18 @@ export function createAttemptLauncher(
         coordinator: caller,
         callerSession: caller,
         existingTask,
-        mode: plannerAwareStartMode(deps.runtime, params, Boolean(planner)),
+        mode,
         controlPlane: {
           dispatchCreator: { kind: 'system' },
           worktreeId,
           dispatchMaxDepth: 1,
           callerIdentity: caller,
-          ...(planner ? claudePlannerLaunchPolicy(deps, spec) : {}),
+          ...(planner
+            ? (spec.provider === 'codex' ? codexPlannerLaunchPolicy : claudePlannerLaunchPolicy)(
+                deps,
+                spec
+              )
+            : {}),
           ...(headless
             ? {
                 headless: createHeadlessWorkerLaunch({
@@ -246,6 +232,9 @@ export function createAttemptLauncher(
       const receipt = Receipt.parse(result)
       if (receipt.taskId !== attempt.taskId) {
         throw new OrchestrationError('invalid_argument', 'Worker receipt Task mismatch.')
+      }
+      if (planner && (receipt.mode?.mode ?? mode.mode) === 'terminal') {
+        recordCodexPlannerTerminalEgress(deps.store, spec, receipt.dispatchId)
       }
       if (
         !store.bindAttemptDispatch(attempt.taskId, attempt.seq, receipt.dispatchId) &&

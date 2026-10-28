@@ -199,6 +199,9 @@ APPLYING / TESTING → QUEUED（应用重启时由 RecoveryService 丢弃临时�
 | Axiom policy tier（`--managed-settings`） | Mission Claude 启动的 Axiom 策略层：Worker argv 传单行内联 JSON，Planner SDK 传 `managedSettings` 对象；模型不能覆写。文件路径形式会被 harness 静默忽略，不使用（D83）。 |
 | `harness_baseline_stale:<version>` | `system/init` 的 Claude 版本（去掉 `(Claude Code)` 后缀）与记录的 `launchBaseline.harnessVersion` 不同的信息性 mismatch；升级需重新验证，运行时不自动重写基线（D57、D83、DEF-8）。 |
 | `attempt.permission_denied` | Mission Claude Planner 未被允许规则放行的工具提示由宿主自动拒绝的审计，带 toolName 与不含输入内容的 summary（D63）。 |
+| egress mode（harness 出站模式） | `allowlist`：六个大小写 proxy 变量指向本机死端口，`NO_PROXY` / `no_proxy` 只放 harness 域与 loopback；`inherited-proxy`：宿主基础环境已有非空 proxy，保留原样，仅记录、不强制阻断（DEF-46）。Codex 终端通道 Planner 另记 `unpinned-terminal`，没有环境 pins（D83 ⑥，M3-08g）。 |
+| `AXIOM_EGRESS_BLACKHOLE_URL` | 验证者从 Axiom 自身进程环境指定的 loopback HTTP 录制代理地址，替换默认 `http://127.0.0.1:9`；只接受 `http://127.0.0.1:` / `http://localhost:` 开头且实际目标为该 loopback host 的无凭据 URL。使用时记入 `overrides`；已有 proxy 时不使用。 |
+| `AXIOM_EGRESS_NO_PROXY` | 验证者从 Axiom 自身进程环境指定的 `NO_PROXY` / `no_proxy` 原文替代值；空字符串表示无放行域，供录制全部 harness 出站。使用时记入 `overrides`；已有 proxy 时不使用（D83 ⑥）。 |
 | `endpointProfile` | `subscription`（V1）：用户在 harness 中已有的登录或自行配置的凭据；进入 AgentSpec 的内容寻址，不包含凭据本身（D57）。 |
 | `caller_not_desktop` | 人工动作（`desktop_only` 方法）收到非桌面应用的调用（本机 CLI、配对设备或无法认定）时的拒绝码（D78）。 |
 | `caller_not_permitted_for_agent` | 宿主已解析为 Axiom Attempt / Planner / Reviewer dispatch 的会话调用非 `workspace` 方法、Agent 审批 / 回答或创建 Run / Worker / Orca Task 时的第二层拒绝码（D78）；不替代桌面传输边界。 |

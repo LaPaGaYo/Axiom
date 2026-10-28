@@ -30,6 +30,7 @@ import {
 import { PlanListResponseSchema } from '../../src/shared/axiom-contract/plan-params'
 import { TaskListResponseSchema } from '../../src/shared/axiom-contract/task-params'
 import { fixturePlanProposal } from './helpers/fixture-plan-proposal'
+import { expectHarnessEgress } from './helpers/harness-egress-expectations'
 
 const FIXTURE_COMMIT = 'a6a8413ecdcbbdb1d34f36950ba7e1aaa5a1a642'
 function git(args: string[]) {
@@ -262,6 +263,21 @@ for (const provider of ['codex', 'claude'] as const) {
           .poll(() => ledger(ledgerPath).find((e) => e.kind === 'proposal')?.response?.ok)
           .toBe(true)
         expect(ledger(ledgerPath).filter((e) => e.kind === 'error')).toEqual([])
+        const egressAudit = settled.audits.find(
+          (entry) =>
+            entry.event === 'attempt.egress_pinned' && entry.object_id === attempt.attemptId
+        )
+        const egress = JSON.parse(egressAudit?.after ?? 'null')
+        if (provider === 'codex' && process.platform !== 'win32') {
+          expect(egress).toEqual({
+            provider: 'codex',
+            channel: 'terminal',
+            mode: 'unpinned-terminal',
+            noProxy: [],
+            blackhole: null,
+            overrides: []
+          })
+        }
         if (provider === 'claude') {
           const settingsPath = path.join(
             userData,
@@ -271,6 +287,12 @@ for (const provider of ['codex', 'claude'] as const) {
             'planner-settings.json'
           )
           const launch = ledger(ledgerPath).find((entry) => entry.kind === 'planner_launch')
+          expect(egress).toMatchObject({ provider: 'claude', channel: 'structured' })
+          expectHarnessEgress({
+            env: launch?.env,
+            evidence: egress,
+            NO_PROXY: 'api.anthropic.com,platform.claude.com,localhost,127.0.0.1,::1'
+          })
           expect(launch).toMatchObject({
             argv: expect.arrayContaining([
               '--settings',

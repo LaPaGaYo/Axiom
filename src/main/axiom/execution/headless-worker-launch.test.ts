@@ -60,7 +60,7 @@ afterEach(async () => {
   vi.unstubAllEnvs()
   await rm(root, { recursive: true, force: true })
 })
-async function launch(home = true, refusal = false) {
+async function launch(home = true, refusal = false, inherited: NodeJS.ProcessEnv = {}) {
   const artifacts = new ArtifactStore(f.store, root)
   const context = new ContextBuilder(f.store, artifacts)
   const factory = new AgentFactory(f.store, new RulesEngine(PROVIDER_SELECTION_RULES), async () => [
@@ -91,6 +91,7 @@ async function launch(home = true, refusal = false) {
     command = (await args.controlPlane?.headless?.prepare('dispatch'))?.command
     return { taskId: args.params.task, dispatchId: 'dispatch', state: 'ready' }
   })
+  const resolveBaseEnvironment = vi.fn(async () => inherited)
   await createAttemptLauncher({
     runtime,
     db: f.db,
@@ -98,6 +99,7 @@ async function launch(home = true, refusal = false) {
     missions: f.controller,
     artifacts,
     startWorker,
+    resolveBaseEnvironment,
     ...(home
       ? {
           codexWorkerHome: () =>
@@ -114,12 +116,72 @@ async function launch(home = true, refusal = false) {
         }
       : {})
   })(attempt)
-  return { command, attempt }
+  return { command, attempt, resolveBaseEnvironment }
 }
 const events = (event: string) =>
   f.store.listAuditEvents({ missionId: f.missionId }).filter((row) => row.event === event)
+it.each([
+  ['codex', 'chatgpt.com,.chatgpt.com,openai.com,.openai.com,localhost,127.0.0.1,::1'],
+  ['claude', 'api.anthropic.com,platform.claude.com,localhost,127.0.0.1,::1']
+])(
+  'pins %s from the resolved base env, not Axiom process proxy values',
+  async (harness, noProxy) => {
+    provider = harness
+    vi.stubEnv('HTTPS_PROXY', 'process-proxy-does-not-decide')
+    const { command } = await launch()
+    expect(command).toContain('HTTPS_PROXY=http://127.0.0.1:9')
+    expect(command).toContain(`NO_PROXY=${noProxy}`)
+    expect(events('attempt.headless_prepared')).toMatchObject([
+      {
+        after: {
+          combination: {
+            requested: {
+              egress: {
+                mode: 'allowlist',
+                blackhole: 'http://127.0.0.1:9',
+                noProxy: noProxy.split(','),
+                overrides: []
+              }
+            }
+          }
+        }
+      }
+    ])
+  }
+)
+it.each(['codex', 'claude'])(
+  'leaves the inherited %s proxy untouched and out of evidence',
+  async (harness) => {
+    provider = harness
+    const { command } = await launch(true, false, { https_proxy: 'private-inherited-proxy' })
+    expect(command).not.toContain('PROXY=')
+    expect(command).not.toContain('proxy=')
+    const evidence = events('attempt.headless_prepared')
+    expect(evidence).toMatchObject([
+      {
+        after: {
+          combination: {
+            requested: {
+              egress: {
+                mode: 'inherited-proxy',
+                blackhole: null,
+                noProxy: [],
+                overrides: []
+              }
+            }
+          }
+        }
+      }
+    ])
+    expect(JSON.stringify(evidence)).not.toContain('private-inherited-proxy')
+  }
+)
 it('records the account combination on prepared and started, and one mismatch on the Attempt', async () => {
-  const { command } = await launch()
+  const { command, resolveBaseEnvironment } = await launch()
+  expect(resolveBaseEnvironment).toHaveBeenCalledWith({
+    agentCmdOverrides: { codex: '/fake/codex', claude: '/fake/claude' },
+    codexAccountHomeAllowlist: allowlist
+  })
   const skillPath = path.join(userHomePath, '.agents', 'skills', 'allowed')
   const combination = {
     requested: {

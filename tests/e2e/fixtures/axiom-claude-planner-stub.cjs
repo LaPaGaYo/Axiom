@@ -200,17 +200,41 @@ function handle(frame) {
         settingSources: frame.request.settingSources ?? null,
         skills: frame.request.skills ?? null
       },
-      env: Object.fromEntries(
-        [
-          'CLAUDE_CONFIG_DIR',
-          'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC',
-          'CLAUDE_CODE_DISABLE_BUNDLED_SKILLS',
-          'DISABLE_AUTOUPDATER',
-          'DISABLE_TELEMETRY',
-          'DISABLE_ERROR_REPORTING',
-          'DISABLE_BUG_COMMAND'
-        ].map((key) => [key, process.env[key] ?? null])
-      )
+      env: {
+        ...Object.fromEntries(
+          [
+            'CLAUDE_CONFIG_DIR',
+            'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC',
+            'CLAUDE_CODE_DISABLE_BUNDLED_SKILLS',
+            'DISABLE_AUTOUPDATER',
+            'DISABLE_TELEMETRY',
+            'DISABLE_ERROR_REPORTING',
+            'DISABLE_BUG_COMMAND'
+          ].map((key) => [key, process.env[key] ?? null])
+        ),
+        ...Object.fromEntries(
+          [
+            'HTTPS_PROXY',
+            'HTTP_PROXY',
+            'ALL_PROXY',
+            'https_proxy',
+            'http_proxy',
+            'all_proxy',
+            'NO_PROXY',
+            'no_proxy'
+          ].map((key) => {
+            const value = process.env[key] ?? null
+            return [
+              key,
+              value &&
+              key.toLowerCase() !== 'no_proxy' &&
+              !/^http:\/\/(?:127\.0\.0\.1|localhost):[0-9]+\/?$/.test(value)
+                ? '[inherited]'
+                : value
+            ]
+          })
+        )
+      }
     })
     write({
       type: 'system',

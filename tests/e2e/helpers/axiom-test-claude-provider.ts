@@ -109,7 +109,11 @@ if (process.argv.slice(2).includes('-p')) {
     terminalHandle: process.env.ORCA_TERMINAL_HANDLE, paneKey: process.env.ORCA_PANE_KEY,
     preambleSha256: createHash('sha256').update(prompt).digest('hex'), preambleBytes: Buffer.byteLength(prompt),
     argv, promptPath: path.join(attemptDir, 'prompt.md'), settings, managedSettings, mcp: { mcpServers: {} },
-    CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR
+    CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR,
+    env: Object.fromEntries(['HTTPS_PROXY', 'HTTP_PROXY', 'ALL_PROXY', 'https_proxy', 'http_proxy', 'all_proxy', 'NO_PROXY', 'no_proxy'].map(key => {
+      const value = process.env[key] ?? null
+      return [key, value && key.toLowerCase() !== 'no_proxy' && !new RegExp('^http://(?:127[.]0[.]0[.]1|localhost):[0-9]+/?$').test(value) ? '[inherited]' : value]
+    }))
   }) + '\\n')
   const emit = event => process.stdout.write(JSON.stringify(event) + '\\n')
   const sessionId = 'fixture-' + attemptId
