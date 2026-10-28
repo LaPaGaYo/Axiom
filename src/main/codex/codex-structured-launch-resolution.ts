@@ -14,6 +14,7 @@ import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-ag
 import type { CodexStructuredLaunch } from './codex-structured-session-adapter'
 import { codexStructuredPermissionPolicy } from './codex-structured-permission-policy'
 import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
+import { codexMissionSessionPins } from './codex-mission-session-pins'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV,
@@ -87,6 +88,7 @@ export function codexStructuredLaunchPart(
       resolveEnvironment: basis.environment
     })
     const environment = await basis.environment()
+    const pins = codexMissionSessionPins(record.sessionId)
     const args = codexStructuredLaunchArgs(await deps.resolveLaunchArgs())
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     // A Codex record's chain holds only Codex handles; the launch admission refuses anything else.
@@ -112,7 +114,11 @@ export function codexStructuredLaunchPart(
         ...(visuals ? { visuals } : {})
       },
       env: withNativeChatVisualsEnv(
-        { ...environment, ...(accountHome.path ? { CODEX_HOME: accountHome.path } : {}) },
+        {
+          ...environment,
+          ...(accountHome.path ? { CODEX_HOME: accountHome.path } : {}),
+          ...pins?.env
+        },
         visuals
       ),
       // Without visuals, a folder Orca itself inherited (started from a chat) names another chat's.

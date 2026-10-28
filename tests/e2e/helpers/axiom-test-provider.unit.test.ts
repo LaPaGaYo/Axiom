@@ -1,7 +1,9 @@
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
+import { createRequire } from 'node:module'
+import { runInNewContext } from 'node:vm'
 import { AXIOM_TEST_PROVIDER_SOURCE } from './axiom-test-provider'
 import {
   parseHeadlessWorkerEvents,
@@ -18,6 +20,63 @@ afterEach(() => {
 })
 it('emits syntactically valid provider JavaScript', () => {
   expect(() => new Function(AXIOM_TEST_PROVIDER_SOURCE)).not.toThrow()
+})
+it('records all proxy spellings but withholds inherited proxy values from the ledger', () => {
+  const append = vi.fn()
+  const nativeRequire = createRequire(import.meta.url)
+  const loopback = 'http://127.0.0.1:9'
+  runInNewContext(AXIOM_TEST_PROVIDER_SOURCE, {
+    require: (name: string) =>
+      name === 'node:fs'
+        ? {
+            readFileSync: () => 'Mission: mission-1\nTask: task-1\nAttempt: attempt-1\n',
+            appendFileSync: append
+          }
+        : nativeRequire(name),
+    process: {
+      argv: [
+        'node',
+        'provider',
+        'exec',
+        '--json',
+        '-s',
+        'workspace-write',
+        '-C',
+        '/fixture',
+        '-o',
+        '/attempt/last-message.md'
+      ],
+      env: {
+        AXIOM_E2E_LEDGER: '/ledger',
+        HTTPS_PROXY: loopback,
+        HTTP_PROXY: 'inherited-proxy-value',
+        ALL_PROXY: '',
+        https_proxy: loopback,
+        http_proxy: loopback,
+        all_proxy: loopback,
+        NO_PROXY: 'chatgpt.com',
+        no_proxy: 'chatgpt.com'
+      },
+      cwd: () => '/fixture',
+      chdir() {},
+      stdout: { write() {} }
+    },
+    Buffer,
+    setInterval() {}
+  })
+  expect(append).toHaveBeenCalledOnce()
+  const text = String(append.mock.calls[0]?.[1])
+  expect(JSON.parse(text).env).toEqual({
+    HTTPS_PROXY: loopback,
+    HTTP_PROXY: '[inherited]',
+    ALL_PROXY: '',
+    https_proxy: loopback,
+    http_proxy: loopback,
+    all_proxy: loopback,
+    NO_PROXY: 'chatgpt.com',
+    no_proxy: 'chatgpt.com'
+  })
+  expect(text).not.toContain('inherited-proxy-value')
 })
 it
   .skipIf(!source)

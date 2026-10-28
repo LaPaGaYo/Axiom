@@ -10,6 +10,7 @@ import { redactContext } from '../context-builder/redaction'
 import { claudeWorkerVersion } from './claude-worker-version'
 import type { prepareClaudeAttemptFiles } from './headless-attempt-files'
 import type { ClaudeInit } from './claude-worker-events'
+import type { HarnessEgressEvidence } from './harness-egress-env'
 
 export async function headlessClaudeCombination(input: {
   spec: AgentSpec
@@ -18,6 +19,7 @@ export async function headlessClaudeCombination(input: {
   command: string
   files: Awaited<ReturnType<typeof prepareClaudeAttemptFiles>>
   platform?: NodeJS.Platform
+  egress?: HarnessEgressEvidence
 }) {
   const { spec, homePath, allowlist, files } = input
   const surfaces = await Promise.all(
@@ -73,6 +75,7 @@ export async function headlessClaudeCombination(input: {
         bundledSkills: 'off',
         plugins: 'off',
         mcp: 'strict',
+        ...(input.egress ? { egress: input.egress } : {}),
         ...(spec.selection.crossProvider ? { crossProvider: spec.selection.crossProvider } : {})
       },
       effective: {

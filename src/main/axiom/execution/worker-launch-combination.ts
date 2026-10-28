@@ -3,6 +3,7 @@ import type { AgentSpec } from '../../../shared/axiom-contract/agent-spec'
 import type { CodexWorkerLaunchHome } from '../../codex/codex-worker-launch-home'
 import { fingerprintCodex, probeCodexVersion } from '../../codex/codex-hook-trust-derivation'
 import { observeSkillPackage } from '../../skills/skill-package-identity'
+import type { HarnessEgressEvidence } from './harness-egress-env'
 export { headlessClaudeCombination } from './claude-worker-combination'
 
 const versions = new Map<string, Promise<string | null>>()
@@ -37,7 +38,8 @@ export async function headlessWorkerCombination(
   spec: AgentSpec,
   home: CodexWorkerLaunchHome,
   allowlist: { skills: string[]; mcpServers: string[] },
-  command: string
+  command: string,
+  egress?: HarnessEgressEvidence
 ) {
   const requested = {
     harness: 'codex',
@@ -47,6 +49,7 @@ export async function headlessWorkerCombination(
     codexHome: 'selected-account',
     allowlist,
     hooks: 'off',
+    ...(egress ? { egress } : {}),
     ...(spec.selection.crossProvider ? { crossProvider: spec.selection.crossProvider } : {})
   }
   const version = await harnessVersion(command)

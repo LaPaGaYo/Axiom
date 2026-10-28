@@ -24,6 +24,7 @@ export function buildHeadlessWorkerCommand(input: {
   platform?: NodeJS.Platform
   commandOverride?: string
   accountHomePath?: string
+  egressEnv?: Record<string, string>
 }) {
   if (!hasHeadlessWorkerBuilder(input.provider, input.platform)) {
     return null
@@ -74,14 +75,16 @@ export function buildHeadlessWorkerCommand(input: {
       ],
       env: {
         ...CLAUDE_LAUNCH_ENV,
+        ...input.egressEnv,
         ...(input.accountHomePath ? { CLAUDE_CONFIG_DIR: input.accountHomePath } : {})
       },
       stdinPath: path.join(input.attemptDir, 'prompt.md')
     }
   }
-  const env: Record<string, string> = input.accountHomePath
-    ? { CODEX_HOME: input.accountHomePath }
-    : {}
+  const env: Record<string, string> = {
+    ...(input.accountHomePath ? { CODEX_HOME: input.accountHomePath } : {}),
+    ...input.egressEnv
+  }
   return {
     argv: [
       binary,

@@ -16,6 +16,7 @@ import {
   AXIOM_TEST_CLAUDE_VERSION
 } from './helpers/axiom-test-claude-provider'
 import { AXIOM_T01_FIXTURE_FILES } from './helpers/axiom-t01-fixture'
+import { expectHarnessEgress, headlessEgressEvidence } from './helpers/harness-egress-expectations'
 
 const source = process.env.AXIOM_FIXTURE_REPO
 test.skip(
@@ -59,6 +60,14 @@ test('three sandboxed exec Workers produce host submissions with Attempt attribu
       .filter((entry) => !entry.kind)
     expect(launches).toHaveLength(3)
     for (const launch of launches) {
+      const prepared = inspect().audits.find(
+        (row) => row.event === 'attempt.headless_prepared' && row.object_id === launch.attemptId
+      )
+      expectHarnessEgress({
+        env: launch.env,
+        evidence: headlessEgressEvidence(prepared?.after),
+        NO_PROXY: 'chatgpt.com,.chatgpt.com,openai.com,.openai.com,localhost,127.0.0.1,::1'
+      })
       const entry = z
         .object({
           argv: z.array(z.string()),
@@ -324,10 +333,19 @@ test('M3-08b: a claude headless Worker progresses RUNNING → SUBMITTED → VERI
           CLAUDE_CONFIG_DIR: z.string(),
           settings: z.unknown(),
           managedSettings: z.unknown(),
-          mcp: z.unknown()
+          mcp: z.unknown(),
+          env: z.unknown()
         })
         .parse(JSON.parse(readFileSync(ledgerPath, 'utf8').trim().split('\n')[0]!))
       expect(launch.attemptId).toBe(attemptId)
+      const prepared = inspect().audits.find(
+        (row) => row.event === 'attempt.headless_prepared' && row.object_id === attemptId
+      )
+      expectHarnessEgress({
+        env: launch.env,
+        evidence: headlessEgressEvidence(prepared?.after),
+        NO_PROXY: 'api.anthropic.com,platform.claude.com,localhost,127.0.0.1,::1'
+      })
       expect(launch.CLAUDE_CONFIG_DIR).toBe(
         path.join(userData, 'claude-profiles', 'e2e-claude', 'home')
       )

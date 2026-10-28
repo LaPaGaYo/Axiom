@@ -14,9 +14,11 @@ import {
 import { registerClaudeMissionSessionPins } from '../../claude/claude-mission-session-pins'
 import type { AttemptLauncherDependencies } from './attempt-launcher'
 import { ClaudeAccountRequiredError } from '../../claude-accounts/claude-account-required-error'
+import { resolveHostAgentBaseEnvironment } from '../../runtime/structured-agent-shell-environment'
+import { harnessEgressEnv } from './harness-egress-env'
 
 export function claudePlannerLaunchPolicy(
-  deps: Pick<AttemptLauncherDependencies, 'store' | 'runtime'>,
+  deps: Pick<AttemptLauncherDependencies, 'store' | 'runtime' | 'resolveBaseEnvironment'>,
   spec: AgentSpec
 ): Pick<ControlPlaneWorkerStart, 'structured'> {
   return spec.provider === 'claude'
@@ -26,6 +28,10 @@ export function claudePlannerLaunchPolicy(
           missionId: spec.missionId,
           model: spec.model,
           effort: spec.reasoning.effort,
+          resolveBaseEnvironment: () =>
+            (deps.resolveBaseEnvironment ?? resolveHostAgentBaseEnvironment)(
+              deps.runtime.requireStore().getSettings()
+            ),
           resolveAccountHome: async () =>
             (await deps.runtime.resolveClaudeHomeForWorkerLaunch?.()) ?? null
         })
@@ -39,6 +45,7 @@ export function createClaudePlannerLaunch(input: {
   model: string
   effort: AgentSpec['reasoning']['effort']
   resolveAccountHome: () => Promise<string | null>
+  resolveBaseEnvironment?: () => Promise<NodeJS.ProcessEnv>
 }): NonNullable<ControlPlaneWorkerStart['structured']> {
   return {
     prepare: async ({ dispatchId, sessionId }) => {
@@ -50,6 +57,13 @@ export function createClaudePlannerLaunch(input: {
       if (!accountHomePath) {
         throw new ClaudeAccountRequiredError()
       }
+      const egress = ['darwin', 'linux'].includes(process.platform)
+        ? harnessEgressEnv({
+            provider: 'claude',
+            inherited: await (input.resolveBaseEnvironment?.() ??
+              resolveHostAgentBaseEnvironment({}))
+          })
+        : undefined
       const directory = headlessAttemptDirectory(dispatchId)
       const settingsPath = path.join(directory, 'planner-settings.json')
       await mkdir(directory, { recursive: true, mode: 0o700 })
@@ -73,9 +87,9 @@ export function createClaudePlannerLaunch(input: {
         }),
         { mode: 0o600, flag: 'wx' }
       )
-      return registerClaudeMissionSessionPins(dispatchId, sessionId, {
+      const dispose = registerClaudeMissionSessionPins(dispatchId, sessionId, {
         settingsPath,
-        env: CLAUDE_LAUNCH_ENV,
+        env: { ...CLAUDE_LAUNCH_ENV, ...egress?.env },
         accountHomePath,
         skills: [],
         managedSettings: claudeManagedSettings('planner'),
@@ -101,6 +115,31 @@ export function createClaudePlannerLaunch(input: {
           }
         }
       })
+      try {
+        if (egress) {
+          const { mode, noProxy, blackhole, overrides } = egress
+          input.store.appendAuditEvent({
+            missionId: input.missionId,
+            actor: 'MissionController',
+            objectKind: 'attempt',
+            objectId: dispatchId,
+            event: 'attempt.egress_pinned',
+            before: null,
+            after: {
+              provider: 'claude',
+              channel: 'structured',
+              mode,
+              noProxy,
+              blackhole,
+              overrides
+            }
+          })
+        }
+        return dispose
+      } catch (error) {
+        dispose()
+        throw error
+      }
     }
   }
 }

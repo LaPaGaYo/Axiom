@@ -280,6 +280,28 @@ M3-08f / D83（2026-10-28）启动 pins 与证据：
 
 surfaces 只用 `lstat`，不读内容、不跟随链接、不列子目录；不是已加载内容清单。Axiom 不布置 Claude 账号 home，不读、复制或移动凭据 / Keychain 项。文件路径形式的 managed settings 在探测版本会被静默忽略，禁止使用。策略层是 M3-08b 空 setting sources 等 pins 的补强；交互启动刷新不变，Claude 仍为 provisional，只有 verifier 真实 smoke 能认证。`--plugin-dir` 的 Axiom skills 交付另立 Task。
 
+### Harness egress environment（M3-08g；D83 ⑥）
+
+On macOS/Linux, headless Codex and Claude Workers and structured Mission Planners receive an Axiom-selected proxy overlay. `execution/harness-egress-env.ts` decides from the kernel's `resolveHostAgentBaseEnvironment(settings)`: the login-shell capture plus the user's shell-environment policy, read with current launch settings. The launcher accepts an injected resolver for tests; it does not use Axiom's raw `process.env` to decide whether the user has a proxy. The kernel never imports Axiom.
+
+- `allowlist`: when none of `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY`, `https_proxy`, `http_proxy`, `all_proxy` is non-empty, all six are set to `http://127.0.0.1:9`. Both `NO_PROXY` and `no_proxy` replace inherited bypass values with the exact comma-separated list below. Non-allowlisted requests that honor these variables hit the dead port and fail with connection refused; their diagnostics remain in the harness output. No proxy process is started.
+- `inherited-proxy`: when any of the six variables is non-empty, the overlay is `{}`. Nothing is set or removed, including the user's bypass list. This mode records the decision but does not enforce an allowlist or block anything; upstream-proxy chaining and per-Attempt proxy evidence belong to DEF-46 (V2). Inherited proxy values are never copied into the egress audit.
+
+| Harness | Exact default `NO_PROXY` / `no_proxy` |
+|---|---|
+| Codex | `chatgpt.com,.chatgpt.com,openai.com,.openai.com,localhost,127.0.0.1,::1` |
+| Claude | `api.anthropic.com,platform.claude.com,localhost,127.0.0.1,::1` |
+
+The explicit loopback entries preserve local harness communication; Claude also bypasses loopback for its WebSocket connections. Claude uses the first set proxy in the order `https_proxy`, `HTTPS_PROXY`, `http_proxy`, `HTTP_PROXY`; it ignores `ALL_PROXY`. Setting both spellings avoids a competing inherited casing. `NO_PROXY` suffix matching varies by HTTP client, so these lists require the verifier's real-harness smoke; they are not a general network firewall.
+
+Verifier hooks come only from Axiom's own process environment and apply in `allowlist` mode. `AXIOM_EGRESS_BLACKHOLE_URL` replaces the dead-port URL with a recording endpoint. It must start with `http://127.0.0.1:` or `http://localhost:` and parse as an HTTP URL with that loopback host and no userinfo; invalid values throw without echoing the value. `AXIOM_EGRESS_NO_PROXY`, when defined, replaces both bypass strings verbatim. An empty string sends all proxy-aware non-loopback requests to the recording endpoint, allowing a full egress recording; the default list is then used for a second run proving the non-allowlisted refusals. Used hook names are recorded in `overrides`.
+
+Workers merge the overlay after `CLAUDE_LAUNCH_ENV` or `CODEX_HOME` into the existing `/usr/bin/env` headless wrapper. `attempt.headless_prepared.combination.requested.egress` records `{mode, blackhole, noProxy, overrides}`; `noProxy` is the parsed comma/whitespace-separated list. In inherited mode it is `[]`, `blackhole` is null and `overrides` is `[]`, describing no Axiom-applied pins rather than disclosing the inherited configuration. Structured Planners register frozen process-local session pins and append dispatch-scoped `attempt.egress_pinned` with those fields plus `provider`, `channel: 'structured'`, and actor `MissionController`. Pins are released through the existing session cleanup; a failed audit releases the registration and fails preparation.
+
+Codex's terminal-channel Mission Planner has no per-launch env seam: the existing start-mode decision is unchanged and its dispatch records `attempt.egress_pinned` with `provider: 'codex'`, `channel: 'terminal'`, `mode: 'unpinned-terminal'`, empty lists and null blackhole. The audit uses the kernel's actual receipt mode, including a downgrade from a structured preference; older receipts without a mode fall back to the original decision. It receives no egress pins until M3-10. Ordinary chats are unchanged. Windows/WSL are outside this Task.
+
+This overlay governs the harness process. The separate layer for commands run by Workers remains Claude's `sandbox.network` with an empty allowlist and `strictAllowlist`, and Codex's `sandbox_workspace_write.network_access=false`. E2E ledgers assert the default env and audit, redact inherited proxy URLs, and fail the no-proxy host prerequisite by variable name. Fake-provider tests do not certify real network behavior (D57); the verifier runs Electron and the two recording-proxy smoke passes on the host.
+
 ### Recovery（M2-08）
 
 `RecoveryService.recover()` 保留同步 Mission report；独立的 `async reconcileAttempts({missionId?})` 处理 Attempt。每次重新读取 binding、Task stage、worker/dispatch 与执行宿主观测；仅保存进行中的 Promise，重叠调用等待前一轮后重读持久状态。扫描非终态 Task 的 bindings，加上仍活跃的 kernel worker 对应 binding；CANCELED Task 的已结算资源也重查，补齐 kernel commit 与 release/audit 之间的崩溃窗口。旧 seq 不得结算最新 RUNNING admission。

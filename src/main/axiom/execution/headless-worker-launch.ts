@@ -10,6 +10,8 @@ import { buildHeadlessWorkerCommand } from './headless-worker-command'
 import { prepareClaudeAttemptFiles, prepareHeadlessAttemptFiles } from './headless-attempt-files'
 import { buildHeadlessTerminalCommand } from '../../runtime/rpc/methods/orchestration/worker/control-plane-worker-start'
 import { ClaudeAccountRequiredError } from '../../claude-accounts/claude-account-required-error'
+import { resolveHostAgentBaseEnvironment } from '../../runtime/structured-agent-shell-environment'
+import { harnessEgressEnv } from './harness-egress-env'
 
 export function createHeadlessWorkerLaunch(input: {
   deps: AttemptLauncherDependencies
@@ -42,6 +44,10 @@ export function createHeadlessWorkerLaunch(input: {
       if (claude ? !homePath : !home || home.kind !== 'account') {
         throw claude ? new ClaudeAccountRequiredError() : new CodexAccountRequiredError()
       }
+      const { env: egressEnv, ...egress } = harnessEgressEnv({
+        provider: claude ? 'claude' : 'codex',
+        inherited: await (deps.resolveBaseEnvironment ?? resolveHostAgentBaseEnvironment)(settings)
+      })
       const launch = buildHeadlessWorkerCommand({
         provider: spec.provider,
         model: spec.model,
@@ -51,7 +57,8 @@ export function createHeadlessWorkerLaunch(input: {
         commandOverride: claude
           ? settings.agentCmdOverrides?.claude
           : settings.agentCmdOverrides?.codex,
-        accountHomePath: homePath ?? undefined
+        accountHomePath: homePath ?? undefined,
+        egressEnv
       })
       if (!launch) {
         throw new Error('Headless builder unavailable')
@@ -64,6 +71,7 @@ export function createHeadlessWorkerLaunch(input: {
           spec,
           homePath,
           allowlist,
+          egress,
           command: launch.argv[0],
           files: await prepareClaudeAttemptFiles({
             directory: attemptDir,
@@ -76,7 +84,7 @@ export function createHeadlessWorkerLaunch(input: {
         if (!home || home.kind !== 'account') {
           throw new CodexAccountRequiredError()
         }
-        prepared = await headlessWorkerCombination(spec, home, allowlist, launch.argv[0])
+        prepared = await headlessWorkerCombination(spec, home, allowlist, launch.argv[0], egress)
       }
       const { combination, reasons } = prepared
       if (

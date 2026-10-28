@@ -27,13 +27,14 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
 
-async function prepare() {
+async function prepare(inherited: NodeJS.ProcessEnv = {}) {
   const launch = createClaudePlannerLaunch({
     store: f.store,
     missionId: f.mission.id,
     model: 'policy-default',
     effort: 'high',
-    resolveAccountHome: async () => '/account/claude'
+    resolveAccountHome: async () => '/account/claude',
+    resolveBaseEnvironment: async () => inherited
   })
   const dispose = await launch.prepare({ dispatchId: 'ctx_planner', sessionId: 's_planner' })
   cleanup.push(dispose)
@@ -41,6 +42,46 @@ async function prepare() {
 }
 
 describe('Claude Planner isolation', () => {
+  it('pins the egress env and records dispatch-scoped evidence without env contents', async () => {
+    const { pins } = await prepare()
+    expect(pins.env).toMatchObject({
+      HTTPS_PROXY: 'http://127.0.0.1:9',
+      NO_PROXY: 'api.anthropic.com,platform.claude.com,localhost,127.0.0.1,::1'
+    })
+    expect(
+      f.store
+        .listAuditEvents({ missionId: f.mission.id })
+        .filter((e) => e.event === 'attempt.egress_pinned')
+    ).toMatchObject([
+      {
+        actor: 'MissionController',
+        objectKind: 'attempt',
+        objectId: 'ctx_planner',
+        after: {
+          provider: 'claude',
+          channel: 'structured',
+          mode: 'allowlist',
+          blackhole: 'http://127.0.0.1:9',
+          noProxy: ['api.anthropic.com', 'platform.claude.com', 'localhost', '127.0.0.1', '::1'],
+          overrides: []
+        }
+      }
+    ])
+  })
+
+  it('preserves the inherited proxy without copying it into pins or evidence', async () => {
+    const { pins } = await prepare({ http_proxy: 'private-inherited-proxy' })
+    expect(pins.env).not.toHaveProperty('http_proxy')
+    expect(pins.env).not.toHaveProperty('HTTPS_PROXY')
+    const events = f.store
+      .listAuditEvents({ missionId: f.mission.id })
+      .filter((e) => e.event === 'attempt.egress_pinned')
+    expect(events).toMatchObject([
+      { after: { mode: 'inherited-proxy', blackhole: null, noProxy: [], overrides: [] } }
+    ])
+    expect(JSON.stringify(events)).not.toContain('private-inherited-proxy')
+  })
+
   it('writes only the invocation read/propose rules and registers the managed policy without home skills', async () => {
     const { pins } = await prepare()
     const settingsPath = path.join(
@@ -140,7 +181,7 @@ describe('Claude Planner isolation', () => {
   })
 
   it.each(['claude', 'codex'])(
-    'wires the Planner preparation hook only for Claude: %s',
+    'wires the provider-specific Planner preparation hook: %s',
     async (provider) => {
       f.installed.mockResolvedValue([provider])
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this launch reads only getSettings; the kernel start is stubbed.
@@ -158,10 +199,22 @@ describe('Claude Planner isolation', () => {
       expect(f.startWorker.mock.calls[0]?.[0].mode?.mode).toBe(
         provider === 'claude' ? 'structured' : 'terminal'
       )
-      if (provider === 'claude') {
-        expect(prepare).toBeTypeOf('function')
-      } else {
-        expect(prepare).toBeUndefined()
+      expect(prepare).toBeTypeOf('function')
+      if (provider === 'codex') {
+        expect(f.store.listAuditEvents({ missionId: f.mission.id })).toContainEqual(
+          expect.objectContaining({
+            event: 'attempt.egress_pinned',
+            objectId: binding.dispatchId,
+            after: {
+              provider: 'codex',
+              channel: 'terminal',
+              mode: 'unpinned-terminal',
+              noProxy: [],
+              blackhole: null,
+              overrides: []
+            }
+          })
+        )
       }
     }
   )

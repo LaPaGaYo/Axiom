@@ -207,7 +207,12 @@ if (process.argv[2] === 'exec') {
   appendFileSync(process.env.AXIOM_E2E_LEDGER, JSON.stringify({
     cwd: process.cwd(), attemptId, terminalHandle: process.env.ORCA_TERMINAL_HANDLE, paneKey: process.env.ORCA_PANE_KEY,
     preambleSha256: createHash('sha256').update(prompt).digest('hex'), preambleBytes: Buffer.byteLength(prompt),
-    argv, promptPath, CODEX_HOME: process.env.CODEX_HOME ?? null
+    argv, promptPath, CODEX_HOME: process.env.CODEX_HOME ?? null,
+    // Retain only the verifier's loopback URLs; never persist an inherited proxy's credentials.
+    env: Object.fromEntries(['HTTPS_PROXY', 'HTTP_PROXY', 'ALL_PROXY', 'https_proxy', 'http_proxy', 'all_proxy', 'NO_PROXY', 'no_proxy'].map(key => {
+      const value = process.env[key] ?? null
+      return [key, value && key.toLowerCase() !== 'no_proxy' && !new RegExp('^http://(?:127[.]0[.]0[.]1|localhost):[0-9]+/?$').test(value) ? '[inherited]' : value]
+    }))
   }) + '\\n')
   process.stdout.write(JSON.stringify({ type: 'thread.started', thread_id: 'fixture-' + attemptId }) + '\\n')
   process.stdout.write(JSON.stringify({ type: 'turn.started' }) + '\\n')
