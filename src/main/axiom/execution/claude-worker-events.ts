@@ -9,7 +9,10 @@ export const ClaudeInitSchema = z.object({
   tools: z.array(z.string()).default([]),
   mcp_servers: z.array(z.object({ name: z.string(), status: z.string().optional() })).default([]),
   skills: z.array(z.string()).default([]),
-  plugins: z.array(z.object({ name: z.string(), path: z.string().optional() })).default([]),
+  // `path: 'builtin'` classifies the harness's own plugins; `source` keeps the provenance string as reported.
+  plugins: z
+    .array(z.object({ name: z.string(), path: z.string().optional(), source: z.string().optional() }))
+    .default([]),
   apiKeySource: z.string().optional(),
   session_id: z.string().optional()
 })
