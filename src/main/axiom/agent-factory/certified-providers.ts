@@ -20,11 +20,14 @@ export const CERTIFIED_PROVIDER_COMBOS: readonly CertifiedProviderCombo[] = [
     roles: ['planner', 'worker'],
     // D57: high-risk Workers require sandbox.enabled and failIfUnavailable at launch.
     maxRisk: 'high',
-    status: 'provisional',
+    // D57 revision 2026-10-29: sandboxed headless Worker RUNNING → SUBMITTED → VERIFIED and a
+    // structured-channel Planner proposal over the Axiom MCP tool (M3-08h), both egress passes recorded.
+    status: 'certified',
+    evidence: '.axiom-work/verifications/M3-08-smoke-real-claude.md',
     launchBaseline: {
-      harnessVersion: '2.1.309',
+      harnessVersion: '2.1.312',
       skills: ['doctor', 'plugin-authoring'],
-      evidence: '.axiom-work/verifications/M3-08f-isolation-probe.md'
+      evidence: '.axiom-work/verifications/M3-08-smoke-real-claude.md'
     }
   },
   {

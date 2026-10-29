@@ -1,7 +1,7 @@
 import { AXIOM_TEST_PROVIDER_SOURCE } from './axiom-test-provider'
 import { AXIOM_T01_FIXTURE_FILES } from './axiom-t01-fixture'
 
-export const AXIOM_TEST_CLAUDE_VERSION = '2.1.309'
+export const AXIOM_TEST_CLAUDE_VERSION = '2.1.312'
 export const AXIOM_TEST_CLAUDE_MODEL = 'sonnet'
 export const AXIOM_TEST_CLAUDE_PLANNER_POLICY = {
   strictPluginOnlyCustomization: true,

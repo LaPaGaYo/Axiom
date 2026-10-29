@@ -11,7 +11,7 @@ const routing = RoutingPolicySchema.parse({})
 const makeEngine = () => new RulesEngine(PROVIDER_SELECTION_RULES)
 
 describe('certified provider selection', () => {
-  it('lists exactly four valid V1 execution identities; only codex is certified (D57)', () => {
+  it('lists exactly four valid V1 execution identities; claude and codex are certified (D57)', () => {
     expect(CERTIFIED_PROVIDER_COMBOS.map((combo) => combo.provider)).toEqual([
       'claude',
       'codex',
@@ -24,6 +24,10 @@ describe('certified provider selection', () => {
       if (combo.provider === 'codex') {
         expect(combo.status).toBe('certified')
         expect(combo.evidence).toBe('.axiom-work/verifications/M3-08-smoke-real-codex.md')
+      } else if (combo.provider === 'claude') {
+        expect(combo.status).toBe('certified')
+        expect(combo.evidence).toBe('.axiom-work/verifications/M3-08-smoke-real-claude.md')
+        expect(combo.launchBaseline?.harnessVersion).toBe('2.1.312')
       } else {
         expect(combo.status).toBe('provisional')
         expect(combo.evidence).toBeUndefined()
@@ -335,15 +339,16 @@ describe('role and cross-provider routing', () => {
 
 describe('certification and account policy', () => {
   it('requires certified combinations before considering disallowed providers', () => {
+    // antigravity is the remaining provisional Worker combo now that claude is certified (D57).
     const selection = selectProvider(
-      ['claude', 'codex'],
-      { ...routing, requireCertified: true, disallowedProviders: ['claude'] },
+      ['antigravity', 'codex'],
+      { ...routing, requireCertified: true, disallowedProviders: ['antigravity'] },
       'worker',
-      'high',
+      'medium',
       makeEngine()
     )
     expect(selection.ranked).toEqual(['codex'])
-    expect(selection.filtered).toContainEqual({ provider: 'claude', reason: 'not_certified' })
+    expect(selection.filtered).toContainEqual({ provider: 'antigravity', reason: 'not_certified' })
   })
 
   it.each(['planner', 'worker'] as const)(

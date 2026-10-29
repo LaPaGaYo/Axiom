@@ -17,7 +17,7 @@ import { fixture, planned } from '../mission-controller/controller-fixture.test-
 let root: string
 beforeEach(async () => {
   root = await mkdtemp(path.join(tmpdir(), 'axiom-claude-combination-'))
-  vi.spyOn(version, 'claudeWorkerVersion').mockResolvedValue('2.1.309 (Claude Code)')
+  vi.spyOn(version, 'claudeWorkerVersion').mockResolvedValue('2.1.312 (Claude Code)')
 })
 afterEach(async () => {
   vi.restoreAllMocks()
@@ -64,10 +64,11 @@ async function combination() {
     platform: 'darwin'
   })
 }
+// Mirrors the certified combo (D57 revision 2026-10-29): the prepare path copies it into requested.
 const launchBaseline = {
-  harnessVersion: '2.1.309',
+  harnessVersion: '2.1.312',
   skills: ['doctor', 'plugin-authoring'],
-  evidence: '.axiom-work/verifications/M3-08f-isolation-probe.md'
+  evidence: '.axiom-work/verifications/M3-08-smoke-real-claude.md'
 }
 it('snapshots only surface names and kinds without following links or scanning packages', async () => {
   // A dangling link must remain a link; no child contents or linked paths enter the evidence.
@@ -84,7 +85,7 @@ it('snapshots only surface names and kinds without following links or scanning p
     settingSources: []
   })
   expect(value.effective).toMatchObject({
-    harnessVersion: '2.1.309 (Claude Code)',
+    harnessVersion: '2.1.312 (Claude Code)',
     claudeConfigDir: { kind: 'account', path: root },
     credentials: 'keychain',
     managedSettingsSha256: claudeManagedSettingsSha256('worker'),
@@ -110,11 +111,11 @@ it('compares init with the request and prelaunch version, including aliases', ()
     launchBaseline,
     allowlist: { skills: ['allowed'], mcpServers: ['safe'] }
   }
-  const effective = { harnessVersion: '2.1.309 (Claude Code)' }
+  const effective = { harnessVersion: '2.1.312 (Claude Code)' }
   const init = ClaudeInitSchema.parse({
     type: 'system',
     subtype: 'init',
-    claude_code_version: '2.1.309',
+    claude_code_version: '2.1.312',
     model: 'claude-opus-5',
     permissionMode: 'acceptEdits',
     skills: ['allowed', 'doctor', 'plugin-authoring'],
@@ -154,13 +155,13 @@ it('reports a stale or missing recorded baseline without changing the prelaunch 
     subtype: 'init',
     model: 'opus',
     permissionMode: 'acceptEdits',
-    claude_code_version: '2.1.312 (Claude Code)'
+    claude_code_version: '2.1.313 (Claude Code)'
   })
   const requested = { model: 'opus', allowlist: { skills: [], mcpServers: [] } }
-  const effective = { harnessVersion: '2.1.312 (Claude Code)' }
+  const effective = { harnessVersion: '2.1.313 (Claude Code)' }
   expect(
     claudeLaunchMismatches(init, { requested: { ...requested, launchBaseline }, effective })
-  ).toEqual(['harness_baseline_stale:2.1.312'])
+  ).toEqual(['harness_baseline_stale:2.1.313'])
   for (const baseline of [requested, { ...requested, launchBaseline: null }]) {
     expect(claudeLaunchMismatches(init, { requested: baseline, effective })).toEqual([
       'harness_baseline_missing'
@@ -187,7 +188,7 @@ it.each([false, true])(
         subtype: 'init',
         model: 'claude-opus-5',
         permissionMode: 'acceptEdits',
-        claude_code_version: '2.1.309',
+        claude_code_version: '2.1.312',
         skills: ['doctor', 'plugin-authoring'],
         plugins: customPlugin
           ? [{ name: 'external-plugin', path: '/outside/plugin' }]

@@ -465,9 +465,9 @@ test('M3-08b: a claude headless Worker progresses RUNNING → SUBMITTED → VERI
             policyTier: 'axiom',
             allowlist: { skills: [], mcpServers: [] },
             launchBaseline: {
-              harnessVersion: '2.1.309',
+              harnessVersion: '2.1.312',
               skills: ['doctor', 'plugin-authoring'],
-              evidence: '.axiom-work/verifications/M3-08f-isolation-probe.md'
+              evidence: '.axiom-work/verifications/M3-08-smoke-real-claude.md'
             },
             settingSources: [],
             syncedSkills: 'off',

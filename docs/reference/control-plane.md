@@ -289,7 +289,7 @@ M3-08f / D83（2026-10-28）启动 pins 与证据：
 | managed sandbox | `sandbox: { enabled: true }`；原 settings 的 failIfUnavailable / 网络 / 写范围约束保留 | 不添加 sandbox |
 | 账号 refresh | 只读 `resolveClaudeHomeForWorkerLaunch`，不调 prepareLaunch | 有 Mission pins 时传 `{ refresh: false }`，跳过已准备目录的 refresh；pointer 与 first setup 保留 |
 | skills | `requested.allowlist.skills: []` | `skills: []`，不读取共享 Codex skill allowlist |
-| `launchBaseline` | certified combo 的可选 `{ harnessVersion, skills, evidence }`，复制到 requested；缺失为 null。Claude 基线 = 2.1.309 / doctor、plugin-authoring / `.axiom-work/verifications/M3-08f-isolation-probe.md` | —；launchBaseline 是 Worker 组合审计字段 |
+| `launchBaseline` | certified combo 的可选 `{ harnessVersion, skills, evidence }`，复制到 requested；缺失为 null。Claude 基线 = 2.1.312 / doctor、plugin-authoring / `.axiom-work/verifications/M3-08-smoke-real-claude.md`（隔离探测记录 `M3-08f-isolation-probe.md` 覆盖 2.1.309 与 2.1.312） | —；launchBaseline 是 Worker 组合审计字段 |
 | 策略证据 | `requested.policyTier: 'axiom'`、`effective.managedSettingsSha256` | process-local pins 与宿主 e2e 的 argv / JSON ledger |
 | surfaces | `effective.accountHome.surfaces`：skills、commands、agents、plugins、hooks、settings.json、.claude.json、.mcp.json 的 `{ name, kind }`；kind 为 dir / file / link / absent | 账号目录原样使用 |
 
