@@ -128,11 +128,17 @@ function ledger(file: string) {
     : []
 }
 
-for (const provider of ['codex', 'claude'] as const) {
+for (const { provider, noProposal } of [
+  { provider: 'codex', noProposal: false },
+  { provider: 'claude', noProposal: false },
+  { provider: 'claude', noProposal: true }
+] as const) {
   test(
-    provider === 'codex'
-      ? 'M2-09: a read-only Planner proposes the fixture DAG and releases after PLAN_REVIEW'
-      : 'M3-08b: a claude structured Planner proposes the fixture DAG and releases after PLAN_REVIEW',
+    noProposal
+      ? 'M3-08h: a finished Claude turn without a proposal settles and permits a new Planner'
+      : provider === 'codex'
+        ? 'M2-09: a read-only Planner proposes the fixture DAG and releases after PLAN_REVIEW'
+        : 'M3-08b: a claude structured Planner proposes the fixture DAG and releases after PLAN_REVIEW',
     async (
       // oxlint-disable-next-line no-empty-pattern -- Restart helper owns the background app lifecycle.
       {},
@@ -158,6 +164,7 @@ for (const provider of ['codex', 'claude'] as const) {
         ORCA_BACKGROUND_LAUNCH: '1',
         PATH: `${temp}${path.delimiter}${process.env.PATH ?? ''}`,
         AXIOM_E2E_LEDGER: ledgerPath,
+        AXIOM_E2E_PLANNER_NO_PROPOSAL: noProposal ? '1' : '0',
         ORCA_E2E_CLI_ENTRY: path.join(process.cwd(), 'out', 'cli', 'index.js')
       })
       let app: ElectronApplication | undefined
@@ -202,6 +209,42 @@ for (const provider of ['codex', 'claude'] as const) {
         )
         expect(attempt.provider).toBe(provider)
         expect(attempt.branch).toBe(`axiom/planner/${mission.id}/1`)
+        if (noProposal) {
+          await expect
+            .poll(
+              () =>
+                inspect(userData, mission.id)
+                  .audits.filter(
+                    (a) => a.event === 'planner.attempt_failed' && a.object_id === attempt.attemptId
+                  )
+                  .map((a) => JSON.parse(a.after ?? 'null')),
+              { timeout: 30_000 }
+            )
+            .toEqual([expect.objectContaining({ reason: 'no_proposal', evidence: 'turn_settled' })])
+          await expect
+            .poll(
+              () =>
+                inspect(userData, mission.id).audits.some(
+                  (a) =>
+                    a.event === 'planner.stopped' &&
+                    a.object_id === attempt.attemptId &&
+                    JSON.parse(a.after ?? '{}').reason === 'no_proposal'
+                ),
+              { timeout: 30_000 }
+            )
+            .toBe(true)
+          expect(
+            MissionResponseSchema.parse(cli(userData, ['mission', 'show', '--mission', mission.id]))
+              .mission.status
+          ).toBe('ANALYZING')
+          const second = MissionPlanResponseSchema.parse(
+            await desktopCall(first.page, 'axiom.mission.plan', { missionId: mission.id })
+          )
+          expect(second.attempt.attemptId).toBeTruthy()
+          expect(second.attempt.attemptId).not.toBe(attempt.attemptId)
+          expect(second.attempt.branch).toBe(`axiom/planner/${mission.id}/2`)
+          return
+        }
         await expect
           .poll(
             () =>
@@ -300,6 +343,7 @@ for (const provider of ['codex', 'claude'] as const) {
               '--setting-sources=',
               '--managed-settings',
               JSON.stringify(AXIOM_TEST_CLAUDE_PLANNER_POLICY),
+              '--strict-mcp-config',
               '--permission-mode',
               'default'
             ]),
@@ -310,8 +354,30 @@ for (const provider of ['codex', 'claude'] as const) {
             env: {
               ...AXIOM_TEST_CLAUDE_ENV,
               CLAUDE_CONFIG_DIR: path.join(userData, 'claude-profiles', 'e2e-claude', 'home')
+            },
+            strictMcpConfig: true,
+            mcpServers: {
+              axiom: {
+                type: 'stdio',
+                command: expect.stringMatching(/^\//),
+                args: ['attempt', 'mcp', '--mission', mission.id, '--attempt', attempt.attemptId],
+                envKeys: [
+                  'ORCA_AGENT_SESSION_ID',
+                  'ORCA_CLI_COMMAND',
+                  'ORCA_ENVIRONMENT',
+                  'ORCA_PAIRING_CODE',
+                  'ORCA_REMOTE_PAIRING',
+                  'ORCA_STRUCTURED_SESSION',
+                  'ORCA_TERMINAL_HANDLE',
+                  'ORCA_USER_DATA_PATH'
+                ]
+              }
             }
           })
+          expect(ledger(ledgerPath).find((entry) => entry.kind === 'tools/list')).toMatchObject({
+            tools: ['plan_propose']
+          })
+          expect(JSON.stringify(launch?.settings)).not.toContain('Bash(axiom plan propose')
           expect(launch?.settings).toEqual({
             syncClaudeAiSkills: false,
             syncClaudeAiPlugins: false,
@@ -325,7 +391,7 @@ for (const provider of ['codex', 'claude'] as const) {
                 'Bash(git log:*)',
                 'Bash(git diff:*)',
                 'Bash(git show:*)',
-                `Bash(axiom plan propose --mission ${mission.id} --attempt ${attempt.attemptId} --file:*)`
+                'mcp__axiom__plan_propose'
               ],
               deny: ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'WebFetch', 'WebSearch']
             }

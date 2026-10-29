@@ -17,11 +17,5 @@ export function createAxiomClaudePlannerStub(directory: string) {
     `#!/bin/sh\nexport PATH=${quotePosixShell(directory)}:"$PATH"\nexec ${quotePosixShell(process.execPath)} ${quotePosixShell(script)} "$@"\n`,
     { mode: 0o755 }
   )
-  // Execute the preamble's exact axiom command using the same compiled CLI as the Codex fixture.
-  writeFileSync(
-    path.join(directory, 'axiom'),
-    `#!/bin/sh\nexec ${quotePosixShell(process.execPath)} "$ORCA_E2E_CLI_ENTRY" "$@"\n`,
-    { mode: 0o755 }
-  )
   return executable
 }

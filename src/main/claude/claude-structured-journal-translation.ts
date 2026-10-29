@@ -1,3 +1,4 @@
+import { ClaudeMissionTurnSettlement } from './claude-mission-turn-settlement'
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
@@ -56,6 +57,7 @@ export function createClaudeJournalTranslator(
   deps: ClaudeJournalTranslatorDeps
 ): ClaudeJournalTranslator {
   const tools = new Map<string, ClaudeToolUse>()
+  const missionTurn = new ClaudeMissionTurnSettlement()
   // Every row joins the root turn open when it is written, whoever produced it.
   const turnScope = () => turn.turnScope
   const prompts = new ClaudeJournalPrompts({
@@ -191,6 +193,7 @@ export function createClaudeJournalTranslator(
 
   return {
     handle: (event) => {
+      missionTurn.observe(event)
       if (event.type === 'ended') {
         prompts.retryPendingCancellations()
         flush()
@@ -248,7 +251,9 @@ export function createClaudeJournalTranslator(
         prompts.retryPendingCancellations()
         prompts.cancel(event.promptKey)
       } else if (event.type === 'message' && event.message.type === 'result') {
+        const openTurn = turn.id
         journalClaudeResult(resultContext, event.message, event.observedAt ?? Date.now())
+        missionTurn.result(turn, event, openTurn !== null)
       } else if (event.type === 'message') {
         backgroundTasks.observe(event.message, event.observedAt ?? Date.now())
         messageContext.usageLimits.observe(event.message)
@@ -275,8 +280,7 @@ export function createClaudeJournalTranslator(
         // Idle also closes faults without a result; the live cause decides failed reopening.
         if (claudeSessionStateEndsTurn(event.message)) {
           corrections.abandon()
-          // No verdict: the CLI said the turn is over, not how it ended.
-          turn.settle({ state: 'completed', completedAt: event.observedAt ?? Date.now() })
+          missionTurn.idle(turn, event)
         }
       } else if (event.type === 'provider-frame') {
         providerFallback.append(event.kind, event.payload)

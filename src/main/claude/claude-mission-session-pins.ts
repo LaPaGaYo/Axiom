@@ -1,4 +1,10 @@
-import type { Options } from '@anthropic-ai/claude-agent-sdk'
+import type { Options, McpStdioServerConfig } from '@anthropic-ai/claude-agent-sdk'
+
+export type ClaudeMissionTurnSettlement = {
+  outcome: 'success' | 'failure' | 'cancellation' | 'unknown'
+  isError: boolean
+  numTurns: number | null
+}
 
 export type ClaudeMissionSessionPins = {
   settingsPath: string
@@ -8,7 +14,9 @@ export type ClaudeMissionSessionPins = {
   effort: NonNullable<Options['effort']>
   env: Readonly<Record<string, string>>
   managedSettings: Readonly<Record<string, unknown>>
-  denyPermission: (toolName: string) => void
+  mcpServers: Readonly<Record<string, McpStdioServerConfig>>
+  onTurnSettled?: (settlement: ClaudeMissionTurnSettlement) => void
+  denyPermission: (toolName: string, input?: unknown) => void
 }
 
 const bySession = new Map<string, ClaudeMissionSessionPins>()
@@ -28,7 +36,25 @@ export function registerClaudeMissionSessionPins(
     ...pins,
     skills: Object.freeze([...pins.skills]),
     managedSettings: Object.freeze({ ...pins.managedSettings }),
-    env: Object.freeze({ ...pins.env })
+    env: Object.freeze({ ...pins.env }),
+    mcpServers: Object.freeze(
+      Object.fromEntries(
+        Object.entries(pins.mcpServers).map(([name, server]) => {
+          const args = server.args ? [...server.args] : undefined
+          if (args) {
+            Object.freeze(args)
+          }
+          return [
+            name,
+            Object.freeze({
+              ...server,
+              ...(args ? { args } : {}),
+              ...(server.env ? { env: Object.freeze({ ...server.env }) } : {})
+            })
+          ]
+        })
+      )
+    )
   })
   bySession.set(sessionId, entry)
   byDispatch.set(dispatchId, sessionId)

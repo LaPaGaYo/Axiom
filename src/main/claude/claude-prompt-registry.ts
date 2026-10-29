@@ -82,7 +82,7 @@ export class ClaudePromptRegistry {
 
   register(registration: ClaudePromptRegistration): ClaudePendingPrompt | null {
     if (this.missionPins) {
-      this.missionPins.denyPermission(registration.toolName)
+      this.missionPins.denyPermission(registration.toolName, registration.input)
       return null
     }
     const toolUseId = readClaudePromptString(registration.toolUseId)

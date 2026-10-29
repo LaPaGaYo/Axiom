@@ -4,7 +4,10 @@ import { z } from 'zod'
 import type { AgentSpec } from '../../../shared/axiom-contract/agent-spec'
 import type { AxiomStore } from '../db/axiom-store'
 import type { ControlPlaneWorkerStart } from '../../runtime/rpc/methods/orchestration/worker/control-plane-worker-start'
-import { plannerProposalCommandPrefix } from '../context-builder/planner-render'
+import { plannerMcpServer } from './planner-mcp-launch'
+import { plannerDeniedInput } from './planner-denied-input'
+import { settleClaudePlannerTurn } from './planner-turn-settlement'
+import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { headlessAttemptDirectory } from './headless-attempt-files'
 import {
   claudeIsolationSettings,
@@ -18,13 +21,14 @@ import { resolveHostAgentBaseEnvironment } from '../../runtime/structured-agent-
 import { harnessEgressEnv } from './harness-egress-env'
 
 export function claudePlannerLaunchPolicy(
-  deps: Pick<AttemptLauncherDependencies, 'store' | 'runtime' | 'resolveBaseEnvironment'>,
+  deps: AttemptLauncherDependencies,
   spec: AgentSpec
 ): Pick<ControlPlaneWorkerStart, 'structured'> {
   return spec.provider === 'claude'
     ? {
         structured: createClaudePlannerLaunch({
           store: deps.store,
+          ...(deps.startWorker ? {} : { runtime: deps.runtime }),
           missionId: spec.missionId,
           model: spec.model,
           effort: spec.reasoning.effort,
@@ -41,6 +45,7 @@ export function claudePlannerLaunchPolicy(
 
 export function createClaudePlannerLaunch(input: {
   store: AxiomStore
+  runtime?: OrcaRuntimeService
   missionId: string
   model: string
   effort: AgentSpec['reasoning']['effort']
@@ -49,7 +54,7 @@ export function createClaudePlannerLaunch(input: {
 }): NonNullable<ControlPlaneWorkerStart['structured']> {
   return {
     prepare: async ({ dispatchId, sessionId }) => {
-      // These ids enter a CLI permission prefix, where shell or rule metacharacters are invalid.
+      // Keep dispatch and Mission ids valid command arguments.
       const id = z.string().regex(/^[\w-]+$/)
       id.parse(input.missionId)
       id.parse(dispatchId)
@@ -57,6 +62,22 @@ export function createClaudePlannerLaunch(input: {
       if (!accountHomePath) {
         throw new ClaudeAccountRequiredError()
       }
+      let mcpServers
+      try {
+        mcpServers = { axiom: plannerMcpServer(input.missionId, dispatchId, sessionId) }
+      } catch (error) {
+        input.store.appendAuditEvent({
+          missionId: input.missionId,
+          actor: 'MissionController',
+          objectKind: 'attempt',
+          objectId: dispatchId,
+          event: 'planner.launch_failed',
+          before: null,
+          after: { reason: 'cli_launcher_unavailable' }
+        })
+        throw error
+      }
+      // The kernel applies strictMcpConfig: true when these Mission pins are present.
       const egress = ['darwin', 'linux'].includes(process.platform)
         ? harnessEgressEnv({
             provider: 'claude',
@@ -80,7 +101,7 @@ export function createClaudePlannerLaunch(input: {
               'Bash(git log:*)',
               'Bash(git diff:*)',
               'Bash(git show:*)',
-              `Bash(${plannerProposalCommandPrefix(input.missionId, dispatchId)}:*)`
+              'mcp__axiom__plan_propose'
             ],
             deny: ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'WebFetch', 'WebSearch']
           }
@@ -95,7 +116,25 @@ export function createClaudePlannerLaunch(input: {
         managedSettings: claudeManagedSettings('planner'),
         ...(input.model === 'policy-default' ? {} : { model: input.model }),
         effort: input.effort,
-        denyPermission: (toolName) => {
+        mcpServers,
+        onTurnSettled: (settlement) => {
+          // An injected startWorker is a fake-kernel launch, with no real session to stop.
+          if (!input.runtime) {
+            return
+          }
+          void settleClaudePlannerTurn(
+            input.runtime,
+            input.store,
+            {
+              missionId: input.missionId,
+              dispatchId
+            },
+            settlement
+          ).catch(() => {
+            console.warn('[axiom] Planner turn settlement unavailable', { dispatchId })
+          })
+        },
+        denyPermission: (toolName, deniedInput) => {
           try {
             input.store.appendAuditEvent({
               missionId: input.missionId,
@@ -106,6 +145,7 @@ export function createClaudePlannerLaunch(input: {
               before: null,
               after: {
                 toolName: /^[\w.:-]{1,128}$/.test(toolName) ? toolName : 'unknown',
+                input: plannerDeniedInput(toolName, deniedInput),
                 summary: 'Mission Planner denied a tool request outside its allow rules.'
               }
             })

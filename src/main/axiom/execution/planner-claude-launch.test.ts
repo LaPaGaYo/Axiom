@@ -1,3 +1,4 @@
+import * as childEnvironment from '../../runtime/structured-session-child-env'
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -30,6 +31,7 @@ afterEach(async () => {
 async function prepare(inherited: NodeJS.ProcessEnv = {}) {
   const launch = createClaudePlannerLaunch({
     store: f.store,
+    runtime: f.runtime,
     missionId: f.mission.id,
     model: 'policy-default',
     effort: 'high',
@@ -99,6 +101,27 @@ describe('Claude Planner isolation', () => {
       accountHomePath: '/account/claude'
     })
     expect(pins.model).toBeUndefined()
+    expect(pins.mcpServers.axiom).toMatchObject({
+      type: 'stdio',
+      command: expect.stringMatching(/^\//),
+      args: ['attempt', 'mcp', '--mission', f.mission.id, '--attempt', 'ctx_planner'],
+      env: {
+        ORCA_AGENT_SESSION_ID: 's_planner',
+        ORCA_STRUCTURED_SESSION: '1',
+        ORCA_USER_DATA_PATH: directory
+      }
+    })
+    expect(Object.keys(pins.mcpServers.axiom.env ?? {}).sort()).toEqual([
+      'ORCA_AGENT_SESSION_ID',
+      'ORCA_CLI_COMMAND',
+      'ORCA_ENVIRONMENT',
+      'ORCA_PAIRING_CODE',
+      'ORCA_REMOTE_PAIRING',
+      'ORCA_STRUCTURED_SESSION',
+      'ORCA_USER_DATA_PATH'
+    ])
+    expect(Object.isFrozen(pins.mcpServers.axiom.env)).toBe(true)
+    expect(Object.isFrozen(pins.mcpServers.axiom.args)).toBe(true)
     expect(JSON.parse(await readFile(settingsPath, 'utf8'))).toEqual({
       permissions: {
         allow: [
@@ -109,7 +132,7 @@ describe('Claude Planner isolation', () => {
           'Bash(git log:*)',
           'Bash(git diff:*)',
           'Bash(git show:*)',
-          `Bash(axiom plan propose --mission ${f.mission.id} --attempt ctx_planner --file:*)`
+          'mcp__axiom__plan_propose'
         ],
         deny: ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'WebFetch', 'WebSearch']
       },
@@ -127,7 +150,7 @@ describe('Claude Planner isolation', () => {
     const { canUseTool } = buildClaudePermissionCallbacks({ sessionId: 's_planner', prompts, emit })
     const result = canUseTool(
       'Bash',
-      { command: 'curl secret-value' },
+      { command: 'curl sk-1234567890abcdefghijklmnop', env: { PRIVATE: 'never-evidence' } },
       {
         requestId: 'permission-one',
         toolUseID: 'tool-one',
@@ -150,7 +173,9 @@ describe('Claude Planner isolation', () => {
         summary: 'Mission Planner denied a tool request outside its allow rules.'
       }
     })
-    expect(JSON.stringify(events)).not.toContain('secret-value')
+    expect(events[0]?.after).toMatchObject({ input: 'curl [REDACTED]' })
+    expect(JSON.stringify(events)).not.toContain('never-evidence')
+    expect(JSON.stringify(events)).not.toContain('sk-1234567890abcdefghijklmnop')
   })
 
   it('removes the registry entry on release while an acquired prompt registry stays deny-safe', async () => {
@@ -194,7 +219,7 @@ describe('Claude Planner isolation', () => {
       await createPlannerLauncher(f.deps).start(f.mission.id)
       const [binding] = f.store.listPlannerBindings(f.mission.id)
       const { content } = await f.artifacts.read(binding.contextPackageId)
-      expect(content.toString('utf8').includes('/dev/stdin')).toBe(provider === 'claude')
+      expect(content.toString('utf8').includes('plan_propose')).toBe(provider === 'claude')
       const prepare = f.startWorker.mock.calls[0]?.[0].controlPlane?.structured?.prepare
       expect(f.startWorker.mock.calls[0]?.[0].mode?.mode).toBe(
         provider === 'claude' ? 'structured' : 'terminal'
@@ -222,6 +247,7 @@ describe('Claude Planner isolation', () => {
   it('refuses before registration when the selected account resolves to no managed home', async () => {
     const launch = createClaudePlannerLaunch({
       store: f.store,
+      runtime: f.runtime,
       missionId: f.mission.id,
       model: 'policy-default',
       effort: 'high',
@@ -232,4 +258,19 @@ describe('Claude Planner isolation', () => {
     ).rejects.toMatchObject({ code: 'no_account' })
     expect(claudeMissionSessionPins('no_account')).toBeUndefined()
   })
+})
+
+it('fails launch with evidence when this app has no absolute CLI launcher', async () => {
+  vi.spyOn(childEnvironment, 'sealStructuredSessionChild').mockReturnValue({
+    env: {},
+    commandEnv: {},
+    envToDelete: []
+  })
+  await expect(prepare()).rejects.toThrow('cli_launcher_unavailable')
+  expect(claudeMissionSessionPins('s_planner')).toBeUndefined()
+  expect(
+    f.store
+      .listAuditEvents({ missionId: f.mission.id })
+      .filter((e) => e.event === 'planner.launch_failed')
+  ).toMatchObject([{ objectId: 'ctx_planner', after: { reason: 'cli_launcher_unavailable' } }])
 })

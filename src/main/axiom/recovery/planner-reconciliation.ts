@@ -1,4 +1,5 @@
 import type { AttemptReconcileEntry } from '../../../shared/axiom-contract/mission-params'
+import { z } from 'zod'
 import { exposeUtcTimestamp } from '../../runtime/orchestration/db/utc-timestamp'
 import { releaseLocalWorker } from '../../runtime/rpc/methods/orchestration/worker/local-worker-release'
 import type { inspectWorkerTerminal } from '../../runtime/rpc/methods/orchestration/worker/worker-observation'
@@ -12,6 +13,8 @@ import {
   type RecoveryContext,
   type AttemptBinding
 } from './attempt-recovery-effects'
+
+export const PLANNER_RUNTIME_BUDGET_MINUTES = 30
 
 export async function reconcilePlanner(
   ctx: RecoveryContext,
@@ -28,8 +31,22 @@ export async function reconcilePlanner(
   }
   const proposed = Boolean(lastAttemptAudit(ctx, binding, 'planner.proposed'))
   if (['failed', 'stopped', 'abandoned'].includes(worker.state)) {
-    if (!proposed && !lastAttemptAudit(ctx, binding, 'planner.attempt_failed')) {
+    const failed = lastAttemptAudit(ctx, binding, 'planner.attempt_failed')
+    if (!proposed && !failed) {
       auditAttempt(ctx, binding, 'planner.attempt_failed', { reason: 'no_proposal' })
+    }
+    if (
+      !proposed &&
+      z
+        .object({ reason: z.literal('no_proposal'), evidence: z.literal('turn_settled') })
+        .safeParse(JSON.parse(failed?.after ?? 'null')).success &&
+      !lastAttemptAudit(ctx, binding, 'planner.stopped')
+    ) {
+      // The kernel stop can commit before its caller writes the receipt. Reuse
+      // the idempotent stop path, including its overlap and audit deduplication.
+      await stopPlanner(runtime, store, { missionId: binding.missionId, dispatchId }, 'no_proposal')
+      entry.action = 'attempt_failed'
+      return entry
     }
     const release = await releaseLocalWorker(runtime, dispatchId)
     if (proposed) {
@@ -48,7 +65,7 @@ export async function reconcilePlanner(
       workerProcessExited: true,
       terminationReason: 'process_exited'
     })
-    if (!proposed) {
+    if (!proposed && !lastAttemptAudit(ctx, binding, 'planner.attempt_failed')) {
       auditAttempt(ctx, binding, 'planner.attempt_failed', {
         reason: 'no_proposal',
         ...(agentExit.exited ? { evidence: agentExit.evidence } : {})
@@ -61,17 +78,18 @@ export async function reconcilePlanner(
   const policy = store.getPolicy(binding.missionId)!
   if (!stopUnknown && entry.liveness === 'live') {
     observeAttemptLiveness(ctx, binding, { status: 'live', ptyIds: [] })
-    const minutes = policy.budget.maxRuntimeMinutes
+    const minutes = policy.budget.maxRuntimeMinutes ?? PLANNER_RUNTIME_BUDGET_MINUTES
+    const failed = Boolean(lastAttemptAudit(ctx, binding, 'planner.attempt_failed'))
     if (
       proposed ||
-      (minutes !== undefined &&
-        ctx.now() - Date.parse(exposeUtcTimestamp(binding.createdAt)!) > minutes * 60_000)
+      failed ||
+      ctx.now() - Date.parse(exposeUtcTimestamp(binding.createdAt)!) > minutes * 60_000
     ) {
       entry.action = await stopPlanner(
         runtime,
         store,
         { missionId: binding.missionId, dispatchId },
-        proposed ? 'plan_proposed' : 'runtime_budget_exceeded'
+        proposed ? 'plan_proposed' : failed ? 'no_proposal' : 'runtime_budget_exceeded'
       )
     }
     return entry
@@ -105,7 +123,11 @@ export async function reconcilePlanner(
   if (db.getDispatchContext(binding.taskId)?.id !== dispatchId) {
     return { ...entry, action: 'stale' }
   }
-  const disposition = db.abandonWorkerDispatch(dispatchId, runtime.getRuntimeId(), 'RecoveryService').disposition
+  const disposition = db.abandonWorkerDispatch(
+    dispatchId,
+    runtime.getRuntimeId(),
+    'RecoveryService'
+  ).disposition
   auditAttempt(ctx, binding, 'planner.abandoned', {
     reason: 'unverifiable_tolerance_exceeded',
     disposition,

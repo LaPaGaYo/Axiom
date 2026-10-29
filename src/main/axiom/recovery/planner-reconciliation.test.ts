@@ -20,7 +20,8 @@ beforeEach(async () => {
   })
   vi.spyOn(observation, 'inspectWorkerTerminal').mockResolvedValue({
     status: 'exited',
-    terminal: null, terminalHandle: null,
+    terminal: null,
+    terminalHandle: null,
     exact: true
   })
   vi.spyOn(release, 'releaseLocalWorker').mockResolvedValue({
@@ -80,7 +81,8 @@ it('uses the durable unverifiable clock, then abandons/releases after tolerance'
   vi.mocked(observation.inspectWorkerTerminal).mockResolvedValue({
     status: 'unverifiable',
     exact: true,
-    terminal: null, terminalHandle: null,
+    terminal: null,
+    terminalHandle: null,
     reason: 'disconnected'
   })
   await recovery.reconcileAttempts()
@@ -101,7 +103,8 @@ it('enumerates planners on Mission cancellation even without a Task stage', asyn
   vi.mocked(observation.inspectWorkerTerminal).mockResolvedValue({
     status: 'unverifiable',
     exact: true,
-    terminal: null, terminalHandle: null,
+    terminal: null,
+    terminalHandle: null,
     reason: 'disconnected'
   })
   expect(
@@ -115,4 +118,122 @@ it('enumerates planners on Mission cancellation even without a Task stage', asyn
   })
   expect(f.db.getWorkerDispatch(attemptId)?.state).toBe('abandoned')
   expect(release.releaseLocalWorker).toHaveBeenCalledWith(f.runtime, attemptId)
+})
+
+it('stops a live Planner after the default 30-minute budget when policy omits a cap', async () => {
+  vi.mocked(observation.inspectWorkerTerminal).mockResolvedValue({
+    status: 'live',
+    terminal: null,
+    terminalHandle: null,
+    exact: true
+  })
+  const stop = vi
+    .spyOn(await import('../execution/planner-stop'), 'stopPlanner')
+    .mockResolvedValue('stopped')
+  now += 29 * 60_000
+  await recovery.reconcileAttempts()
+  expect(stop).not.toHaveBeenCalled()
+  now += 2 * 60_000
+  await recovery.reconcileAttempts()
+  expect(stop).toHaveBeenCalledWith(
+    f.runtime,
+    f.store,
+    { missionId: f.mission.id, dispatchId: attemptId },
+    'runtime_budget_exceeded'
+  )
+})
+it('recovers a persisted no-proposal claim immediately and keeps its turn evidence', async () => {
+  vi.mocked(observation.inspectWorkerTerminal).mockResolvedValue({
+    status: 'live',
+    terminal: null,
+    terminalHandle: null,
+    exact: true
+  })
+  f.store.appendAuditEvent({
+    missionId: f.mission.id,
+    actor: 'MissionController',
+    objectKind: 'attempt',
+    objectId: attemptId,
+    event: 'planner.attempt_failed',
+    before: null,
+    after: { reason: 'no_proposal', evidence: 'turn_settled' }
+  })
+  const stop = vi
+    .spyOn(await import('../execution/planner-stop'), 'stopPlanner')
+    .mockResolvedValue('stopped')
+  await recovery.reconcileAttempts()
+  expect(stop).toHaveBeenCalledExactlyOnceWith(
+    f.runtime,
+    f.store,
+    { missionId: f.mission.id, dispatchId: attemptId },
+    'no_proposal'
+  )
+  vi.mocked(observation.inspectWorkerTerminal).mockResolvedValue({
+    status: 'exited',
+    terminal: null,
+    terminalHandle: null,
+    exact: true
+  })
+  await recovery.reconcileAttempts()
+  expect(events('planner.attempt_failed')).toMatchObject([
+    { after: { reason: 'no_proposal', evidence: 'turn_settled' } }
+  ])
+})
+it('backfills one stop receipt after a crash between kernel stop and audit persistence', async () => {
+  f.store.appendAuditEvent({
+    missionId: f.mission.id,
+    actor: 'MissionController',
+    objectKind: 'attempt',
+    objectId: attemptId,
+    event: 'planner.attempt_failed',
+    before: null,
+    after: { reason: 'no_proposal', evidence: 'turn_settled' }
+  })
+  f.db.beginWorkerStop(attemptId, f.runtime.getRuntimeId())
+  f.db.settleWorkerStop(attemptId)
+  vi.mocked(release.releaseLocalWorker).mockResolvedValue({
+    dispatchId: attemptId,
+    state: 'already_released',
+    processAction: 'none',
+    archive: null
+  })
+  await recovery.reconcileAttempts()
+  await recovery.reconcileAttempts()
+  expect(events('planner.attempt_failed')).toMatchObject([
+    { after: { reason: 'no_proposal', evidence: 'turn_settled' } }
+  ])
+  expect(events('planner.stopped')).toMatchObject([
+    { after: { state: 'stopped', releaseDisposition: 'already_released', reason: 'no_proposal' } }
+  ])
+  expect(f.missions.getMission(f.mission.id).status).toBe('ANALYZING')
+})
+it.each([5, 45])('honors an explicit %s-minute Planner runtime budget', async (minutes) => {
+  const policy = f.store.getPolicy(f.mission.id)
+  if (!policy) {
+    throw new Error('Missing fixture policy')
+  }
+  f.store.upsertPolicy(f.mission.id, {
+    ...policy,
+    budget: { ...policy.budget, maxRuntimeMinutes: minutes }
+  })
+  vi.mocked(observation.inspectWorkerTerminal).mockResolvedValue({
+    status: 'live',
+    terminal: null,
+    terminalHandle: null,
+    exact: true
+  })
+  const stop = vi
+    .spyOn(await import('../execution/planner-stop'), 'stopPlanner')
+    .mockResolvedValue('stopped')
+  now += (minutes - 1) * 60_000
+  await recovery.reconcileAttempts()
+  expect(stop).not.toHaveBeenCalled()
+  now += 2 * 60_000
+  await recovery.reconcileAttempts()
+  expect(stop).toHaveBeenCalledExactlyOnceWith(
+    f.runtime,
+    f.store,
+    { missionId: f.mission.id, dispatchId: attemptId },
+    'runtime_budget_exceeded'
+  )
 })

@@ -1,6 +1,12 @@
 import { GLOBAL_FLAGS, type CommandSpec } from '../args'
 export const AXIOM_ATTEMPT_COMMAND_SPECS: CommandSpec[] = [
   {
+    path: ['attempt', 'mcp'],
+    summary: 'Serve the Planner proposal MCP tool over stdio',
+    usage: 'axiom attempt mcp --mission <id> --attempt <id>',
+    allowedFlags: [...GLOBAL_FLAGS, 'mission', 'attempt', 'from']
+  },
+  {
     path: ['attempt', 'submit'],
     summary: 'Submit an immutable Candidate and Worker report',
     usage:
