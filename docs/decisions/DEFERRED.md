@@ -50,7 +50,7 @@
 | DEF-44 | 规划前的快速只读扫描（D82 修订行）：大仓库在规划前用快速模型只读扫描，产出仓库地图与风险清单 Artifact 交给 Planner；Planner / Worker 的 harness 内部自己的并行探索不算 | V2，规划质量数据显示大仓库需要时 | D82 修订 | OPEN |
 | DEF-45 | harness 一键升级 + Approval（D57 / D37 2026-10-26 修订行）：V1 由用户在终端升级（`brew upgrade codex` / `npm i -g @openai/codex@latest`），Axiom 只显示版本、按用户点击检查更新并给出命令；V2 在 harness 页提供"升级"按钮——Approval 绑定精确动作（harness、目标版本、包管理器命令、预期效果），由 Axiom 代为执行包管理器命令并记录结果；升级后该组合自动标"需要复验"并可一键重跑协议一致性 smoke（DEF-8）；定时的"有新版本"提示作为默认关的开关一并做 | **V2 规划时**，排进 V2 的 harness 选档 / 定时整合一批（DEF-18） | D57、D37、DEF-8；Henry 2026-10-26 | OPEN（2026-10-26 登记） |
 | DEF-46 | V2 由 Axiom 执行 harness 出站策略：执行宿主上每台一个本机转发代理（只做 CONNECT 隧道、不解 TLS），harness 进程的 `HTTPS_PROXY` 指向它、`NO_PROXY` 清空；按 Attempt 定名单，逐条记录 host:port 与 Attempt id（不记请求体、不记令牌）；代理挂了算 `unverifiable` 不算失败；Windows / 远端宿主各一份；起点是 e2e 的 `RecordingProxy`（已有按策略放行、其余记录并 502）。V1 只做 M3-08g（环境变量名单：`HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` 指向本机死端口 + `NO_PROXY` 放行 harness 自己的域），拿到堵截价值的大头 | 以下任一：接入 Codex / Claude 之外的 harness；发现某个 harness 不遵守 `NO_PROXY`；M4 把逐 Attempt 出站记录列为验收项；V2 规划时复审 | D83 ⑥ 复录修订行与 2026-10-28 修订行、D37；Henry 2026-10-28 | OPEN（2026-10-28 登记） |
-| DEF-47 | V1.5：Claude 结构化通道的提案改走 SDK 进程内 MCP 工具（`createSdkMcpServer`：`plan_propose(proposal)` 由 Orca 主进程转发给同一个 Control Plane 命令校验、持久化，权限 allow `mcp__axiom__plan_propose`，不经 Bash、不落文件）；V1 用 D84 的"Write 一个文件 + 单行 `axiom plan propose --file`"。同一机制可承接 M3-10 的 Claude 审批桥（类型化消息经工具而非终端文本） | 以下任一：Claude Code 的 Bash 安全分析再次拦住 CLI 配方；M3-10 的审批桥需要会话内工具；Planner 提案体超过命令行 / 文件路径方案的可审计性要求 | D84、D63 第 3 条、M3-10 | OPEN（2026-10-28 登记） |
+| DEF-47 | agent → Axiom 的其余类型化消息走同一个 `axiom attempt mcp` 服务器：Worker 的 `question` / `blocked` / `request_subtask` / `submission`（Claude Worker 的 `claude-mcp.json` 加 axiom 条目；Codex 随 app-server 通道加 `mcp_servers.axiom`），以及 Codex Planner 的提案。V1 的 Claude Planner 提案已按 D84 走 MCP（M3-08h）；原"进程内 `createSdkMcpServer`"方案作废（Claude 专用、第二套实现） | M3-10（Codex Planner 挪到 app-server、审批桥）；Worker 提交契约改为工具调用时（V1.5） | D84、D63 第 3 条、M3-10 | OPEN（2026-10-28 登记，同日按 D84 改写） |
 
 ## M2 出口核对（2026-10-20，D61）
 
@@ -180,6 +180,6 @@ D60 / D68 修订行（确定性规则可自动结算；超时 / 超预算 / 停�
 
 M3-08f 从"Claude 账号目录由 Axiom 布置"改为"Mission 启动时的隔离"（策略层 + 不刷新 + 启动基线，见 D83 2026-10-28 修订行与 `.axiom-work/verifications/M3-08f-isolation-probe.md`）；M3-08g（harness 出站环境变量名单）排在 M3-08f 之后、真实 Claude 冒烟之前；新增 **DEF-46**（V2 本机出站代理，条件触发）。
 
-## 2026-10-28 Claude Planner 的提案通道与结构化回合结算（D84 提议；验证者，依据真实冒烟 + 宿主探测）
+## 2026-10-28 Claude Planner 的提案通道与结构化回合结算（D84；Henry 2026-10-28："没问题，可以按照这个方式来走"）
 
-真实 Claude 冒烟（`.axiom-work/verifications/M3-08-smoke-real-claude.md`）：Worker 两遍全过，Planner 两遍无提案卡在 `ANALYZING`——heredoc 配方被 Claude Code 的 Bash 安全分析拒绝，结构化通道的回合结束无提案没有结算。M3-08h（brief 已定稿）按 D84 改配方与规则、加 c″ 结算与被拒输入摘要；新增 **DEF-47**（SDK 进程内 MCP 提案工具，V1.5，条件触发）。
+真实 Claude 冒烟（`.axiom-work/verifications/M3-08-smoke-real-claude.md`）：Worker 两遍全过，Planner 两遍无提案卡在 `ANALYZING`——heredoc 配方被 Claude Code 的 Bash 安全分析拒绝，结构化通道的回合结束无提案没有结算。Henry 问"升级后会不会再出类似的事"，第一版"写文件 + 单行命令"因此作废：M3-08h 改为 agent → Axiom 统一走 MCP 工具（`axiom attempt mcp` + `plan_propose`）、c″ 结算 + Planner 运行预算默认值、被拒输入摘要；**DEF-47** 改记 Worker 类型化消息与 Codex 的接入；升级的制度（漂移阻断 + `axiom doctor harness` 一致性探测）排进 M3-10。
