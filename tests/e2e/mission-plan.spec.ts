@@ -1,7 +1,10 @@
 import { seedCodexTestAccount } from './helpers/codex-test-account'
 import { seedClaudeTestAccount } from './helpers/claude-test-account'
 import { createAxiomClaudePlannerStub } from './helpers/axiom-claude-planner-stub'
-import { AXIOM_TEST_CLAUDE_PLANNER_POLICY } from './helpers/axiom-test-claude-provider'
+import {
+  AXIOM_TEST_CLAUDE_ENV,
+  AXIOM_TEST_CLAUDE_PLANNER_POLICY
+} from './helpers/axiom-test-claude-provider'
 import { desktopCall } from './helpers/axiom-desktop-call'
 import { readGoalFile } from '../../src/cli/handlers/axiom/input-files'
 import { DEFAULT_MISSION_POLICY } from '../../src/shared/axiom-contract/mission-objects'
@@ -27,6 +30,7 @@ import {
 import { PlanListResponseSchema } from '../../src/shared/axiom-contract/plan-params'
 import { TaskListResponseSchema } from '../../src/shared/axiom-contract/task-params'
 import { fixturePlanProposal } from './helpers/fixture-plan-proposal'
+import { expectHarnessEgress } from './helpers/harness-egress-expectations'
 
 const FIXTURE_COMMIT = 'a6a8413ecdcbbdb1d34f36950ba7e1aaa5a1a642'
 function git(args: string[]) {
@@ -327,6 +331,11 @@ for (const { provider, noProposal } of [
           )
           const launch = ledger(ledgerPath).find((entry) => entry.kind === 'planner_launch')
           expect(egress).toMatchObject({ provider: 'claude', channel: 'structured' })
+          expectHarnessEgress({
+            env: launch?.env,
+            evidence: egress,
+            NO_PROXY: 'api.anthropic.com,platform.claude.com,localhost,127.0.0.1,::1'
+          })
           expect(launch).toMatchObject({
             argv: expect.arrayContaining([
               '--settings',
@@ -342,6 +351,10 @@ for (const { provider, noProposal } of [
             managedSettings: AXIOM_TEST_CLAUDE_PLANNER_POLICY,
             // The pinned SDK sends sources via argv and skills via initialize.
             initialize: { settingSources: null, skills: [] },
+            env: {
+              ...AXIOM_TEST_CLAUDE_ENV,
+              CLAUDE_CONFIG_DIR: path.join(userData, 'claude-profiles', 'e2e-claude', 'home')
+            },
             strictMcpConfig: true,
             mcpServers: {
               axiom: {

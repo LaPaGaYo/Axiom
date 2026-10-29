@@ -196,6 +196,7 @@ it.skipIf(!source).each([false, true])(
         settingsPath,
         settings,
         initialize: { settingSources: null, skills: [] },
+        env: { ...AXIOM_TEST_CLAUDE_ENV, CLAUDE_CONFIG_DIR: path.join(directory, 'account-home') },
         strictMcpConfig: true,
         mcpServers: {
           axiom: {
