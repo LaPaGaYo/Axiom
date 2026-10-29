@@ -43,6 +43,7 @@ export const AXIOM_HANDLER_GROUPS: readonly HandlerGroup[] = [
   {
     name: 'axiom-attempt',
     keys: [
+      'attempt mcp',
       'attempt submit',
       'attempt ask',
       'attempt show',

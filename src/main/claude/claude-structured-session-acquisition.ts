@@ -154,6 +154,9 @@ export async function acquireClaudeSession({
           ...(requestedAt === null || requestedAt === undefined ? {} : { requestedAt }),
           ...(turnOrigin?.clientMessageId ? { clientMessageId: turnOrigin.clientMessageId } : {}),
           ...(startedSend ? { startedSend } : {}),
+          ...(message.type === 'result' && settlements.some((entry) => 'providerIdentity' in entry)
+            ? { resultAnsweredSend: true as const }
+            : {}),
           ...observedAt
         })
       })

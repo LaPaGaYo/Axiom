@@ -1,3 +1,4 @@
+import { runAttemptMcp } from './attempt-mcp'
 import { askAttempt } from './attempt-ask'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -67,6 +68,7 @@ async function sendWorkerMessage(ctx: HandlerContext, verb: string) {
 }
 
 export const AXIOM_ATTEMPT_HANDLERS: Record<string, CommandHandler> = {
+  'attempt mcp': runAttemptMcp,
   'attempt submit': async ({ flags, cwd, client, json }) => {
     const content = await readFile(path.resolve(cwd, required(flags, 'report')), 'utf8')
     let value: unknown

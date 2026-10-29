@@ -48,6 +48,8 @@ export type ClaudeStructuredSessionEvent =
       clientMessageId?: string
       /** On any other frame: the send the CLI started and has not echoed, whose turn output opens. */
       startedSend?: ClaudeStartedSend
+      /** A result correlated an admitted send, even when no start or echo preceded it. */
+      resultAnsweredSend?: true
       /** Host clock at receipt; stamped on turn boundaries only. */
       observedAt?: number
     }

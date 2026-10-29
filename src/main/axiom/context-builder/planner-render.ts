@@ -7,7 +7,7 @@ import { markdownSection } from './render'
 import { readRepositoryRules } from './repository-rules'
 import { redactContext } from './redaction'
 
-/** Shared with the Claude permission rule so its prefix cannot drift from the printed recipe. */
+/** The Codex terminal-channel proposal recipe. */
 export function plannerProposalCommandPrefix(missionId: string, attemptId: string): string {
   return `axiom plan propose --mission ${missionId} --attempt ${attemptId} --file`
 }
@@ -89,14 +89,10 @@ export async function buildPlannerContext(
       'Planner proposal recipe',
       (p.provider === 'claude'
         ? [
-            'Replace the example JSON below with your complete PlanProposal and run this single Bash command. Keep the quoted heredoc delimiter so the shell does not expand JSON content.',
-            '```bash',
-            `${plannerProposalCommandPrefix(mission.id, '{{attemptId}}')} /dev/stdin --json <<'AXIOM_PLAN_JSON'`,
-            JSON.stringify(example, null, 2),
-            'AXIOM_PLAN_JSON',
-            '```',
-            'Do not create, edit or commit any file. The CLI reads the proposal JSON from stdin; the worktree must stay clean.',
-            'This is a read-only planning Attempt: permissions.write = []. Your only output channel is axiom plan propose.'
+            'Deliver by calling the MCP tool plan_propose with { "proposal": <complete PlanProposal> }. This is your only output channel.',
+            'The tool returns ok or schema issues. Fix the issues and call again; the Control Plane keeps one PlanRevision per Attempt.',
+            'Do not create, edit or commit any file. Do not run commands beyond the read-only git log, git diff and git show commands.',
+            'This is a read-only planning Attempt: permissions.write = []. The worktree must stay clean.'
           ]
         : [
             `${plannerProposalCommandPrefix(mission.id, '{{attemptId}}')} <proposal.json> --json`,

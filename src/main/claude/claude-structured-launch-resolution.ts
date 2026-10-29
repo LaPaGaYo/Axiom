@@ -57,6 +57,8 @@ export type ClaudeStructuredSdkOptions = Pick<
   | 'allowDangerouslySkipPermissions'
   | 'settings'
   | 'managedSettings'
+  | 'mcpServers'
+  | 'strictMcpConfig'
   | 'sessionId'
   | 'resume'
   | 'resumeSessionAt'
@@ -295,6 +297,8 @@ export function claudeStructuredLaunchPart(
                 skills: [...missionPins.skills],
                 settings: missionPins.settingsPath,
                 managedSettings: missionPins.managedSettings,
+                mcpServers: missionPins.mcpServers,
+                strictMcpConfig: true,
                 ...(missionPins.model ? { model: missionPins.model } : {}),
                 effort: missionPins.effort
               }

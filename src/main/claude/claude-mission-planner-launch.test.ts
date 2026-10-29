@@ -72,6 +72,14 @@ function register(model?: string, accountHomePath = '/account/claude') {
       effort: 'high',
       accountHomePath,
       ...(model ? { model } : {}),
+      mcpServers: {
+        axiom: {
+          type: 'stdio',
+          command: '/app/axiom',
+          args: ['attempt', 'mcp'],
+          env: { ORCA_AGENT_SESSION_ID: 'mission-planner' }
+        }
+      },
       denyPermission: () => {}
     })
   )
@@ -91,6 +99,15 @@ describe('Mission Claude Planner launch pins', () => {
       managedSettings,
       skills: ['review'],
       permissionMode: 'default',
+      mcpServers: {
+        axiom: {
+          type: 'stdio',
+          command: '/app/axiom',
+          args: ['attempt', 'mcp'],
+          env: { ORCA_AGENT_SESSION_ID: 'mission-planner' }
+        }
+      },
+      strictMcpConfig: true,
       settings: '/attempt/planner-settings.json',
       model: 'policy-model',
       effort: 'high'
@@ -147,6 +164,7 @@ describe('Mission Claude Planner launch pins', () => {
         model: 'policy-model',
         effort: 'high',
         accountHomePath: '/account/claude',
+        mcpServers: {},
         denyPermission: () => {}
       })
     )
