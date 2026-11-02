@@ -68,7 +68,7 @@ async function submitFixture(attemptId, missionId, taskId, outputPath) {
     'suppression': { file: 'clock.test.ts', expected: "test('fixed clocks normalize instants and reject malformed input', () => {" }
   }
   const tamper = tamperProbes[scenario]
-  if (!tamper && !['retry', 'deterministic-failure', 'agent-crash', 'scope-violation', 'secret-line', 'transcript-secret', 'self-approve'].includes(scenario)) throw new Error('Unknown fixture scenario')
+  if (!tamper && !['retry', 'deterministic-failure', 'agent-crash', 'scope-violation', 'secret-line', 'transcript-secret', 'self-approve', 'unchanged-fix'].includes(scenario)) throw new Error('Unknown fixture scenario')
   // Keep both the Worker Artifact and protocol envelope outside the Candidate snapshot.
   const temp = headless ? path.join(process.cwd(), '.axiom', 'artifacts') : mkdtempSync(path.join(os.tmpdir(), 'axiom-submit-report-'))
   if (headless) mkdirSync(temp, { recursive: true })
@@ -76,12 +76,15 @@ async function submitFixture(attemptId, missionId, taskId, outputPath) {
     if (scenario === 'transcript-secret') {
       process.stdout.write('Transcript redaction probe: ' + 'gh' + 'p_' + 'T'.repeat(36) + '\\n')
     }
-    const command = ['scenarios/stub-worker/worker.mjs', '--scenario', scenario === 'transcript-secret' ? 'retry' : scenario, '--attempt', String(Math.min(seq, 2)), '--mode', 'succeed', '--cwd', process.cwd()]
+    const command = ['scenarios/stub-worker/worker.mjs', '--scenario', ['transcript-secret', 'unchanged-fix'].includes(scenario) ? 'retry' : scenario, '--attempt', String(Math.min(seq, 2)), '--mode', 'succeed', '--cwd', process.cwd()]
     const started = Date.now()
-    const providerOnly = Boolean(tamper) || scenario === 'scope-violation' || scenario === 'secret-line' || scenario === 'self-approve'
+    const unchanged = headless && scenario === 'unchanged-fix' && seq === 2
+    const providerOnly = unchanged || Boolean(tamper) || scenario === 'scope-violation' || scenario === 'secret-line' || scenario === 'self-approve'
     let reportText
     if (providerOnly) {
-      if (scenario === 'self-approve') {
+      if (unchanged) {
+        reportText = 'The previous Candidate is unchanged; this Attempt made no file changes.\\n'
+      } else if (scenario === 'self-approve') {
         const plans = cli(['plan', 'list', '--mission', missionId])
         const plan = plans.response.result?.planRevisions.find(row => row.status === 'APPROVED')
         if (!plans.response.ok || !plan) throw new Error('Missing current PlanRevision')
@@ -130,7 +133,7 @@ async function submitFixture(attemptId, missionId, taskId, outputPath) {
     const changed = spawnSync('git', ['diff', '--name-only', 'HEAD'], { cwd: process.cwd(), encoding: 'utf8' })
     if (changed.status !== 0) throw new Error('Fixture diff failed')
     const report = {
-      summary: 'D49 ' + scenario + ' scenario attempt ' + seq + ' succeeded',
+      summary: unchanged ? 'No files changed; the previous Candidate needs the same fix.' : 'D49 ' + scenario + ' scenario attempt ' + seq + ' succeeded',
       filesChanged: changed.stdout.trim().split(/\\r?\\n/).filter(Boolean),
       checksRun: [{ command: providerOnly ? 'provider scenario ' + scenario : 'node ' + command.join(' '), result: 'pass', durationMs: Date.now() - started },
         { command: 'fixture verification', result: 'skipped', note: 'Stub Worker; independent verification is queued for M3.' }],

@@ -78,7 +78,7 @@ M3-04：Worker context 在 admission 插入 binding 之前，以 `store.nextAtte
 candidate baseline 的第 7 节按以下顺序渲染，source 为 `verification:<runId>`：
 
 1. `This Attempt continues the previous Candidate <commitSha> from Attempt <previousSeq>; fix the failures below in this tree. Do not weaken, skip or delete tests, assertions, lint rules or checks to make them pass.`
-2. 失败 run 的 verdict 与 reason。
+2. D85：接续行之后按 seq 升序列出 `unchangedAttempts`：`Attempt <seq> exited without changing this Candidate; its report said: <summary>`，摘要先 `redactContext`、截取 500 字符、作为单行引用数据转义换行、反引号与角括号；无摘要用 `(no summary)`。其后提示 `If the failures below cannot be fixed inside allowedPaths, say so in limitations and name the paths or commands at fault; do not submit an unchanged tree.` 这些行与失败摘录共用 8 KiB UTF-8 预算；随后列失败 run 的 verdict 与 reason。
 3. `result: fail` 的 checks，按 index 升序：command、exitCode、最多 20 个失败名、verdict evidence Artifact（`verdictDetail.verdictArtifactId`）中对应 index 的 excerpt。每项摘录最多 40 行，全部摘录合计最多 8 KiB UTF-8，不截断多字节字符；用尽时标明省略。Artifact 缺失、读取/解析失败或找不到该项时写 `excerpt unavailable`，不阻止重试。
 4. `verdictDetail.diff` 中的 scope violations、secret findings（仅路径与模式名）、dangerous changes（路径与模式）。越界路径带明确的 remove/revert 指令：scope 对 merge-base 比较，留在树里会再次失败。
 5. Task 的全部 acceptanceCriteria，列在 `Not yet demonstrated` 下；逐条判定留给 M3-04b。
@@ -178,12 +178,12 @@ M2 之后：M3 的验证结算接入既有调度触发；M4 接预算 Approval�
 
 启动顺序：读取已绑定 AgentSpec / ContextPackage render → 校验 Run/Task 与 prompt 大小 → `resolveAttemptBaseline` → 经现有 `createManagedWorktree` 预创建 `axiom/attempt/<taskId>/<seq>`（不传 startupAgent）→ 校验修复基线 HEAD、必要时重开 Orca task → 直接调 `startLocalWorker` → CAS 回填 `attempt_bindings.dispatch_id` → audit / stage settlement。没有 `worktree_id` side-table 列；worktree id 写入启动 audit，读接口经 fleet 的 dispatch/workspace 读取。
 
-M3-04 / D64 ①：`execution/attempt-baseline.ts` 是 ContextBuilder 与 launcher 共用的纯存储判定，只看紧邻的 seq−1。该 binding 有 dispatch、dispatch 有 Submission、其 Candidate 仍为 ACTIVE、该 Candidate 最新 VerificationRun（按 createdAt 再 id 排序取最后一项，不预先过滤 FAIL）为 FAIL 且 reason 不是 `secret_detected`，才返回 candidate baseline（previousSeq、Candidate、VerificationRun）。其它情况按顺序返回 integration baseline：
+M3-04 / D64 ①：`execution/attempt-baseline.ts` 是 ContextBuilder 与 launcher 共用的纯存储判定，从 seq−1 向前检查（M3-08i / D85）：无 Submission 时只有该 dispatch 的 `attempt.failed.after.settlement.kind = unchanged` 审计允许越过，最多走到 seq 1；缺 binding / dispatch、普通失败或其它无 Submission 情形立即回集成基线。找到 Submission 后，其 Candidate 仍为 ACTIVE、该 Candidate 最新 VerificationRun（按 createdAt 再 id 排序取最后一项，不预先过滤 FAIL）为 FAIL 且 reason 不是 `secret_detected`，才返回 candidate baseline（previousSeq、Candidate、VerificationRun、unchangedAttempts）。`previousSeq` 是 Candidate 所属 Attempt 的序号；`unchangedAttempts: {seq, attemptId, reportSummary: string | null}[]` 按 seq 升序记录被越过的 Attempt，无则空数组。其它情况按顺序返回 integration baseline：
 
 | reason | 条件 |
 | --- | --- |
 | `first_attempt` | seq 1 |
-| `previous_attempt_not_submitted` | seq−1 不存在、没有 dispatch 或没有 Submission（包括崩溃、放弃、launch 失败） |
+| `previous_attempt_not_submitted` | 向前检查未找到 Submission，或遇到非 unchanged 的无 Submission Attempt（包括崩溃、放弃、launch 失败） |
 | `previous_candidate_superseded` | Submission 的 Candidate 不再 ACTIVE（缺失也不采用） |
 | `previous_verification_not_failed` | 无 run，或最新 run 不是 FAIL |
 | `secret_detected` | 最新 FAIL 的 reason 为 secret_detected；附带该 run 供安全证据展示，历史含秘密的 Candidate 不可续接 |
@@ -225,6 +225,10 @@ ContextBuilder 的 planner 形式为 `{missionId,role:'planner',goalRevisionId}`
 4. 两个 Task、一条边的最小示例。
 5. Codex 保留 `axiom plan propose --mission <id> --attempt {{attemptId}} --file <proposal.json> --json` 配方，proposal JSON 写到 worktree 外；Claude 只能调用 Axiom MCP 工具 `plan_propose`，输入 `{ "proposal": <完整 PlanProposal> }`，按工具返回的 schema issues 修正后重试，同一 Attempt 由 Control Plane 保持一个 PlanRevision。Claude 提示词不再含 shell 提案命令或文件约定，禁止创建、编辑、提交文件，只允许只读 git 命令。两者均要求 worktree 保持 clean。
 
+M3-08i / D85：`requiredEvidence` 是有确定性边界的命令数组，最小示例为 `['pnpm exec vitest run tests/example.test.ts']`。每项从仓库根原样执行且须 exit 0，单行、一个命令，不含 `;`、`&`（含 `&&`）、`|`（含 `||`）、`>`、`<`、反引号、`$(`；首个空白分隔 token 必须是允许程序（按完整名称或 basename 匹配，含 `=` 的 token 不是程序）。允许集为 `verificationRules.evidenceCommands.allowedPrograms` 加全部 setupCommands / repositoryGates 使用的程序，提示词列出解析后的集合。期望与描述只写 acceptanceCriteria，不在 requiredEvidence 加 “output” 或 “with exit code 0”。同一句 `.describe()` 进入提示词的 JSON Schema 与 MCP plan_propose 输入 schema。
+
+提案在结构验证后、插入 PlanRevision 前调用共享 `validateEvidenceCommands`；非法项返回 `plan_invalid {errors: [{code: evidence_command_invalid, severity: error, message, path: [tasks, i, requiredEvidence, j], taskIds}]}`，CLI / MCP 保留路径与说明，同回合可修正。REQUEST_SUBTASK 使用同一函数，失败 reason 为 `evidence`。旧 policy 无法解析时以默认 VerificationRules 检查，边界不失效；执行时不重复检查。边界限制形状与程序，不限制程序能力（验证沙盒属 M3-10 / DEF-46）；`pnpm run verify:full output with exit code 0` 的程序合法，故仍通过，靠 planInvalidPatterns 与 M3-09 计划卡处置，不启发式检测参数或读取 package.json。
+
 Planner 无 PlanRevision，因此只持久化 `context_package_manifest` 与 `context_package_render` 两个内容寻址 Artifacts，**不插入 context_packages**（其 plan_revision_id 为 NOT NULL）。binding.contextPackageId 为 render Artifact 的 `art_…` id；launcher 用 `artifacts.read` 取模板。preamble 由 preambleBuilder 交付时只替换 `{{attemptId}}`，D73 之后不含任何凭据。Planner dispatch 在该回调交付 preamble 前绑定，以支持快速 provider 在 readiness receipt 返回前提交。
 
 `axiom.plan.propose` 的 planner 形式通过同一 Attempt 身份链（D73：宿主核实的 worker 身份 / assignee / 进程代次）鉴权，但显式要求 planner AgentSpec、同 Mission/Goal/Run 的 pseudo-task 与 planner branch；Worker 通道仍要求真实 Task stage。提交前对记录的 worker.worktree_id 执行 `git status --porcelain`，非空返回 `planner_worktree_dirty`（data.files 为 porcelain 文件列表，错误消息同时列出文件供 CLI 显示）并写 planner.rejected，Plan/Mission 不变；缺少 worktree 路径返回 `planner_worktree_missing`。Git IO 后再次鉴权。干净提案经原 `missions.proposePlan` 完成 ANALYZING → PLAN_REVIEW；provenance 由服务写为 `{kind:'planner',actor:provider,model?:explicitModel,at}`（遵循 M2-09 brief 与现行 ProvenanceSchema；D48 旧文的 model kind 不作为新增枚举）。
@@ -248,6 +252,8 @@ macOS / Linux 的 Codex 与 Claude Worker 走 `channel=headless`、`posture=head
 D14 service-only `controlPlane.headless.prepare(dispatchId)` 在 dispatch 创建后、terminal spawn 前绑定 Attempt 并准备命令，RPC 不能请求该字段。强制 terminal mode，复用 `createTerminal({command, env})`，跳过 startupAgent/default args、交互 readiness 与 preamble paste。POSIX wrapper 用 tee 保存 JSONL，读取 `PIPESTATUS[0]`，临时文件 rename 发布 exit-code，再保持 shell 存活直到既有 D76 release；spawn 后即 ready。dispatch/custody/prepareStartingWorkerAuthority 与 PTY liveness 仍由内核负责，没有第二套进程生命周期。
 
 `execution/attempt-exit-submission.ts` 的串行队列与 CLI submit 共用。launch 后的 250 ms exit-file watcher 和恢复对账调用同一幂等入口；重启只凭持久 exit-code 结算，不对 headless Attempt 使用 D59 shell-foreground 证据。host 鉴权重新核对当前 dispatched dispatch、RUNNING Task、最新 binding、Mission/Run 与 worktree/branch。exit 0 且最终 fenced JSON 通过 `HeadlessSubmissionReportSchema` 时进入原 Submission transaction；schema 省略宿主计算的 filesChanged，artifacts 改为 `.axiom/artifacts/` 下的 path/kind/mediaType。路径必须解析到该目录内的普通、单链接文件，单个 Artifact 上限仍为 8 MiB。宿主把最终 report 存为 worker_report，并把所有 Worker Artifact 归属为 `createdBy=attempt:<id>`、`related=[taskId,attemptId]`。
+
+D85 / M3-08i：exit 0 的有效报告若收到精确 `OrchestrationError(invalid_argument, candidate_unchanged)`，结算为 `unchanged_candidate`（审计 `settlement.kind=unchanged`），watcher 停止、reconciliation 返回 failed / exited。摘要脱敏后 ≤2000 字符，limitations 脱敏后每项 ≤500 字符、最多 20 项，并保留 worker_report Artifact、ACTIVE Candidate id/commit/tree、lastMessageExcerpt 与原事件证据。失败后重复调用返回 unchanged、不追加审计；丢失释放定时器仍由既有恢复释放规则补齐。其它 Submission 错误仍交 watcher / recovery 重试，原 invalid-report 路径和终端提交行为不变。
 
 headless `snapshotCandidate` 使用临时私有 Git index，排除 `.axiom/`，不会删除已有 index.lock；commit-tree + 带旧值检查的 update-ref 只写 Attempt branch，并以空 hooksPath 禁用 hooks。filesChanged 从 launch baseline 到 Candidate commit 的 Git diff 计算。后续 Candidate / Submission / VerificationRun transaction、transcript archive 与 release 沿用现有实现，Worker 报告仍不等于独立验证。
 
@@ -418,7 +424,7 @@ axiom attempt submit --attempt <attemptId> --report <path.json> --json
 
 结算之后，重复 submit 仅允许读取既有 Submission：只接受同一 pane、同一进程代次的调用方（D73），并校验最新 binding 与 hasLifecycleAuthority，不恢复任何权限；其他 pane 或进程代次 → `worker_identity_changed`。不同请求丢失了提交后的消息时，可用认证后的重复 submit 补写一条；已有消息不重复插入。Git 在事务外，事务失败可能留下快照 commit；重试采用 clean HEAD，禁止 reset/clean/checkout 撤销证据。
 
-Candidate id 为 `cand_` + sha256(taskId + ':' + commit)。M3-02 / DEF-21 ⑥ 在 `axiom_submit` 事务内、insertCandidate 之前比较该 Task 上一 Attempt 的 ACTIVE Candidate：treeSha 相同即 `invalid_argument: candidate_unchanged`（即使 commit 不同），不写 Candidate / Submission / VerificationRun，Attempt 保持 RUNNING，可以修改后再提交。首个 Candidate 不受此限制；新树正常接受并 supersede 旧候选。数据库的 Task/commit 唯一键仍拒绝其它重复身份（candidate_exists），不得把旧 Candidate 改绑。环境修复后的同一 Candidate 重跑留给 M3-05 的显式路径。候选快照只允许在绑定的 `axiom/attempt/<taskId>/<seq>` 分支，不前进集成基线/目标分支。通用 stage API 对非 AttemptSettlement 的 RUNNING → SUBMITTED 返回 illegal_transition（reason=submission_required）。
+Candidate id 为 `cand_` + sha256(taskId + ':' + commit)。M3-02 / DEF-21 ⑥ 在 `axiom_submit` 事务内、insertCandidate 之前比较该 Task 上一 Attempt 的 ACTIVE Candidate：treeSha 相同即 `invalid_argument: candidate_unchanged`（即使 commit 不同），不写 Candidate / Submission / VerificationRun，终端通道的 Attempt 保持 RUNNING，可以修改后再提交（DEF-21 ⑥ 由 D85 收窄到 live Worker）。headless 已退出时由 `attempt-exit-submission.ts` 同一 `headless_exit_unchanged` 事务重新核实宿主权限、failDispatch、写 `attempt.failed {reason: process_exited, evidence: exit_code, exitCode: 0, settlement: {kind: unchanged}, candidate, reportArtifactId, reportSummary, limitations}`，经原 retry policy 转 `NEEDS_FIX → READY(retry)` 或 `BLOCKED(retry_budget_exhausted)` 并安排释放；不重新提交相同 Candidate、不直接第二次启动 Worker，下一次 admission 仍归 Scheduler。首个 Candidate 不受此限制；新树正常接受并 supersede 旧候选。数据库的 Task/commit 唯一键仍拒绝其它重复身份（candidate_exists），不得把旧 Candidate 改绑。环境修复后的同一 Candidate 重跑留给 M3-05 的显式路径。候选快照只允许在绑定的 `axiom/attempt/<taskId>/<seq>` 分支，不前进集成基线/目标分支。通用 stage API 对非 AttemptSettlement 的 RUNNING → SUBMITTED 返回 illegal_transition（reason=submission_required）。
 
 **Attempt 2 addendum（2026-10-19；D76 于 2026-10-24 取代 retention）**：终端资源维护仍在结算事务之外。提交后先存 redacted transcript Artifact，再持久化邮件 / receipt，约 2 秒后经 Orca 释放终端；不再 retain。存档或释放失败只记固定 reason 的审计，不回滚 Submission/Candidate/stage/VerificationRun、不阻止已结算提交回执。崩溃丢失计时器由 RecoveryService 对至少 60 秒的 Submission 补做（见 Recovery g），缺两种存档审计时先补存档；终端已消失时捕获可能失败，失败仍审计。重复 submit 不再执行这些副作用。
 
@@ -467,6 +473,8 @@ phase 词汇为 `claimed | prepared | checking | verdict | prepare_failed | requ
 | dangerousPathPatterns | M3-03 下列 27 个危险路径模式；policy 显式设置时整体替换默认列表                   |
 | testPathPatterns      | `**/*.test.*`、`**/*.spec.*`、`**/__tests__/**`、`**/test_*.py`、`**/*_test.py`、`**/*_test.go`；policy 显式设置时整体替换（包括空列表） |
 | secretPatterns        | `[]`；非空 JavaScript 正则源码，无 flags；只追加，编译失败拒绝（invalid_argument） |
+| evidenceCommands | `{allowedPrograms: [pnpm, npm, npx, yarn, bun, node, pytest, python, python3, go, cargo, make, dotnet, mvn, gradle, ./gradlew]}`；用户 setup / gate 程序并入允许集；只约束模型命令形状与程序（D85） |
+| planInvalidPatterns | `ERR_PNPM_NO_SCRIPT`、`Missing script:`、`No test files found`、`error: unknown command`、`Unknown command`；非空 JavaScript regex、无 flags，非法 regex 拒绝；policy 可整体替换（D85） |
 | setupCommands         | `[]`                                                                                                                                       |
 | retryOnce             | 常见测试前缀：pnpm / npm / yarn / bun 的 test、run test；npx vitest、vitest、npx jest、jest、pytest、python -m pytest、go test、cargo test |
 | knownFlaky            | `[]`；人工维护的失败名模式，只有 `*` 是通配符                                                                                              |
@@ -490,10 +498,13 @@ retryOnce 对命令与前缀规范化空白，只允许相等、前缀后接空�
 | 内容型篡改发现 | INCONCLUSIVE / test_tampering | human；保持 VERIFYING |
 | 危险路径未被 scope 明确命名 | INCONCLUSIVE / dangerous_change | human；保持 VERIFYING |
 | 无以上，任一 environmental | INCONCLUSIVE / environment | human；保持 VERIFYING |
+| 无以上，evidence check 为 inconclusive / plan_invalid | INCONCLUSIVE / plan_invalid | human；detail 为命令，保持 VERIFYING，不进入修复 Attempt（D85） |
 | 无以上，任一 inconclusive | INCONCLUSIVE / flaky（有 flaky 时）或 known_flaky | inconclusiveRouting；保持 VERIFYING |
 | 无以上，仍有 skipped | INCONCLUSIVE / environment | human；未执行不能算通过 |
 | 无以上，非代码 Task（不取决于仓库门禁是否通过或有无命令） | INCONCLUSIVE / non_code | human_confirm → human，artifact_only → inconclusiveRouting；保持 VERIFYING |
 | 无以上，代码 Task 全部 pass 且 gate clear | PASS / checks_passed | VERIFYING → VERIFIED |
+
+D85：retryOnce / knownFlaky 处理之后，仍为 fail 的 evidence step 的所有执行尝试 stdout + stderr（完整已捕获输出，不只摘录）若匹配任一 planInvalidPatterns，则改为 inconclusive / plan_invalid。setup / gate 不适用；其它确定性 fail 优先，plan_invalid 优先于 flaky / known_flaky。verdict Artifact、verdictDetail 和 verification.inconclusive 审计通过既有路径带 reason、escalation=human 与 detail=<command>；Task 留在 VERIFYING，等待人工处置。
 
 每个 verdict 的事务都带 id、expectedStatus=RUNNING、expectedRuntimeEpoch、expectedClaimCount，且要求 Task 仍 VERIFYING、Candidate 仍是该 Task 的 ACTIVE Candidate。CAS 丢失不写 verdict / stage / audit，仍回收本次 worktree。PASS 的 stage actor=VerificationService、reason=verification_passed，审计 verification.passed。FAIL 经 execution/attempt-settlement.ts 的 settleVerificationFailure，同事务先 NEEDS_FIX(verification_failed)，再按 attemptCount < retryPolicy.maxAttempts 进入 READY(retry) 或 BLOCKED(retry_budget_exhausted)，审计 verification.failed {failures}。INCONCLUSIVE 只结算 run 与 verification.inconclusive {reason, escalation}，M3-05 才接审查。updateVerificationRun 根据术语表 §4.8 的完整转换表拒绝非法变化，FAIL/PASS/CANCELED 终态不可再改判；无 status 的元数据更新仍合法。
 

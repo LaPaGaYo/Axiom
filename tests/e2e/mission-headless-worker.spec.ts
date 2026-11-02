@@ -24,6 +24,113 @@ test.skip(
   'Headless Workers require a POSIX host and AXIOM_FIXTURE_REPO'
 )
 
+for (const maxAttempts of [2, 3]) {
+  test(`M3-08i: unchanged-fix settles and ${maxAttempts === 3 ? 'continues its Candidate' : 'exhausts retries'}`, async (// oxlint-disable-next-line no-empty-pattern -- Fixture owns the background app lifecycle.
+  {}, testInfo) => {
+    test.setTimeout(300_000)
+    // The frozen retry scenario (S4) tightens date-range.ts in seq 1 and, in its second patch, moves the
+    // empty entityId example from the accepted list to the rejected list of date-range.test.ts. The evidence
+    // command passes only once that second patch is in the tree; it needs Node alone, no dependency provisioning,
+    // and stays inside the D85 evidence-command boundary (one command, no shell operators, program node).
+    const check = `node -e "process.exit(require('node:fs').readFileSync('src/services/date-range.test.ts','utf8').includes('entityId: \\'\\' }, { from') ? 0 : 1)"`
+    await withFixtureMission(
+      testInfo,
+      source!,
+      async ({ userData, mission, ledgerPath, releaseWorkers, restart }) => {
+        const inspect = () => inspectFixtureMission(userData, mission.id)
+        await expect.poll(() => inspect().bindings.length, { timeout: 60_000 }).toBe(1)
+        const taskId = inspect().bindings[0].task_id
+        writeFileSync(`${ledgerPath}.scenario-${taskId}`, 'unchanged-fix')
+        releaseWorkers()
+        await expect
+          .poll(() => inspect().bindings.find((row) => row.seq === 2)?.dispatch_id, {
+            timeout: 120_000
+          })
+          .toBeTruthy()
+        const second = z
+          .string()
+          .parse(inspect().bindings.find((row) => row.seq === 2)?.dispatch_id)
+        const exitFile = path.join(userData, 'axiom', 'attempts', second, 'exit-code')
+        await expect.poll(() => existsSync(exitFile), { timeout: 60_000 }).toBe(true)
+        expect(readFileSync(exitFile, 'utf8').trim()).toBe('0')
+        await expect
+          .poll(
+            () =>
+              inspect().audits.some(
+                (row) => row.event === 'attempt.failed' && row.object_id === second
+              ),
+            { timeout: 30_000 }
+          )
+          .toBe(true)
+        const failed = inspect().audits.filter(
+          (row) => row.event === 'attempt.failed' && row.object_id === second
+        )
+        expect(failed).toHaveLength(1)
+        const first = inspect().bindings.find((row) => row.seq === 1)!
+        const original = inspect().submissions.find((row) => row.attemptId === first.dispatch_id)!
+        expect(JSON.parse(failed[0].after!)).toMatchObject({
+          reason: 'process_exited',
+          exitCode: 0,
+          settlement: { kind: 'unchanged' },
+          candidate: { id: original.candidateId },
+          reportSummary: 'No files changed; the previous Candidate needs the same fix.'
+        })
+        const stages = inspect()
+          .audits.filter((row) => row.event === 'task.stage' && row.object_id === taskId)
+          .map((row) => JSON.parse(row.after!))
+        const unchangedStage = stages.findIndex(
+          (row) => row.stage === 'NEEDS_FIX' && row.reason === 'attempt_failed'
+        )
+        expect(unchangedStage).toBeGreaterThanOrEqual(0)
+        // task.stage audits also carry previousStage; only the transition is asserted here.
+        expect(stages[unchangedStage + 1]).toMatchObject({
+          stage: maxAttempts === 3 ? 'READY' : 'BLOCKED',
+          reason: maxAttempts === 3 ? 'retry' : 'retry_budget_exhausted'
+        })
+        if (maxAttempts === 2) {
+          // Cross a scheduler restart to prove the durable budget prevents another admission.
+          await restart!()
+          await expect.poll(() => inspect().tasks[0].stage).toBe('BLOCKED')
+          expect(inspect().bindings.map((row) => row.seq)).toEqual([1, 2])
+          return
+        }
+        await expect.poll(() => inspect().tasks[0].stage, { timeout: 120_000 }).toBe('VERIFIED')
+        const third = z.string().parse(inspect().bindings.find((row) => row.seq === 3)?.dispatch_id)
+        const started = inspect().audits.find(
+          (row) => row.event === 'attempt.started' && row.object_id === third
+        )!
+        expect(JSON.parse(started.after!)).toMatchObject({
+          baseline: { kind: 'candidate', candidateId: original.candidateId }
+        })
+        const prompt = readFileSync(
+          path.join(userData, 'axiom', 'attempts', third, 'prompt.md'),
+          'utf8'
+        )
+        expect(prompt).toContain('Attempt 2 exited without changing this Candidate')
+        expect(prompt).toContain('No files changed; the previous Candidate needs the same fix.')
+        expect(
+          inspect().verification.find((run) => run.candidateId === original.candidateId)?.status
+        ).toBe('FAIL')
+        expect(
+          inspect()
+            .verification.map((run) => run.status)
+            .sort()
+        ).toEqual(['FAIL', 'PASS'])
+      },
+      {
+        taskIds: ['T01'],
+        holdWorkers: true,
+        runVerification: true,
+        releaseTerminals: true,
+        restart: maxAttempts === 2,
+        maxAttempts,
+        extraAllowedPaths: ['src/services/date-range.ts', 'src/services/date-range.test.ts'],
+        requiredEvidence: [check]
+      }
+    )
+  })
+}
+
 test('three sandboxed exec Workers produce host submissions with Attempt attribution', async (// oxlint-disable-next-line no-empty-pattern -- Fixture owns the background app lifecycle.
 {}, testInfo) => {
   test.setTimeout(300_000)

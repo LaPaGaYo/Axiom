@@ -12,7 +12,15 @@ afterEach(() => {
   f.db.close()
   vi.restoreAllMocks()
 })
-const checks: Check[] = ['scope', 'depth', 'duplicate', 'dependency', 'budget', 'attempt']
+const checks: Check[] = [
+  'scope',
+  'depth',
+  'duplicate',
+  'dependency',
+  'budget',
+  'attempt',
+  'evidence'
+]
 
 it.each(checks)(
   '%s fails deterministically and keeps an auto-create request pending',
@@ -26,6 +34,7 @@ it.each(checks)(
     })
     const requested = {
       ...subtask,
+      ...(check === 'evidence' ? { requiredEvidence: ['Test results'] } : {}),
       allowedPaths: [check === 'scope' ? 'src/storage-other/x.ts' : 'src/storage/migrate.ts'],
       ...(check === 'duplicate' ? { title: '  STORAGE MIGRATION  ' } : {}),
       ...(check === 'dependency' ? { dependsOn: ['foreign-task'] } : {})

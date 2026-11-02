@@ -114,7 +114,7 @@ describe('ContextBuilder', () => {
     const headless = await builder.build({ missionId, taskId, channel: 'headless' })
     const terminal = await builder.build({ missionId, taskId })
     expect(headless.packageId).toBe(
-      'ctx_31a48ef1f201d1e357012a2782259cb0cc05f0e2f745561ac5b9c14f6ec22dff'
+      'ctx_84748e218015cde4a9e689a71dfa02d2d6226183b161196eea0c2b1b0a5ed373'
     )
     expect(headless.packageId).not.toBe(terminal.packageId)
     expect(headless.renderTemplate).toContain('re-read .axiom/prompt.md before continuing')
@@ -182,7 +182,7 @@ describe('ContextBuilder', () => {
     const first = await builder.build({ missionId, taskId })
     expect(upstream).toHaveLength(2)
     expect(first.packageId).toBe(
-      'ctx_f85df28ebdfe95ab6501cf47d08ad9900c7af1be6063bb5731b423c86f0b26cf'
+      'ctx_0450de341480ecf59a850875ef64e452874f1288bdf2068a21d060e72e0ddc94'
     )
     expect(first.manifest.mandatory.map((entry) => entry.section)).toEqual(sections)
     expect(first.packageId).toBe(`ctx_${sha256(canonicalContextManifest(first.manifest))}`)
@@ -231,7 +231,7 @@ describe('ContextBuilder', () => {
     const { renderTemplate } = await builder.build({ missionId, taskId })
     expect(renderTemplate).toContain('Target branch rules: keep tests.')
     expect(renderTemplate).not.toMatch(/Uncommitted|Untracked|Never read this/)
-    expect(renderTemplate).toContain('## Required verification commands\n\nTest report')
+    expect(renderTemplate).toContain('## Required verification commands\n\npnpm test')
   })
 
   it('redacts candidate credentials and a target-branch private key before hashing/rendering', async () => {

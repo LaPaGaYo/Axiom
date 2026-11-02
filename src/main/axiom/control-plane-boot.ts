@@ -1,5 +1,5 @@
 import { getAxiomControlPlane } from './control-plane'
-import { stopHeadlessAttemptWatchers } from './execution/attempt-exit-submission'
+import { stopHeadlessAttemptWatchers } from './execution/headless-attempt-watcher'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { ATTEMPT_RECONCILE_INTERVAL_MS, type RecoveryReport } from './recovery/recovery-service'
 

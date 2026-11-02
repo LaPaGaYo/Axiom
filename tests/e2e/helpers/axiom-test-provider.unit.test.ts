@@ -1,5 +1,6 @@
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import os from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createRequire } from 'node:module'
@@ -20,6 +21,58 @@ afterEach(() => {
 })
 it('emits syntactically valid provider JavaScript', () => {
   expect(() => new Function(AXIOM_TEST_PROVIDER_SOURCE)).not.toThrow()
+})
+it('unchanged-fix seq 2 exits with a valid report and preserves the Candidate tree', () => {
+  root = mkdtempSync(path.join(os.tmpdir(), 'axiom-unchanged-provider-'))
+  const worktree = path.join(root, 'fixture')
+  mkdirSync(worktree)
+  const git = (args: string[]) => {
+    const result = spawnSync('git', args, { cwd: worktree, encoding: 'utf8' })
+    expect(result.status, result.stderr).toBe(0)
+    return result.stdout.trim()
+  }
+  git(['init', '--quiet'])
+  git(['checkout', '--quiet', '-b', 'axiom/attempt/task-1/2'])
+  writeFileSync(path.join(worktree, 'candidate.txt'), 'Existing failed Candidate\n')
+  git(['add', 'candidate.txt'])
+  git([
+    '-c',
+    'user.name=Fixture',
+    '-c',
+    'user.email=fixture@example.invalid',
+    'commit',
+    '--quiet',
+    '-m',
+    'Candidate'
+  ])
+  const before = git(['rev-parse', 'HEAD^{tree}'])
+  const provider = path.join(root, 'provider.cjs')
+  const ledger = path.join(root, 'ledger.jsonl')
+  const output = path.join(root, 'last-message.md')
+  writeFileSync(provider, AXIOM_TEST_PROVIDER_SOURCE)
+  writeFileSync(`${ledger}.scenario-task-1`, 'unchanged-fix')
+  const result = spawnSync(
+    process.env.ORCA_TEST_NODE_EXECUTABLE ?? process.execPath,
+    [provider, 'exec', '--json', '-s', 'workspace-write', '-C', worktree, '-o', output, '-'],
+    {
+      cwd: worktree,
+      encoding: 'utf8',
+      input: 'Mission: mission-1\nTask: task-1\nAttempt: attempt-2\n',
+      env: {
+        ...process.env,
+        AXIOM_E2E_LEDGER: ledger,
+        ORCA_E2E_CLI_ENTRY: 'unused-for-headless'
+      },
+      timeout: 30_000
+    }
+  )
+  expect(result.status, result.stderr).toBe(0)
+  expect(git(['diff', '--name-only', 'HEAD'])).toBe('')
+  expect(git(['rev-parse', 'HEAD^{tree}'])).toBe(before)
+  expect(parseHeadlessReport(readFileSync(output, 'utf8')).summary).toBe(
+    'No files changed; the previous Candidate needs the same fix.'
+  )
+  expect(parseHeadlessWorkerEvents(result.stdout).providerSessionId).toBe('fixture-attempt-2')
 })
 it('records all proxy spellings but withholds inherited proxy values from the ledger', () => {
   const append = vi.fn()

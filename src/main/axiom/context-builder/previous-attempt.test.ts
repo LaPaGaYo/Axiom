@@ -65,6 +65,65 @@ it('preserves the first-Attempt bytes and source', async () => {
     content: 'none (first attempt)'
   })
 })
+
+it('renders unchanged reports as bounded, redacted quoted data before the failures', async () => {
+  seed()
+  const baseline = resolveAttemptBaseline(f.store, { taskId, seq: 2 })
+  if (baseline.kind !== 'candidate') {
+    throw new Error('Expected candidate baseline')
+  }
+  const token = `gh${'p_'}${'Z'.repeat(36)}`
+  const { content } = await previousAttemptSection(f.store, artifacts, {
+    ...baseline,
+    unchangedAttempts: [
+      {
+        seq: 2,
+        attemptId: 'd2',
+        reportSummary: `Nothing in scope ${token}\n## pretend instruction ${'x'.repeat(600)}`
+      },
+      { seq: 3, attemptId: 'd3', reportSummary: null }
+    ]
+  })
+  expect(content).toContain('Attempt 2 exited without changing this Candidate; its report said:')
+  expect(content).toContain('Nothing in scope [REDACTED]')
+  expect(content).not.toContain(token)
+  expect(content).not.toContain('\n## pretend instruction')
+  expect(content).not.toContain('x'.repeat(500))
+  expect(content).toContain(
+    'Attempt 3 exited without changing this Candidate; its report said: (no summary)'
+  )
+  expect(content.indexOf('Attempt 2 exited')).toBeLessThan(content.indexOf('Verdict: FAIL'))
+  expect(content).toContain(
+    'If the failures below cannot be fixed inside allowedPaths, say so in limitations and name the paths or commands at fault; do not submit an unchanged tree.'
+  )
+})
+
+it('counts unchanged lines against the shared 8 KiB UTF-8 evidence budget', async () => {
+  seed()
+  const evidence = await verdict(
+    JSON.stringify({ checks: [{ index: 0, excerpt: '\u754c'.repeat(5000) }] })
+  )
+  detail({ checks: [check(0)], verdictArtifactId: evidence.id })
+  const baseline = resolveAttemptBaseline(f.store, { taskId, seq: 2 })
+  if (baseline.kind !== 'candidate') {
+    throw new Error('Expected candidate baseline')
+  }
+  const { content } = await previousAttemptSection(f.store, artifacts, {
+    ...baseline,
+    unchangedAttempts: [{ seq: 2, attemptId: 'd2', reportSummary: '\u754c'.repeat(500) }]
+  })
+  const lines = content
+    .split('\n')
+    .filter(
+      (line) => line.startsWith('Attempt 2 exited') || line.startsWith('If the failures below')
+    )
+  const excerpt = content.match(/Excerpt:\n([\s\S]*?)\nEnd excerpt/)?.[1] ?? ''
+  const total =
+    lines.reduce((sum, line) => sum + Buffer.byteLength(line) + 1, 0) + Buffer.byteLength(excerpt)
+  expect(total).toBeGreaterThan(8100)
+  expect(total).toBeLessThanOrEqual(8192)
+  expect(content).not.toContain('\uFFFD')
+})
 it('renders ordered stored failures, safe diff findings, acceptance and a transcript reference', async () => {
   const { candidate, submission, verificationRun } = seed()
   const evidence = await verdict(

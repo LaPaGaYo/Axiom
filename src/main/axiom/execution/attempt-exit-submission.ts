@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { OrchestrationError } from '../../runtime/orchestration/orchestration-error'
 import { recordClaudeLaunchObservation } from './claude-worker-combination'
 import { scheduleFailedWorkerRelease } from './attempt-worker-release'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
@@ -191,79 +192,95 @@ async function submitExit(runtime: OrcaRuntimeService, attemptId: string) {
     artifacts: [reportArtifact.id, ...artifactIds],
     filesChanged: []
   }
-  await settleSubmission(
-    { attemptId, report: submissionReport },
-    { runtime },
-    {
-      headless: true,
-      resolveAuthority: () => resolveHostAttempt(db, store, attemptId),
-      audit: { exitCode, ...eventAudit },
-      finalizeReport: async (snapshot) => ({
-        ...submissionReport,
-        filesChanged: (
-          await gitExecFileAsync(
-            [
-              'diff',
-              '--name-only',
-              '-z',
-              '--no-renames',
-              launch.baselineSha,
-              snapshot.commitSha,
-              '--'
-            ],
-            { cwd: worktree }
-          )
-        ).stdout
-          .split('\0')
-          .filter(Boolean)
+  try {
+    await settleSubmission(
+      { attemptId, report: submissionReport },
+      { runtime },
+      {
+        headless: true,
+        resolveAuthority: () => resolveHostAttempt(db, store, attemptId),
+        audit: { exitCode, ...eventAudit },
+        finalizeReport: async (snapshot) => ({
+          ...submissionReport,
+          filesChanged: (
+            await gitExecFileAsync(
+              [
+                'diff',
+                '--name-only',
+                '-z',
+                '--no-renames',
+                launch.baselineSha,
+                snapshot.commitSha,
+                '--'
+              ],
+              { cwd: worktree }
+            )
+          ).stdout
+            .split('\0')
+            .filter(Boolean)
+        })
+      }
+    )
+  } catch (error) {
+    if (
+      !(error instanceof OrchestrationError) ||
+      error.code !== 'invalid_argument' ||
+      error.message !== 'candidate_unchanged'
+    ) {
+      throw error
+    }
+    store.transaction('headless_exit_unchanged', () => {
+      const current = resolveHostAttempt(db, store, attemptId)
+      // The rejected transaction established tree equality; no async work intervenes.
+      const candidate = store
+        .listCandidates(current.mission.id)
+        .find((entry) => entry.taskId === current.task.taskId && entry.status === 'ACTIVE')
+      if (!candidate) {
+        throw error
+      }
+      db.failDispatch(attemptId, 'Headless Worker exited without changing the Candidate', {
+        workerProcessExited: true,
+        terminationReason: 'process_exited'
       })
-    }
-  )
-  return 'submitted'
-}
-
-const watchers = new WeakMap<OrcaRuntimeService, Map<string, ReturnType<typeof setInterval>>>()
-export function watchHeadlessAttempt(runtime: OrcaRuntimeService, attemptId: string) {
-  let timers = watchers.get(runtime)
-  if (!timers) {
-    timers = new Map()
-    watchers.set(runtime, timers)
-  }
-  if (timers.has(attemptId)) {
-    return
-  }
-  let busy = false
-  const stop = () => {
-    clearInterval(timer)
-    timers.delete(attemptId)
-  }
-  const timer = setInterval(() => {
-    if (busy) {
-      return
-    }
-    busy = true
-    void submitExitedAttempt(runtime, attemptId)
-      .then((result) => {
-        if (result !== 'pending') {
-          stop()
+      store.appendAuditEvent({
+        missionId: current.mission.id,
+        actor: 'AttemptSettlement',
+        event: 'attempt.failed',
+        objectKind: 'attempt',
+        objectId: attemptId,
+        before: null,
+        after: {
+          taskId: current.task.taskId,
+          reason: 'process_exited',
+          evidence: 'exit_code',
+          exitCode: 0,
+          settlement: { kind: 'unchanged' },
+          candidate: {
+            id: candidate.id,
+            commitSha: candidate.commitSha,
+            treeSha: candidate.treeSha
+          },
+          reportArtifactId: reportArtifact.id,
+          reportSummary: redactContext(submissionReport.summary).content.slice(0, 2000),
+          limitations: submissionReport.limitations
+            .slice(0, 20)
+            .map((text) => redactContext(text).content.slice(0, 500)),
+          lastMessageExcerpt: redactContext(lastMessage).content.slice(-2000),
+          ...eventAudit
         }
       })
-      .catch(() => {
-        // Recovery retries from the same durable exit file after an IO/DB failure.
-        stop()
-        console.warn('[axiom] Headless exit settlement deferred to recovery', { attemptId })
-      })
-      .finally(() => {
-        busy = false
-      })
-  }, 250)
-  timer.unref()
-  timers.set(attemptId, timer)
-}
-
-export function stopHeadlessAttemptWatchers(runtime: OrcaRuntimeService) {
-  for (const timer of watchers.get(runtime)?.values() ?? []) {
-    clearInterval(timer)
+      settleAttemptWithoutSubmission(
+        { store, missions },
+        {
+          ...current.binding,
+          dispatchId: attemptId,
+          reason: 'attempt_failed',
+          actor: 'AttemptSettlement'
+        }
+      )
+    })
+    scheduleFailedWorkerRelease(runtime, { missionId: authority.mission.id, attemptId })
+    return 'unchanged_candidate'
   }
-  watchers.delete(runtime)
+  return 'submitted'
 }

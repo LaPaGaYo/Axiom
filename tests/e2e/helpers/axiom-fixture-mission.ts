@@ -103,6 +103,7 @@ export async function withFixtureMission(
     holdExitSubmission?: boolean
     provider?: AxiomFixtureProvider
     taskIds?: string[]
+    requiredEvidence?: string[]
   } = {}
 ) {
   const provider = options.provider ?? 'codex'
@@ -186,6 +187,9 @@ process.exit(result.status ?? 1)
         proposal.milestones[0]!.exitCriteria = options.taskIds.map((id) => `${id} integrated`)
       }
       for (const task of proposal.tasks) {
+        if (options.requiredEvidence) {
+          task.requiredEvidence = options.requiredEvidence
+        }
         if (options.maxAttempts !== undefined) {
           task.retryPolicy.maxAttempts = options.maxAttempts
         }

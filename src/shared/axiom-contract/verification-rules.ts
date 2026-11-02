@@ -3,7 +3,50 @@ import type { TaskSpec } from './mission-objects'
 
 const Command = z.string().trim().min(1)
 const Commands = z.array(Command)
+const RegexSource = z
+  .string()
+  .min(1)
+  .refine((source) => {
+    try {
+      new RegExp(source)
+      return true
+    } catch {
+      return false
+    }
+  }, 'Invalid regular expression')
+const EvidenceCommandsSchema = z.strictObject({
+  allowedPrograms: z
+    .array(z.string().trim().min(1))
+    .default([
+      'pnpm',
+      'npm',
+      'npx',
+      'yarn',
+      'bun',
+      'node',
+      'pytest',
+      'python',
+      'python3',
+      'go',
+      'cargo',
+      'make',
+      'dotnet',
+      'mvn',
+      'gradle',
+      './gradlew'
+    ])
+})
 export const VerificationRulesSchema = z.strictObject({
+  evidenceCommands: EvidenceCommandsSchema.default(() => EvidenceCommandsSchema.parse({})),
+  planInvalidPatterns: z
+    .array(RegexSource)
+    .default([
+      'ERR_PNPM_NO_SCRIPT',
+      'Missing script:',
+      'No test files found',
+      'error: unknown command',
+      'Unknown command'
+    ]),
   repositoryGates: z
     .strictObject({
       low: Commands.optional(),
@@ -55,21 +98,7 @@ export const VerificationRulesSchema = z.strictObject({
       '**/.mcp.json',
       '.axiom-work/**'
     ]),
-  secretPatterns: z
-    .array(
-      z
-        .string()
-        .min(1)
-        .refine((source) => {
-          try {
-            new RegExp(source)
-            return true
-          } catch {
-            return false
-          }
-        }, 'Invalid regular expression')
-    )
-    .default([]),
+  secretPatterns: z.array(RegexSource).default([]),
   setupCommands: Commands.default([]),
   retryOnce: Commands.default([
     'pnpm test',

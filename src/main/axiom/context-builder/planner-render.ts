@@ -6,6 +6,8 @@ import { sha256 } from '../artifacts/artifact-store'
 import { markdownSection } from './render'
 import { readRepositoryRules } from './repository-rules'
 import { redactContext } from './redaction'
+import { VerificationRulesSchema } from '../../../shared/axiom-contract/verification-rules'
+import { allowedEvidencePrograms } from '../../../shared/axiom-contract/evidence-commands'
 
 /** The Codex terminal-channel proposal recipe. */
 export function plannerProposalCommandPrefix(missionId: string, attemptId: string): string {
@@ -34,6 +36,10 @@ export async function buildPlannerContext(
   ) {
     throw new Error('planner_goal_mismatch')
   }
+  const parsedRules = VerificationRulesSchema.safeParse(
+    store.getPolicy(mission.id)?.verificationRules
+  )
+  const rules = parsedRules.success ? parsedRules.data : VerificationRulesSchema.parse({})
   const example = PlanProposalSchema.omit({ provenance: true }).parse({
     goalRevisionId: goal.id,
     milestones: [{ id: 'M1', title: 'Deliver the goal', exitCriteria: ['Acceptance checks pass'] }],
@@ -43,7 +49,7 @@ export async function buildPlannerContext(
       objective: i ? 'Add regression coverage' : 'Implement the requested behavior',
       scope: { allowedPaths: [i ? 'tests/' : 'src/'] },
       acceptanceCriteria: ['Relevant tests pass'],
-      requiredEvidence: ['Test results'],
+      requiredEvidence: ['pnpm exec vitest run tests/example.test.ts'],
       risk: 'low',
       retryPolicy: { maxAttempts: 2 },
       milestoneId: 'M1',
@@ -80,6 +86,7 @@ export async function buildPlannerContext(
         'scope.allowedPaths entries are repository-relative: an entry covers that path and everything below it; * and ? match within one path segment, ** matches any number of segments, and . is the whole repository. Verification fails any change outside allowedPaths.',
         'Name dependency manifests, lockfiles, CI workflows, hooks, test or lint configuration and agent instruction files (AGENTS.md, CLAUDE.md, .claude/, .codex/, .agents/, .mcp.json) in allowedPaths when a Task must change them; otherwise such a change goes to human review.',
         'Name a test file in allowedPaths when a Task must delete it, and give every Task required evidence commands unless its deliverable is an Artifact for human or Reviewer confirmation.',
+        `requiredEvidence entries are exact shell commands; the independent verification runs each one verbatim from the repository root and requires exit 0; one command per entry, no shell operators; the program must be one of: ${allowedEvidencePrograms(rules).join(', ')}; put expectations and descriptions in acceptanceCriteria, never in requiredEvidence (no "output", "with exit code 0" or other prose).`,
         'Optional TaskSpec.role is a free-text label only; it does not select a provider or materialize skills.',
         'Do not supply provenance; the Control Plane stamps it from the authenticated Planner Attempt.'
       ].join('\n')

@@ -128,17 +128,20 @@ function ledger(file: string) {
     : []
 }
 
-for (const { provider, noProposal } of [
-  { provider: 'codex', noProposal: false },
-  { provider: 'claude', noProposal: false },
-  { provider: 'claude', noProposal: true }
+for (const { provider, noProposal, proseEvidence } of [
+  { provider: 'codex', noProposal: false, proseEvidence: false },
+  { provider: 'claude', noProposal: false, proseEvidence: false },
+  { provider: 'claude', noProposal: true, proseEvidence: false },
+  { provider: 'claude', noProposal: false, proseEvidence: true }
 ] as const) {
   test(
-    noProposal
-      ? 'M3-08h: a finished Claude turn without a proposal settles and permits a new Planner'
-      : provider === 'codex'
-        ? 'M2-09: a read-only Planner proposes the fixture DAG and releases after PLAN_REVIEW'
-        : 'M3-08b: a claude structured Planner proposes the fixture DAG and releases after PLAN_REVIEW',
+    proseEvidence
+      ? 'M3-08i: Claude corrects evidence_command_invalid in the same MCP turn'
+      : noProposal
+        ? 'M3-08h: a finished Claude turn without a proposal settles and permits a new Planner'
+        : provider === 'codex'
+          ? 'M2-09: a read-only Planner proposes the fixture DAG and releases after PLAN_REVIEW'
+          : 'M3-08b: a claude structured Planner proposes the fixture DAG and releases after PLAN_REVIEW',
     async (
       // oxlint-disable-next-line no-empty-pattern -- Restart helper owns the background app lifecycle.
       {},
@@ -165,6 +168,7 @@ for (const { provider, noProposal } of [
         PATH: `${temp}${path.delimiter}${process.env.PATH ?? ''}`,
         AXIOM_E2E_LEDGER: ledgerPath,
         AXIOM_E2E_PLANNER_NO_PROPOSAL: noProposal ? '1' : '0',
+        AXIOM_E2E_PLANNER_PROSE_EVIDENCE: proseEvidence ? '1' : '0',
         ORCA_E2E_CLI_ENTRY: path.join(process.cwd(), 'out', 'cli', 'index.js')
       })
       let app: ElectronApplication | undefined
@@ -303,8 +307,35 @@ for (const { provider, noProposal } of [
             .toBe('released')
         }
         await expect
-          .poll(() => ledger(ledgerPath).find((e) => e.kind === 'proposal')?.response?.ok)
+          .poll(() => ledger(ledgerPath).findLast((e) => e.kind === 'proposal')?.response?.ok)
           .toBe(true)
+        if (proseEvidence) {
+          const calls = ledger(ledgerPath).filter((e) => e.kind === 'proposal')
+          expect(calls).toHaveLength(2)
+          // The ledger reader validates the envelope; inspect the original issue payload too.
+          const rejected = readFileSync(ledgerPath, 'utf8')
+            .trim()
+            .split('\n')
+            .map((line) => JSON.parse(line))
+            .find((entry) => entry.kind === 'proposal')
+          expect(rejected).toMatchObject({
+            isError: true,
+            response: {
+              ok: false,
+              error: {
+                code: 'plan_invalid',
+                issues: [
+                  {
+                    code: 'evidence_command_invalid',
+                    path: ['tasks', 0, 'requiredEvidence', 0],
+                    message: 'Program "Test" is not allowed for requiredEvidence commands.'
+                  }
+                ]
+              }
+            }
+          })
+          expect(calls[1]).toMatchObject({ response: { ok: true } })
+        }
         expect(ledger(ledgerPath).filter((e) => e.kind === 'error')).toEqual([])
         const egressAudit = settled.audits.find(
           (entry) =>

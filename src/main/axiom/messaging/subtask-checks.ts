@@ -4,8 +4,17 @@ import type { TaskSpec } from '../../../shared/axiom-contract/mission-objects'
 import { orderPlanTasks } from '../../../shared/axiom-contract/plan-task-graph'
 import type { AxiomStore } from '../db/axiom-store'
 import type { OrchestrationDb } from '../../runtime/orchestration/db'
+import { VerificationRulesSchema } from '../../../shared/axiom-contract/verification-rules'
+import { validateEvidenceCommands } from '../../../shared/axiom-contract/evidence-commands'
 
-export type Check = 'scope' | 'depth' | 'duplicate' | 'dependency' | 'budget' | 'attempt'
+export type Check =
+  | 'scope'
+  | 'depth'
+  | 'duplicate'
+  | 'dependency'
+  | 'budget'
+  | 'attempt'
+  | 'evidence'
 export type SubtaskSource = { taskId: string; attemptId: string; messageId: string }
 const normalize = (value: string) =>
   path.posix.normalize(value.replaceAll('\\', '/')).replace(/\/$/, '') || '/'
@@ -79,6 +88,11 @@ export function checkSubtask(
     failed.push('dependency')
   }
   const policy = store.getPolicy(missionId)
+  const parsedRules = VerificationRulesSchema.safeParse(policy?.verificationRules)
+  const rules = parsedRules.success ? parsedRules.data : VerificationRulesSchema.parse({})
+  if (validateEvidenceCommands(task.requiredEvidence, rules).length) {
+    failed.push('evidence')
+  }
   if (
     !policy ||
     (policy.budget.maxAttempts !== undefined &&

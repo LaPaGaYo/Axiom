@@ -236,6 +236,16 @@ const precedence: { reason: string; apply: (input: VerdictInput) => void }[] = [
     }
   },
   {
+    reason: 'plan_invalid',
+    apply: (v) => {
+      v.checks.push({
+        result: 'inconclusive',
+        reason: 'plan_invalid',
+        command: 'pnpm run no-such-script'
+      })
+    }
+  },
+  {
     reason: 'flaky',
     apply: (v) => {
       v.checks.push({ result: 'inconclusive', reason: 'flaky' })
@@ -261,6 +271,29 @@ const precedence: { reason: string; apply: (input: VerdictInput) => void }[] = [
   },
   { reason: 'checks_passed', apply: () => {} }
 ]
+
+it('routes invalid plan commands to a human with the exact command, unless another check fails', () => {
+  const checks: CheckOutcome[] = [
+    { result: 'inconclusive', reason: 'plan_invalid', command: 'pnpm run no-such-script' }
+  ]
+  expect(
+    decideVerificationVerdict(checks, rules, { outcome: 'clear' }, false, validArtifacts)
+  ).toEqual({
+    verdict: 'INCONCLUSIVE',
+    reason: 'plan_invalid',
+    escalation: 'human',
+    detail: 'pnpm run no-such-script'
+  })
+  expect(
+    decideVerificationVerdict(
+      [...checks, { result: 'fail' }],
+      rules,
+      { outcome: 'clear' },
+      false,
+      validArtifacts
+    )
+  ).toEqual({ verdict: 'FAIL', reason: 'checks_failed' })
+})
 
 it.each(precedence.slice(0, -1).map((first, i) => ({ first, second: precedence[i + 1] })))(
   'D65 adjacent precedence: $first.reason before $second.reason',

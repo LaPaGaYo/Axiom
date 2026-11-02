@@ -128,7 +128,7 @@ export function makeProposal() {
       objective: task.title,
       scope: { allowedPaths: [...task.files] },
       acceptanceCriteria: ['Checks pass'],
-      requiredEvidence: ['Test report'],
+      requiredEvidence: ['pnpm test'],
       risk: 'low' as const,
       retryPolicy: { maxAttempts: 2 },
       milestoneId: 'M1',

@@ -3,12 +3,14 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { submissionFixture, report } from './submission-fixture.test-support'
-import { stopHeadlessAttemptWatchers, submitExitedAttempt } from './attempt-exit-submission'
+import { submitExitedAttempt } from './attempt-exit-submission'
+import { stopHeadlessAttemptWatchers } from './headless-attempt-watcher'
 import { getAxiomControlPlane } from '../control-plane'
 import { RecoveryService } from '../recovery/recovery-service'
 import * as files from './headless-attempt-files'
 import * as git from '../../git/runner'
 import * as e2e from '../../e2e-config'
+import { OrchestrationError } from '../../runtime/orchestration/orchestration-error'
 
 let f: ReturnType<typeof submissionFixture>
 let root: string
@@ -244,6 +246,128 @@ it('accepts a valid completion after a transient reconnect error', async () => {
       .join('\n')
   )
   expect(await submitExitedAttempt(f.runtime, f.t01.attemptId)).toBe('submitted')
+})
+
+it.each([false, true])('settles an unchanged Candidate once (exhausted=%s)', async (exhausted) => {
+  const candidate = f.store.insertCandidate({
+    id: 'previous-candidate',
+    missionId: f.mission.id,
+    taskId: f.t01.taskId,
+    attemptId: 'previous-attempt',
+    commitSha: 'a'.repeat(40),
+    treeSha: 'b'.repeat(40),
+    status: 'ACTIVE',
+    supersededBy: null
+  })
+  if (exhausted) {
+    f.db.db
+      .prepare('UPDATE task_stages SET attempt_count = ? WHERE task_id = ?')
+      .run(f.store.getTaskStage(f.t01.taskId)!.retryPolicy.maxAttempts, f.t01.taskId)
+  }
+  expect(await submitExitedAttempt(f.runtime, f.t01.attemptId)).toBe('unchanged_candidate')
+  const events = f.store
+    .listAuditEvents({ missionId: f.mission.id })
+    .filter((e) => e.event === 'attempt.failed')
+  expect(events).toHaveLength(1)
+  if (!exhausted) {
+    console.info('M3-08i observed attempt.failed:', JSON.stringify(events[0]))
+  }
+  const reportArtifact = f.store.listArtifacts({
+    missionId: f.mission.id,
+    kind: 'worker_report'
+  })[0]
+  const { filesChanged: _files, ...headlessReport } = report
+  expect(events[0]).toMatchObject({
+    actor: 'AttemptSettlement',
+    objectKind: 'attempt',
+    objectId: f.t01.attemptId,
+    before: null,
+    after: {
+      taskId: f.t01.taskId,
+      reason: 'process_exited',
+      evidence: 'exit_code',
+      exitCode: 0,
+      settlement: { kind: 'unchanged' },
+      candidate: { id: candidate.id, commitSha: candidate.commitSha, treeSha: candidate.treeSha },
+      reportArtifactId: reportArtifact.id,
+      reportSummary: report.summary,
+      limitations: report.limitations,
+      lastMessageExcerpt: `Done\n\`\`\`json\n${JSON.stringify(headlessReport)}\n\`\`\``,
+      providerSessionId: 'provider-thread',
+      usage: { input_tokens: 100, cached_input_tokens: 40, output_tokens: 12 }
+    }
+  })
+  expect(f.db.getWorkerDispatch(f.t01.attemptId)?.state).toBe('failed')
+  expect(f.db.getDispatchContextById(f.t01.attemptId)?.status).toBe('failed')
+  expect(f.store.getCandidate(candidate.id)?.status).toBe('ACTIVE')
+  expect(f.store.getSubmissionByDispatch(f.t01.attemptId)).toBeUndefined()
+  const transitions = f.store
+    .listAuditEvents({ missionId: f.mission.id })
+    .filter((e) => e.event === 'task.stage' && e.objectId === f.t01.taskId)
+    .slice(-2)
+  expect(transitions.map((e) => e.after)).toMatchObject([
+    { stage: 'NEEDS_FIX', reason: 'attempt_failed' },
+    {
+      stage: exhausted ? 'BLOCKED' : 'READY',
+      reason: exhausted ? 'retry_budget_exhausted' : 'retry'
+    }
+  ])
+  const before = f.snapshot()
+  expect(await submitExitedAttempt(f.runtime, f.t01.attemptId)).toBe('unchanged')
+  expect(f.snapshot()).toEqual(before)
+  await vi.advanceTimersByTimeAsync(2000)
+  expect(f.releaseWorker).toHaveBeenCalledExactlyOnceWith(f.runtime, f.t01.attemptId)
+})
+
+it.each([
+  new OrchestrationError('invalid_argument', 'candidate_branch_mismatch'),
+  new OrchestrationError('inactive_dispatch', 'candidate_unchanged'),
+  new Error('candidate_unchanged')
+])('propagates other settlement errors: %s', async (error) => {
+  f.snapshotGit.mockRejectedValueOnce(error)
+  await expect(submitExitedAttempt(f.runtime, f.t01.attemptId)).rejects.toBe(error)
+  expect(f.store.getTaskStage(f.t01.taskId)?.stage).toBe('RUNNING')
+  expect(
+    f.store.listAuditEvents({ missionId: f.mission.id }).filter((e) => e.event === 'attempt.failed')
+  ).toEqual([])
+})
+
+it('redacts and bounds unchanged explanations and reconciles them as exited failures', async () => {
+  f.store.insertCandidate({
+    id: 'previous-candidate',
+    missionId: f.mission.id,
+    taskId: f.t01.taskId,
+    attemptId: 'previous-attempt',
+    commitSha: 'a'.repeat(40),
+    treeSha: 'b'.repeat(40),
+    status: 'ACTIVE',
+    supersededBy: null
+  })
+  const token = `gh${'p_'}${'Z'.repeat(36)}`
+  const { filesChanged: _files, ...headlessReport } = report
+  await writeFile(
+    path.join(root, 'last-message.md'),
+    `\`\`\`json\n${JSON.stringify({
+      ...headlessReport,
+      summary: `${token} ${'x'.repeat(2100)}`,
+      limitations: Array.from({ length: 25 }, () => `${token} ${'y'.repeat(600)}`)
+    })}\n\`\`\``
+  )
+  const recovery = new RecoveryService(f.db, f.store, f.missions, {
+    runtime: f.runtime,
+    artifacts: getAxiomControlPlane(f.runtime).artifacts
+  })
+  expect(await recovery.reconcileAttempts()).toMatchObject({
+    attempts: [{ action: 'failed', liveness: 'exited' }]
+  })
+  const event = f.store
+    .listAuditEvents({ missionId: f.mission.id })
+    .find((e) => e.event === 'attempt.failed')!
+  expect(event.after).toMatchObject({
+    reportSummary: `[REDACTED] ${'x'.repeat(1989)}`,
+    limitations: Array.from({ length: 20 }, () => `[REDACTED] ${'y'.repeat(489)}`)
+  })
+  expect(JSON.stringify(event)).not.toContain(token)
 })
 
 it.each(['not_requested', 'retained', 'requested'])(
