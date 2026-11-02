@@ -28,9 +28,11 @@ for (const maxAttempts of [2, 3]) {
   test(`M3-08i: unchanged-fix settles and ${maxAttempts === 3 ? 'continues its Candidate' : 'exhausts retries'}`, async (// oxlint-disable-next-line no-empty-pattern -- Fixture owns the background app lifecycle.
   {}, testInfo) => {
     test.setTimeout(300_000)
-    // The frozen retry scenario changes this file in seq 1 and restores it in seq 3.
-    // Comparing with the pinned fixture needs only Node and Git, no dependency provisioning.
-    const check = `node -e "process.exit(require('node:fs').readFileSync('src/services/date-range.ts','utf8') === require('node:child_process').execFileSync('git',['show','fixture-v1:src/services/date-range.ts'],{encoding:'utf8'}) ? 0 : 1)"`
+    // The frozen retry scenario (S4) tightens date-range.ts in seq 1 and, in its second patch, moves the
+    // empty entityId example from the accepted list to the rejected list of date-range.test.ts. The evidence
+    // command passes only once that second patch is in the tree; it needs Node alone, no dependency provisioning,
+    // and stays inside the D85 evidence-command boundary (one command, no shell operators, program node).
+    const check = `node -e "process.exit(require('node:fs').readFileSync('src/services/date-range.test.ts','utf8').includes('entityId: \\'\\' }, { from') ? 0 : 1)"`
     await withFixtureMission(
       testInfo,
       source!,
@@ -80,7 +82,8 @@ for (const maxAttempts of [2, 3]) {
           (row) => row.stage === 'NEEDS_FIX' && row.reason === 'attempt_failed'
         )
         expect(unchangedStage).toBeGreaterThanOrEqual(0)
-        expect(stages[unchangedStage + 1]).toEqual({
+        // task.stage audits also carry previousStage; only the transition is asserted here.
+        expect(stages[unchangedStage + 1]).toMatchObject({
           stage: maxAttempts === 3 ? 'READY' : 'BLOCKED',
           reason: maxAttempts === 3 ? 'retry' : 'retry_budget_exhausted'
         })
@@ -121,7 +124,7 @@ for (const maxAttempts of [2, 3]) {
         releaseTerminals: true,
         restart: maxAttempts === 2,
         maxAttempts,
-        extraAllowedPaths: ['src/services/date-range.ts'],
+        extraAllowedPaths: ['src/services/date-range.ts', 'src/services/date-range.test.ts'],
         requiredEvidence: [check]
       }
     )
