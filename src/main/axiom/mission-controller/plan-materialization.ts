@@ -17,6 +17,12 @@ import {
   type ControllerContext
 } from './controller-context'
 import { moveMission } from './mission-lifecycle'
+import { VerificationRulesSchema } from '../../../shared/axiom-contract/verification-rules'
+import {
+  evidenceCommandMessage,
+  validateEvidenceCommands
+} from '../../../shared/axiom-contract/evidence-commands'
+import { redactContext } from '../context-builder/redaction'
 
 function validatedProposal(input: unknown) {
   const validation = validatePlanProposal(input)
@@ -46,6 +52,23 @@ export function proposePlan(
     })
   }
   const { proposal } = validatedProposal({ ...input.planRevision, provenance: input.provenance })
+  const parsedRules = VerificationRulesSchema.safeParse(
+    ctx.store.getPolicy(mission.id)?.verificationRules
+  )
+  const rules = parsedRules.success ? parsedRules.data : VerificationRulesSchema.parse({})
+  const errors = proposal.tasks.flatMap((task, i) =>
+    validateEvidenceCommands(task.requiredEvidence, rules).map((issue) => ({
+      code: 'evidence_command_invalid' as const,
+      severity: 'error' as const,
+      message: redactContext(evidenceCommandMessage(issue, task.requiredEvidence[issue.index]))
+        .content,
+      path: ['tasks', i, 'requiredEvidence', issue.index],
+      taskIds: [task.id]
+    }))
+  )
+  if (errors.length) {
+    throw new MissionControllerError('plan_invalid', { errors })
+  }
   const goal = ctx.store.getGoalRevision(proposal.goalRevisionId)
   if (
     !goal ||

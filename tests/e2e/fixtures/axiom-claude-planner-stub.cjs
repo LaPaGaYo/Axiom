@@ -171,9 +171,26 @@ async function propose(preamble) {
     if (process.env.AXIOM_E2E_PLANNER_NO_PROPOSAL === '1') {
       return
     }
+    const proposal = fixtureProposal(preamble)
+    if (process.env.AXIOM_E2E_PLANNER_PROSE_EVIDENCE === '1') {
+      const invalid = structuredClone(proposal)
+      invalid.tasks[0].requiredEvidence = ['Test results']
+      const rejected = await request('tools/call', {
+        name: 'plan_propose',
+        arguments: { proposal: invalid }
+      })
+      const response = JSON.parse(rejected.content.find((item) => item.type === 'text').text)
+      record({ kind: 'proposal', attemptId, response, isError: rejected.isError ?? false })
+      if (
+        response.ok ||
+        !response.error?.issues?.some((issue) => issue.code === 'evidence_command_invalid')
+      ) {
+        throw new Error('Expected evidence command rejection')
+      }
+    }
     const result = await request('tools/call', {
       name: 'plan_propose',
-      arguments: { proposal: fixtureProposal(preamble) }
+      arguments: { proposal }
     })
     const response = JSON.parse(result.content.find((item) => item.type === 'text').text)
     record({ kind: 'proposal', attemptId, response, isError: result.isError ?? false })

@@ -30,6 +30,7 @@ export type PlanProposalError = {
     | 'unknown_milestone'
     | 'insufficient_parallel_roots'
     | 'threshold_not_supported'
+    | 'evidence_command_invalid'
   severity: 'error' | 'warning'
   message: string
   taskIds?: string[]

@@ -127,13 +127,38 @@ export async function previousAttemptSection(
   }
   const { candidate, verificationRun: run, previousSeq } = baseline
   const detail = run.verdictDetail
+  let remaining = 8 * 1024
+  const unchangedLines: string[] = []
+  if (baseline.unchangedAttempts.length) {
+    const instruction =
+      'If the failures below cannot be fixed inside allowedPaths, say so in limitations and name the paths or commands at fault; do not submit an unchanged tree.'
+    remaining -= Buffer.byteLength(instruction) + 1
+    for (const attempt of baseline.unchangedAttempts) {
+      // Quote untrusted Worker text as a single line so it cannot introduce prompt sections.
+      const summary =
+        attempt.reportSummary === null
+          ? '(no summary)'
+          : JSON.stringify(redactContext(attempt.reportSummary).content.slice(0, 500))
+              .replaceAll('`', '\\u0060')
+              .replaceAll('<', '\\u003c')
+              .replaceAll('>', '\\u003e')
+      const line = `Attempt ${attempt.seq} exited without changing this Candidate; its report said: ${summary}`
+      const bytes = Buffer.byteLength(line) + 1
+      if (bytes > remaining) {
+        break
+      }
+      unchangedLines.push(line)
+      remaining -= bytes
+    }
+    unchangedLines.push(instruction)
+  }
   const lines = [
     `This Attempt continues the previous Candidate ${candidate.commitSha} from Attempt ${previousSeq}; fix the failures below in this tree. Do not weaken, skip or delete tests, assertions, lint rules or checks to make them pass.`,
+    ...unchangedLines,
     `Verdict: ${run.status}; reason: ${typeof detail.reason === 'string' ? detail.reason : 'unknown'}`
   ]
   const checks = Checks.safeParse(detail.checks)
   const excerpts = await readExcerpts(artifacts, detail.verdictArtifactId)
-  let remaining = 8 * 1024
   for (const check of (checks.success ? checks.data : [])
     .filter((c) => c.result === 'fail')
     .sort((a, b) => a.index - b.index)) {

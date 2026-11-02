@@ -1,6 +1,13 @@
 import type { Candidate } from '../../../shared/axiom-contract/submission-params'
 import type { VerificationRun } from '../../../shared/axiom-contract/verification-params'
 import type { AxiomStore } from '../db/axiom-store'
+import { z } from 'zod'
+
+const UnchangedFailure = z.object({
+  settlement: z.object({ kind: z.literal('unchanged') }),
+  reportSummary: z.string().nullable().optional()
+})
+type UnchangedAttempt = { seq: number; attemptId: string; reportSummary: string | null }
 
 export type AttemptBaseline =
   | {
@@ -17,6 +24,7 @@ export type AttemptBaseline =
       previousSeq: number
       candidate: Candidate
       verificationRun: VerificationRun
+      unchangedAttempts: UnchangedAttempt[]
     }
 
 export function previousAttemptSubmission(
@@ -27,7 +35,7 @@ export function previousAttemptSubmission(
   return previous?.dispatchId ? store.getSubmissionByDispatch(previous.dispatchId) : undefined
 }
 
-/** D64: only the immediately preceding submitted Attempt can supply a fix tree. */
+/** D64 / D85: walk only across audited unchanged exits, never arbitrary failures. */
 export function resolveAttemptBaseline(
   store: AxiomStore,
   input: { taskId: string; seq: number }
@@ -35,7 +43,29 @@ export function resolveAttemptBaseline(
   if (input.seq === 1) {
     return { kind: 'integration', reason: 'first_attempt' }
   }
-  const submission = previousAttemptSubmission(store, input)
+  let previousSeq = input.seq - 1
+  let submission = previousAttemptSubmission(store, input)
+  const unchangedAttempts: UnchangedAttempt[] = []
+  const binding = store.getAttemptBinding(input.taskId, previousSeq)
+  const failures = new Map(
+    (binding ? store.listAuditEvents({ missionId: binding.missionId }) : [])
+      .filter((event) => event.event === 'attempt.failed' && event.objectKind === 'attempt')
+      .map((event) => [event.objectId, event.after])
+  )
+  while (!submission && previousSeq >= 1) {
+    const previous = store.getAttemptBinding(input.taskId, previousSeq)
+    const failure = UnchangedFailure.safeParse(failures.get(previous?.dispatchId ?? ''))
+    if (!previous?.dispatchId || !failure.success) {
+      break
+    }
+    unchangedAttempts.push({
+      seq: previousSeq,
+      attemptId: previous.dispatchId,
+      reportSummary: failure.data.reportSummary ?? null
+    })
+    previousSeq--
+    submission = previousAttemptSubmission(store, { taskId: input.taskId, seq: previousSeq + 1 })
+  }
   if (!submission) {
     return { kind: 'integration', reason: 'previous_attempt_not_submitted' }
   }
@@ -53,5 +83,11 @@ export function resolveAttemptBaseline(
   if (verificationRun.verdictDetail.reason === 'secret_detected') {
     return { kind: 'integration', reason: 'secret_detected', verificationRun }
   }
-  return { kind: 'candidate', previousSeq: input.seq - 1, candidate, verificationRun }
+  return {
+    kind: 'candidate',
+    previousSeq,
+    candidate,
+    verificationRun,
+    unchangedAttempts: unchangedAttempts.sort((a, b) => a.seq - b.seq)
+  }
 }

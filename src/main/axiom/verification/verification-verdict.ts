@@ -5,6 +5,7 @@ import type { VerificationRules } from '../../../shared/axiom-contract/verificat
 export type CheckOutcome = {
   result: 'pass' | 'fail' | 'environmental' | 'inconclusive' | 'skipped'
   reason?: string
+  command?: string
 }
 export type VerificationVerdict = {
   verdict: 'PASS' | 'FAIL' | 'INCONCLUSIVE'
@@ -23,6 +24,7 @@ export type VerificationVerdict = {
     | 'known_flaky'
     | 'non_code'
     | 'policy_invalid'
+    | 'plan_invalid'
   escalation?: 'specialist' | 'human'
   detail?: string
 }
@@ -69,6 +71,17 @@ export function decideVerificationVerdict(
   }
   if (checks.some((check) => check.result === 'environmental')) {
     return { verdict: 'INCONCLUSIVE', reason: 'environment', escalation: 'human' }
+  }
+  const invalidPlan = checks.find(
+    (check) => check.result === 'inconclusive' && check.reason === 'plan_invalid'
+  )
+  if (invalidPlan) {
+    return {
+      verdict: 'INCONCLUSIVE',
+      reason: 'plan_invalid',
+      escalation: 'human',
+      detail: invalidPlan.command
+    }
   }
   if (checks.some((check) => check.result === 'inconclusive')) {
     return {

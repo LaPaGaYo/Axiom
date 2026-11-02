@@ -30,6 +30,8 @@ export async function executeVerificationPlan(input: PlanInput) {
   const checks: VerificationCheck[] = []
   let setupFailed = false
   let excerptBytes = 32 * 1024
+  const invalidPlanOutput = new WeakSet<CheckAttempt>()
+  const planInvalidPatterns = input.rules.planInvalidPatterns.map((source) => new RegExp(source))
   const execute = async (command: string, deadline = input.deadline) => {
     input.assertCurrent()
     const result = await runVerificationCommand({
@@ -40,7 +42,15 @@ export async function executeVerificationPlan(input: PlanInput) {
       spawnCommand: input.spawnCommand
     })
     input.assertCurrent()
-    return recordCommandEvidence(input, result)
+    const evidence = await recordCommandEvidence(input, result)
+    if (
+      planInvalidPatterns.some((pattern) =>
+        pattern.test(`${result.stdout.content}\n${result.stderr.content}`)
+      )
+    ) {
+      invalidPlanOutput.add(evidence)
+    }
+    return evidence
   }
   for (const [index, step] of input.plan.entries()) {
     input.assertCurrent()
@@ -70,6 +80,13 @@ export async function executeVerificationPlan(input: PlanInput) {
       failures.every((failure) => matchesKnownFlaky(failure, input.rules.knownFlaky))
     ) {
       outcome = { ...outcome, result: 'inconclusive', reason: 'known_flaky' }
+    }
+    if (
+      step.source === 'evidence' &&
+      outcome.result === 'fail' &&
+      attempts.some((attempt) => invalidPlanOutput.has(attempt))
+    ) {
+      outcome = { ...outcome, result: 'inconclusive', reason: 'plan_invalid' }
     }
     const excerpt = boundVerificationText(
       verificationExcerpt(

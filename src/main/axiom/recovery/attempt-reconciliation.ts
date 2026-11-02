@@ -9,11 +9,8 @@ import { foldAttemptLiveness } from '../execution/attempt-projection'
 import { settleAttemptWithoutSubmission } from '../execution/attempt-settlement'
 import { reconcilePlanner } from './planner-reconciliation'
 import { observeAgentExit } from './agent-exit-observation'
-import {
-  isHeadlessAttempt,
-  submitExitedAttempt,
-  watchHeadlessAttempt
-} from '../execution/attempt-exit-submission'
+import { isHeadlessAttempt, submitExitedAttempt } from '../execution/attempt-exit-submission'
+import { watchHeadlessAttempt } from '../execution/headless-attempt-watcher'
 import {
   abandonmentEvidence,
   activeWorkerStates as activeStates,
@@ -105,6 +102,9 @@ export async function reconcileAttempt(
   }
   if (headless && currentRunning(ctx, binding)) {
     const result = await submitExitedAttempt(runtime, dispatchId)
+    if (result === 'unchanged_candidate') {
+      return { ...entry, action: 'failed', liveness: 'exited' }
+    }
     if (result === 'submitted' || result === 'failed' || result === 'interrupted') {
       return { ...entry, action: result, liveness: 'exited' }
     }

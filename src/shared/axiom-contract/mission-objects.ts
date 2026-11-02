@@ -75,7 +75,11 @@ export const TaskSpecSchema = z.object({
   scope: z.object({ allowedPaths: z.array(Text) }),
   role: Text.optional(),
   acceptanceCriteria: z.array(Text),
-  requiredEvidence: z.array(Text),
+  requiredEvidence: z
+    .array(Text)
+    .describe(
+      'requiredEvidence entries are exact shell commands; the independent verification runs each one verbatim from the repository root and requires exit 0; one command per entry, no shell operators; put expectations and descriptions in acceptanceCriteria, never in requiredEvidence (no "output", "with exit code 0" or other prose).'
+    ),
   risk: RiskLevelSchema,
   retryPolicy: z.object({ maxAttempts: z.number().int().positive() }),
   budget: BudgetSchema.omit({ maxAttempts: true }).optional(),

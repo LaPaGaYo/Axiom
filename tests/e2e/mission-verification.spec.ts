@@ -11,6 +11,60 @@ import {
 } from '../../src/shared/axiom-contract/verification-params'
 import { TaskListResponseSchema } from '../../src/shared/axiom-contract/task-params'
 
+test('M3-08i: plan_invalid stays VERIFYING without admitting a fix Attempt', async (// oxlint-disable-next-line no-empty-pattern -- Fixture owns the background app lifecycle.
+{}, testInfo) => {
+  test.setTimeout(180_000)
+  const source = process.env.AXIOM_FIXTURE_REPO
+  if (!source || process.platform === 'win32') {
+    test.skip(true, 'Requires POSIX fixture host')
+    return
+  }
+  await withFixtureMission(
+    testInfo,
+    source,
+    async ({ userData, mission, ledgerPath, releaseWorkers }) => {
+      const inspect = () => inspectFixtureMission(userData, mission.id)
+      await expect.poll(() => inspect().bindings.length, { timeout: 60_000 }).toBe(1)
+      const taskId = inspect().bindings[0].task_id
+      writeFileSync(`${ledgerPath}.scenario-${taskId}`, 'agent-crash')
+      releaseWorkers()
+      await expect
+        .poll(() => inspect().verification[0]?.status, { timeout: 90_000 })
+        .toBe('INCONCLUSIVE')
+      expect(inspect().verification[0]).toMatchObject({
+        verdictDetail: {
+          verdict: 'INCONCLUSIVE',
+          reason: 'plan_invalid',
+          escalation: 'human',
+          detail: 'pnpm run no-such-script',
+          checks: [
+            expect.objectContaining({
+              source: 'evidence',
+              command: 'pnpm run no-such-script',
+              result: 'inconclusive',
+              reason: 'plan_invalid'
+            })
+          ]
+        }
+      })
+      expect(inspect().tasks[0].stage).toBe('VERIFYING')
+      expect(inspect().bindings).toHaveLength(1)
+      expect(
+        inspect()
+          .audits.filter((row) => row.event === 'task.stage')
+          .map((row) => JSON.parse(row.after!).stage)
+      ).not.toContain('NEEDS_FIX')
+    },
+    {
+      taskIds: ['T01'],
+      holdWorkers: true,
+      runVerification: true,
+      maxAttempts: 3,
+      requiredEvidence: ['pnpm run no-such-script']
+    }
+  )
+})
+
 test('M3-02: independent checks reject both broken fixture candidates and verify the unpatched one', async (// oxlint-disable-next-line no-empty-pattern -- Fixture helper owns the background app lifecycle.
 {}, testInfo) => {
   test.setTimeout(600_000)

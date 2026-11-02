@@ -188,6 +188,9 @@ APPLYING / TESTING → QUEUED（应用重启时由 RecoveryService 丢弃临时�
 
 | 词汇 | 值与含义 |
 |---|---|
+| `settlement.kind` | Attempt 退出分类：`failed`、`interrupted`，以及 D85 的 `unchanged`（headless exit 0、有效报告、快照树等于 ACTIVE Candidate）。`unchanged` 仍记 `attempt.failed.reason = process_exited`，消耗一次重试；不是新生命周期状态。 |
+| `evidence_command_invalid` | D85：模型提案的 `requiredEvidence` 不满足单行、无 shell 操作符、程序允许名单规则；`plan_invalid` 错误附精确字段 path，同回合退回 Planner；REQUEST_SUBTASK 对应 `evidence` 检查失败。 |
+| `plan_invalid` | D85 验证 verdict reason：evidence 命令失败且输出命中 `planInvalidPatterns`，check / run 为 INCONCLUSIVE、交人处置、Task 保持 VERIFYING；其他 check 的确定性 FAIL 仍优先。不是 Worker 的修复失败。 |
 | `TaskSpec.role` | 可选的非空字符串标签（M2-09 / DEF-4）；提案、批准物化与 Task spec 保留它，不参与 provider 路由、角色权限或 skills 物化。省略时保持既有行为。 |
 | `ProviderFilterReason` | `not_installed \| no_account \| not_certified \| disallowed \| tier_too_low`，按此顺序取首个命中原因（D57、D83）；`no_account` = macOS / Linux 未选中 Axiom 管理的对应 Codex / Claude 账号。 |
 | `RoleRouting` | `routing.roles.planner` / `routing.roles.worker` 的可选 `{ provider, model, effort }`（D82，2026-10-27）；角色模型优先于 `routing.models[provider]`，最后回退 `policy-default`（harness 默认模型，无写死型号）。 |

@@ -160,3 +160,31 @@ it('redacts planted credentials before evidence, excerpts and failure names', as
     (await f.artifacts.read(result.checks[0].stderrArtifactId!)).content.toString()
   ).not.toContain(secret)
 })
+
+it.each(['stdout', 'stderr'] as const)(
+  'detects invalid evidence commands in full captured %s, after retries',
+  async (stream) => {
+    const command = node(
+      `process.${stream}.write('No test files found\\n' + 'ordinary output\\n'.repeat(1000));process.exit(1)`
+    )
+    const result = await run([command], { retryOnce: ['node -e'] })
+    expect(result.checks[0]).toMatchObject({
+      source: 'evidence',
+      result: 'inconclusive',
+      reason: 'plan_invalid'
+    })
+    expect(result.checks[0].attempts.map((a) => a.result)).toEqual(['fail', 'fail'])
+  }
+)
+it('leaves identical output on user gates failed and setup environmental', async () => {
+  const command = node("console.error('ERR_PNPM_NO_SCRIPT');process.exit(1)")
+  expect((await run([], { repositoryGates: { low: [command] } })).checks[0]).toMatchObject({
+    source: 'gate',
+    result: 'fail'
+  })
+  expect((await run([], { setupCommands: [command] })).checks[0]).toMatchObject({
+    source: 'setup',
+    result: 'environmental',
+    reason: 'setup_failed'
+  })
+})

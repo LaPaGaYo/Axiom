@@ -32,7 +32,13 @@ it.each([undefined, null, 'not-submitted'])(
 )
 it('continues the ACTIVE Candidate with its latest failed run', () => {
   const { candidate, verificationRun } = previousSubmission(f.store)
-  expect(resolve()).toEqual({ kind: 'candidate', previousSeq: 1, candidate, verificationRun })
+  expect(resolve()).toEqual({
+    kind: 'candidate',
+    previousSeq: 1,
+    candidate,
+    verificationRun,
+    unchangedAttempts: []
+  })
 })
 it('does not continue a superseded Candidate', () => {
   previousSubmission(f.store)
@@ -89,4 +95,63 @@ it('orders by createdAt then id, independently of insertion order', () => {
     .prepare('UPDATE verification_runs SET created_at = ? WHERE id = ?')
     .run('2026-10-24T00:00:00Z', verificationRun.id)
   expect(resolve()).toMatchObject({ kind: 'candidate', verificationRun: { id: 'z-new' } })
+})
+
+function unchanged(seq: number, kind = 'unchanged') {
+  f.store.insertAttemptBinding({
+    missionId: 'm',
+    taskId: 't',
+    seq,
+    dispatchId: `d${seq}`,
+    branch: `axiom/attempt/t/${seq}`,
+    agentSpecId: 'agent',
+    contextPackageId: 'context'
+  })
+  f.store.appendAuditEvent({
+    missionId: 'm',
+    actor: 'AttemptSettlement',
+    event: 'attempt.failed',
+    objectKind: 'attempt',
+    objectId: `d${seq}`,
+    before: null,
+    after: { settlement: { kind }, reportSummary: `Report ${seq}` }
+  })
+}
+it.each([1, 2])('walks past %s unchanged Attempts to the failed ACTIVE Candidate', (count) => {
+  const { candidate, verificationRun } = previousSubmission(f.store)
+  for (let seq = 2; seq <= count + 1; seq++) {
+    unchanged(seq)
+  }
+  expect(resolve(count + 2)).toEqual({
+    kind: 'candidate',
+    previousSeq: 1,
+    candidate,
+    verificationRun,
+    unchangedAttempts: Array.from({ length: count }, (_, i) => ({
+      seq: i + 2,
+      attemptId: `d${i + 2}`,
+      reportSummary: `Report ${i + 2}`
+    }))
+  })
+})
+it('does not revive a superseded Candidate behind an unchanged Attempt', () => {
+  previousSubmission(f.store)
+  unchanged(2)
+  f.store.supersedeActiveCandidates('t', 'replacement')
+  expect(resolve(3)).toEqual({ kind: 'integration', reason: 'previous_candidate_superseded' })
+})
+it('does not walk behind an ordinary failed Attempt', () => {
+  previousSubmission(f.store)
+  unchanged(2, 'failed')
+  expect(resolve(3)).toEqual({ kind: 'integration', reason: 'previous_attempt_not_submitted' })
+})
+it('falls back when the walk reaches seq 1 without a Submission', () => {
+  unchanged(1)
+  unchanged(2)
+  expect(resolve(3)).toEqual({ kind: 'integration', reason: 'previous_attempt_not_submitted' })
+})
+it('still starts clean for secret detection behind an unchanged Attempt', () => {
+  previousSubmission(f.store, { reason: 'secret_detected' })
+  unchanged(2)
+  expect(resolve(3)).toMatchObject({ kind: 'integration', reason: 'secret_detected' })
 })
