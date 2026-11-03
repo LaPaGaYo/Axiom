@@ -3,6 +3,7 @@ import {
   resolveVerificationPlan
 } from '../../../shared/axiom-contract/verification-rules'
 import type { AxiomStore } from '../db/axiom-store'
+import { resolveAcceptance } from '../../../shared/axiom-contract/acceptance'
 import { readRepositoryRules } from './repository-rules'
 import { redactContext } from './redaction'
 import { z } from 'zod'
@@ -129,8 +130,8 @@ export async function mandatorySections(
     }
     return { taskId: id, title: value.spec.title }
   }
-  const { title, objective, scope, acceptanceCriteria, requiredEvidence, risk, retryPolicy } =
-    task.spec
+  const { title, objective, scope, risk, retryPolicy } = task.spec
+  const acceptanceCriteria = resolveAcceptance(task.spec)
   const rules = VerificationRulesSchema.safeParse(policy.verificationRules)
   const verificationCommands = rules.success
     ? resolveVerificationPlan(task.spec, rules.data)
@@ -148,7 +149,6 @@ export async function mandatorySections(
         objective,
         scope,
         acceptanceCriteria,
-        requiredEvidence,
         risk,
         retryPolicy
       })
@@ -197,7 +197,7 @@ export async function mandatorySections(
           ? 'The host computes the Candidate and changed files. Keep reports and other Artifacts under .axiom/artifacts/; .axiom/ never enters the Candidate.'
           : 'Every file left in this worktree becomes part of the Candidate. Write reports and other Artifact files outside the worktree (for example in a temporary directory) before running axiom mission artifact put.',
         'Verification compares the Candidate with its merge-base on the integration branch: a changed path outside allowedPaths fails it (scope_violation), an added line that matches a secret pattern fails it (secret_detected), and changes to dependency manifests, lockfiles, CI, hooks, test or lint configuration or agent instruction files go to human review unless an allowedPaths entry names them.',
-        'Deleting or skipping tests, removing assertions from a test file, or adding lint, type-check or coverage suppressions sends the Candidate to human review (test_tampering). When the Task has no required evidence commands, reference at least one readable, non-empty Artifact in the submission (JSON must parse); a human or Reviewer confirms it.',
+        'Deleting or skipping tests, removing assertions from a test file, or adding lint, type-check or coverage suppressions sends the Candidate to human review (test_tampering). When the Task has no command criterion, reference at least one readable, non-empty Artifact in the submission (JSON must parse); a person confirms it.',
         'Submission contract: axiom-submission-v1',
         '- Task and Attempt identifiers',
         '- Concise implementation summary',

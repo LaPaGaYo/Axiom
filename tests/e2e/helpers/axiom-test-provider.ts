@@ -170,8 +170,9 @@ function fixtureProposal(tasks, goalRevisionId) {
     tasks: tasks.map(task => ({
       id: task.id, title: task.title, objective: task.title,
       scope: { allowedPaths: task.scope },
-      acceptanceCriteria: task.acceptance.map(entry => entry.must),
-      requiredEvidence: [...new Set(task.acceptance.map(entry => entry.command))],
+      acceptanceCriteria: task.acceptance.map(({ must, command }) => ({
+        text: must, check: { kind: 'command', command }
+      })),
       risk: 'low', retryPolicy: { maxAttempts: 2 }, kind: 'task', milestoneId: 'm1'
     })),
     edges: tasks.flatMap(task => task.dependsOn.map(dep => ({

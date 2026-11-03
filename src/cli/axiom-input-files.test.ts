@@ -2,10 +2,11 @@ import { mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { readGoalFile, readPlanFile } from './handlers/axiom/input-files'
+import { readGoalFile, readPlanFile, readTaskFile } from './handlers/axiom/input-files'
 import { dispatch } from './dispatch'
 import { RuntimeClient } from './runtime-client'
-import { formatTaskList } from './axiom-format'
+import { formatTask, formatTaskList } from './axiom-format'
+import { makeProposal } from '../shared/axiom-contract/contract-fixtures.test-support'
 
 const directories: string[] = []
 afterEach(() => {
@@ -78,4 +79,44 @@ it('renders Task stage even when the Orca execution projection is completed', ()
       ]
     })
   ).toBe('ID\tSTAGE\tTITLE\nt1\tSUBMITTED\tTask')
+})
+
+it('loads a Task file with criterion checks and rejects retired evidence at its exact path', async () => {
+  const cwd = directory()
+  const { id: _id, ...task } = makeProposal().tasks[0]
+  writeFileSync(join(cwd, 'task.json'), JSON.stringify(task))
+  expect(await readTaskFile(cwd, 'task.json')).toMatchObject({ task })
+  writeFileSync(
+    join(cwd, 'task.json'),
+    JSON.stringify({ ...task, requiredEvidence: ['pnpm test'] })
+  )
+  await expect(readTaskFile(cwd, 'task.json')).rejects.toMatchObject({
+    code: 'plan_invalid',
+    data: { errors: [{ code: 'required_evidence_retired', path: ['task', 'requiredEvidence'] }] }
+  })
+})
+
+it('renders compatible Task criteria and appended legacy commands', () => {
+  expect(
+    formatTask({
+      task: {
+        id: 't1',
+        missionId: 'm1',
+        planRevisionId: 'p1',
+        title: 'Task',
+        stage: 'DEFINED',
+        orcaStatus: 'pending',
+        spec: {
+          ...makeProposal().tasks[0],
+          acceptanceCriteria: [
+            'A person likes the result',
+            { text: 'Attach proof', check: { kind: 'artifact' } }
+          ],
+          requiredEvidence: ['pnpm test']
+        }
+      }
+    })
+  ).toContain(
+    '[human] A person likes the result — human check\n[artifact] Attach proof — Artifact\n[command] Command passes: pnpm test — pnpm test'
+  )
 })

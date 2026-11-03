@@ -1,5 +1,6 @@
 import { z } from 'zod'
-import { AxiomIdSchema } from './mission-objects'
+import { AcceptanceCriterionSchema, AxiomIdSchema } from './mission-objects'
+import { resolvePersistedMessageAcceptance } from './persisted-message-acceptance'
 
 export const AXIOM_MESSAGE_TYPES = [
   'INFORM',
@@ -45,8 +46,7 @@ export const SubtaskRequestSchema = z
     title: z.string().trim().min(1),
     objective: z.string().trim().min(1),
     allowedPaths: z.array(z.string().min(1)).min(1),
-    acceptanceCriteria: z.array(z.string().min(1)).min(1),
-    requiredEvidence: z.array(z.string().min(1)).min(1),
+    acceptanceCriteria: z.array(AcceptanceCriterionSchema).min(1),
     risk: z.enum(['low', 'medium', 'high']).default('low'),
     dependsOn: z.array(AxiomIdSchema).optional()
   })
@@ -90,7 +90,9 @@ export function parseAxiomMessagePayload(payload: string | null): AxiomMessagePa
     return undefined
   }
   try {
-    const parsed = AxiomMessagePayloadSchema.safeParse(JSON.parse(payload))
+    const parsed = AxiomMessagePayloadSchema.safeParse(
+      resolvePersistedMessageAcceptance(JSON.parse(payload))
+    )
     return parsed.success ? parsed.data : undefined
   } catch {
     return undefined

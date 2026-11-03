@@ -2,12 +2,14 @@ import type { z } from 'zod'
 import type { PlanProposeParams } from '../../../shared/axiom-contract/plan-params'
 import {
   PlanProposalSchema,
-  validatePlanProposal
+  validatePlanProposal,
+  type PlanProposalError
 } from '../../../shared/axiom-contract/plan-proposal'
 import type {
   PlanRevision,
   Provenance,
-  TaskEdge
+  TaskEdge,
+  TaskSpec
 } from '../../../shared/axiom-contract/mission-objects'
 import {
   audit,
@@ -17,19 +19,38 @@ import {
   type ControllerContext
 } from './controller-context'
 import { moveMission } from './mission-lifecycle'
-import { VerificationRulesSchema } from '../../../shared/axiom-contract/verification-rules'
+import {
+  VerificationRulesSchema,
+  type VerificationRules
+} from '../../../shared/axiom-contract/verification-rules'
 import {
   evidenceCommandMessage,
-  validateEvidenceCommands
+  validateAcceptanceCommands
 } from '../../../shared/axiom-contract/evidence-commands'
 import { redactContext } from '../context-builder/redaction'
+import { resolveAcceptance } from '../../../shared/axiom-contract/acceptance'
 
-function validatedProposal(input: unknown) {
-  const validation = validatePlanProposal(input)
+function validatedProposal(input: unknown, persisted = false) {
+  const validation = validatePlanProposal(input, { persisted })
   if (!validation.ok) {
     throw new MissionControllerError('plan_invalid', { errors: validation.errors })
   }
   return { proposal: PlanProposalSchema.parse(input), order: validation.order }
+}
+
+export function validateTaskCommands(
+  task: TaskSpec,
+  rules: VerificationRules,
+  path: (string | number)[]
+): PlanProposalError[] {
+  const criteria = resolveAcceptance(task)
+  return validateAcceptanceCommands(criteria, rules).map((issue) => ({
+    code: 'evidence_command_invalid',
+    severity: 'error',
+    message: redactContext(evidenceCommandMessage(issue, issue.command)).content,
+    path: [...path, 'acceptanceCriteria', issue.index, 'check', 'command'],
+    taskIds: [task.id]
+  }))
 }
 
 export function proposePlan(
@@ -57,14 +78,7 @@ export function proposePlan(
   )
   const rules = parsedRules.success ? parsedRules.data : VerificationRulesSchema.parse({})
   const errors = proposal.tasks.flatMap((task, i) =>
-    validateEvidenceCommands(task.requiredEvidence, rules).map((issue) => ({
-      code: 'evidence_command_invalid' as const,
-      severity: 'error' as const,
-      message: redactContext(evidenceCommandMessage(issue, task.requiredEvidence[issue.index]))
-        .content,
-      path: ['tasks', i, 'requiredEvidence', issue.index],
-      taskIds: [task.id]
-    }))
+    validateTaskCommands(task, rules, ['tasks', i])
   )
   if (errors.length) {
     throw new MissionControllerError('plan_invalid', { errors })
@@ -124,7 +138,7 @@ export function approvePlan(
       to: 'PLANNED'
     })
   }
-  const { proposal, order } = validatedProposal(plan)
+  const { proposal, order } = validatedProposal(plan, true)
   if (!ctx.store.updatePlanRevisionStatus({ id: plan.id, from: 'PROPOSED', to: 'APPROVED' })) {
     throw new MissionControllerError('stale_state', {
       planRevisionId: plan.id,

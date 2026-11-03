@@ -40,7 +40,7 @@ function contentProblem(content: Buffer, mediaType: string): ArtifactProblem | u
   return undefined
 }
 
-/** Inspect every reference; only the evidence list is capped, never the verdict counts. */
+/** Inspect every reference; callers cap the persisted summary only after acceptance evaluation. */
 export async function checkWorkerArtifacts(input: {
   store: AxiomStore
   artifacts: ArtifactStore
@@ -81,9 +81,7 @@ export async function checkWorkerArtifacts(input: {
     if (check.problem) {
       result.counts[check.problem]++
     }
-    if (result.checked.length < 50) {
-      result.checked.push(check)
-    }
+    result.checked.push(check)
   }
   return result
 }

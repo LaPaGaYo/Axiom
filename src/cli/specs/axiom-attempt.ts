@@ -36,7 +36,7 @@ export const AXIOM_ATTEMPT_COMMAND_SPECS: CommandSpec[] = [
   ...['inform', 'request', 'blocked', 'handoff', 'request-subtask'].map((verb): CommandSpec => ({
     path: ['attempt', verb],
     summary: `Send a typed Worker ${verb} message`,
-    usage: `axiom attempt ${verb} --attempt <id> --summary <text> [--body <text> | --body-file <path>] [--artifact <id>] [--related-task <id>]${verb === 'request-subtask' ? ' --title <text> --objective <text> --allowed-path <path> --acceptance <text> --evidence <text> [--risk low|medium|high] [--depends-on <taskId>]' : ''}${verb === 'blocked' ? ' [--reason blocked_by_scope|candidate_already_correct|cannot_reproduce] [--path <path>]' : ''} [--json]`,
+    usage: `axiom attempt ${verb} --attempt <id> --summary <text> [--body <text> | --body-file <path>] [--artifact <id>] [--related-task <id>]${verb === 'request-subtask' ? ' --title <text> --objective <text> --allowed-path <path> [--acceptance <text>] [--evidence <command>] [--acceptance-artifact <text>] [--risk low|medium|high] [--depends-on <taskId>]' : ''}${verb === 'blocked' ? ' [--reason blocked_by_scope|candidate_already_correct|cannot_reproduce] [--path <path>]' : ''} [--json]`,
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'attempt',
@@ -49,7 +49,16 @@ export const AXIOM_ATTEMPT_COMMAND_SPECS: CommandSpec[] = [
       'related-task',
       ...(verb === 'blocked' ? ['reason', 'path'] : []),
       ...(verb === 'request-subtask'
-        ? ['title', 'objective', 'allowed-path', 'acceptance', 'evidence', 'risk', 'depends-on']
+        ? [
+            'title',
+            'objective',
+            'allowed-path',
+            'acceptance',
+            'acceptance-artifact',
+            'evidence',
+            'risk',
+            'depends-on'
+          ]
         : [])
     ],
     repeatableFlags: [
@@ -57,11 +66,16 @@ export const AXIOM_ATTEMPT_COMMAND_SPECS: CommandSpec[] = [
       'related-task',
       ...(verb === 'blocked' ? ['path'] : []),
       ...(verb === 'request-subtask'
-        ? ['allowed-path', 'acceptance', 'evidence', 'depends-on']
+        ? ['allowed-path', 'acceptance', 'acceptance-artifact', 'evidence', 'depends-on']
         : [])
     ],
     notes: [
-      'Detailed content belongs in an Artifact. Summary and optional body are limited to 2,000 characters.'
+      'Detailed content belongs in an Artifact. Summary and optional body are limited to 2,000 characters.',
+      ...(verb === 'request-subtask'
+        ? [
+            'Repeat --acceptance and --evidence to pair text and command positionally. Extra commands add Command passes criteria; text without a command requires a human. Repeat --acceptance-artifact to add Artifact criteria.'
+          ]
+        : [])
     ]
   })),
   {

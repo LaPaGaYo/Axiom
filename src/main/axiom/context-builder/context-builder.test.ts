@@ -1,3 +1,4 @@
+import { acceptanceCommands, resolveAcceptance } from '../../../shared/axiom-contract/acceptance'
 import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -114,7 +115,7 @@ describe('ContextBuilder', () => {
     const headless = await builder.build({ missionId, taskId, channel: 'headless' })
     const terminal = await builder.build({ missionId, taskId })
     expect(headless.packageId).toBe(
-      'ctx_64a14eafe9b0ca85a2b99825803765b5fc2a52cd97a410ade50855b6f4364238'
+      'ctx_090c732b19deca591a348562d574b810f40bdc91d2e030b800285509689a0508'
     )
     expect(headless.packageId).not.toBe(terminal.packageId)
     expect(headless.renderTemplate).toContain('re-read .axiom/prompt.md before continuing')
@@ -135,13 +136,13 @@ describe('ContextBuilder', () => {
       goalRevisionId: store.getMission(missionId)!.activeGoalRevisionId!
     })
     expect(worker.renderTemplate).toContain(
-      'Deleting or skipping tests, removing assertions from a test file, or adding lint, type-check or coverage suppressions sends the Candidate to human review (test_tampering). When the Task has no required evidence commands, reference at least one readable, non-empty Artifact in the submission (JSON must parse); a human or Reviewer confirms it.'
+      'Deleting or skipping tests, removing assertions from a test file, or adding lint, type-check or coverage suppressions sends the Candidate to human review (test_tampering). When the Task has no command criterion, reference at least one readable, non-empty Artifact in the submission (JSON must parse); a person confirms it.'
     )
     expect(planner.renderTemplate).toContain(
       'Use readinessThreshold INTEGRATED only; V1 rejects VERIFIED edges (threshold_not_supported).'
     )
     expect(planner.renderTemplate).toContain(
-      'Name a test file in allowedPaths when a Task must delete it, and give every Task required evidence commands unless its deliverable is an Artifact for human or Reviewer confirmation.'
+      'Name a test file in allowedPaths when a Task must delete it.'
     )
     expect(planner.renderTemplate).toContain(
       'scope.allowedPaths entries are repository-relative: an entry covers that path and everything below it; * and ? match within one path segment, ** matches any number of segments, and . is the whole repository. Verification fails any change outside allowedPaths.'
@@ -158,12 +159,14 @@ describe('ContextBuilder', () => {
       ...policy,
       verificationRules: {
         setupCommands: ['setup'],
-        repositoryGates: { [task.spec.risk]: [...task.spec.requiredEvidence, 'gate'] }
+        repositoryGates: {
+          [task.spec.risk]: [...acceptanceCommands(resolveAcceptance(task.spec)), 'gate']
+        }
       }
     })
     const { renderTemplate } = await builder.build({ missionId, taskId })
     expect(renderTemplate).toContain(
-      `## Required verification commands\n\n${['setup', ...new Set(task.spec.requiredEvidence), 'gate'].join('\n')}`
+      `## Required verification commands\n\n${['setup', ...acceptanceCommands(resolveAcceptance(task.spec)), 'gate'].join('\n')}`
     )
   })
   it('builds context with a human-escalation notice for invalid stored verification rules', async () => {
@@ -182,7 +185,7 @@ describe('ContextBuilder', () => {
     const first = await builder.build({ missionId, taskId })
     expect(upstream).toHaveLength(2)
     expect(first.packageId).toBe(
-      'ctx_5b7a4c19957ef659dbe18158066dbff22b5f094011645e6e55829b1368bc9275'
+      'ctx_0d21af9fc43fb6021bac4e49bb672180b48e95e68245ed973ea42022e24c74f3'
     )
     expect(first.manifest.mandatory.map((entry) => entry.section)).toEqual(sections)
     expect(first.packageId).toBe(`ctx_${sha256(canonicalContextManifest(first.manifest))}`)

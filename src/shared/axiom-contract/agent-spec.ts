@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { AxiomIdSchema, EffortSchema, TuiAgentIdSchema } from './mission-objects'
+import { AxiomIdSchema, EffortSchema, TaskSpecSchema, TuiAgentIdSchema } from './mission-objects'
 
 export const ProviderFilterReasonSchema = z.enum([
   'not_installed',
@@ -47,7 +47,7 @@ export const AgentSpecSchema = z.discriminatedUnion('role', [
     role: z.literal('worker'),
     taskId: AxiomIdSchema,
     contextPackageId: AxiomIdSchema,
-    acceptanceCriteria: z.array(z.string()),
+    acceptanceCriteria: TaskSpecSchema.shape.acceptanceCriteria,
     capabilities: z.array(z.string().min(1)),
     workspace: z.strictObject({ strategy: z.literal('attempt-worktree') })
   }),

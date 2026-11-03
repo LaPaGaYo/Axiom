@@ -2,6 +2,7 @@ import type { Repo } from '../../../shared/repo-types'
 import { isRepoOnCatalogHost } from '../../../shared/execution-host'
 import type { VerificationRunStatus } from '../../../shared/axiom-contract/lifecycle'
 import type { VerificationRun } from '../../../shared/axiom-contract/verification-params'
+import { resolveAcceptance } from '../../../shared/axiom-contract/acceptance'
 import {
   VerificationRulesSchema,
   resolveVerificationPlan
@@ -16,6 +17,7 @@ import { VerificationInterrupted, settleVerificationVerdict } from './verificati
 import { readCandidateDiff } from './candidate-diff'
 import { evaluateDiffGate, summarizeDiffGate, type DiffGate } from './diff-gate'
 import { checkWorkerArtifacts } from './worker-artifacts'
+import { evaluateAcceptance } from './verification-acceptance'
 
 export function isLocalVerificationRepository(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'>
@@ -92,7 +94,8 @@ export async function runVerificationChecks(
     if (!candidate) {
       throw new VerificationInterrupted()
     }
-    const nonCodeTask = !task.spec.requiredEvidence.some((command) => command.trim())
+    const criteria = resolveAcceptance(task.spec)
+    const nonCodeTask = !criteria.some((criterion) => criterion.check.kind === 'command')
     const parsed = VerificationRulesSchema.safeParse(
       store.getPolicy(run.missionId)?.verificationRules
     )
@@ -160,15 +163,24 @@ export async function runVerificationChecks(
       store,
       artifacts,
       attemptId: candidate.attemptId,
-      required: nonCodeTask
+      required: nonCodeTask || criteria.some((criterion) => criterion.check.kind === 'artifact')
     })
+    const acceptance = evaluateAcceptance(criteria, result.checks, workerArtifacts)
     if (gate) {
-      verdict = decideVerificationVerdict(result.checks, rules, gate, nonCodeTask, workerArtifacts)
+      verdict = decideVerificationVerdict(
+        result.checks,
+        rules,
+        gate,
+        nonCodeTask,
+        workerArtifacts,
+        acceptance
+      )
     }
     if (!verdict) {
       throw new VerificationInterrupted()
     }
     assertCurrent()
+    const artifactSummary = { ...workerArtifacts, checked: workerArtifacts.checked.slice(0, 50) }
     const finishedAt = new Date().toISOString()
     const evidence = await artifacts.put({
       missionId: run.missionId,
@@ -180,7 +192,8 @@ export async function runVerificationChecks(
         JSON.stringify({
           ...verdict,
           ...result,
-          artifacts: workerArtifacts,
+          artifacts: artifactSummary,
+          acceptance,
           ...(diffEvidence ? { diff: diffEvidence } : {}),
           runId: run.id,
           taskId: run.taskId,
@@ -199,16 +212,18 @@ export async function runVerificationChecks(
       : []
     const verdictDetail = {
       phase: 'verdict',
-      artifacts: workerArtifacts,
+      artifacts: artifactSummary,
+      acceptance,
       ...(diffSummary ? { diff: diffSummary } : {}),
       ...verdict,
       verdictArtifactId: evidence.id,
       evidenceArtifactIds: [...previousEvidence, evidence.id],
       checks: result.checks.map(
-        ({ index, source, command, result, reason, exitCode, durationMs, failures }) => ({
+        ({ index, source, command, criteria, result, reason, exitCode, durationMs, failures }) => ({
           index,
           source,
           command,
+          criteria,
           result,
           ...(reason ? { reason } : {}),
           exitCode,

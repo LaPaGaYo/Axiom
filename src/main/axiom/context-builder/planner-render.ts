@@ -48,8 +48,20 @@ export async function buildPlannerContext(
       title: i ? 'Verify the change' : 'Implement the change',
       objective: i ? 'Add regression coverage' : 'Implement the requested behavior',
       scope: { allowedPaths: [i ? 'tests/' : 'src/'] },
-      acceptanceCriteria: ['Relevant tests pass'],
-      requiredEvidence: ['pnpm exec vitest run tests/example.test.ts'],
+      acceptanceCriteria: i
+        ? [
+            {
+              text: 'A coverage report is attached',
+              check: { kind: 'artifact', artifactKind: 'evidence' }
+            },
+            { text: 'The workflow meets the user intent', check: { kind: 'human' } }
+          ]
+        : [
+            {
+              text: 'Relevant tests pass',
+              check: { kind: 'command', command: 'pnpm exec vitest run tests/example.test.ts' }
+            }
+          ],
       risk: 'low',
       retryPolicy: { maxAttempts: 2 },
       milestoneId: 'M1',
@@ -85,8 +97,12 @@ export async function buildPlannerContext(
         'kind: task | fix; risk: low | medium | high; retryPolicy.maxAttempts >= 1.',
         'scope.allowedPaths entries are repository-relative: an entry covers that path and everything below it; * and ? match within one path segment, ** matches any number of segments, and . is the whole repository. Verification fails any change outside allowedPaths.',
         'Name dependency manifests, lockfiles, CI workflows, hooks, test or lint configuration and agent instruction files (AGENTS.md, CLAUDE.md, .claude/, .codex/, .agents/, .mcp.json) in allowedPaths when a Task must change them; otherwise such a change goes to human review.',
-        'Name a test file in allowedPaths when a Task must delete it, and give every Task required evidence commands unless its deliverable is an Artifact for human or Reviewer confirmation.',
-        `requiredEvidence entries are exact shell commands; the independent verification runs each one verbatim from the repository root and requires exit 0; one command per entry, no shell operators; the program must be one of: ${allowedEvidencePrograms(rules).join(', ')}; put expectations and descriptions in acceptanceCriteria, never in requiredEvidence (no "output", "with exit code 0" or other prose).`,
+        'Name a test file in allowedPaths when a Task must delete it.',
+        'Every acceptanceCriteria entry is { text, check }.',
+        `check.kind = "command" carries one exact shell command; the independent verification runs it verbatim from the repository root and requires exit 0; one command per criterion, no shell operators; the program must be one of: ${allowedEvidencePrograms(rules).join(', ')}; put expectations and descriptions in text, never in command (no "output", "with exit code 0" or other prose).`,
+        '"artifact" means the submission must reference a readable, non-empty Artifact (of artifactKind when given).',
+        '"human" means no command or Artifact can prove it and a person will confirm it — use it sparingly, the plan shows it.',
+        'requiredEvidence is retired and rejected.',
         'Optional TaskSpec.role is a free-text label only; it does not select a provider or materialize skills.',
         'Do not supply provenance; the Control Plane stamps it from the authenticated Planner Attempt.'
       ].join('\n')

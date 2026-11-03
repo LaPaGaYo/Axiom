@@ -1,5 +1,6 @@
 import { desktopCall } from './helpers/axiom-desktop-call'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { z } from 'zod'
 import { test, expect } from './helpers/orca-app'
@@ -8,6 +9,103 @@ import { fixtureLedger, inspectFixtureMission } from './helpers/axiom-fixture-in
 import { VerificationListResponseSchema } from '../../src/shared/axiom-contract/verification-params'
 import { TaskListResponseSchema } from '../../src/shared/axiom-contract/task-params'
 import { ArtifactReadResponseSchema } from '../../src/shared/axiom-contract/artifact-params'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
+
+test('M3-04b-2: Attempt 3 names a failed criterion and a finding persisting since Attempt 1', async (// oxlint-disable-next-line no-empty-pattern -- Fixture owns the background app lifecycle.
+{}, testInfo) => {
+  test.setTimeout(240_000)
+  const source = process.env.AXIOM_FIXTURE_REPO
+  if (!source || process.platform === 'win32') {
+    test.skip(true, 'Requires POSIX fixture host')
+    return
+  }
+  const temp = mkdtempSync(path.join(os.tmpdir(), 'axiom-acceptance-persistence-'))
+  const checkPath = path.join(temp, 'persistence-check.cjs')
+  const command = `node ${quotePosixShell(checkPath)}`
+  const criterion = 'The persistence probe passes'
+  const failure = 'tests/e2e/mission-fix-loop.spec.ts > persistence probe'
+  try {
+    await withFixtureMission(
+      testInfo,
+      source,
+      async ({ userData, mission, ledgerPath, releaseWorkers }) => {
+        const inspect = () => inspectFixtureMission(userData, mission.id)
+        await expect.poll(() => inspect().bindings.length, { timeout: 60_000 }).toBe(1)
+        const taskId = z.string().parse(inspect().bindings[0]?.task_id)
+        writeFileSync(`${ledgerPath}.scenario-${taskId}`, 'deterministic-failure')
+        // The frozen scenario applies candidate.patch then fix.patch unchanged. This external
+        // verification probe supplies a repeatable finding solely to exercise context persistence.
+        // Hold the third Worker with the existing ledger gate before it can reapply fix.patch.
+        writeFileSync(
+          checkPath,
+          `const { existsSync, writeFileSync } = require('node:fs')
+const firstCheck = ${JSON.stringify(path.join(temp, 'first-check'))}
+if (existsSync(firstCheck)) writeFileSync(${JSON.stringify(`${ledgerPath}.hold`)}, '')
+else writeFileSync(firstCheck, '')
+console.error(${JSON.stringify(`FAIL ${failure}`)})
+process.exit(1)
+`
+        )
+        releaseWorkers()
+        await expect
+          .poll(() => inspect().verification.filter((run) => run.status === 'FAIL').length, {
+            timeout: 120_000
+          })
+          .toBe(2)
+        await expect
+          .poll(() => inspect().bindings.find((binding) => binding.seq === 3)?.dispatch_id, {
+            timeout: 60_000
+          })
+          .toBeTruthy()
+        const persisted = inspect()
+        expect(persisted.bindings.map((binding) => binding.seq)).toEqual([1, 2, 3])
+        expect(persisted.verification).toHaveLength(2)
+        for (const run of persisted.verification) {
+          expect(run.verdictDetail).toMatchObject({
+            verdict: 'FAIL',
+            reason: 'checks_failed',
+            acceptance: [
+              {
+                index: 0,
+                text: criterion,
+                check: { kind: 'command', command },
+                result: 'fail',
+                checkIndexes: [0],
+                artifactIds: []
+              }
+            ],
+            checks: [expect.objectContaining({ result: 'fail', failures: [failure] })]
+          })
+        }
+        const third = z
+          .string()
+          .parse(persisted.bindings.find((binding) => binding.seq === 3)?.dispatch_id)
+        const promptPath = path.join(userData, 'axiom', 'attempts', third, 'prompt.md')
+        await expect.poll(() => existsSync(promptPath)).toBe(true)
+        const prompt = readFileSync(promptPath, 'utf8')
+        expect(prompt).toContain(`[fail] ${JSON.stringify(criterion)}`)
+        expect(prompt).toContain(`${JSON.stringify(failure)} (persisting since Attempt 1)`)
+        expect(prompt).not.toContain('Not yet demonstrated')
+        await expect
+          .poll(
+            () => fixtureLedger(ledgerPath).filter((entry) => entry.kind === 'submission').length
+          )
+          .toBe(2)
+        expect(fixtureLedger(ledgerPath).filter((entry) => entry.kind === 'error')).toEqual([])
+      },
+      {
+        taskIds: ['T01'],
+        holdWorkers: true,
+        runVerification: true,
+        maxAttempts: 3,
+        extraAllowedPaths: ['src/domain/recurrence.ts'],
+        acceptanceCriteria: [{ text: criterion, check: { kind: 'command', command } }]
+      }
+    )
+  } finally {
+    rmSync(temp, { recursive: true, force: true })
+  }
+})
 
 test('M3-04: failed Candidates continue with evidence, two fixes verify and repeated scope violations exhaust retries', async (// oxlint-disable-next-line no-empty-pattern -- Fixture helper owns the background app lifecycle.
 {}, testInfo) => {

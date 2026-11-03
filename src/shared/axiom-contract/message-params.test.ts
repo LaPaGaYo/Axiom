@@ -25,8 +25,7 @@ const subtask = {
   title: 'Follow-up',
   objective: 'Test it',
   allowedPaths: ['src/'],
-  acceptanceCriteria: ['Pass'],
-  requiredEvidence: ['Tests'],
+  acceptanceCriteria: [{ text: 'Pass', check: { kind: 'command', command: 'pnpm test' } }],
   risk: 'low'
 }
 it('maps all eight product types without extending Orca routing types', () => {
@@ -101,6 +100,48 @@ it('requires subtask only for REQUEST_SUBTASK and rejects unknown payload fields
     AxiomMessagePayloadSchema.safeParse({ axiom: { ...fields, type: 'INFORM' }, extra: true })
       .success
   ).toBe(false)
+})
+it('reads persisted legacy subtasks through acceptance resolution without accepting them at ingress', () => {
+  const legacy = {
+    ...subtask,
+    acceptanceCriteria: ['The migration is correct'],
+    requiredEvidence: ['pnpm test', ' pnpm test ', 'node check.js']
+  }
+  const payload = { axiom: { ...fields, type: 'REQUEST_SUBTASK', subtask: legacy } }
+  const stored = JSON.stringify(payload)
+  expect(parseAxiomMessagePayload(stored)?.axiom.subtask).toEqual({
+    ...subtask,
+    acceptanceCriteria: [
+      { text: 'The migration is correct', check: { kind: 'human' } },
+      { text: 'Command passes: pnpm test', check: { kind: 'command', command: 'pnpm test' } },
+      {
+        text: 'Command passes: node check.js',
+        check: { kind: 'command', command: 'node check.js' }
+      }
+    ]
+  })
+  expect(JSON.stringify(payload)).toBe(stored)
+  expect(AxiomMessagePayloadSchema.safeParse(payload).success).toBe(false)
+  expect(
+    AttemptRequestSubtaskParams.safeParse({
+      from: 'term_worker',
+      attemptId: 'a',
+      summary: 'Evidence',
+      subtask: legacy
+    }).success
+  ).toBe(false)
+})
+it('preserves strict persisted payload validation while reading legacy subtask acceptance', () => {
+  const legacy = { ...subtask, acceptanceCriteria: ['Pass'], requiredEvidence: ['pnpm test'] }
+  for (const payload of [
+    { axiom: { ...fields, type: 'REQUEST_SUBTASK', subtask: { ...legacy, extra: true } } },
+    { axiom: { ...fields, type: 'REQUEST_SUBTASK', subtask: legacy, extra: true } },
+    { axiom: { ...fields, type: 'REQUEST_SUBTASK', subtask: legacy }, extra: true },
+    { axiom: { ...fields, type: 'INFORM', subtask: legacy } },
+    { axiom: { ...fields, type: 'REQUEST_SUBTASK', subtask: { ...legacy, requiredEvidence: [1] } } }
+  ]) {
+    expect(parseAxiomMessagePayload(JSON.stringify(payload))).toBeUndefined()
+  }
 })
 it('worker params cannot choose type, recipient or Mission authority', () => {
   const input = { from: 'term_worker', attemptId: 'a', summary: 'Evidence' }

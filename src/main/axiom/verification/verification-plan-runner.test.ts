@@ -36,7 +36,10 @@ async function run(
     deadline,
     spawnCommand,
     rules,
-    plan: resolveVerificationPlan({ risk: 'low', requiredEvidence: commands }, rules),
+    plan: resolveVerificationPlan(
+      { risk: 'low', acceptanceCriteria: [], requiredEvidence: commands },
+      rules
+    ),
     assertCurrent: () => {}
   })
 }

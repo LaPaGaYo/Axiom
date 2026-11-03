@@ -128,26 +128,29 @@ function ledger(file: string) {
     : []
 }
 
-for (const { provider, noProposal, proseEvidence } of [
-  { provider: 'codex', noProposal: false, proseEvidence: false },
-  { provider: 'claude', noProposal: false, proseEvidence: false },
-  { provider: 'claude', noProposal: true, proseEvidence: false },
-  { provider: 'claude', noProposal: false, proseEvidence: true }
+for (const { provider, noProposal, proseEvidence, legacyEvidence } of [
+  { provider: 'codex', noProposal: false, proseEvidence: false, legacyEvidence: false },
+  { provider: 'claude', noProposal: false, proseEvidence: false, legacyEvidence: false },
+  { provider: 'claude', noProposal: true, proseEvidence: false, legacyEvidence: false },
+  { provider: 'claude', noProposal: false, proseEvidence: true, legacyEvidence: false },
+  { provider: 'claude', noProposal: false, proseEvidence: false, legacyEvidence: true }
 ] as const) {
   test(
-    proseEvidence
-      ? 'M3-08i: Claude corrects evidence_command_invalid in the same MCP turn'
-      : noProposal
-        ? 'M3-08h: a finished Claude turn without a proposal settles and permits a new Planner'
-        : provider === 'codex'
-          ? 'M2-09: a read-only Planner proposes the fixture DAG and releases after PLAN_REVIEW'
-          : 'M3-08b: a claude structured Planner proposes the fixture DAG and releases after PLAN_REVIEW',
+    legacyEvidence
+      ? 'M3-04b-2: Claude corrects required_evidence_retired in the same MCP turn'
+      : proseEvidence
+        ? 'M3-08i: Claude corrects evidence_command_invalid in the same MCP turn'
+        : noProposal
+          ? 'M3-08h: a finished Claude turn without a proposal settles and permits a new Planner'
+          : provider === 'codex'
+            ? 'M2-09: a read-only Planner proposes the fixture DAG and releases after PLAN_REVIEW'
+            : 'M3-08b: a claude structured Planner proposes the fixture DAG and releases after PLAN_REVIEW',
     async (
       // oxlint-disable-next-line no-empty-pattern -- Restart helper owns the background app lifecycle.
       {},
       testInfo
     ) => {
-      test.setTimeout(300_000)
+      test.setTimeout(legacyEvidence ? 240_000 : 300_000)
       test.skip(
         provider === 'claude' && process.platform === 'win32',
         'Claude Mission support requires a POSIX host'
@@ -169,6 +172,7 @@ for (const { provider, noProposal, proseEvidence } of [
         AXIOM_E2E_LEDGER: ledgerPath,
         AXIOM_E2E_PLANNER_NO_PROPOSAL: noProposal ? '1' : '0',
         AXIOM_E2E_PLANNER_PROSE_EVIDENCE: proseEvidence ? '1' : '0',
+        AXIOM_E2E_PLANNER_LEGACY_EVIDENCE: legacyEvidence ? '1' : '0',
         ORCA_E2E_CLI_ENTRY: path.join(process.cwd(), 'out', 'cli', 'index.js')
       })
       let app: ElectronApplication | undefined
@@ -309,7 +313,7 @@ for (const { provider, noProposal, proseEvidence } of [
         await expect
           .poll(() => ledger(ledgerPath).findLast((e) => e.kind === 'proposal')?.response?.ok)
           .toBe(true)
-        if (proseEvidence) {
+        if (proseEvidence || legacyEvidence) {
           const calls = ledger(ledgerPath).filter((e) => e.kind === 'proposal')
           expect(calls).toHaveLength(2)
           // The ledger reader validates the envelope; inspect the original issue payload too.
@@ -325,11 +329,18 @@ for (const { provider, noProposal, proseEvidence } of [
               error: {
                 code: 'plan_invalid',
                 issues: [
-                  {
-                    code: 'evidence_command_invalid',
-                    path: ['tasks', 0, 'requiredEvidence', 0],
-                    message: 'Program "Test" is not allowed for requiredEvidence commands.'
-                  }
+                  legacyEvidence
+                    ? {
+                        code: 'required_evidence_retired',
+                        path: ['tasks', 0, 'requiredEvidence'],
+                        message:
+                          'requiredEvidence is retired; put each command on an acceptance criterion.'
+                      }
+                    : {
+                        code: 'evidence_command_invalid',
+                        path: ['tasks', 0, 'acceptanceCriteria', 0, 'check', 'command'],
+                        message: 'Program "Test" is not allowed for acceptance commands.'
+                      }
                 ]
               }
             }

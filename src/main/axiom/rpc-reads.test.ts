@@ -94,9 +94,19 @@ it('reads revisions and Task stage projections and routes cancellation, pause an
     result(await f.call('axiom.task.list', { missionId: mission.id, stage: 'READY' }))
   ).tasks
   expect(tasks).toHaveLength(3)
-  expect(
-    TaskResponseSchema.parse(result(await f.call('axiom.task.show', { taskId: tasks[0].id }))).task
-  ).toEqual(tasks[0])
+  const shown = TaskResponseSchema.parse(
+    result(await f.call('axiom.task.show', { taskId: tasks[0].id }))
+  ).task
+  expect(shown).toMatchObject(tasks[0])
+  expect(shown.spec?.acceptanceCriteria).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        text: expect.any(String),
+        check: { kind: 'command', command: 'pnpm test' }
+      })
+    ])
+  )
+  expect(shown.spec?.requiredEvidence).toBeUndefined()
   expect(
     result(await f.call('axiom.task.cancel', { taskId: tasks[0].id, rationale: 'obsolete' }))
   ).toMatchObject({ task: { id: tasks[0].id, stage: 'CANCELED' } })

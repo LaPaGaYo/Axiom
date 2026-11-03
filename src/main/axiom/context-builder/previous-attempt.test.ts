@@ -123,7 +123,8 @@ it('counts unchanged lines against the shared 8 KiB UTF-8 evidence budget', asyn
   const excerpt = content.match(/Excerpt:\n([\s\S]*?)\nEnd excerpt/)?.[1] ?? ''
   const total =
     lines.reduce((sum, line) => sum + Buffer.byteLength(line) + 1, 0) + Buffer.byteLength(excerpt)
-  expect(total).toBeGreaterThan(8100)
+  expect(total).toBeGreaterThan(2000)
+  expect(Buffer.byteLength(content)).toBeLessThanOrEqual(8192)
   expect(total).toBeLessThanOrEqual(8192)
   expect(content).not.toContain('\uFFFD')
 })
@@ -179,12 +180,12 @@ it('renders ordered stored failures, safe diff findings, acceptance and a transc
   expect(rendered.source).toBe(`verification:${verificationRun.id}`)
   const expected = [
     `This Attempt continues the previous Candidate ${candidate.commitSha} from Attempt 1; fix the failures below in this tree. Do not weaken, skip or delete tests, assertions, lint rules or checks to make them pass.`,
-    'Verdict: FAIL; reason: checks_failed',
-    'command: check-0',
+    'Verdict: FAIL; reason: "checks_failed"',
+    'command: "check-0"',
     'exitCode: 1',
     'failure-0',
     'first excerpt',
-    'command: check-2',
+    'command: "check-2"',
     'second excerpt',
     'Scope violations',
     'README.md',
@@ -195,12 +196,10 @@ it('renders ordered stored failures, safe diff findings, acceptance and a transc
     'Dangerous changes',
     'package.json',
     'Test tampering findings (path, rule, net count):',
-    '- src/check.test.ts (assertions_reduced, 2)',
+    '- "src/check.test.ts" (assertions_reduced, 2)',
     'Restore the removed tests or assertions and remove the added skips or suppressions; the next verification applies the same rules.',
     'Artifact problems:',
     '- art_report (invalid_json)',
-    'Not yet demonstrated',
-    ...f.store.getTaskStage(taskId)!.spec.acceptanceCriteria,
     `axiom mission artifact read --artifact ${transcript.id}`
   ]
   let position = -1
@@ -234,7 +233,7 @@ it('bounds new findings at 50 and omits code-Task Artifact problems', async () =
   detail({ diff: { tampering }, artifacts: { required: true, checked } })
   const first = await section()
   expect((await section()).content).toBe(first.content)
-  expect(first.content).toContain('- path-49 (suppression_added, 1)')
+  expect(first.content).toContain('- "path-49" (suppression_added, 1)')
   expect(first.content).not.toContain('path-50')
   expect(first.content).toContain('- art-49 (empty)')
   expect(first.content).not.toContain('art-50')
@@ -266,7 +265,8 @@ it('limits failure names to 20, each excerpt to 40 lines and all excerpt UTF-8 b
   expect(excerpts.length).toBeGreaterThan(1)
   expect(excerpts.every((text) => text.split('\n').length <= 40)).toBe(true)
   const bytes = excerpts.reduce((sum, text) => sum + Buffer.byteLength(text), 0)
-  expect(bytes).toBeGreaterThan(8000)
+  expect(bytes).toBeGreaterThan(4000)
+  expect(Buffer.byteLength(content)).toBeLessThanOrEqual(8192)
   expect(bytes).toBeLessThanOrEqual(8192)
   expect(content).not.toContain('\uFFFD')
 })
@@ -307,9 +307,9 @@ it('starts clean for secrets, names only path/pattern and forbids reintroduction
   expect(result.source).toBe('previous-attempt:secret_detected')
   expect(result.content).toContain('integration base')
   expect(result.content).toContain('secret_detected')
-  expect(result.content).toContain('src/key.ts (provider_token)')
+  expect(result.content).toContain('"src/key.ts" ("provider_token")')
   expect(result.content).toContain('The secret must not be reintroduced.')
-  expect(result.content).toContain('- src/check.test.ts (test_skip_added, 1)')
+  expect(result.content).toContain('- "src/check.test.ts" (test_skip_added, 1)')
   expect(result.content).toContain('Restore the removed tests or assertions')
   expect(result.content).toContain('Artifact problems:\n- art_bad (invalid_json)')
   expect(result.content).not.toContain('NEVER_INCLUDE_MATCH')

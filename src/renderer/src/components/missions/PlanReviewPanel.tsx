@@ -3,7 +3,18 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { translate } from '@/i18n/i18n'
-import type { PlanRevision } from '../../../../shared/axiom-contract/mission-objects'
+import type { PlanRevision, TaskSpec } from '../../../../shared/axiom-contract/mission-objects'
+import { resolveAcceptance } from '../../../../shared/axiom-contract/acceptance'
+
+function reviewCriteria(task: TaskSpec) {
+  const occurrences = new Map<string, number>()
+  return resolveAcceptance(task).map((criterion) => {
+    const identity = JSON.stringify(criterion)
+    const occurrence = occurrences.get(identity) ?? 0
+    occurrences.set(identity, occurrence + 1)
+    return { criterion, key: `${identity}:${occurrence}` }
+  })
+}
 
 export function PlanReviewPanel({
   plan,
@@ -53,8 +64,19 @@ export function PlanReviewPanel({
             </span>
             <p>{task.objective}</p>
             <ul className="list-disc pl-5 text-xs text-muted-foreground">
-              {task.acceptanceCriteria.map((criterion, i) => (
-                <li key={`${i}:${criterion}`}>{criterion}</li>
+              {reviewCriteria(task).map(({ criterion, key }) => (
+                <li key={key}>
+                  {criterion.text}{' '}
+                  {criterion.check.kind === 'command' ? (
+                    <code className="font-mono">{criterion.check.command}</code>
+                  ) : (
+                    <span>
+                      {criterion.check.kind === 'artifact'
+                        ? translate('missions.acceptanceArtifact', 'Artifact')
+                        : translate('missions.acceptanceHumanCheck', 'Human check')}
+                    </span>
+                  )}
+                </li>
               ))}
             </ul>
           </li>

@@ -10,6 +10,8 @@ import {
   VerificationResponseSchema
 } from '../../src/shared/axiom-contract/verification-params'
 import { TaskListResponseSchema } from '../../src/shared/axiom-contract/task-params'
+import type { AcceptanceCriterion } from '../../src/shared/axiom-contract/mission-objects'
+import { VerificationAcceptanceSchema } from '../../src/shared/axiom-contract/verification-acceptance'
 
 test('M3-08i: plan_invalid stays VERIFYING without admitting a fix Attempt', async (// oxlint-disable-next-line no-empty-pattern -- Fixture owns the background app lifecycle.
 {}, testInfo) => {
@@ -44,6 +46,16 @@ test('M3-08i: plan_invalid stays VERIFYING without admitting a fix Attempt', asy
               result: 'inconclusive',
               reason: 'plan_invalid'
             })
+          ],
+          acceptance: [
+            {
+              index: 0,
+              text: 'The requested repository script passes',
+              check: { kind: 'command', command: 'pnpm run no-such-script' },
+              result: 'inconclusive',
+              checkIndexes: [0],
+              artifactIds: []
+            }
           ]
         }
       })
@@ -60,10 +72,116 @@ test('M3-08i: plan_invalid stays VERIFYING without admitting a fix Attempt', asy
       holdWorkers: true,
       runVerification: true,
       maxAttempts: 3,
-      requiredEvidence: ['pnpm run no-such-script']
+      acceptanceCriteria: [
+        {
+          text: 'The requested repository script passes',
+          check: { kind: 'command', command: 'pnpm run no-such-script' }
+        }
+      ]
     }
   )
 })
+
+for (const human of [false, true]) {
+  test(
+    human
+      ? 'M3-04b-2: a passing command plus a human criterion stays VERIFYING without a fix Attempt'
+      : 'M3-04b-2: command criteria retain pass and fail results in criterion order',
+    async (
+      // oxlint-disable-next-line no-empty-pattern -- Fixture owns the background app lifecycle.
+      {},
+      testInfo
+    ) => {
+      test.setTimeout(240_000)
+      const source = process.env.AXIOM_FIXTURE_REPO
+      if (!source || process.platform === 'win32') {
+        test.skip(true, 'Requires POSIX fixture host')
+        return
+      }
+      const acceptanceCriteria: AcceptanceCriterion[] = [
+        {
+          text: 'The first deterministic check passes',
+          check: { kind: 'command', command: 'node -e "process.exit(0)"' }
+        },
+        human
+          ? { text: 'A person confirms the requested outcome', check: { kind: 'human' } }
+          : {
+              text: 'The second deterministic check passes',
+              check: { kind: 'command', command: 'node -e "process.exit(1)"' }
+            }
+      ]
+      await withFixtureMission(
+        testInfo,
+        source,
+        async ({ userData, mission, ledgerPath, releaseWorkers, restart }) => {
+          const inspect = () => inspectFixtureMission(userData, mission.id)
+          await expect.poll(() => inspect().bindings.length, { timeout: 60_000 }).toBe(1)
+          const taskId = z.string().parse(inspect().bindings[0]?.task_id)
+          writeFileSync(`${ledgerPath}.scenario-${taskId}`, 'agent-crash')
+          releaseWorkers()
+          await expect
+            .poll(() => inspect().verification[0]?.status, { timeout: 90_000 })
+            .toBe(human ? 'INCONCLUSIVE' : 'FAIL')
+          const run = inspect().verification[0]
+          if (!run) {
+            throw new Error('Missing criterion VerificationRun')
+          }
+          expect(run.verdictDetail).toMatchObject(
+            human
+              ? {
+                  verdict: 'INCONCLUSIVE',
+                  reason: 'acceptance_human',
+                  escalation: 'human',
+                  detail: 1
+                }
+              : { verdict: 'FAIL', reason: 'checks_failed' }
+          )
+          const acceptance = z
+            .array(VerificationAcceptanceSchema)
+            .parse(run.verdictDetail.acceptance)
+          expect(acceptance).toEqual(
+            acceptanceCriteria.map((criterion, index) => ({
+              ...criterion,
+              index,
+              result: index === 0 ? 'pass' : human ? 'human' : 'fail',
+              checkIndexes: human && index === 1 ? [] : [index],
+              artifactIds: []
+            }))
+          )
+          await expect.poll(() => inspect().tasks[0]?.stage).toBe(human ? 'VERIFYING' : 'BLOCKED')
+          if (human) {
+            // Reconcile from persisted state to prove a human criterion never admits a fix.
+            if (!restart) {
+              throw new Error('Missing fixture restart')
+            }
+            await restart()
+            expect(inspect().tasks[0]?.stage).toBe('VERIFYING')
+            expect(
+              inspect()
+                .audits.filter((row) => row.event === 'task.stage' && row.object_id === taskId)
+                .map((row) => JSON.parse(row.after ?? '{}').stage)
+            ).not.toContain('NEEDS_FIX')
+          }
+          expect(inspect().bindings.map((binding) => binding.seq)).toEqual([1])
+          await expect
+            .poll(
+              () => fixtureLedger(ledgerPath).filter((entry) => entry.kind === 'submission').length
+            )
+            .toBe(1)
+          expect(fixtureLedger(ledgerPath).filter((entry) => entry.kind === 'error')).toEqual([])
+        },
+        {
+          taskIds: ['T01'],
+          holdWorkers: true,
+          runVerification: true,
+          restart: human,
+          maxAttempts: human ? 3 : 1,
+          acceptanceCriteria
+        }
+      )
+    }
+  )
+}
 
 test('M3-02: independent checks reject both broken fixture candidates and verify the unpatched one', async (// oxlint-disable-next-line no-empty-pattern -- Fixture helper owns the background app lifecycle.
 {}, testInfo) => {

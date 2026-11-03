@@ -1,6 +1,6 @@
 # Control Plane 子系统参考
 
-更新：2026-11-02 · 适用：M2 出口基线及本文标注的 M3 增量；M3-04b 为本候选实现，宿主验收结果待 verifier 填写。M2-11 attempt 2 测试与证据索引见 [M2-exit-e2e.md](../review-evidence/axiom-m2/M2-exit-e2e.md)，M1 历史证据见 [M1-exit-e2e.md](../review-evidence/axiom-m1/M1-exit-e2e.md)。
+更新：2026-11-03 · 适用：M2 出口基线及本文标注的 M3 增量；M3-04b-2 为本候选实现，宿主验收结果待 verifier 填写。M2-11 attempt 2 测试与证据索引见 [M2-exit-e2e.md](../review-evidence/axiom-m2/M2-exit-e2e.md)，M1 历史证据见 [M1-exit-e2e.md](../review-evidence/axiom-m1/M1-exit-e2e.md)。
 规范权威仍是 [Constitution](../PROJECT_CONSTITUTION.md) §1、ACCEPTED Decisions、[Glossary](../GLOSSARY.md) §4 与 [Architecture](../ARCHITECTURE.md)；本文定位实现，不新增权威或状态。
 
 ## 1. 用途与边界
@@ -13,27 +13,27 @@ Execution Kernel 继续拥有 Run、Orca Task、dispatch、PTY、进程、worktr
 
 ## 2. 模块地图
 
-| 路径 | 职责 |
-|---|---|
-| `src/main/axiom/db/` | `axiom-store.ts` 聚合已启用的 side table 的访问；`missions-store.ts`、`revisions-store.ts`、`task-graph-store.ts`、`policy-audit-store.ts`、`artifacts-store.ts`、`agent-specs-store.ts` 分域 SQL；`axiom-rows.ts` / `row-codec.ts` 校验数据库行 |
-| `src/main/axiom/mission-controller/` | `mission-controller.ts` 提供事务入口；`mission-lifecycle.ts`、`goal-lifecycle.ts`、`plan-materialization.ts`、`task-readiness.ts` 实现状态转换；`task-adjustment.ts` 调整 Task spec / 重试预算并解决 BLOCKED 待处理项；`controller-context.ts` 定义错误与审计；`run-mailbox-consumer.ts` 消费 Run mailbox |
-| `src/main/axiom/execution/attempt-launcher.ts` / `mission-caller.ts` | M2-05：预创建 Attempt worktree、合成 caller、D14 service 调用、dispatch 绑定与启动结算 |
-| `src/main/axiom/execution/integration-base.ts` | D51：start 前以目标分支 HEAD 创建集成基线；已存在只沿用，M4 前不移动 |
-| `src/main/axiom/execution/attempt-projection.ts` | `attempt_bindings` 与 Orca `projectFleetWorker` 投影，供 `axiom.attempt.show/list` 与 CLI 读接口 |
-| `src/main/axiom/artifacts/` | M2-02：`ArtifactStore` 以 sha256 寻址文件，原子写入、读取校验、Mission/kind/related 过滤；根目录由 Control Plane 注入 |
-| `src/main/axiom/context-builder/` | M2-02：七节强制集、确定性依赖 Artifact 排序、预算裁剪、脱敏、canonical manifest 和 Worker prompt template |
-| `src/main/axiom/agent-factory/` | M2-03：先过滤，再由 RulesEngine 排序；生成 worker/planner AgentSpec，在同一事务持久化合同与选择审计，不启动进程 |
-| `src/main/axiom/decision-engine/` | M2-03：闭集 choose/score/classify/rank 接口与确定性 RulesEngine；只能建议，不能修改 eligibility 或权威状态 |
-| `src/main/axiom/scheduler/` | `scheduler.ts` 逐轮从数据库排序/校验并事务性 admission；`critical-path.ts` 计算最长下游链；`admission-blockers.ts` 真查 Question/Approval；`admission-budget.ts` 校验 Mission 总 Attempts/wall-clock；typed launch seam 在 M2-05 注入 |
-| `src/main/axiom/admission/` | `mission-managed-run-guard.ts` 阻止 Orca RPC 修改 Mission 对象；五组测试固定 §4b 拦截 |
-| `src/main/axiom/recovery/` | `recovery-service.ts` 恢复非终态 Mission、检查绑定、重算 readiness；启动、60 秒周期与退出邮件触发 Attempt reconciliation（规则 a–h 见 §4）；`attempt-reconciliation.ts` / `planner-reconciliation.ts` 对账 Attempt；`agent-exit-observation.ts` 读取 D59 的宿主 shell 前台证明 |
-| `src/main/axiom/control-plane.ts` | 按 `OrchestrationDb` WeakMap 缓存 store/controller/recovery/artifacts/contextBuilder/agentFactory/decisionEngine，维护进程内消费者取消句柄并接入生命周期 |
-| `src/main/axiom/control-plane-boot.ts` | `startAxiomControlPlane` / `stopAxiomControlPlane`；启动恢复和退出停止 |
-| `src/main/axiom/kernel-contract/` | M1-01 的 session party、Run/mailbox、Task 与 dispatch 身份契约测试；D14 的可执行依据 |
-| `src/shared/axiom-contract/` | zod 对象/params/响应、`lifecycle.ts` 合法转换、`plan-proposal.ts` 与 `plan-task-graph.ts` 校验、`mutations.ts` 分类、`stage-labels.ts` 文案 |
-| `src/main/runtime/rpc/methods/axiom/` | Mission/Goal/Plan/Task/Artifact/Policy/Attempt/Message 方法；`../axiom.ts` 聚合到 `ALL_RPC_METHODS` |
-| `src/cli/specs/axiom-*.ts` + `src/cli/handlers/axiom/` | `mission`（含 plan/goal/artifact/policy）、`plan`、`task`、`attempt`、`message` CLI；`input-files.ts` 解析 Goal / Plan，`rpc-command.ts` 调用与输出 |
-| `src/renderer/src/components/missions/` + `src/renderer/src/lib/axiom-client.ts` | Mission list/Home、Plan 审批、Task 表与 Task Detail（Attempt、Submission、typed timeline）；共享 schema 校验与 mutation envelope；刷新后以服务端状态对账 |
+| 路径                                                                             | 职责                                                                                                                                                                                                                                                                                                      |
+| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/main/axiom/db/`                                                             | `axiom-store.ts` 聚合已启用的 side table 的访问；`missions-store.ts`、`revisions-store.ts`、`task-graph-store.ts`、`policy-audit-store.ts`、`artifacts-store.ts`、`agent-specs-store.ts` 分域 SQL；`axiom-rows.ts` / `row-codec.ts` 校验数据库行                                                          |
+| `src/main/axiom/mission-controller/`                                             | `mission-controller.ts` 提供事务入口；`mission-lifecycle.ts`、`goal-lifecycle.ts`、`plan-materialization.ts`、`task-readiness.ts` 实现状态转换；`task-adjustment.ts` 调整 Task spec / 重试预算并解决 BLOCKED 待处理项；`controller-context.ts` 定义错误与审计；`run-mailbox-consumer.ts` 消费 Run mailbox |
+| `src/main/axiom/execution/attempt-launcher.ts` / `mission-caller.ts`             | M2-05：预创建 Attempt worktree、合成 caller、D14 service 调用、dispatch 绑定与启动结算                                                                                                                                                                                                                    |
+| `src/main/axiom/execution/integration-base.ts`                                   | D51：start 前以目标分支 HEAD 创建集成基线；已存在只沿用，M4 前不移动                                                                                                                                                                                                                                      |
+| `src/main/axiom/execution/attempt-projection.ts`                                 | `attempt_bindings` 与 Orca `projectFleetWorker` 投影，供 `axiom.attempt.show/list` 与 CLI 读接口                                                                                                                                                                                                          |
+| `src/main/axiom/artifacts/`                                                      | M2-02：`ArtifactStore` 以 sha256 寻址文件，原子写入、读取校验、Mission/kind/related 过滤；根目录由 Control Plane 注入                                                                                                                                                                                     |
+| `src/main/axiom/context-builder/`                                                | M2-02：七节强制集、确定性依赖 Artifact 排序、预算裁剪、脱敏、canonical manifest 和 Worker prompt template                                                                                                                                                                                                 |
+| `src/main/axiom/agent-factory/`                                                  | M2-03：先过滤，再由 RulesEngine 排序；生成 worker/planner AgentSpec，在同一事务持久化合同与选择审计，不启动进程                                                                                                                                                                                           |
+| `src/main/axiom/decision-engine/`                                                | M2-03：闭集 choose/score/classify/rank 接口与确定性 RulesEngine；只能建议，不能修改 eligibility 或权威状态                                                                                                                                                                                                |
+| `src/main/axiom/scheduler/`                                                      | `scheduler.ts` 逐轮从数据库排序/校验并事务性 admission；`critical-path.ts` 计算最长下游链；`admission-blockers.ts` 真查 Question/Approval；`admission-budget.ts` 校验 Mission 总 Attempts/wall-clock；typed launch seam 在 M2-05 注入                                                                     |
+| `src/main/axiom/admission/`                                                      | `mission-managed-run-guard.ts` 阻止 Orca RPC 修改 Mission 对象；五组测试固定 §4b 拦截                                                                                                                                                                                                                     |
+| `src/main/axiom/recovery/`                                                       | `recovery-service.ts` 恢复非终态 Mission、检查绑定、重算 readiness；启动、60 秒周期与退出邮件触发 Attempt reconciliation（规则 a–h 见 §4）；`attempt-reconciliation.ts` / `planner-reconciliation.ts` 对账 Attempt；`agent-exit-observation.ts` 读取 D59 的宿主 shell 前台证明                            |
+| `src/main/axiom/control-plane.ts`                                                | 按 `OrchestrationDb` WeakMap 缓存 store/controller/recovery/artifacts/contextBuilder/agentFactory/decisionEngine，维护进程内消费者取消句柄并接入生命周期                                                                                                                                                  |
+| `src/main/axiom/control-plane-boot.ts`                                           | `startAxiomControlPlane` / `stopAxiomControlPlane`；启动恢复和退出停止                                                                                                                                                                                                                                    |
+| `src/main/axiom/kernel-contract/`                                                | M1-01 的 session party、Run/mailbox、Task 与 dispatch 身份契约测试；D14 的可执行依据                                                                                                                                                                                                                      |
+| `src/shared/axiom-contract/`                                                     | zod 对象/params/响应、`lifecycle.ts` 合法转换、`plan-proposal.ts` 与 `plan-task-graph.ts` 校验、`mutations.ts` 分类、`stage-labels.ts` 文案                                                                                                                                                               |
+| `src/main/runtime/rpc/methods/axiom/`                                            | Mission/Goal/Plan/Task/Artifact/Policy/Attempt/Message 方法；`../axiom.ts` 聚合到 `ALL_RPC_METHODS`                                                                                                                                                                                                       |
+| `src/cli/specs/axiom-*.ts` + `src/cli/handlers/axiom/`                           | `mission`（含 plan/goal/artifact/policy）、`plan`、`task`、`attempt`、`message` CLI；`input-files.ts` 解析 Goal / Plan，`rpc-command.ts` 调用与输出                                                                                                                                                       |
+| `src/renderer/src/components/missions/` + `src/renderer/src/lib/axiom-client.ts` | Mission list/Home、Plan 审批、Task 表与 Task Detail（Attempt、Submission、typed timeline）；共享 schema 校验与 mutation envelope；刷新后以服务端状态对账                                                                                                                                                  |
 
 新增逻辑不能进入 `@ts-nocheck` 的 runtime 文件（D12）；D59 明确授权的例外仅为完全标注类型的进程内转发访问器 `confirmTerminalShellForeground`，恢复决策仍在强类型 Control Plane 模块内。扩展 RPC 仍遵循 [orca-mapping](orca-mapping.md) §4c 的五步注册与 catalog 检查。
 
@@ -41,31 +41,37 @@ Execution Kernel 继续拥有 Run、Orca Task、dispatch、PTY、进程、worktr
 
 权威数据库为 `<userData>/orchestration.db`。M1-03 的 `src/main/runtime/orchestration/db/schema/create-axiom-tables-sql.ts` / `migrate-v43.ts` 建全 17 张表；M1 的业务 store 使用下表前七张。已有表不改 CHECK 枚举，未来只做 additive migration。
 
-| 表 | 内容 / M2 出口使用情况 |
-|---|---|
-| `missions` | 使用：repository、target branch、Run/session 绑定、status、active revisions、`previous_status` |
-| `goal_revisions` | 使用：版本化正文、约束、验收、provenance、ACTIVE/SUPERSEDED |
-| `plan_revisions` | 使用：milestones/risks/proposal JSON、版本、Goal 关联、审批与拒绝理由 |
-| `task_stages` | 使用：Orca Task id、Plan 关联、权威 stage、`previous_stage`、spec、retry policy、attempt count |
-| `mission_task_edges` | 使用：物化后 Orca Task id 间的有向边及 readiness threshold |
-| `mission_policies` | 使用：默认 concurrency/预算/阈值/审批与验证规则；v44 `routing` 由 policy RPC 更新；`nested_worker_max_depth=1` |
-| `audit_events` | 使用：只追加的 sequence、actor、object、event、before/after、时间；mailbox 幂等依据 |
-| `agent_specs` | M2-03 已写/读：v44 `spec` 存 canonical 完整合同，id = `spec_` + sha256；标量索引与合同必须一致 |
-| `context_packages` | M2-02 已写/读：canonical manifest、预算；`mandatory_refs` = `[manifestArtifactId, renderArtifactId]`，`ranked_refs` = 已纳入候选 Artifact id |
-| `attempt_bindings` | M2-04 admission 写/读：Task 序号、branch、AgentSpec、ContextPackage；`dispatch_id = NULL`，由 M2-05 launch 创建 dispatch 后回填（D6a） |
-| `submissions` | M2-07 store 已接入：完整严格 report JSON 与检查/限制/后续投影；dispatch_id UNIQUE，不提供更新方法 |
-| `candidates` | M2-07 store 已接入：Control Plane 固定 commit/tree；ACTIVE → SUPERSEDED + superseded_by；Task/commit 唯一 |
-| `artifacts` | M2-02 已写/读：Mission、kind、sha256、size、media type、related ids、createdBy；内容只存 `<userData>/axiom/artifacts/<sha256>` |
-| `decisions` | M2-02 `listDecisions({ missionId, status })` 只读；ContextBuilder 包含 ACCEPTED 的 title/resolution；Decision service/RPC 写入者仍待后续 |
-| `verification_runs` | M2-07 入 QUEUED；M3-01 事务领取、独立 worktree 准备与重启重排队；v45 保存 runtime_epoch、claim_count、worktree_id、started_at、finished_at |
-| `integration_batches` | 表已建；M4 串行集成使用 |
-| `approvals` | 表已建；M4 ApprovalGateway 使用，不复用 decision gate |
+| 表                    | 内容 / M2 出口使用情况                                                                                                                       |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `missions`            | 使用：repository、target branch、Run/session 绑定、status、active revisions、`previous_status`                                               |
+| `goal_revisions`      | 使用：版本化正文、约束、验收、provenance、ACTIVE/SUPERSEDED                                                                                  |
+| `plan_revisions`      | 使用：milestones/risks/proposal JSON、版本、Goal 关联、审批与拒绝理由                                                                        |
+| `task_stages`         | 使用：Orca Task id、Plan 关联、权威 stage、`previous_stage`、spec、retry policy、attempt count                                               |
+| `mission_task_edges`  | 使用：物化后 Orca Task id 间的有向边及 readiness threshold                                                                                   |
+| `mission_policies`    | 使用：默认 concurrency/预算/阈值/审批与验证规则；v44 `routing` 由 policy RPC 更新；`nested_worker_max_depth=1`                               |
+| `audit_events`        | 使用：只追加的 sequence、actor、object、event、before/after、时间；mailbox 幂等依据                                                          |
+| `agent_specs`         | M2-03 已写/读：v44 `spec` 存 canonical 完整合同，id = `spec_` + sha256；标量索引与合同必须一致                                               |
+| `context_packages`    | M2-02 已写/读：canonical manifest、预算；`mandatory_refs` = `[manifestArtifactId, renderArtifactId]`，`ranked_refs` = 已纳入候选 Artifact id |
+| `attempt_bindings`    | M2-04 admission 写/读：Task 序号、branch、AgentSpec、ContextPackage；`dispatch_id = NULL`，由 M2-05 launch 创建 dispatch 后回填（D6a）       |
+| `submissions`         | M2-07 store 已接入：完整严格 report JSON 与检查/限制/后续投影；dispatch_id UNIQUE，不提供更新方法                                            |
+| `candidates`          | M2-07 store 已接入：Control Plane 固定 commit/tree；ACTIVE → SUPERSEDED + superseded_by；Task/commit 唯一                                    |
+| `artifacts`           | M2-02 已写/读：Mission、kind、sha256、size、media type、related ids、createdBy；内容只存 `<userData>/axiom/artifacts/<sha256>`               |
+| `decisions`           | M2-02 `listDecisions({ missionId, status })` 只读；ContextBuilder 包含 ACCEPTED 的 title/resolution；Decision service/RPC 写入者仍待后续     |
+| `verification_runs`   | M2-07 入 QUEUED；M3-01 事务领取、独立 worktree 准备与重启重排队；v45 保存 runtime_epoch、claim_count、worktree_id、started_at、finished_at   |
+| `integration_batches` | 表已建；M4 串行集成使用                                                                                                                      |
+| `approvals`           | 表已建；M4 ApprovalGateway 使用，不复用 decision gate                                                                                        |
 
 Milestone 存在 Plan JSON 内，没有独立表/状态机。Attempt 身份仍等于 Orca dispatch id，不存在 Axiom Attempt 表。M2-02 启用 Artifact/ContextPackage 写入和 Decision 读取；M2-03 启用 AgentSpec 写入和 policy routing 更新；M2-04 启用 attempt_bindings 写入与阻塞 Approval/Question 读取；M2-07 接入 Candidate/Submission/VerificationRun store 与结算写入；其余后续表目前只有建表和清理支持，不能把表存在当成产品能力已完成。
 
 `create-tables.ts` 每次打开执行幂等 DDL，`SCHEMA_VERSION=44`；9 个查询索引、3 个删除触发器沿用 additive 模式。Task 删除清理 stage/边/binding，dispatch 删除仅清空 binding 的 dispatch 引用，Run 删除清理所属 Mission side rows。没有声明外键；v44 仅为 agent_specs.spec 与 mission_policies.routing 加列（TEXT NOT NULL DEFAULT '{}'），hasColumn 防止重复 ALTER，版本化探针从 v44 起检查这两列，v43 与更高版本降级路径保持透明。详细列见映射 §6。
 
 所有 store 读取先用 zod 解析，不把 SQLite 行强制断言为领域对象。写入由 `runLifecycleWriteTransaction` 包裹，嵌套 savepoint 使 Run 创建和 Mission 创建能一起回滚；审计与状态同事务提交。
+
+### Task spec：逐条验收合同（M3-04b-2）
+
+Task 的 `acceptanceCriteria` 为 `{text, check}` 数组：`check.kind=command` 带一个精确 shell `command`；`artifact` 可带 `artifactKind`，要求 Submission 引用可读、非空且种类匹配的 Artifact；`human` 只用于命令和 Artifact 都不能证明、必须由人确认的要求。GoalRevision 的用户文本仍为 `string[]`。AgentFactory 将解析后的对象写入内容寻址 AgentSpec；Plan review 显示文本及 command / Artifact / human check 标记。
+
+`acceptance.ts` 的纯函数 `resolveAcceptance` 是兼容解释的唯一入口：已存字符串变为同文本的 human criterion；已存 `requiredEvidence` 中尚无 criterion 携带的非空命令，按原顺序追加为 `{text: 'Command passes: <command>', check: {kind: 'command', command}}`。`acceptanceCommands` 去重并保留 criterion 顺序。`requiredEvidence` 已退役，只作兼容读取；不迁移或重写已存 PlanRevision / Task JSON。验证、上下文、CLI、renderer 和 AgentFactory 都消费解析结果。`axiom task show --json` 暴露解析后的 spec，文本输出列出证明方式。
 
 ### ContextPackage（M2-02）
 
@@ -79,9 +85,9 @@ candidate baseline 的第 7 节按以下顺序渲染，source 为 `verification:
 
 1. `This Attempt continues the previous Candidate <commitSha> from Attempt <previousSeq>; fix the failures below in this tree. Do not weaken, skip or delete tests, assertions, lint rules or checks to make them pass.`
 2. D85 / M3-04b：接续行之后按 seq 升序列出 `skippedAttempts`。`unchanged` 保留 `Attempt <seq> exited without changing this Candidate; its report said: <summary>`；`no_change` 为 `Attempt <seq> declared no_change (<reason>); its report said: <summary>`；`blocked` 为 `Attempt <seq> declared blocked_by_scope naming <paths>; its report said: <summary>`。随后按审计顺序列出本 Task 的 `task.adjusted`：`A human adjusted this Task after Attempt <afterAttemptSeq>: ...`，仅列新增 allowedPaths、发生变化的 maxAttempts（前值 → 后值）及 rationale。candidate baseline 只纳入 `afterAttemptSeq >= previousSeq`；带 skipped Attempts 的 integration baseline 只纳入 `afterAttemptSeq >= 1`。摘要、路径与 rationale 均先脱敏、最多取 500 字符，再作 JSON 单行引用并转义反引号与角括号；无摘要用 `(no summary)`，路径列表另受显示预算限制。声明、调整行与失败摘录共用 8 KiB UTF-8 预算；`previous-attempt-text.ts` 在预算不足时优先保留最新声明和人工调整，再按原顺序显示所保留的行，明确提示省略的早期证据；最后保留 `If the failures below cannot be fixed inside allowedPaths, say so in limitations and name the paths or commands at fault; do not submit an unchanged tree.`，随后列失败 run 的 verdict 与 reason。
-3. `result: fail` 的 checks，按 index 升序：command、exitCode、最多 20 个失败名、verdict evidence Artifact（`verdictDetail.verdictArtifactId`）中对应 index 的 excerpt。每项摘录最多 40 行，全部摘录合计最多 8 KiB UTF-8，不截断多字节字符；用尽时标明省略。Artifact 缺失、读取/解析失败或找不到该项时写 `excerpt unavailable`，不阻止重试。
-4. `verdictDetail.diff` 中的 scope violations、secret findings（仅路径与模式名）、dangerous changes（路径与模式）。越界路径带明确的 remove/revert 指令：scope 对 merge-base 比较，留在树里会再次失败。
-5. Task 的全部 acceptanceCriteria，列在 `Not yet demonstrated` 下；逐条判定留给 M3-04b-2。
+3. 最新 run 的 `verdictDetail.acceptance[]` 按 criterion 顺序逐行列出：`[pass] <text>`、`[fail] <text> — <command> (<n> failures)`、`[human] <text> — a person confirms this; do not try to prove it with code changes`、`[inconclusive] <text>` 或 `[skipped] <text>`。text / command 先脱敏再作 JSON 单行引用；legacy run 无 acceptance 时不猜测各 criterion 的结果，不再把全部要求列作未证明。
+4. `result: fail` 的 checks，按 index 升序：command、exitCode、最多 20 个失败名、verdict evidence Artifact（`verdictDetail.verdictArtifactId`）中对应 index 的 excerpt。对最新 FAIL run 中每个失败名，沿同 Task 的历史 run 顺序向前检查连续出现区间；若从更早 run 起每次都有，追加 `(persisting since Attempt <seq>)`，seq 来自那个 run 的 Attempt binding。已从最新 run 消失的 finding 不再列出。每项摘录最多 40 行，所有模型文本经 `quote`；声明、状态、失败名、摘录及其余证据共享 8 KiB UTF-8 上限，按完整引用行裁剪，关闭 excerpt 边界并提示省略。Artifact 缺失、读取/解析失败或找不到该项时写 `excerpt unavailable`，不阻止重试。
+5. `verdictDetail.diff` 中的 scope violations、secret findings（仅路径与模式名）、dangerous changes（路径与模式）。越界路径带明确的 remove/revert 指令：scope 对 merge-base 比较，留在树里会再次失败。
 6. 上一 Submission 的 transcript Artifact id（存在时）；`axiom mission artifact read --artifact <id>` 配方只给 terminal fallback，headless 不给 CLI 指令。与 `attempt show` 共用导出的 `findSubmissionTranscriptArtifactId`，不内联 transcript。
 
 只读已存 run、verdict Artifact、Task spec 与 transcript 元数据，不重跑检查、不读取 Worker 当前输出。相同输入得到相同 package id；run id 变化会改变 source 与 package id。
@@ -94,7 +100,7 @@ canonical manifest 无空白、对象键序固定，保留数组顺序，id = `c
 
 M3-04b 的两种协议都要求结束前运行本 worktree 可执行的 `Required verification commands`，按 acceptanceCriteria 和现有 AGENTS.md / CLAUDE.md / REVIEW.md 重读完整 diff；未运行的检查逐项写 `checksRun {result: skipped, note}`，该报告不决定 verdict。只使用本 worktree 的工具链，不 symlink、复制或借用其它目录的 node_modules / .bin / caches；缺依赖写入 limitations。headless 以 `outcome` 声明 submitted / no_change / blocked（见 §4）；无可修时不改树，范围不足时停止且不得越界。terminal fallback 在停止前用 `axiom attempt blocked --reason … --path …` 报告相同结论。
 
-后续：M3-04b-2 负责逐条 acceptance、已答 Question 与跨 Attempt 未关闭发现；DEF-4/5 的 skills 与代码知识输入按登记触发点复审。
+后续：report questions 转成绑定 Task 的 Question、回答进入后续上下文，以及 followUps 待决项属于 M3-04b-3；DEF-4/5 的 skills 与代码知识输入按登记触发点复审。
 
 ### Provider selection（M2-03）
 
@@ -102,12 +108,12 @@ AgentFactory.build 接受 worker 的 missionId/taskId/contextPackageId，或 pla
 
 执行身份由 provider（harness）、model 与 endpointProfile 组成。D57 的矩阵在 `src/main/axiom/agent-factory/certified-providers.ts` 的 `CERTIFIED_PROVIDER_COMBOS`；`endpointProfile` 均为 `subscription`，不存储凭据。D82 的 V1 真实 provider 为 Codex 与 Claude Code，均支持 planner、worker；保留的 Antigravity/OpenCode 条目不扩大 V1 范围。当前只有 Codex 为 `certified`（宿主证据见 `.axiom-work/verifications/M3-08-smoke-real-codex.md`），Claude 保持 `provisional`，由 verifier 的真实宿主 smoke 决定认证。确定性 fake 测试不认证真实组合。Claude Worker 的 `maxRisk: high` 以 OS sandbox 启用且 `failIfUnavailable: true` 为前提（D57 ④）；无 OS sandbox 的组合不得据此取得 high 风险资格。
 
-| Provider | 模型选择方式 | Tier | 角色 | 最高风险 |
-|---|---|---|---|---|
-| claude | launch-arg | A | planner、worker | high |
-| codex | launch-arg | A | planner、worker | high |
-| antigravity | launch-arg | B | worker | medium |
-| opencode | harness-default | B | worker | low |
+| Provider    | 模型选择方式    | Tier | 角色            | 最高风险 |
+| ----------- | --------------- | ---- | --------------- | -------- |
+| claude      | launch-arg      | A    | planner、worker | high     |
+| codex       | launch-arg      | A    | planner、worker | high     |
+| antigravity | launch-arg      | B    | worker          | medium   |
+| opencode    | harness-default | B    | worker          | low      |
 
 先按 TUI_AGENT_CONFIG 的顺序规范安装集合，排除 claude-agent-teams（Claude launch mode）。只检查矩阵内或已安装的 harness，按首个命中原因过滤：`not_installed` → `no_account`（macOS/Linux 的 Codex 或 Claude 未选择受管账号；D83）→ `not_certified`（不在矩阵，或 `routing.requireCertified=true` 且 status 不是 certified）→ `disallowed` → `tier_too_low`（角色不在组合 roles、风险超过 maxRisk，或 highRiskTier=A 时高风险选择非 A）。Planner 的筛选风险固定为 high。filtered 按原因顺序排列，同原因保持配置顺序。无候选返回 no_eligible_provider，附 installed/filtered；配置的角色 provider 被过滤时还附 roleProviderUnavailable。Factory 不写 spec 或 audit；no_account 的 provider-specific 提示指向 Settings › Accounts。Scheduler 沿用 `task.admission_refused`，Task 保持 READY。Windows / WSL 保留既有路径。
 
@@ -141,11 +147,11 @@ Task: approve → DEFINED；start → READY；admission → RUNNING；submit →
 
 M3-04b / D70 ② 的 Task 阻塞处置复用该返回点，不增加 stage：
 
-| BLOCKED reason | 来源 | 人工解除 |
-|---|---|---|
-| `scope` | headless 声明 `blocked_by_scope` | 桌面 `axiom.task.adjust` 扩大 allowedPaths，`BLOCKED → NEEDS_FIX → READY`（均为 reason=adjusted），或 cancel |
-| `candidate_disputed` | headless 声明 `candidate_already_correct` / `cannot_reproduce` | 人复核后以 rationale-only adjust 重开上述路径，或 cancel；不改写确定性 FAIL，同 Candidate 重验留给 M3-05 |
-| `retry_budget_exhausted` | 原失败 / 验证修复循环耗尽 Task 预算 | adjust 提高 maxAttempts 后经 previousStage 回 READY，或 cancel / replan |
+| BLOCKED reason           | 来源                                                           | 人工解除                                                                                                     |
+| ------------------------ | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `scope`                  | headless 声明 `blocked_by_scope`                               | 桌面 `axiom.task.adjust` 扩大 allowedPaths，`BLOCKED → NEEDS_FIX → READY`（均为 reason=adjusted），或 cancel |
+| `candidate_disputed`     | headless 声明 `candidate_already_correct` / `cannot_reproduce` | 人复核后以 rationale-only adjust 重开上述路径，或 cancel；不改写确定性 FAIL，同 Candidate 重验留给 M3-05     |
+| `retry_budget_exhausted` | 原失败 / 验证修复循环耗尽 Task 预算                            | adjust 提高 maxAttempts 后经 previousStage 回 READY，或 cancel / replan                                      |
 
 上述 NEEDS_FIX → READY 都要求调整后 `attemptCount < maxAttempts`；否则整笔调整回滚并返回 `retry_budget_exhausted`。声明 Attempt 仍占 seq、计入已消耗次数，扩大 scope 本身不退还预算。具体参数、审计与权限见 §6「人工 Task 调整」。
 
@@ -168,20 +174,19 @@ ContextBuilder/AgentFactory 的异步构建在 admission 事务之前完成。�
 
 只有 admission 提交成功后才 `await launch(attempt)`；M2-05 的 `plane.scheduler` 注入 `createAttemptLauncher`，launch 为必填。launcher 持久化 dispatch 绑定并按内核 receipt 结算，失败不抛回调度轮。Scheduler 的防御性 rejection audit 仍保留；没有 `launcher_unavailable` skip。
 
-| 配置 | 含义 | M2 enforcement |
-|---|---|---|
-| `policy.budget.maxAttempts` | Mission 总 Attempt 数 = 全部 Task `attempt_count` 之和 + Planner bindings 数量 | readiness 与 admission 重查；有 READY 候选且耗尽时 Mission BLOCKED |
-| `policy.budget.maxRuntimeMinutes` | 默认每次 Attempt 运行时长上限，**不是** Mission 总时长 | AgentFactory 采用 Task → Mission → 45 分钟；M2-08 RecoveryService 按 `attempt_bindings.created_at` + Task spec / Mission policy 的 runtime cap enforce（两者均无 cap 时不限，不采用 Factory 的 45 分钟默认值）；不映射到 `workerStart.timeoutMs` |
-| `policy.budget.maxWallClockMinutes` | 可选正数；Mission 自第一次 `mission.status.after.status = EXECUTING` 审计起的总 wall-clock，含暂停/阻塞时间 | admission 按注入时钟重查；有 READY 候选且耗尽时 Mission BLOCKED |
-| `policy.concurrencyLimit` | Mission 的 RUNNING Task 总数 | admission 事务内重查；满额只跳过，不 BLOCKED |
-| `policy.routing.providerConcurrency` | provider → 正整数上限，默认 `{}` 表示未设 provider cap | RUNNING Tasks 的最新 seq binding JOIN AgentSpec.provider；事务内重查，满额只跳过 |
-| `task.retryPolicy.maxAttempts` | 单 Task Attempt 次数上限，权威计数为 `task_stages.attempt_count` | readiness 与 admission 重查，admission 返回 task_attempts |
-| 单 Task 总时长、token/成本总预算 | 需要 Attempt 结算数据 | M2 不 enforce；后续结算/预算服务接入 |
+| 配置                                 | 含义                                                                                                        | M2 enforcement                                                                                                                                                                                                                                   |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `policy.budget.maxAttempts`          | Mission 总 Attempt 数 = 全部 Task `attempt_count` 之和 + Planner bindings 数量                              | readiness 与 admission 重查；有 READY 候选且耗尽时 Mission BLOCKED                                                                                                                                                                               |
+| `policy.budget.maxRuntimeMinutes`    | 默认每次 Attempt 运行时长上限，**不是** Mission 总时长                                                      | AgentFactory 采用 Task → Mission → 45 分钟；M2-08 RecoveryService 按 `attempt_bindings.created_at` + Task spec / Mission policy 的 runtime cap enforce（两者均无 cap 时不限，不采用 Factory 的 45 分钟默认值）；不映射到 `workerStart.timeoutMs` |
+| `policy.budget.maxWallClockMinutes`  | 可选正数；Mission 自第一次 `mission.status.after.status = EXECUTING` 审计起的总 wall-clock，含暂停/阻塞时间 | admission 按注入时钟重查；有 READY 候选且耗尽时 Mission BLOCKED                                                                                                                                                                                  |
+| `policy.concurrencyLimit`            | Mission 的 RUNNING Task 总数                                                                                | admission 事务内重查；满额只跳过，不 BLOCKED                                                                                                                                                                                                     |
+| `policy.routing.providerConcurrency` | provider → 正整数上限，默认 `{}` 表示未设 provider cap                                                      | RUNNING Tasks 的最新 seq binding JOIN AgentSpec.provider；事务内重查，满额只跳过                                                                                                                                                                 |
+| `task.retryPolicy.maxAttempts`       | 单 Task Attempt 次数上限，权威计数为 `task_stages.attempt_count`                                            | readiness 与 admission 重查，admission 返回 task_attempts                                                                                                                                                                                        |
+| 单 Task 总时长、token/成本总预算     | 需要 Attempt 结算数据                                                                                       | M2 不 enforce；后续结算/预算服务接入                                                                                                                                                                                                             |
 
 Mission 总 Attempts/wall-clock 耗尽通过既有 `blockMission(missionId, budget_exhausted)` 保留 `previous_status = EXECUTING`，同事务追加 `budget.exhausted {dimension, limit, used}`；Approval 请求对象留给 M4。并发满额、无可选 provider 与 Question/Approval 不视为预算耗尽。
 
 每轮返回 admitted（有序身份）与 skipped（taskId/reason）；skip reason 为 concurrency、provider_concurrency、task_attempts、question、approval、no_eligible_provider 或 stale。只有本轮 admitted 非空或 Mission 被预算阻塞才写一条 `scheduler.round {trigger, admitted, skipped}`；空轮和全部跳过的轮不写此事件。构建合同可留下可复用的内容寻址行，这不等于 admission。M2-12 / D59 在 boot recover 与消费者同步后，对每个 EXECUTING 且未因 Run 绑定丢失而 blocked 的 Mission 显式请求一轮 resume，覆盖已持久化 READY、readiness 没有变化的情形；没有 READY 时仍不写 scheduler.round。未发出的 binding 由 M2-08 orphan 规则结算，不重复使用旧 seq。
-
 
 M2 之后：M3 的验证结算接入既有调度触发；M4 接预算 Approval，token/成本总预算仍未 enforce。
 
@@ -193,13 +198,13 @@ M2 之后：M3 的验证结算接入既有调度触发；M4 接预算 Approval�
 
 M3-04 / D64 ①：`execution/attempt-baseline.ts` 是 ContextBuilder 与 launcher 共用的纯存储判定，从 seq−1 向前检查（D85 / M3-04b）：无 Submission 时只有该 dispatch 的 `attempt.failed.after.settlement.kind` 为 `unchanged | no_change | blocked` 才允许越过，最多走到 seq 1；缺 binding / dispatch、普通失败或其它无 Submission 情形立即回集成基线。找到 Submission 后，其 Candidate 仍为 ACTIVE、该 Candidate 最新 VerificationRun（按 createdAt 再 id 排序取最后一项，不预先过滤 FAIL）为 FAIL 且 reason 不是 `secret_detected`，才返回 candidate baseline（previousSeq、Candidate、VerificationRun、skippedAttempts）。`previousSeq` 是 Candidate 所属 Attempt 的序号；`skippedAttempts: {seq, attemptId, kind, reason?, paths?, reportSummary: string | null}[]` 按 seq 升序记录被越过的 Attempt，无则空数组。`previous_attempt_not_submitted` 的 integration baseline 同样保留已越过的 skippedAttempts，例如 seq 1 声明 blocked、人工调整后的首次重试。其它情况按顺序返回 integration baseline：
 
-| reason | 条件 |
-| --- | --- |
-| `first_attempt` | seq 1 |
-| `previous_attempt_not_submitted` | 向前检查未找到 Submission，或遇到未经上述三种 settlement 审计的无 Submission Attempt（包括崩溃、放弃、launch 失败）；附带已跨过的 skippedAttempts |
-| `previous_candidate_superseded` | Submission 的 Candidate 不再 ACTIVE（缺失也不采用） |
-| `previous_verification_not_failed` | 无 run，或最新 run 不是 FAIL |
-| `secret_detected` | 最新 FAIL 的 reason 为 secret_detected；附带该 run 供安全证据展示，历史含秘密的 Candidate 不可续接 |
+| reason                             | 条件                                                                                                                                              |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `first_attempt`                    | seq 1                                                                                                                                             |
+| `previous_attempt_not_submitted`   | 向前检查未找到 Submission，或遇到未经上述三种 settlement 审计的无 Submission Attempt（包括崩溃、放弃、launch 失败）；附带已跨过的 skippedAttempts |
+| `previous_candidate_superseded`    | Submission 的 Candidate 不再 ACTIVE（缺失也不采用）                                                                                               |
+| `previous_verification_not_failed` | 无 run，或最新 run 不是 FAIL                                                                                                                      |
+| `secret_detected`                  | 最新 FAIL 的 reason 为 secret_detected；附带该 run 供安全证据展示，历史含秘密的 Candidate 不可续接                                                |
 
 candidate baseline 将完整 `candidate.commitSha` 传给 `createManagedWorktree.baseBranch`，新分支仍为本次 `attempt.branch`。创建后用返回的 `worktree.git.head` 验证；未提供时在新 worktree 中经 `gitExecFileAsync` / `gitOptionsForWorktree` 执行 `rev-parse HEAD`。不等于 Candidate commit 则抛出消息恰为 `fix_base_mismatch` 的异常，既有 catch 审计 `attempt.launch_failed {message}` 并按 launch_failed 结算；不 reset、改写或删除任何分支/worktree。integration baseline 仍从 `axiom/integration/<missionId>` 起，Planner 的 baseBranch 不变。
 
@@ -214,7 +219,6 @@ terminal fallback 只有 AgentSpec 的 `model !== 'policy-default'` 时，launch
 `axiom.attempt.show/list` 异步经 `inspectWorkerTerminal` 读取执行宿主的 liveness（`live/exited` 原样保留，其余状态 → `unverifiable`，可选 `livenessReason` 优先保留 reason、否则保留非 live/exited 的 status，无则 null），不用 fleet 的 agent-status 判定；state、workspace 与 worktreeId 继续取自 `projectFleetWorker`，NULL dispatch 的 liveness/livenessReason 仍为 null。
 
 M2-10 的 `AttemptSummary.role` 为绑定 AgentSpec 的 `spec.role`（`planner | worker`；spec 缺失时回退 `worker`），renderer 不解析 branch 前缀。可选 `submission` 通过 `getSubmissionByDispatch(dispatchId)` 与 `getCandidate(candidateId)` 联合投影，包含 `id / candidateId / commitSha / treeSha / filesChanged / checksRun / limitations / risks / followUps / createdAt`；无 Submission 时省略。Candidate 丢失是读取错误，不伪造 hash 或隐藏已提交证据。读取不改变状态，检查结果只是 Worker 报告，独立 Verification 仍由 M3 提供。
-
 
 M2-06b：pending question_threads 通过 attempt_bindings 关联 Task；`blockingQuestionOrApproval` 使该 Task 无法 admission 新 Attempt。回答后 pending 消失并重算 readiness；当前 Attempt 仍 RUNNING，问题不改变其执行状态。超时或取消等待不自动关闭问题；结算由内核 closeQuestionsForDispatch 关闭。
 
@@ -238,9 +242,9 @@ ContextBuilder 的 planner 形式为 `{missionId,role:'planner',goalRevisionId}`
 4. 两个 Task、一条边的最小示例。
 5. Codex 保留 `axiom plan propose --mission <id> --attempt {{attemptId}} --file <proposal.json> --json` 配方，proposal JSON 写到 worktree 外；Claude 只能调用 Axiom MCP 工具 `plan_propose`，输入 `{ "proposal": <完整 PlanProposal> }`，按工具返回的 schema issues 修正后重试，同一 Attempt 由 Control Plane 保持一个 PlanRevision。Claude 提示词不再含 shell 提案命令或文件约定，禁止创建、编辑、提交文件，只允许只读 git 命令。两者均要求 worktree 保持 clean。
 
-M3-08i / D85：`requiredEvidence` 是有确定性边界的命令数组，最小示例为 `['pnpm exec vitest run tests/example.test.ts']`。每项从仓库根原样执行且须 exit 0，单行、一个命令，不含 `;`、`&`（含 `&&`）、`|`（含 `||`）、`>`、`<`、反引号、`$(`；首个空白分隔 token 必须是允许程序（按完整名称或 basename 匹配，含 `=` 的 token 不是程序）。允许集为 `verificationRules.evidenceCommands.allowedPrograms` 加全部 setupCommands / repositoryGates 使用的程序，提示词列出解析后的集合。期望与描述只写 acceptanceCriteria，不在 requiredEvidence 加 “output” 或 “with exit code 0”。同一句 `.describe()` 进入提示词的 JSON Schema 与 MCP plan_propose 输入 schema。
+M3-04b-2 / D85 rule 2 修订：每个 `acceptanceCriteria` 项都是 `{text, check}`。最小示例横跨两个 Task 展示 command、artifact 和 human 三种 check。command 从仓库根原样执行且须 exit 0，单行、一个命令，不含 `;`、`&`（含 `&&`）、`|`（含 `||`）、`>`、`<`、反引号、`$(`；首个空白分隔 token 必须是允许程序（按完整名称或 basename 匹配，含 `=` 的 token 不是程序）。允许集为 `verificationRules.evidenceCommands.allowedPrograms` 加全部 setupCommands / repositoryGates 使用的程序，提示词列出解析后的集合。期望与描述只写 `text`，不在 `command` 加 “output” 或 “with exit code 0”。artifact 表示提交引用可读、非空 Artifact，指定 artifactKind 时须匹配；human 只在命令和 Artifact 都无法证明时使用，由人确认，应少用且计划会标明。`requiredEvidence` 已退役并拒绝新写入。同一 schema 的 `.describe()` 进入提示词 JSON Schema 与 MCP plan_propose 输入 schema；持久合同不含 transform，JSON Schema 转换不需特殊 io / unrepresentable 选项。
 
-提案在结构验证后、插入 PlanRevision 前调用共享 `validateEvidenceCommands`；非法项返回 `plan_invalid {errors: [{code: evidence_command_invalid, severity: error, message, path: [tasks, i, requiredEvidence, j], taskIds}]}`，CLI / MCP 保留路径与说明，同回合可修正。REQUEST_SUBTASK 使用同一函数，失败 reason 为 `evidence`。旧 policy 无法解析时以默认 VerificationRules 检查，边界不失效；执行时不重复检查。边界限制形状与程序，不限制程序能力（验证沙盒属 M3-10 / DEF-46）；`pnpm run verify:full output with exit code 0` 的程序合法，故仍通过，靠 planInvalidPatterns 与 M3-09 计划卡处置，不启发式检测参数或读取 package.json。
+提案在结构验证后、插入 PlanRevision 前检查：非空 legacy 字段 → `plan_invalid` / `required_evidence_retired`，path=`['tasks',i,'requiredEvidence']`；字符串 criterion → `criterion_shape`，path=`['tasks',i,'acceptanceCriteria',j]`。随后对 `resolveAcceptance` / `acceptanceCommands` 的命令执行 D85 边界检查；非法项为 `evidence_command_invalid`，path=`['tasks',i,'acceptanceCriteria',j,'check','command']`，j 是 criterion index，不是去重后的命令 index。CLI / MCP 保留 code、severity、message、path、taskIds，Planner 同回合可修正，失败不插入 PlanRevision。已存旧提案审批保留兼容读取。Human `axiom.task.create` 使用相同检查，路径从 `['task',…]` 开始；REQUEST_SUBTASK 使用同一命令验证，失败 reason 为 `evidence`。旧 policy 无法解析时以默认 VerificationRules 检查，边界不失效；执行时不重复检查。边界限制形状与程序，不限制程序能力（验证沙盒属 M3-10 / DEF-46）；`pnpm run verify:full output with exit code 0` 的程序合法，故仍通过，靠 planInvalidPatterns 与 M3-09 计划卡处置，不启发式检测参数或读取 package.json。
 
 Planner 无 PlanRevision，因此只持久化 `context_package_manifest` 与 `context_package_render` 两个内容寻址 Artifacts，**不插入 context_packages**（其 plan_revision_id 为 NOT NULL）。binding.contextPackageId 为 render Artifact 的 `art_…` id；launcher 用 `artifacts.read` 取模板。preamble 由 preambleBuilder 交付时只替换 `{{attemptId}}`，D73 之后不含任何凭据。Planner dispatch 在该回调交付 preamble 前绑定，以支持快速 provider 在 readiness receipt 返回前提交。
 
@@ -272,11 +276,11 @@ D85 / M3-08i：exit 0 且 outcome=submitted（或省略）的有效报告若收�
 
 **声明结算（M3-04b，D85 第 5 条 / D82 ③）**：有效 `no_change` / `blocked` 报告不调用 settleSubmission、不快照树、不创建 Submission / Candidate；先存报告及其 Artifacts，再由 `attempt-exit-declared.ts` 在 `headless_exit_declared` 事务内重新核实 host authority、`failDispatch(workerProcessExited=true, terminationReason=process_exited)`、写一次 attempt.failed、路由 typed BLOCKED 并转换 Task。audit 的 objectKind=attempt、objectId=attemptId，after 为 `{taskId, reason: process_exited, evidence: exit_code, exitCode: 0, settlement: {kind: no_change|blocked, reason, paths?}, candidate?: {id,commitSha,treeSha}, worktreeChanged, reportArtifactId, artifactIds, reportSummary, limitations, lastMessageExcerpt, ...eventAudit}`；candidate 仅引用仍 ACTIVE 的旧候选。paths 脱敏后最多 50×500 字符，reportSummary ≤2000，limitations ≤20×500；lastMessageExcerpt 与事件证据沿用退出路径的脱敏规则。`worktreeChanged` 是只读 `git status --porcelain` 的非空行数；即使树已改动，声明仍按下表结算，该计数只是证据，不是准入门。
 
-| 声明 reason | settlement.kind | Task stage 路径 |
-|---|---|---|
-| `blocked_by_scope` | `blocked` | RUNNING → NEEDS_FIX (`attempt_blocked`) → BLOCKED (`scope`) |
-| `candidate_already_correct` | `no_change` | RUNNING → NEEDS_FIX (`attempt_no_change`) → BLOCKED (`candidate_disputed`) |
-| `cannot_reproduce` | `no_change` | RUNNING → NEEDS_FIX (`attempt_no_change`) → BLOCKED (`candidate_disputed`) |
+| 声明 reason                 | settlement.kind | Task stage 路径                                                            |
+| --------------------------- | --------------- | -------------------------------------------------------------------------- |
+| `blocked_by_scope`          | `blocked`       | RUNNING → NEEDS_FIX (`attempt_blocked`) → BLOCKED (`scope`)                |
+| `candidate_already_correct` | `no_change`     | RUNNING → NEEDS_FIX (`attempt_no_change`) → BLOCKED (`candidate_disputed`) |
+| `cannot_reproduce`          | `no_change`     | RUNNING → NEEDS_FIX (`attempt_no_change`) → BLOCKED (`candidate_disputed`) |
 
 路由只看类型化 reason，不分析报告文本；即使还剩重试次数，也不自动回 READY。`settleDeclaredAttempt` 与普通失败结算共用「最新 RUNNING binding、dispatch 匹配、无 Submission」栅栏；消息与 stage 同事务回滚。BLOCKED 消息含 `blocked: {reason,paths}`、Task/Attempt 身份、`related.taskIds=[taskId]`、`artifactIds=[reportArtifactId,...artifactIds]`，summary 为脱敏后的 `Attempt <seq> declared <reason>` 与路径（≤2000），body 为报告摘要（≤4000）；无路径时 paths=[]。它立即成为 pending 待处理项，直到人工 adjust / cancel 写 `blocked.resolved`。事务提交后安排既有失败 Worker release，结果为 `declared`；watcher 停止、reconciliation 返回 failed / exited，再调用返回 unchanged，不追加结算。确定性 FAIL 保留，后续 Attempt 必须重新独立验证。
 
@@ -300,7 +304,16 @@ Planner settings 的权限规则固定为：
 
 ```json
 {
-  "allow": ["Read", "Grep", "Glob", "LS", "Bash(git log:*)", "Bash(git diff:*)", "Bash(git show:*)", "mcp__axiom__plan_propose"],
+  "allow": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(git log:*)",
+    "Bash(git diff:*)",
+    "Bash(git show:*)",
+    "mcp__axiom__plan_propose"
+  ],
   "deny": ["Edit", "Write", "MultiEdit", "NotebookEdit", "WebFetch", "WebSearch"]
 }
 ```
@@ -313,16 +326,16 @@ prompt registry 对该 session 的未放行请求返回 denySafeResult，并把 
 
 M3-08f / D83（2026-10-28）启动 pins 与证据：
 
-| Pin / evidence | Worker（A） | Planner（B） |
-|---|---|---|
-| Axiom policy tier | `--managed-settings` 单行内联 JSON，紧跟 `--settings <path>` | SDK `managedSettings` 对象，由 SDK 序列化为内联 JSON |
-| 共同 managed settings | `strictPluginOnlyCustomization`、`disableAllHooks`、`disableSkillShellExecution`、`disableClaudeAiConnectors`、`disableRemoteControl`、`isolatePeerMachines` 均为 true；`permissions.disableBypassPermissionsMode: 'disable'` | 同左；模型不能覆写 |
-| managed sandbox | `sandbox: { enabled: true }`；原 settings 的 failIfUnavailable / 网络 / 写范围约束保留 | 不添加 sandbox |
-| 账号 refresh | 只读 `resolveClaudeHomeForWorkerLaunch`，不调 prepareLaunch | 有 Mission pins 时传 `{ refresh: false }`，跳过已准备目录的 refresh；pointer 与 first setup 保留 |
-| skills | `requested.allowlist.skills: []` | `skills: []`，不读取共享 Codex skill allowlist |
-| `launchBaseline` | certified combo 的可选 `{ harnessVersion, skills, evidence }`，复制到 requested；缺失为 null。Claude 基线 = 2.1.312 / doctor、plugin-authoring / `.axiom-work/verifications/M3-08-smoke-real-claude.md`（隔离探测记录 `M3-08f-isolation-probe.md` 覆盖 2.1.309 与 2.1.312） | —；launchBaseline 是 Worker 组合审计字段 |
-| 策略证据 | `requested.policyTier: 'axiom'`、`effective.managedSettingsSha256` | process-local pins 与宿主 e2e 的 argv / JSON ledger |
-| surfaces | `effective.accountHome.surfaces`：skills、commands、agents、plugins、hooks、settings.json、.claude.json、.mcp.json 的 `{ name, kind }`；kind 为 dir / file / link / absent | 账号目录原样使用 |
+| Pin / evidence        | Worker（A）                                                                                                                                                                                                                                                                 | Planner（B）                                                                                     |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Axiom policy tier     | `--managed-settings` 单行内联 JSON，紧跟 `--settings <path>`                                                                                                                                                                                                                | SDK `managedSettings` 对象，由 SDK 序列化为内联 JSON                                             |
+| 共同 managed settings | `strictPluginOnlyCustomization`、`disableAllHooks`、`disableSkillShellExecution`、`disableClaudeAiConnectors`、`disableRemoteControl`、`isolatePeerMachines` 均为 true；`permissions.disableBypassPermissionsMode: 'disable'`                                               | 同左；模型不能覆写                                                                               |
+| managed sandbox       | `sandbox: { enabled: true }`；原 settings 的 failIfUnavailable / 网络 / 写范围约束保留                                                                                                                                                                                      | 不添加 sandbox                                                                                   |
+| 账号 refresh          | 只读 `resolveClaudeHomeForWorkerLaunch`，不调 prepareLaunch                                                                                                                                                                                                                 | 有 Mission pins 时传 `{ refresh: false }`，跳过已准备目录的 refresh；pointer 与 first setup 保留 |
+| skills                | `requested.allowlist.skills: []`                                                                                                                                                                                                                                            | `skills: []`，不读取共享 Codex skill allowlist                                                   |
+| `launchBaseline`      | certified combo 的可选 `{ harnessVersion, skills, evidence }`，复制到 requested；缺失为 null。Claude 基线 = 2.1.312 / doctor、plugin-authoring / `.axiom-work/verifications/M3-08-smoke-real-claude.md`（隔离探测记录 `M3-08f-isolation-probe.md` 覆盖 2.1.309 与 2.1.312） | —；launchBaseline 是 Worker 组合审计字段                                                         |
+| 策略证据              | `requested.policyTier: 'axiom'`、`effective.managedSettingsSha256`                                                                                                                                                                                                          | process-local pins 与宿主 e2e 的 argv / JSON ledger                                              |
+| surfaces              | `effective.accountHome.surfaces`：skills、commands、agents、plugins、hooks、settings.json、.claude.json、.mcp.json 的 `{ name, kind }`；kind 为 dir / file / link / absent                                                                                                  | 账号目录原样使用                                                                                 |
 
 surfaces 只用 `lstat`，不读内容、不跟随链接、不列子目录；不是已加载内容清单。Axiom 不布置 Claude 账号 home，不读、复制或移动凭据 / Keychain 项。文件路径形式的 managed settings 在探测版本会被静默忽略，禁止使用。策略层是 M3-08b 空 setting sources 等 pins 的补强；交互启动刷新不变，Claude 仍为 provisional，只有 verifier 真实 smoke 能认证。`--plugin-dir` 的 Axiom skills 交付另立 Task。
 
@@ -333,10 +346,10 @@ On macOS/Linux, headless Codex and Claude Workers and structured Mission Planner
 - `allowlist`: when none of `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY`, `https_proxy`, `http_proxy`, `all_proxy` is non-empty, all six are set to `http://127.0.0.1:9`. Both `NO_PROXY` and `no_proxy` replace inherited bypass values with the exact comma-separated list below. Non-allowlisted requests that honor these variables hit the dead port and fail with connection refused; their diagnostics remain in the harness output. No proxy process is started.
 - `inherited-proxy`: when any of the six variables is non-empty, the overlay is `{}`. Nothing is set or removed, including the user's bypass list. This mode records the decision but does not enforce an allowlist or block anything; upstream-proxy chaining and per-Attempt proxy evidence belong to DEF-46 (V2). Inherited proxy values are never copied into the egress audit.
 
-| Harness | Exact default `NO_PROXY` / `no_proxy` |
-|---|---|
-| Codex | `chatgpt.com,.chatgpt.com,openai.com,.openai.com,localhost,127.0.0.1,::1` |
-| Claude | `api.anthropic.com,platform.claude.com,localhost,127.0.0.1,::1` |
+| Harness | Exact default `NO_PROXY` / `no_proxy`                                     |
+| ------- | ------------------------------------------------------------------------- |
+| Codex   | `chatgpt.com,.chatgpt.com,openai.com,.openai.com,localhost,127.0.0.1,::1` |
+| Claude  | `api.anthropic.com,platform.claude.com,localhost,127.0.0.1,::1`           |
 
 The explicit loopback entries preserve local harness communication; Claude also bypasses loopback for its WebSocket connections. Claude uses the first set proxy in the order `https_proxy`, `HTTPS_PROXY`, `http_proxy`, `HTTP_PROXY`; it ignores `ALL_PROXY`. Setting both spellings avoids a competing inherited casing. `NO_PROXY` suffix matching varies by HTTP client, so these lists require the verifier's real-harness smoke; they are not a general network firewall.
 
@@ -354,18 +367,18 @@ This overlay governs the harness process. The separate layer for commands run by
 
 启动时在 recover 后执行一次，每 60,000ms 执行一次（unref timer，stop 时清除）；消费者成功处理并 ack 含同 Mission bound dispatchId 的 kernel escalation 批次后再触发一轮。正常无变化的 tick 不写 audit。失败只记录身份到 console.warn，其他 Attempt 仍继续对账，报告 action=reconcile_failed，不能当作成功结算。
 
-| 规则 | 读取与 kernel 操作 | 审计 / Axiom stage |
-|---|---|---|
-| a | starting/stopping 的 runtime_epoch 不同于当前 runtime：先 markWorkerStartUnknown / markWorkerStopUnknown，再 inspectWorkerTerminal | 保持 Task；后续按实际宿主 liveness 处置 |
-| b | RUNNING、worker failed/stopped/abandoned、无 Submission | 共享 settlement；failed 且无既有 attempt.failed 时，在同一 recovery_terminal 事务内先补 attempt.failed{reason: kernel_failed, lastError: worker.last_error ?? null}，再 settlement；重复 tick 不追加。放弃已提交而 Axiom consequence 未提交时，从关联 evidence Artifact 补回 attempt.abandoned；stopped / abandoned 其余行为不变，kernel-first stop 的补审计不在本次范围 |
-| c | RUNNING、活跃 worker（stop_unknown 除外）、宿主明确 exited：failDispatch(workerProcessExited=true, terminationReason=process_exited) | attempt.failed{reason: process_exited} → RUNNING → NEEDS_FIX → READY/BLOCKED |
-| c′（D59；M2-12 attempt 2 修正证明来源） | 仅 terminal fallback / Planner：inspectWorkerTerminal.status=live、exact=true、terminal 非 null（PTY 通道）、worker.state=ready（preamble readiness 已结算），且 confirmTerminalShellForeground(terminal.handle) 返回 true：执行宿主的新鲜前台进程名是 shell（isShellProcess），经 controller.confirmForegroundProcess 读取，方法缺失时回退 getForegroundProcess。每 tick 一次新证明，不缓存、不计数；SSH 返回 null（访问器返回 false）、structured 无 terminal，均不适用 | 对账 entry.liveness 折叠为 exited，沿用 c 的 failDispatch 与重试，attempt.failed{reason: process_exited, evidence: shell_foreground}；last_error 为 Worker agent exited without a Submission。Planner 无提案时同样 fail/release，planner.attempt_failed{reason: no_proposal, evidence: shell_foreground}，沿用该次证明、不重探测，后续 tick 保留该审计 |
-| c″（D84；M3-08h） | 仅结构化 Claude Mission Planner：内核在 result 帧结束回合时调用可选 pins.onTurnSettled；缺 result 时由 session_state_changed: idle 后备，每回合一次。Control Plane 事务检查该 dispatch 尚无 planner.proposed 与 planner.attempt_failed，写入失败证据后调用 stopPlanner(..., 'no_proposal')；并发停止合并、相同停止审计去重。若证据持久化后停止前崩溃，60 s reconciliation 对仍 live 的失败 Planner 补 stop/release；若内核已停止但停止审计缺失，则补写去重的 planner.stopped 收据 | planner.attempt_failed{reason:no_proposal,evidence:turn_settled,outcome,isError,numTurns} 与 planner.stopped{reason:no_proposal}；outcome 为 success / failure / cancellation / unknown，numTurns 不可得时为 null。只结算 Attempt，Mission 保持 ANALYZING，原 Attempt 停止后允许再次 axiom.mission.plan |
-| d | live、未命中 c′ 且非 stop_unknown：通常不动；Worker 的 now-createdAt 大于 Task spec.budget.maxRuntimeMinutes（无则 policy.budget.maxRuntimeMinutes，无 cap 不限）时 stopLocalWorker。Planner 单独使用 policy.budget.maxRuntimeMinutes ?? PLANNER_RUNTIME_BUDGET_MINUTES（30 分钟），为 c″ 信号缺失兜底 | stopped：attempt.stopped + settlement(runtime_budget_exceeded)；Planner 为 planner.stopped{reason:runtime_budget_exceeded}；stop_unknown：只在首次停止结果写 attempt.stop_unknown，保持 RUNNING；下一 tick 无论宿主观测如何均走 e |
-| e | unverifiable 或 worker stop_unknown：写 liveness facet 的变化；stop_unknown 固定记 `{status: unverifiable, reason: stop_unknown}`；到 unverifiableToleranceMinutes 后先 put evidence，再 abandonWorkerDispatch | attempt.unverifiable；超时 attempt.abandoned（含 evidenceArtifactId、disposition）+ settlement(unverifiable_tolerance_exceeded)；等待期间不重复 stop、不启动新 Attempt |
-| f | RUNNING、最新 binding.dispatchId=null，超过两倍默认 readiness timeout（当前 120,000ms） | attempt.launch_pending_orphan + settlement；较新 pending 不动 |
-| g（D76） | 有持久 Submission，距 createdAt 至少 60 s，且 terminal resource.release_state 为 not_requested / retained / requested：先确认该 Submission 的 attempt.transcript_archived 或 attempt.transcript_archive_failed 审计；两者都无则补 transcript Artifact，再经 releaseSubmittedWorker → releaseLocalWorker 补释放。年轻 Submission、released / 无资源不动；E2E hold 时不释放 | attempt.transcript_archived / attempt.transcript_archive_failed；attempt.terminal_released / attempt.terminal_release_failed。Submission 优先于取消和 Mission 终态分支；不改变 Candidate、Task stage 或 VerificationRun |
-| h | Task CANCELED 或 Mission 终态：stop_unknown 无论宿主观测如何均 abandonWorkerDispatch；其他活跃且 live/exact 用 stopLocalWorker（start_unknown 仍可 stop），否则 abandonWorkerDispatch；结算后 releaseLocalWorker | attempt.stopped / attempt.abandoned，reason=mission_canceled；从 stop_unknown 放弃时另记 priorStop=stop_unknown 与放弃时折叠的 liveness；after.release 保留 requested completion / retained / already_released 真实收据；stage 不再变；已提交 Attempt 走 g，Candidate/worktree 生命周期不变 |
+| 规则                                    | 读取与 kernel 操作                                                                                                                                                                                                                                                                                                                                                                                                                                                                | 审计 / Axiom stage                                                                                                                                                                                                                                                                                                                                                       |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| a                                       | starting/stopping 的 runtime_epoch 不同于当前 runtime：先 markWorkerStartUnknown / markWorkerStopUnknown，再 inspectWorkerTerminal                                                                                                                                                                                                                                                                                                                                                | 保持 Task；后续按实际宿主 liveness 处置                                                                                                                                                                                                                                                                                                                                  |
+| b                                       | RUNNING、worker failed/stopped/abandoned、无 Submission                                                                                                                                                                                                                                                                                                                                                                                                                           | 共享 settlement；failed 且无既有 attempt.failed 时，在同一 recovery_terminal 事务内先补 attempt.failed{reason: kernel_failed, lastError: worker.last_error ?? null}，再 settlement；重复 tick 不追加。放弃已提交而 Axiom consequence 未提交时，从关联 evidence Artifact 补回 attempt.abandoned；stopped / abandoned 其余行为不变，kernel-first stop 的补审计不在本次范围 |
+| c                                       | RUNNING、活跃 worker（stop_unknown 除外）、宿主明确 exited：failDispatch(workerProcessExited=true, terminationReason=process_exited)                                                                                                                                                                                                                                                                                                                                              | attempt.failed{reason: process_exited} → RUNNING → NEEDS_FIX → READY/BLOCKED                                                                                                                                                                                                                                                                                             |
+| c′（D59；M2-12 attempt 2 修正证明来源） | 仅 terminal fallback / Planner：inspectWorkerTerminal.status=live、exact=true、terminal 非 null（PTY 通道）、worker.state=ready（preamble readiness 已结算），且 confirmTerminalShellForeground(terminal.handle) 返回 true：执行宿主的新鲜前台进程名是 shell（isShellProcess），经 controller.confirmForegroundProcess 读取，方法缺失时回退 getForegroundProcess。每 tick 一次新证明，不缓存、不计数；SSH 返回 null（访问器返回 false）、structured 无 terminal，均不适用         | 对账 entry.liveness 折叠为 exited，沿用 c 的 failDispatch 与重试，attempt.failed{reason: process_exited, evidence: shell_foreground}；last_error 为 Worker agent exited without a Submission。Planner 无提案时同样 fail/release，planner.attempt_failed{reason: no_proposal, evidence: shell_foreground}，沿用该次证明、不重探测，后续 tick 保留该审计                   |
+| c″（D84；M3-08h）                       | 仅结构化 Claude Mission Planner：内核在 result 帧结束回合时调用可选 pins.onTurnSettled；缺 result 时由 session_state_changed: idle 后备，每回合一次。Control Plane 事务检查该 dispatch 尚无 planner.proposed 与 planner.attempt_failed，写入失败证据后调用 stopPlanner(..., 'no_proposal')；并发停止合并、相同停止审计去重。若证据持久化后停止前崩溃，60 s reconciliation 对仍 live 的失败 Planner 补 stop/release；若内核已停止但停止审计缺失，则补写去重的 planner.stopped 收据 | planner.attempt_failed{reason:no_proposal,evidence:turn_settled,outcome,isError,numTurns} 与 planner.stopped{reason:no_proposal}；outcome 为 success / failure / cancellation / unknown，numTurns 不可得时为 null。只结算 Attempt，Mission 保持 ANALYZING，原 Attempt 停止后允许再次 axiom.mission.plan                                                                  |
+| d                                       | live、未命中 c′ 且非 stop_unknown：通常不动；Worker 的 now-createdAt 大于 Task spec.budget.maxRuntimeMinutes（无则 policy.budget.maxRuntimeMinutes，无 cap 不限）时 stopLocalWorker。Planner 单独使用 policy.budget.maxRuntimeMinutes ?? PLANNER_RUNTIME_BUDGET_MINUTES（30 分钟），为 c″ 信号缺失兜底                                                                                                                                                                            | stopped：attempt.stopped + settlement(runtime_budget_exceeded)；Planner 为 planner.stopped{reason:runtime_budget_exceeded}；stop_unknown：只在首次停止结果写 attempt.stop_unknown，保持 RUNNING；下一 tick 无论宿主观测如何均走 e                                                                                                                                        |
+| e                                       | unverifiable 或 worker stop_unknown：写 liveness facet 的变化；stop_unknown 固定记 `{status: unverifiable, reason: stop_unknown}`；到 unverifiableToleranceMinutes 后先 put evidence，再 abandonWorkerDispatch                                                                                                                                                                                                                                                                    | attempt.unverifiable；超时 attempt.abandoned（含 evidenceArtifactId、disposition）+ settlement(unverifiable_tolerance_exceeded)；等待期间不重复 stop、不启动新 Attempt                                                                                                                                                                                                   |
+| f                                       | RUNNING、最新 binding.dispatchId=null，超过两倍默认 readiness timeout（当前 120,000ms）                                                                                                                                                                                                                                                                                                                                                                                           | attempt.launch_pending_orphan + settlement；较新 pending 不动                                                                                                                                                                                                                                                                                                            |
+| g（D76）                                | 有持久 Submission，距 createdAt 至少 60 s，且 terminal resource.release_state 为 not_requested / retained / requested：先确认该 Submission 的 attempt.transcript_archived 或 attempt.transcript_archive_failed 审计；两者都无则补 transcript Artifact，再经 releaseSubmittedWorker → releaseLocalWorker 补释放。年轻 Submission、released / 无资源不动；E2E hold 时不释放                                                                                                         | attempt.transcript_archived / attempt.transcript_archive_failed；attempt.terminal_released / attempt.terminal_release_failed。Submission 优先于取消和 Mission 终态分支；不改变 Candidate、Task stage 或 VerificationRun                                                                                                                                                  |
+| h                                       | Task CANCELED 或 Mission 终态：stop_unknown 无论宿主观测如何均 abandonWorkerDispatch；其他活跃且 live/exact 用 stopLocalWorker（start_unknown 仍可 stop），否则 abandonWorkerDispatch；结算后 releaseLocalWorker                                                                                                                                                                                                                                                                  | attempt.stopped / attempt.abandoned，reason=mission_canceled；从 stop_unknown 放弃时另记 priorStop=stop_unknown 与放弃时折叠的 liveness；after.release 保留 requested completion / retained / already_released 真实收据；stage 不再变；已提交 Attempt 走 g，Candidate/worktree 生命周期不变                                                                              |
 
 基础 liveness 与 `axiom.attempt.show/list` 共用 `foldAttemptLiveness`：live/exited 原样，unattached/missing/identity_changed/unverifiable → unverifiable。c′ 只在 Recovery 折叠额外的执行宿主证明；不改 `inspectWorkerTerminal`、`foldAttemptLiveness`、show/list 或 fleet 投影，不以 title、hook、Agent activity 推断死亡。`starting / start_unknown / stopping / stop_unknown` 与终态 worker 不满足 c′ 的 ready 条件。访问器仅在主进程内读取 controller `confirmForegroundProcess`：daemon 请求经 `Session.confirmForegroundProcess()` 到 `foreground-process-tracker.confirmForegroundProcess`，用 `resolveAgentForegroundProcessWithAvailability(fresh)` 新鲜解析进程表，node-pty 的前台进程名作 fallback；controller 没有该方法时才用 `getForegroundProcess`。结果必须为非空字符串，去除首尾空白与 login-shell 名的前导 `-` 后由 `isShellProcess` 判为 shell；null、非 shell、无 live PTY、无 controller、异常或超过 `PTY_CONTROLLER_LIST_TIMEOUT_MS` 均返回 false，不用旧结果补证明。daemon 的 `confirmShellForeground` 回答 recovery barrier 的 settled owner（alternate-screen dead-TUI recovery），不是进程退出证明；M2-12 attempt 2 明确不再调用它。两次宿主 IO await 结束后重新读取 Task、Mission、worker 的持久权威，Submission / cancel / 新 Attempt 的栅栏仍优先。
 
@@ -416,7 +429,7 @@ CLI JSON 输出是 `{ ok, result, ... }` / `{ ok:false, error:{code,...}, ... }`
 5. 内核 `hasLifecycleAuthority` 失败 → `sender_not_assignee`。
 6. binding、Task、Mission、Run 关联不一致 → `task_dispatch_mismatch`。
 
-CLI `axiom attempt <verb> --attempt <id> --summary <text>` 支持 `--body` / `--body-file`（互斥）、可重复 `--artifact` / `--related-task`；子任务另需 `--title --objective --allowed-path --acceptance --evidence`，risk 默认 low；M2-06b 可重复 `--depends-on` 对应 subtask.dependsOn。from 复用 `resolveOrchestrationTerminalHandle`（`--from` / `ORCA_TERMINAL_HANDLE`），pane metadata 来自 `ORCA_PANE_KEY`；runtime 自行解析 pane，不信任该参数授予权限。调用方身份由宿主核实（D73：终端 / 会话 → Dispatch → 进程代次，见 orca-mapping 的 Worker 身份一节），mutation 复用 `callOrchestrationMutation` 与 `--retry-request <原 UUID>`。失败的新请求不留收据；已完成请求沿用内核回放语义，同 id + 同 params 不重复写入，改变 params → `request_mismatch`。
+CLI `axiom attempt <verb> --attempt <id> --summary <text>` 支持 `--body` / `--body-file`（互斥）、可重复 `--artifact` / `--related-task`；子任务另需 `--title --objective --allowed-path` 及至少一个 criterion，risk 默认 low。可重复 `--acceptance <text>` 与 `--evidence <command>` 按各自出现顺序配对：第 i 个 command 证明第 i 个 text；多余 command 追加 `Command passes: …` criterion；无 command 的 text 为 human。可重复 `--acceptance-artifact <text>` 追加 artifact criterion。`--evidence` 只是 CLI 输入兼容标志，发送对象不含 requiredEvidence。可重复 `--depends-on` 对应 subtask.dependsOn。from 复用 `resolveOrchestrationTerminalHandle`（`--from` / `ORCA_TERMINAL_HANDLE`），pane metadata 来自 `ORCA_PANE_KEY`；runtime 自行解析 pane，不信任该参数授予权限。调用方身份由宿主核实（D73：终端 / 会话 → Dispatch → 进程代次，见 orca-mapping 的 Worker 身份一节），mutation 复用 `callOrchestrationMutation` 与 `--retry-request <原 UUID>`。失败的新请求不留收据；已完成请求沿用内核回放语义，同 id + 同 params 不重复写入，改变 params → `request_mismatch`。
 
 M3-04b：`axiom attempt blocked --attempt <id> --summary <text> [--reason blocked_by_scope|candidate_already_correct|cannot_reproduce] [--path <path>]... [--json]` 将 reason / 可重复 path 映射到 blocked；只给 path、不带 reason 会拒绝。不带 reason/path 时保持旧的普通 BLOCKED 报告。terminal Worker 可能仍在运行，发信不转换 Task 或 Attempt；typed payload 仅增加 pending 投影，退出结算仍由宿主负责。
 
@@ -439,15 +452,15 @@ axiom attempt submit --attempt <attemptId> --report <path.json> --json
 
 实现位于 `execution/candidate-snapshot.ts` / `attempt-submission.ts` 与 `db/{candidates,submissions,verification-runs}-store.ts`，步骤对照映射 §5：
 
-| 步骤 | 当前实现与写入 |
-|---|---|
-| 1 · 栅栏/收据 | 复用 AXIOM_MUTATION_METHODS、OrchestrationMutationExecutor；`--retry-request` 原载荷回放，变更载荷 request_mismatch |
-| 2 · 鉴权/报告 | resolveAttemptSender 校验 dispatch、binding、seq、宿主核实的身份与进程代次（D73）、assignee、Mission/Run；zod 与 Artifact 归属在 Git 前校验 |
-| 3 · 快照 | 从 worker_dispatches.worktree_id 用 splitWorktreeIdForFilesystem 取路径；先验当前 branch，再 status --porcelain；dirty → add -A + Control Plane identity commit --no-verify（两次写操作均以临时空 core.hooksPath 禁用全部 hooks），clean → 采用 HEAD；读 commit/tree 后再验 branch |
-| 4 · 结算事务 | runLifecycleWriteTransaction('axiom_submit')：Candidate ACTIVE、旧 ACTIVE SUPERSEDED、不可变 Submission、artifact_git facet；settleWorkerReportInTransaction(succeeded)，rejected → 抛原 code 回滚；无 Axiom Submission 的内核 duplicate 也拒绝 |
-| 5 · 同事务后续 | actor=AttemptSettlement 推 RUNNING → SUBMITTED；VerificationRun QUEUED；candidate.superseded / attempt.submitted；事务内任何异常回滚整笔 |
+| 步骤                              | 当前实现与写入                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 · 栅栏/收据                     | 复用 AXIOM_MUTATION_METHODS、OrchestrationMutationExecutor；`--retry-request` 原载荷回放，变更载荷 request_mismatch                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 2 · 鉴权/报告                     | resolveAttemptSender 校验 dispatch、binding、seq、宿主核实的身份与进程代次（D73）、assignee、Mission/Run；zod 与 Artifact 归属在 Git 前校验                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 3 · 快照                          | 从 worker_dispatches.worktree_id 用 splitWorktreeIdForFilesystem 取路径；先验当前 branch，再 status --porcelain；dirty → add -A + Control Plane identity commit --no-verify（两次写操作均以临时空 core.hooksPath 禁用全部 hooks），clean → 采用 HEAD；读 commit/tree 后再验 branch                                                                                                                                                                                                                                                                                                                                   |
+| 4 · 结算事务                      | runLifecycleWriteTransaction('axiom_submit')：Candidate ACTIVE、旧 ACTIVE SUPERSEDED、不可变 Submission、artifact_git facet；settleWorkerReportInTransaction(succeeded)，rejected → 抛原 code 回滚；无 Axiom Submission 的内核 duplicate 也拒绝                                                                                                                                                                                                                                                                                                                                                                      |
+| 5 · 同事务后续                    | actor=AttemptSettlement 推 RUNNING → SUBMITTED；VerificationRun QUEUED；candidate.superseded / attempt.submitted；事务内任何异常回滚整笔                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | 6 · 提交后存档、消息与释放（D76） | 事务提交 → verification.kick → archiveAttemptTranscript → MessageRouter 的 SUBMISSION 邮件 / submit receipt → 2,000 ms unref release timer。存档用 Orca 只读 captureWorkerOutputArchive，逐字符串 redactContext，记录提交时进程名；Artifact 完成后才发信。MessageRouter 直接 db.insertMessage(type=worker_done, payload.axiom.type=SUBMISSION)，不经 send/reconcileLifecycleMessage；router 保存 receipt，再 notifyMessageArrived。计时器调用 releaseSubmittedWorker → releaseLocalWorker，内核重验身份、保留自身输出并关闭 agent 终端，daemon descendant sweep 结束进程树；不调用 stopLocalWorker，不改变已结算状态 |
-| 7 · 重复 | 同 dispatch 返回原 Submission/Candidate、duplicate=true，不再 Git/结算/入队/存档/安排释放；同 Attempt 的并发请求复用既有 keyed queue 串行化；重启后靠 DB UNIQUE 与收据，内存队列不保存权威状态 |
+| 7 · 重复                          | 同 dispatch 返回原 Submission/Candidate、duplicate=true，不再 Git/结算/入队/存档/安排释放；同 Attempt 的并发请求复用既有 keyed queue 串行化；重启后靠 DB UNIQUE 与收据，内存队列不保存权威状态                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 结算之后，重复 submit 仅允许读取既有 Submission：只接受同一 pane、同一进程代次的调用方（D73），并校验最新 binding 与 hasLifecycleAuthority，不恢复任何权限；其他 pane 或进程代次 → `worker_identity_changed`。不同请求丢失了提交后的消息时，可用认证后的重复 submit 补写一条；已有消息不重复插入。Git 在事务外，事务失败可能留下快照 commit；重试采用 clean HEAD，禁止 reset/clean/checkout 撤销证据。
 
@@ -491,22 +504,24 @@ phase 词汇为 `claimed | prepared | checking | verdict | prepare_failed | requ
 
 `verification-rules.ts` 的严格 schema 用于 `axiom.policy.update.patch.verificationRules` 的写入校验，以及运行器读策略；未知键（含旧占位键 commands）或类型错误拒绝写入，RPC 返回 invalid_argument。patch 替换整份 verificationRules，不是深合并。PolicySchema 的存储契约仍为 JSON record，旧行仍可加载；运行器遇到不符合 schema 的旧值直接 INCONCLUSIVE(policy_invalid)、escalation=human，不执行命令。ContextBuilder 用 safeParse 读取同一存储值，非法时仍可构建 ContextPackage，并以固定行 `Verification rules are invalid (policy_invalid); the independent verifier will escalate to a human.` 代替命令列表。CLI 为 `axiom mission policy update --mission <id> --verification-rules-file <json>`，沿用 envelope、收据与 policy.updated 审计。
 
-| 策略键                | 默认值 / 含义                                                                                                                              |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| repositoryGates       | `{}`；low / medium / high 的可选命令数组                                                                                                   |
-| timeBudgetMinutes     | 30，正整数；一次运行共用的 deadline                                                                                                        |
-| inconclusiveRouting   | specialist；可选 human                                                                                                                     |
-| nonCodeTasks          | human_confirm；可选 artifact_only                                                                                                          |
-| dangerousPathPatterns | M3-03 下列 27 个危险路径模式；policy 显式设置时整体替换默认列表                   |
-| testPathPatterns      | `**/*.test.*`、`**/*.spec.*`、`**/__tests__/**`、`**/test_*.py`、`**/*_test.py`、`**/*_test.go`；policy 显式设置时整体替换（包括空列表） |
-| secretPatterns        | `[]`；非空 JavaScript 正则源码，无 flags；只追加，编译失败拒绝（invalid_argument） |
-| evidenceCommands | `{allowedPrograms: [pnpm, npm, npx, yarn, bun, node, pytest, python, python3, go, cargo, make, dotnet, mvn, gradle, ./gradlew]}`；用户 setup / gate 程序并入允许集；只约束模型命令形状与程序（D85） |
-| planInvalidPatterns | `ERR_PNPM_NO_SCRIPT`、`Missing script:`、`No test files found`、`error: unknown command`、`Unknown command`；非空 JavaScript regex、无 flags，非法 regex 拒绝；policy 可整体替换（D85） |
-| setupCommands         | `[]`                                                                                                                                       |
-| retryOnce             | 常见测试前缀：pnpm / npm / yarn / bun 的 test、run test；npx vitest、vitest、npx jest、jest、pytest、python -m pytest、go test、cargo test |
-| knownFlaky            | `[]`；人工维护的失败名模式，只有 `*` 是通配符                                                                                              |
+| 策略键                | 默认值 / 含义                                                                                                                                                                                       |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| repositoryGates       | `{}`；low / medium / high 的可选命令数组                                                                                                                                                            |
+| timeBudgetMinutes     | 30，正整数；一次运行共用的 deadline                                                                                                                                                                 |
+| inconclusiveRouting   | specialist；可选 human                                                                                                                                                                              |
+| nonCodeTasks          | human_confirm；可选 artifact_only                                                                                                                                                                   |
+| dangerousPathPatterns | M3-03 下列 27 个危险路径模式；policy 显式设置时整体替换默认列表                                                                                                                                     |
+| testPathPatterns      | `**/*.test.*`、`**/*.spec.*`、`**/__tests__/**`、`**/test_*.py`、`**/*_test.py`、`**/*_test.go`；policy 显式设置时整体替换（包括空列表）                                                            |
+| secretPatterns        | `[]`；非空 JavaScript 正则源码，无 flags；只追加，编译失败拒绝（invalid_argument）                                                                                                                  |
+| evidenceCommands      | `{allowedPrograms: [pnpm, npm, npx, yarn, bun, node, pytest, python, python3, go, cargo, make, dotnet, mvn, gradle, ./gradlew]}`；用户 setup / gate 程序并入允许集；只约束模型命令形状与程序（D85） |
+| planInvalidPatterns   | `ERR_PNPM_NO_SCRIPT`、`Missing script:`、`No test files found`、`error: unknown command`、`Unknown command`；非空 JavaScript regex、无 flags，非法 regex 拒绝；policy 可整体替换（D85）             |
+| setupCommands         | `[]`                                                                                                                                                                                                |
+| retryOnce             | 常见测试前缀：pnpm / npm / yarn / bun 的 test、run test；npx vitest、vitest、npx jest、jest、pytest、python -m pytest、go test、cargo test                                                          |
+| knownFlaky            | `[]`；人工维护的失败名模式，只有 `*` 是通配符                                                                                                                                                       |
 
-策略中的命令去首尾空白且不得为空。`resolveVerificationPlan(taskSpec, rules)` 同时供 ContextBuilder 和运行器使用：setupCommands 原顺序（不去重），Task 的 requiredEvidence 逐项去首尾空白、跳过空项，再去重且保留声明顺序（不对合法但未 trim 的 Task 数据抛错），最后追加 task.risk 对应的 repositoryGates（去掉已经列出的命令）。每项带 source=setup/evidence/gate。Worker 的 checksRun 从不参与验证判定；报告声称全绿也不能抵消实际失败。
+策略中的命令去首尾空白且不得为空。`resolveVerificationPlan(taskSpec, rules)` 同时供 ContextBuilder 和运行器使用：setupCommands 原顺序（不去重），接着 `resolveAcceptance` / `acceptanceCommands` 解析并去重后的 criterion commands，最后追加 task.risk 对应的 repositoryGates（去掉已经列出的命令）。每项为 `{source,command,criteria}`，source=setup/evidence/gate；evidence step 的 criteria 列出共用该命令的全部 criterion indexes，setup / gate 为 `[]`。legacy 命令仍去首尾空白、跳过空项并保留顺序，旧行的命令计划不变。Worker 的 `Required verification commands` 节继续列出同一计划。Worker 的 checksRun 从不参与验证判定；报告声称全绿也不能抵消实际失败。
+
+运行后 `verification-acceptance.ts` 逐条生成 `verdictDetail.acceptance[]`：`{index,text,check,result,checkIndexes,artifactIds}`，result 为 pass / fail / inconclusive / skipped / human。command 采用关联 step 的结果，environmental / plan_invalid 为 inconclusive；artifact 要求至少一个符合种类且有效的提交引用，以 artifactIds 指向证明；human 永远记录 human。文本和命令在持久化验证证据前脱敏。没有 command check 的 Task 继续走 M3-03b 非代码路径；artifact criterion 的确定性通过不自动让该路径 PASS。
 
 `verification-checks.ts` 在 prepare 成功后、同一全局串行 drain 中先写 phase=checking，再在 `splitWorktreeIdForFilesystem(worktreeId).worktreePath` 执行。只支持本地 repository；connectionId 非空或 executionHostId 非 local 的 repository 在建 worktree 之前交给运行器，得到 INCONCLUSIVE(environment)、detail=remote_repository_unsupported、escalation=human。进程选项沿用 automation precheck：shell=true、cwd、process.env、POSIX detached、windowsHide；超时和 shutdown 都复用其 killLocalPrecheckProcessTree，不新增 tree-kill。POSIX 停止时保留 helper 的延迟 SIGKILL，并等它执行后才允许回收。
 
@@ -514,30 +529,31 @@ deadline 从检查阶段开始（prepare 不计入），每条命令只得到剩
 
 retryOnce 对命令与前缀规范化空白，只允许相等、前缀后接空格或冒号；`pnpm run test:unit` 命中，fixture 的 `pnpm run verify:full` 不命中。匹配的 fail 在同一 worktree 最多重跑一次；两个 Attempt 的日志均保留，第二次 pass 使该 check 为 inconclusive(flaky)，第二次 fail 保持 fail。重试环境失败或预算耗尽不抹除第一次 deterministic fail。仍为 fail 且抽取出的失败名非空、全部匹配 knownFlaky（并无环境失败的重试）时变 inconclusive(known_flaky)，结算事务写一次 `verification.known_flaky {checkIndex, failures}`；系统不增加隔离名单。
 
-| Gate / Check（按优先顺序） | Verdict / reason | escalation / Task |
-| --- | --- | --- |
-| diff 新增行含密钥 | FAIL / secret_detected | VERIFYING → NEEDS_FIX → READY 或 BLOCKED |
-| diff 存在越界路径 | FAIL / scope_violation | 同上；即使所有命令 pass |
-| 任一 check fail | FAIL / checks_failed | 同上；优先于 diff INCONCLUSIVE |
-| 非代码 Task 无引用 Artifact / Artifact 为空、UTF-8 或 JSON 无效 | FAIL / artifact_missing 或 artifact_invalid | NEEDS_FIX → READY / BLOCKED；checks_failed 仍优先 |
-| diff 不可得，或非代码 Artifact 不可读 | INCONCLUSIVE / environment，detail 为固定 diff 错因或 artifact_unreadable | human；保持 VERIFYING；两者同时出现时保留 diff 错因 |
-| patch 超过扫描上限 | INCONCLUSIVE / diff_too_large | human；保持 VERIFYING |
-| 内容型篡改发现 | INCONCLUSIVE / test_tampering | human；保持 VERIFYING |
-| 危险路径未被 scope 明确命名 | INCONCLUSIVE / dangerous_change | human；保持 VERIFYING |
-| 无以上，任一 environmental | INCONCLUSIVE / environment | human；保持 VERIFYING |
-| 无以上，evidence check 为 inconclusive / plan_invalid | INCONCLUSIVE / plan_invalid | human；detail 为命令，保持 VERIFYING，不进入修复 Attempt（D85） |
-| 无以上，任一 inconclusive | INCONCLUSIVE / flaky（有 flaky 时）或 known_flaky | inconclusiveRouting；保持 VERIFYING |
-| 无以上，仍有 skipped | INCONCLUSIVE / environment | human；未执行不能算通过 |
-| 无以上，非代码 Task（不取决于仓库门禁是否通过或有无命令） | INCONCLUSIVE / non_code | human_confirm → human，artifact_only → inconclusiveRouting；保持 VERIFYING |
-| 无以上，代码 Task 全部 pass 且 gate clear | PASS / checks_passed | VERIFYING → VERIFIED |
+| Gate / Check（按优先顺序）                                                                          | Verdict / reason                                                          | escalation / Task                                                          |
+| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| diff 新增行含密钥                                                                                   | FAIL / secret_detected                                                    | VERIFYING → NEEDS_FIX → READY 或 BLOCKED                                   |
+| diff 存在越界路径                                                                                   | FAIL / scope_violation                                                    | 同上；即使所有命令 pass                                                    |
+| 任一 check fail 或 command criterion fail                                                           | FAIL / checks_failed                                                      | 同上；优先于 diff INCONCLUSIVE                                             |
+| artifact criterion 无匹配引用 / 匹配引用均无效，或非代码 Task 无引用 / 引用为空、UTF-8 或 JSON 无效 | FAIL / artifact_missing 或 artifact_invalid                               | NEEDS_FIX → READY / BLOCKED；checks_failed 仍优先                          |
+| diff 不可得，或非代码 Artifact 不可读                                                               | INCONCLUSIVE / environment，detail 为固定 diff 错因或 artifact_unreadable | human；保持 VERIFYING；两者同时出现时保留 diff 错因                        |
+| patch 超过扫描上限                                                                                  | INCONCLUSIVE / diff_too_large                                             | human；保持 VERIFYING                                                      |
+| 内容型篡改发现                                                                                      | INCONCLUSIVE / test_tampering                                             | human；保持 VERIFYING                                                      |
+| 危险路径未被 scope 明确命名                                                                         | INCONCLUSIVE / dangerous_change                                           | human；保持 VERIFYING                                                      |
+| 无以上，任一 environmental                                                                          | INCONCLUSIVE / environment                                                | human；保持 VERIFYING                                                      |
+| 无以上，evidence check 为 inconclusive / plan_invalid                                               | INCONCLUSIVE / plan_invalid                                               | human；detail 为命令，保持 VERIFYING，不进入修复 Attempt（D85）            |
+| 无以上，任一 inconclusive                                                                           | INCONCLUSIVE / flaky（有 flaky 时）或 known_flaky                         | inconclusiveRouting；保持 VERIFYING                                        |
+| 无以上，check / criterion 仍有 skipped，或 criterion 缺检查结果                                     | INCONCLUSIVE / environment                                                | human；未执行不能算通过                                                    |
+| 无以上，非代码 Task（不取决于仓库门禁是否通过或有无命令）                                           | INCONCLUSIVE / non_code                                                   | human_confirm → human，artifact_only → inconclusiveRouting；保持 VERIFYING |
+| 无以上，代码 Task 的确定性 criteria 全 pass，仍有 human criterion                                   | INCONCLUSIVE / acceptance_human，detail 为 human criterion 数量           | human；保持 VERIFYING，不 admission 修复 Attempt                           |
+| 无以上，全部确定性 criteria / checks pass，gate clear 且无 human criterion                          | PASS / checks_passed                                                      | VERIFYING → VERIFIED                                                       |
 
 D85：retryOnce / knownFlaky 处理之后，仍为 fail 的 evidence step 的所有执行尝试 stdout + stderr（完整已捕获输出，不只摘录）若匹配任一 planInvalidPatterns，则改为 inconclusive / plan_invalid。setup / gate 不适用；其它确定性 fail 优先，plan_invalid 优先于 flaky / known_flaky。verdict Artifact、verdictDetail 和 verification.inconclusive 审计通过既有路径带 reason、escalation=human 与 detail=<command>；Task 留在 VERIFYING，等待人工处置。
 
 每个 verdict 的事务都带 id、expectedStatus=RUNNING、expectedRuntimeEpoch、expectedClaimCount，且要求 Task 仍 VERIFYING、Candidate 仍是该 Task 的 ACTIVE Candidate。CAS 丢失不写 verdict / stage / audit，仍回收本次 worktree。PASS 的 stage actor=VerificationService、reason=verification_passed，审计 verification.passed。FAIL 经 execution/attempt-settlement.ts 的 settleVerificationFailure，同事务先 NEEDS_FIX(verification_failed)，再按 attemptCount < retryPolicy.maxAttempts 进入 READY(retry) 或 BLOCKED(retry_budget_exhausted)，审计 verification.failed {failures}。INCONCLUSIVE 只结算 run 与 verification.inconclusive {reason, escalation}，M3-05 才接审查。updateVerificationRun 根据术语表 §4.8 的完整转换表拒绝非法变化，FAIL/PASS/CANCELED 终态不可再改判；无 status 的元数据更新仍合法。
 
-证据先写、后回收 worktree：每条执行（含重跑与版本探针）的 stdout/stderr 各为 text/plain、kind=log Artifact，先脱敏再持久化；每流上限 MAX_ARTIFACT_BYTES（8 MiB），超限保留最前 1 MiB 与最新尾部，中间一行 `[axiom: <n> bytes omitted]`，记录 truncated 与原始字节数。失败名支持 Vitest `FAIL <file> > <name>`（可带 project 列）、Jest `● <suite> › <name>`（使用前面的 FAIL 文件头）和 fixture 的 deterministic reporter `<test-file> > <test fullName>: <message>`（在首个 ` > ` 后的首个 `: ` 处截断），每项最多 20 个、每名最多 300 字符。未知格式不猜测。失败/环境/不确定 check 的摘录围绕 FAIL、×、✗、Error、AssertionError、ERR_、failed、not found；无标记取末尾，单项 ≤40 行 / 4 KiB，总计 ≤32 KiB；摘录脱敏。
+证据先写、后回收 worktree：每条执行（含重跑与版本探针）的 stdout/stderr 各为 text/plain、kind=log Artifact，先脱敏再持久化；每流上限 MAX_ARTIFACT_BYTES（8 MiB），超限保留最前 1 MiB 与最新尾部，中间一行 `[axiom: <n> bytes omitted]`，记录 truncated 与原始字节数。失败名支持 Vitest `FAIL <file> > <name>`（可带 project 列）、Jest `● <suite> › <name>`（使用前面的 FAIL 文件头）和 fixture 的 deterministic reporter `<test-file> > <test fullName>: <message>`（在首个 `>` 后的首个 `: ` 处截断），每项最多 20 个、每名最多 300 字符。未知格式不猜测。失败/环境/不确定 check 的摘录围绕 FAIL、×、✗、Error、AssertionError、ERR_、failed、not found；无标记取末尾，单项 ≤40 行 / 4 KiB，总计 ≤32 KiB；摘录脱敏。
 
-verdict 文档为单个 application/json、kind=evidence Artifact，createdBy=VerificationService、related=[runId,taskId,candidateId]。包含 verdict/reason/escalation、checks（index/source/command/result/reason、exitCode/signal/durationMs、attempts、failures/excerpt、stdoutArtifactId/stderrArtifactId、truncated、每流原始字节数与截断标记）、工具探针记录、toolVersions、deadline 与时间戳。版本命令 node/pnpm/git --version 在检查之后运行，每个最多 10 秒且仍在同一预算内；缺失或未能取得版本记 unavailable，不影响 verdict。resolved commands 与 toolVersions 写到既有列；verdictDetail 仅存 phase=verdict、verdict/reason/escalation、verdictArtifactId、保留 prepare 证据的 evidenceArtifactIds，以及 check 的 index/source/command/result/reason/exitCode/durationMs/failures 摘要。日志和摘录不放 SQLite；verification show 因而能列出失败测试。重复内容沿用 ArtifactStore 的内容去重；verdict 文档的引用固定本次运行的关联。
+verdict 文档为单个 application/json、kind=evidence Artifact，createdBy=VerificationService、related=[runId,taskId,candidateId]。包含 verdict/reason/escalation、acceptance[]、checks（index/source/command/criteria/result/reason、exitCode/signal/durationMs、attempts、failures/excerpt、stdoutArtifactId/stderrArtifactId、truncated、每流原始字节数与截断标记）、工具探针记录、toolVersions、deadline 与时间戳。版本命令 node/pnpm/git --version 在检查之后运行，每个最多 10 秒且仍在同一预算内；缺失或未能取得版本记 unavailable，不影响 verdict。resolved commands 与 toolVersions 写到既有列；verdictDetail 存 phase=verdict、verdict/reason/escalation、acceptance[]、verdictArtifactId、保留 prepare 证据的 evidenceArtifactIds，以及 check 的 index/source/command/criteria/result/reason/exitCode/durationMs/failures 摘要。`verification.passed/failed/inconclusive` 审计同样带逐条 acceptance 结果。日志和摘录不放 SQLite；verification show 因而能列出失败测试。重复内容沿用 ArtifactStore 的内容去重；verdict 文档的引用固定本次运行的关联。
 
 回收失败保留 worktreeId 与 cleanupPending=true；周期恢复现覆盖 PASS、FAIL、INCONCLUSIVE、两类 review 与 CANCELED 的待清理行，清理只更新元数据，不改变 verdict。shutdown 中 VerificationService.stop 中止运行中的进程树、停止 drain；RUNNING 保留，下一 boot 回收并重新 QUEUED。同一 plane 的 stop/start 也先等待旧 drain 退出，再换 epoch 恢复。E2E 唯一 hold seam：getMainE2EConfig().enabled 且 AXIOM_E2E_HOLD_VERIFICATION=1 时停在 prepared；非 E2E 模式不读取此变量。withFixtureMission 默认设置 hold，runVerification=true 时省略；新的 mission-verification.spec.ts 用 per-Task scenario marker 驱动三个冻结场景，并在批准的测试计划设 maxAttempts=1，阻止后续 Attempt 抢跑断言。
 
@@ -557,13 +573,33 @@ patch 默认最多 32 MiB；超限停止子进程，保留路径清单，丢弃�
 
 ```json
 [
-  ".github/workflows/**", ".github/actions/**", ".gitlab-ci.yml", ".circleci/**",
-  ".husky/**", ".pre-commit-config.yaml", "**/lefthook.yml", "**/package.json",
-  "**/pnpm-lock.yaml", "**/pnpm-workspace.yaml", "**/package-lock.json", "**/yarn.lock",
-  "**/.npmrc", "**/vitest.config.*", "**/vitest.workspace.*", "**/jest.config.*",
-  "**/playwright.config.*", "**/eslint.config.*", "**/.eslintrc*", "**/.oxlintrc*",
-  "**/AGENTS.md", "**/CLAUDE.md", "**/.claude/**", "**/.codex/**", "**/.agents/**",
-  "**/.mcp.json", ".axiom-work/**"
+  ".github/workflows/**",
+  ".github/actions/**",
+  ".gitlab-ci.yml",
+  ".circleci/**",
+  ".husky/**",
+  ".pre-commit-config.yaml",
+  "**/lefthook.yml",
+  "**/package.json",
+  "**/pnpm-lock.yaml",
+  "**/pnpm-workspace.yaml",
+  "**/package-lock.json",
+  "**/yarn.lock",
+  "**/.npmrc",
+  "**/vitest.config.*",
+  "**/vitest.workspace.*",
+  "**/jest.config.*",
+  "**/playwright.config.*",
+  "**/eslint.config.*",
+  "**/.eslintrc*",
+  "**/.oxlintrc*",
+  "**/AGENTS.md",
+  "**/CLAUDE.md",
+  "**/.claude/**",
+  "**/.codex/**",
+  "**/.agents/**",
+  "**/.mcp.json",
+  ".axiom-work/**"
 ]
 ```
 
@@ -623,16 +659,15 @@ const ASSERTIONS = [
 const SUPPRESSIONS = [
   /(?:eslint-disable|oxlint-disable|biome-ignore|@ts-ignore|@ts-nocheck|@ts-expect-error|#\s*noqa\b|#\s*type:\s*ignore|pylint:\s*disable|\bnolint\b|istanbul\s+ignore|c8\s+ignore|v8\s+ignore)/g
 ]
-
 ```
 
 这是词法检查，不是语义审查：字符串、注释中的示例也可能命中；合法的删冗余断言、条件 skip、expected-failure 和抑制注释会交人。跨文件计数不抵消，改断言参数或等量替换断言不保证被发现。二进制内容不扫描，patch 被截断时不能据部分内容判安全。`checks_failed` 或 scope / secret 失败优先时，tampering 仍保留在 diff 证据中；下一修复 Attempt 的既有 Diff schema 解析该列表，在原有失败信息后追加 `Test tampering findings (path, rule, net count):`、最多 50 条 path/rule/count，以及恢复测试 / 断言、移除新增 skip / suppression 的指令。secret_detected 导致从干净集成基线重试时也通过同一渲染逻辑保留这些发现；原有摘录和失败名上限不变。
 
-命令计划执行后，`worker-artifacts.ts` 通过 Candidate.attemptId 读取 Submission，逐个检查 report.artifacts 引用：`artifacts.read` 失败为 unreadable；零字节为 empty；text/*、application/json、application/*+json 使用 fatal UTF-8 decoder，解码失败为 invalid_utf8；JSON 再解析，失败为 invalid_json。媒体类型匹配忽略大小写和 `;` 后参数。其他媒体类型只检查可读、非空；纯空白文本仍非空，纯空白 JSON 无效。所有 kind 使用同一检查，不推测按 kind 的 schema，也不以 Worker 的 checksRun 作证据。
+命令计划执行后，`worker-artifacts.ts` 通过 Candidate.attemptId 读取 Submission，逐个检查 report.artifacts 引用：`artifacts.read` 失败为 unreadable；零字节为 empty；text/_、application/json、application/_+json 使用 fatal UTF-8 decoder，解码失败为 invalid_utf8；JSON 再解析，失败为 invalid_json。媒体类型匹配忽略大小写和 `;` 后参数。其他媒体类型只检查可读、非空；纯空白文本仍非空，纯空白 JSON 无效。所有 kind 使用同一检查，不推测按 kind 的 schema，也不以 Worker 的 checksRun 作证据。
 
-每个完成检查阶段的 run（含 policy_invalid / remote_repository_unsupported）在 verdictDetail 与完整证据 Artifact 中保存 `artifacts={required,checked:[{id,kind,mediaType,bytes,problem?}],counts:{checked,unreadable,empty,invalid_utf8,invalid_json}}`。required 表示非代码 Task；checked 列表按提交引用顺序最多 50 条，counts 统计全部引用，超出列表的无效项仍改变 verdict。可读时 bytes 是实际内容长度；不可读时保留可用元数据，未知字段为 null。只存元数据与固定问题名，不存内容或原始存储错误。
+每个完成检查阶段的 run（含 policy_invalid / remote_repository_unsupported）在 verdictDetail 与完整证据 Artifact 中保存 `artifacts={required,checked:[{id,kind,mediaType,bytes,problem?}],counts:{checked,unreadable,empty,invalid_utf8,invalid_json}}`。required 表示非代码 Task 或存在显式 artifact criterion。内部检查全部引用，再按种类判定每个 criterion；持久摘要 checked 按引用顺序最多 50 条，counts 统计全部引用，因此第 51 条后的有效证明仍可满足 criterion，无效项仍参与非代码规则。可读时 bytes 是实际内容长度；不可读时保留可用元数据，未知字段为 null。只存元数据与固定问题名，不存内容或原始存储错误。
 
-非代码 Task 严格定义为 requiredEvidence 逐项 trim 后无非空命令，setupCommands / repositoryGates 不改变分类且仍照常运行。无引用 Artifact → FAIL(artifact_missing)；任一 empty / invalid_utf8 / invalid_json → FAIL(artifact_invalid)；无上述失败但有 unreadable → INCONCLUSIVE(environment, artifact_unreadable)，交人。其他优先级规则仍按上表；没有更高优先级原因时，非代码 Task 始终 INCONCLUSIVE(non_code)，即使门禁全绿或根本没有命令。human_confirm 交人，artifact_only 按 inconclusiveRouting（默认 specialist）；不自动 PASS。代码 Task 的 Artifact 问题仅为证据，不改变 verdict。修复上下文对 required=true 的 Artifact 问题追加 `Artifact problems:` 与最多 50 条 `id (problem)`。
+非代码 Task 定义为解析后 criteria 中没有 command check，setupCommands / repositoryGates 不改变分类且仍照常运行。保留 M3-03b 的隐式证明规则：无引用 Artifact → FAIL(artifact_missing)；任一 empty / invalid_utf8 / invalid_json → FAIL(artifact_invalid)；无上述失败但有 unreadable → INCONCLUSIVE(environment, artifact_unreadable)，交人。显式 artifact criterion 则按本 Task brief 的确定性证明要求：没有可读、非空的匹配引用就 fail；无匹配 kind 为 artifact_missing，有匹配但均无效（含 unreadable）为 artifact_invalid，优先于隐式非代码环境分支。其他优先级按上表；没有更高原因时，非代码 Task 始终 INCONCLUSIVE(non_code)，即使 Artifact criteria 与门禁全绿。human_confirm 交人，artifact_only 按 inconclusiveRouting（默认 specialist）；不自动 PASS。代码 Task 未被 artifact criterion 要求的 Artifact 问题只记证据。修复上下文对 required=true 的 Artifact 问题追加 `Artifact problems:` 与最多 50 条 `id (problem)`。
 
 宿主 `mission-tamper-gate.spec.ts` 使用三个 provider-only 修改，分别为 date.test.ts 的 test.skip、guards.test.ts 删除一个 expect、clock.test.ts 增加 c8 ignore；provider 在预期文本缺失时抛错。三个候选的 setup 与 verify:full 必须全部 pass，但 run 均为 INCONCLUSIVE(test_tampering)、escalation=human，Task 保持 VERIFYING；diff 与审计中的单条发现必须精确一致，scopeViolations 为空。S4 的输入表修正仍无发现，修复循环的宿主回归继续由验证者运行。
 
@@ -642,22 +677,25 @@ const SUPPRESSIONS = [
 
 `axiom.message.answer {missionId, questionId, body}` 是唯一 Mission answer 路径：核对 Mission/Attempt 归属，以当前 `run.consumer_generation` 调用 `answerQuestion`，记录 question.answered / receipt、重算 readiness，再通知 `dispatch:<id>` 的 status waiter。同内容重答幂等，异内容 answer_conflict；closed → dispatch_inactive。ask / answer 的内核函数各自拥有 BEGIN IMMEDIATE，不能嵌入另一写事务；内核写入后同步保存 Axiom 审计及收据，再通知。CLI 为 `axiom message answer --mission <id> --question <messageId> --body <text>`。
 
-`axiom.task.create {missionId, task, dependsOn, provenance}` 经唯一的 `MissionController.createTask` 写入；task 为不带 id 的 TaskSpec，dependsOn 可为空。只允许 PLANNED / EXECUTING 且 active PlanRevision 为 APPROVED（否则 mission_not_executing / plan_pending）。事务内检查重复、依赖、预算；物化 tasks（deps=[]）、task_stages（DEFINED）与 mission_task_edges，写 task.created / plan.minor_adjustment，再重算 readiness（执行中 root 可立即 READY）。提交后触发 Scheduler。原 PlanRevision proposal 保留，新增 Task 绑定该 revision，不创建新 revision。CLI `axiom task create --mission <id> --file <task.json> [--depends-on <taskId>]* --json`；JSON 是 TaskSpec（无 id），user provenance 的 at 使用文件 mtime 保持重试稳定。D50 的 model provenance 只存本次 Task audit，不改变 PlanRevision provenance schema。
+`axiom.task.create {missionId, task, dependsOn, provenance}` 经唯一的 `MissionController.createTask` 写入；task 为不带 id 的 TaskSpec，dependsOn 可为空。只允许 PLANNED / EXECUTING 且 active PlanRevision 为 APPROVED（否则 mission_not_executing / plan_pending）。事务内先执行与 plan.propose 相同的 criterion shape / retired evidence / command 边界检查，再检查重复、依赖、预算；物化 tasks（deps=[]）、task_stages（DEFINED）与 mission_task_edges，写 task.created / plan.minor_adjustment，再重算 readiness（执行中 root 可立即 READY）。提交后触发 Scheduler。原 PlanRevision proposal 保留，新增 Task 绑定该 revision，不创建新 revision。CLI `axiom task create --mission <id> --file <task.json> [--depends-on <taskId>]* --json`；JSON 为对象 criteria 的 TaskSpec（无 id），拒绝 retired requiredEvidence；user provenance 的 at 使用文件 mtime 保持重试稳定。D50 的 model provenance 只存本次 Task audit，不改变 PlanRevision provenance schema。
 
-| D50 检查 / 分支 | 确定性行为 |
-|---|---|
-| scope | 分隔符与点路径规范化后，每个 allowedPath 等于或在请求者 scope 内，按目录边界判断 |
-| depth | 请求者的 task.created.after.origin 不得是 request_subtask（最多一层） |
-| duplicate | Mission 内不得有规范化后相同路径集合或 trim + case-insensitive 相同标题 |
-| dependency | 所有 dependsOn 属于 Mission；追加原 Task → 新 Task 及请求依赖后 orderPlanTasks 无环 |
-| budget | policy.budget.maxAttempts 若设置，须大于 Mission attemptCount 总和 |
-| attempt | 请求者 binding 匹配 Task/Mission，dispatch 仍为 dispatched |
+`REQUEST_SUBTASK.subtask` 为严格对象：`{title,objective,allowedPaths,acceptanceCriteria: AcceptanceCriterion[至少一项],risk?,dependsOn?}`；不接受字符串 criteria 或 requiredEvidence。命令边界与 Planner 共用 `resolveAcceptance` 和验证器，D50 失败项名为 `evidence`。既有持久消息的读取也通过唯一 resolver 兼容，不重写历史 payload；新 Worker RPC / MCP 仍严格拒绝旧形状。
+
+| D50 检查 / 分支                               | 确定性行为                                                                                                                                                                         |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| scope                                         | 分隔符与点路径规范化后，每个 allowedPath 等于或在请求者 scope 内，按目录边界判断                                                                                                   |
+| depth                                         | 请求者的 task.created.after.origin 不得是 request_subtask（最多一层）                                                                                                              |
+| duplicate                                     | Mission 内不得有规范化后相同路径集合或 trim + case-insensitive 相同标题                                                                                                            |
+| dependency                                    | 所有 dependsOn 属于 Mission；追加原 Task → 新 Task 及请求依赖后 orderPlanTasks 无环                                                                                                |
+| budget                                        | policy.budget.maxAttempts 若设置，须大于 Mission attemptCount 总和                                                                                                                 |
+| evidence                                      | 每个 command criterion 满足 D85 命令边界，失败 reason=evidence                                                                                                                     |
+| attempt                                       | 请求者 binding 匹配 Task/Mission，dispatch 仍为 dispatched                                                                                                                         |
 | 全部通过，subtaskAutoCreate 严格 boolean true | 消费者在 subtask.requested 后经 createTask 创建；继承 retryPolicy、milestoneId，kind=task，risk 默认 low；边使用 Mission readinessThreshold；subtask.resolved.decision=auto_accept |
-| 检查失败 / 自动创建未启用 | 保持 pending；失败写 subtask.checks_failed（failed 数组），无 Task 创建 |
-| 人工 accept | `axiom.message.resolve {missionId,messageId,decision:'accept',rationale}` 重跑全部检查，再走相同 createTask；失败仍 pending |
-| 人工 reject | 同一 resolve，decision=reject；只写 subtask.resolved，不创建 Task |
+| 检查失败 / 自动创建未启用                     | 保持 pending；失败写 subtask.checks_failed（failed 数组），无 Task 创建                                                                                                            |
+| 人工 accept                                   | `axiom.message.resolve {missionId,messageId,decision:'accept',rationale}` 重跑全部检查，再走相同 createTask；失败仍 pending                                                        |
+| 人工 reject                                   | 同一 resolve，decision=reject；只写 subtask.resolved，不创建 Task                                                                                                                  |
 
-所有成功处置写 `subtask.resolved.after = {decision,reason,taskId?}`；再次 resolve 返回 invalid_argument。CLI `axiom message resolve --mission <id> --message <id> --accept|--reject --rationale <text>` 要求恰好一个决定。用户 task.create 无请求 Attempt，仅执行 duplicate / dependency / budget；来源请求的创建仍执行六项。answer、resolve、task.create 均进 AXIOM_MUTATION_METHODS，与 ask 一起使用既有 envelope 栅栏和收据。M4 接 Approval，M5 将请求量作为 replan 信号。
+所有成功处置写 `subtask.resolved.after = {decision,reason,taskId?}`；再次 resolve 返回 invalid_argument。CLI `axiom message resolve --mission <id> --message <id> --accept|--reject --rationale <text>` 要求恰好一个决定。用户 task.create 无请求 Attempt，执行验收合同检查及 duplicate / dependency / budget；来源请求的创建执行上表全部检查。answer、resolve、task.create 均进 AXIOM_MUTATION_METHODS，与 ask 一起使用既有 envelope 栅栏和收据。M4 接 Approval，M5 将请求量作为 replan 信号。
 
 M2 之后：M3 复用 Question/待决项投影；M4 接 Approval，M5 使用 REQUEST_SUBTASK 作为 replan 输入。
 
@@ -677,11 +715,11 @@ CLI 形状为 `axiom task adjust --task <id> --rationale <text> [--add-path <pat
 
 `src/main/axiom/authority/caller-authority.ts` 的 `AXIOM_METHOD_CALLER_CLASS` 覆盖所有已注册的 `axiom.*`，测试与 `AXIOM_METHODS` 双向对照，包含 `axiom.namespace.get`。方法只占一行；`resolveAxiomCallerClass` 按解析后的 `attemptId` 区分两种提案 / 上传入口。
 
-| 类别 | 方法（省略 axiom. 前缀） |
-| --- | --- |
+| 类别         | 方法（省略 axiom. 前缀）                                                                                                                                                                                                     |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | desktop_only | mission.create / plan / start / pause / resume / cancel；goal.propose / activate；plan.approve / reject；policy.update；task.create / adjust / cancel；message.answer / resolve；无 attemptId 的 plan.propose / artifact.put |
-| attempt | attempt.submit / ask / inform / request / blocked / handoff / request-subtask / check；带 attemptId 的 plan.propose / artifact.put |
-| read | namespace.get；artifact.read / list；attempt.show / list；goal.show；message.list；mission.show / list；plan.show / list；policy.show；task.list / show；verification.show / list |
+| attempt      | attempt.submit / ask / inform / request / blocked / handoff / request-subtask / check；带 attemptId 的 plan.propose / artifact.put                                                                                           |
+| read         | namespace.get；artifact.read / list；attempt.show / list；goal.show；message.list；mission.show / list；plan.show / list；policy.show；task.list / show；verification.show / list                                            |
 
 `RpcDispatcher.invokeUnary` 在 `assertAttemptRequestAuthority` 旁、mutation receipt replay 之前调用 `assertAxiomCallerAuthority(method, params, ctx, method.permission)`；普通和 streaming transport 的 unary 请求共用此点。desktop_only 只接受 transport 盖章的 `ctx.caller.kind=desktop`；local-cli、paired-device、缺失身份均抛 `OrchestrationError(caller_not_desktop)`，提示在 Axiom app 决定。params 中的身份字段无权改变传输盖章的 caller kind。现有人工 handler 的 user / resolver provenance 不改，也不新增 schema。
 
@@ -691,13 +729,13 @@ CLI 形状为 `axiom task adjust --task <id> --rationale <text> [--add-path <pat
 
 实际覆盖由 `dispatcher-axiom-session-coverage.test.ts` 固定：请求携带注入的 agentSessionId 时，宿主按下表解析 ctx.orchestrationCaller。CLI 的 compatibility envelope 只为相同的方法集合附带身份依据；测试逐一对照全部 AXIOM_METHODS，保证新扩展恰好是 desktop_only 方法。CLI 复用 AXIOM_MUTATION_METHODS（当前除 Attempt mutation 外均为 desktop_only），不引入 main 模块或第二套身份机制。
 
-| 方法 / 调用条件 | 会话归属与第二层覆盖 |
-| --- | --- |
-| 所有 orchestration. 方法（含未列在 ORCHESTRATION_CALLER_PARAM 的 runShow / reset） | 有注入的 agentSessionId 时解析 ctx；只有 ORCHESTRATION_CALLER_PARAM 列出的方法改写 caller params。非 workspace 与 Run / Worker 创建拒绝可归属的 Axiom 会话；普通非 Axiom 会话行为不变。 |
-| AXIOM_ATTEMPT_CALLER_METHODS：八个 Worker 动词、plan.propose、artifact.put | 解析 ctx 并绑定 from；两个条件方法无 attemptId 时仍为 desktop_only。 |
-| 其余 desktop_only Axiom 方法（含 plan.approve / policy.update / message.answer） | 解析 ctx 以关联 authority.refused，但不改写 params，也不授予权限。所有非 desktop 调用仍拒绝；清掉会话环境也不能绕过 desktop 边界。 |
-| Axiom read、agentSession.respondToApproval / respondToQuestion、settings / computer 等非 orchestration 方法 | 不解析 ctx；非 Axiom 方法的解析范围与原实现一致。respondTo* 等方法只有已有宿主归属时才受第二层拦截，当前真实入口不能归属，仍靠 D63 沙盒姿态。 |
-| 无 agentSessionId，仅有 PTY terminal / pane 依据 | 不产生 ctx.orchestrationCaller；已经拒绝的 desktop_only 调用经上述 D73 检查后写 authority.refused。无效 / 矛盾依据、非 live pane、过期 / stopping / 已结算 Attempt 不归属；第二层覆盖不变。显式 session address 可触发原有 caller 参数绑定，但不产生 ctx。 |
+| 方法 / 调用条件                                                                                             | 会话归属与第二层覆盖                                                                                                                                                                                                                                       |
+| ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 所有 orchestration. 方法（含未列在 ORCHESTRATION_CALLER_PARAM 的 runShow / reset）                          | 有注入的 agentSessionId 时解析 ctx；只有 ORCHESTRATION_CALLER_PARAM 列出的方法改写 caller params。非 workspace 与 Run / Worker 创建拒绝可归属的 Axiom 会话；普通非 Axiom 会话行为不变。                                                                    |
+| AXIOM_ATTEMPT_CALLER_METHODS：八个 Worker 动词、plan.propose、artifact.put                                  | 解析 ctx 并绑定 from；两个条件方法无 attemptId 时仍为 desktop_only。                                                                                                                                                                                       |
+| 其余 desktop_only Axiom 方法（含 plan.approve / policy.update / message.answer）                            | 解析 ctx 以关联 authority.refused，但不改写 params，也不授予权限。所有非 desktop 调用仍拒绝；清掉会话环境也不能绕过 desktop 边界。                                                                                                                         |
+| Axiom read、agentSession.respondToApproval / respondToQuestion、settings / computer 等非 orchestration 方法 | 不解析 ctx；非 Axiom 方法的解析范围与原实现一致。respondTo* 等方法只有已有宿主归属时才受第二层拦截，当前真实入口不能归属，仍靠 D63 沙盒姿态。                                                                                                              |
+| 无 agentSessionId，仅有 PTY terminal / pane 依据                                                            | 不产生 ctx.orchestrationCaller；已经拒绝的 desktop_only 调用经上述 D73 检查后写 authority.refused。无效 / 矛盾依据、非 live pane、过期 / stopping / 已结算 Attempt 不归属；第二层覆盖不变。显式 session address 可触发原有 caller 参数绑定，但不产生 ctx。 |
 
 会话解析只提供归属，desktop 传输盖章才是人工动作边界。不能把第二层当成认证边界，也不能把读取仍可用误记为允许 Agent 作人工决定。
 
@@ -709,22 +747,22 @@ artifact.put 增加可选 attemptId / from；带 attemptId 时在回执前及 ha
 
 `mission-managed-run-guard.ts` 按 Run、Task、dispatch 查 Mission 归属，在对象解析后、首次写入前拒绝。非 Mission Run 保持原行为；未知对象保持原错误。以下路径在 M1-07 / M2-06a 落地：
 
-| Orca 入口 | 守卫 / RPC 文件（`src/main/runtime/rpc/methods/` 下） |
-|---|---|
-| taskUpdate 修改 status | `assertNotMissionManaged`；`orchestration/messaging/message-methods.ts` |
-| taskCreate（有/无 deps 均拒绝） | `assertTaskCreateAllowed`；同上，仅 Plan 批准物化 Mission Task |
-| reset all/tasks/messages | `assertResetAllowed`；`orchestration/runs/reset-methods.ts`；数据库存在任一 Mission 即拒绝 |
-| workerStart / dispatch | `assertNotMissionManaged`；`orchestration/worker/workers.ts`、`orchestration/runs/dispatch-methods.ts` |
-| send worker_done / merge_ready / dispatch / decision_gate | `assertWorkerMessageAllowed`；`orchestration/messaging/send-methods.ts`；同步结算前拦截 |
-| gateCreate / gateResolve | `assertNotMissionManaged`；`orchestration/gates/gates.ts` |
-| runUse，包括 takeover-legacy | `assertNotMissionManaged`；`orchestration/runs/runs.ts`；bindRun 前拒绝 |
-| run / runStop / coordinator-start | 保持退役；契约 fence / CLI dispatch-handlers 拒绝 |
-| workerStop / workerAbandon（M2-06a） | `assertNotMissionManaged`；`orchestration/worker/worker-stop.ts` / `worker-control.ts`，首次 stop/abandon 前 |
+| Orca 入口                                                        | 守卫 / RPC 文件（`src/main/runtime/rpc/methods/` 下）                                                                                   |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| taskUpdate 修改 status                                           | `assertNotMissionManaged`；`orchestration/messaging/message-methods.ts`                                                                 |
+| taskCreate（有/无 deps 均拒绝）                                  | `assertTaskCreateAllowed`；同上，仅 Plan 批准物化 Mission Task                                                                          |
+| reset all/tasks/messages                                         | `assertResetAllowed`；`orchestration/runs/reset-methods.ts`；数据库存在任一 Mission 即拒绝                                              |
+| workerStart / dispatch                                           | `assertNotMissionManaged`；`orchestration/worker/workers.ts`、`orchestration/runs/dispatch-methods.ts`                                  |
+| send worker_done / merge_ready / dispatch / decision_gate        | `assertWorkerMessageAllowed`；`orchestration/messaging/send-methods.ts`；同步结算前拦截                                                 |
+| gateCreate / gateResolve                                         | `assertNotMissionManaged`；`orchestration/gates/gates.ts`                                                                               |
+| runUse，包括 takeover-legacy                                     | `assertNotMissionManaged`；`orchestration/runs/runs.ts`；bindRun 前拒绝                                                                 |
+| run / runStop / coordinator-start                                | 保持退役；契约 fence / CLI dispatch-handlers 拒绝                                                                                       |
+| workerStop / workerAbandon（M2-06a）                             | `assertNotMissionManaged`；`orchestration/worker/worker-stop.ts` / `worker-control.ts`，首次 stop/abandon 前                            |
 | workerRelease / workerRetain / workerTerminalUserInput（M2-06a） | `orchestration/worker/worker-release.ts`；输入先解析 pane（含 session/handle），守卫查资源的 dispatch，覆盖已结算保留资源与 pane remint |
-| ask（M2-06a） | `orchestration/messaging/ask-methods.ts`；activeDispatch 解析后，createQuestion 前；Worker ask 已由 M2-06b 提供 |
-| reply（M2-06a） | `orchestration/messaging/message-methods.ts`；原消息 run_id 与发送者 Run 两侧检查，markAsRead / answerQuestion 前 |
-| send(group)，含 @all / @worktree（M2-06a） | `orchestration/messaging/send-methods.ts`；路由与发送者 Run 检查，sendGroupMessage 前 |
-| workerStart --on（M2-06a 测试） | 沿用 `worker/workers.ts` 的 M1-07 守卫；测试证明 federation 前拒绝，无新增内核代码 |
+| ask（M2-06a）                                                    | `orchestration/messaging/ask-methods.ts`；activeDispatch 解析后，createQuestion 前；Worker ask 已由 M2-06b 提供                         |
+| reply（M2-06a）                                                  | `orchestration/messaging/message-methods.ts`；原消息 run_id 与发送者 Run 两侧检查，markAsRead / answerQuestion 前                       |
+| send(group)，含 @all / @worktree（M2-06a）                       | `orchestration/messaging/send-methods.ts`；路由与发送者 Run 检查，sendGroupMessage 前                                                   |
+| workerStart --on（M2-06a 测试）                                  | 沿用 `worker/workers.ts` 的 M1-07 守卫；测试证明 federation 前拒绝，无新增内核代码                                                      |
 
 M2-06a 的 `admission-worker-control.test.ts` 与 `admission-rpc.test.ts` 覆盖上述入口的 Mission/非 Mission 对照。Control Plane 的 stop/abandon 调用已走 M2-08 service 边界；进程内 `caller: 'control_plane'` 不对 RPC params 开放。
 
@@ -784,29 +822,29 @@ D78 之后，创建 Mission、启动 Planner、人工提案、批准计划、开
 
 M2-10：Mission Home 的 Attempt 计数仅包含 `role=worker` 的 RUNNING / SUBMITTED；Planner 为 STARTING / RUNNING 时显示进行中。ANALYZING 可 Start Planner；进行中的 mutation、活跃 Planner 或 PROPOSED plan 禁用重复启动。Planner readiness 的长等待期间保留 busy。Pending items 用 `message.list({missionId,pendingOnly:true})` 列出 QUESTION / REQUEST_SUBTASK，点击跳到所属 Task Detail。Task Detail 读取 Task 范围的 Attempt / message 列表，展示最新提交的 Attempt 的 Candidate 证据与按时间升序的单列消息；pending QUESTION 可回答，pending REQUEST_SUBTASK 可附理由接受/拒绝。answer/resolve/plan 均走统一 request-id envelope，不确定重试复用同一载荷的 id；成功或失败都重读 RPC，不用 mutation 响应推断权威状态。Task 选择只在当前 Mission 会话内保留，切换 Mission 时清空。worktreeId 经既有 `activateWorktreeFromSidebar` 导航，不新增执行面板。
 
-| 错误/诊断 | 含义与操作 |
-|---|---|
-| `no_active_sender_terminal` | CLI 没有终端身份，命令未到达 runtime；不是 Mission 损坏 |
-| `mission_managed` | Orca 入口试图越过权威；改用相应 `axiom mission/plan/task` 动作。reset 不是取消；破坏性恢复需后续 Approval 路径 |
-| `consumer_fenced` | caller/consumer 的绑定或 generation 已失效；CLI 拒绝不等于 Mission 损坏。若 Mission BLOCKED，检查 `mailbox.consumer_fenced` 及绑定证据，不抢占/重建 Run |
-| `run_required` | Orca caller 没有可用 coordinator Run；仅传 `--run` 不能获得权限 |
-| `run_binding_lost` | RecoveryService 诊断；关联审计 `recovery.run_binding_lost`，Mission BLOCKED，需保留证据后处理绑定，不把失联当成功恢复 |
-| `plan_pending` | 已有 PROPOSED 计划；先查看并 approve/reject，不重发新计划 |
-| `stale_state` | 预期源状态与数据库不符；重读当前对象再决定动作；不盲目覆盖 |
-| `retry_budget_exhausted`（task.adjust） | 调整后仍没有下一次 Attempt 额度；整笔调整已回滚，pending 项保留，需经桌面明确提高 Task maxAttempts 或取消 |
-| `plan_invalid` / `illegal_transition` | 提案结构/DAG/Goal 关联无效，或转换不合法；看错误 data，修正输入 |
-| `replan_not_supported` | M2 仍不能批准替代计划；Goal 在 EXECUTING 激活虽可进入 REPLANNING，完整替代闭环留给 M5 |
-| `orchestration_migration_required` / `request_mismatch` | 契约 envelope 缺失/不兼容，或同幂等 id 换了载荷；升级兼容客户端或为新意图使用新 id |
+| 错误/诊断                                               | 含义与操作                                                                                                                                              |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `no_active_sender_terminal`                             | CLI 没有终端身份，命令未到达 runtime；不是 Mission 损坏                                                                                                 |
+| `mission_managed`                                       | Orca 入口试图越过权威；改用相应 `axiom mission/plan/task` 动作。reset 不是取消；破坏性恢复需后续 Approval 路径                                          |
+| `consumer_fenced`                                       | caller/consumer 的绑定或 generation 已失效；CLI 拒绝不等于 Mission 损坏。若 Mission BLOCKED，检查 `mailbox.consumer_fenced` 及绑定证据，不抢占/重建 Run |
+| `run_required`                                          | Orca caller 没有可用 coordinator Run；仅传 `--run` 不能获得权限                                                                                         |
+| `run_binding_lost`                                      | RecoveryService 诊断；关联审计 `recovery.run_binding_lost`，Mission BLOCKED，需保留证据后处理绑定，不把失联当成功恢复                                   |
+| `plan_pending`                                          | 已有 PROPOSED 计划；先查看并 approve/reject，不重发新计划                                                                                               |
+| `stale_state`                                           | 预期源状态与数据库不符；重读当前对象再决定动作；不盲目覆盖                                                                                              |
+| `retry_budget_exhausted`（task.adjust）                 | 调整后仍没有下一次 Attempt 额度；整笔调整已回滚，pending 项保留，需经桌面明确提高 Task maxAttempts 或取消                                               |
+| `plan_invalid` / `illegal_transition`                   | 提案结构/DAG/Goal 关联无效，或转换不合法；看错误 data，修正输入                                                                                         |
+| `replan_not_supported`                                  | M2 仍不能批准替代计划；Goal 在 EXECUTING 激活虽可进入 REPLANNING，完整替代闭环留给 M5                                                                   |
+| `orchestration_migration_required` / `request_mismatch` | 契约 envelope 缺失/不兼容，或同幂等 id 换了载荷；升级兼容客户端或为新意图使用新 id                                                                      |
 
 M2 出口证据以 [M2-exit-e2e.md](../review-evidence/axiom-m2/M2-exit-e2e.md) 的六条矩阵与 verifier 的宿主记录为准。新 exit spec 要求在同一 profile 完成 Planner → approve → start → 三根并行 → 一根 crash/retry → 三个 SUBMITTED，并比较四类提交前后持久行及 refs。shell 存活时的退出证明、kernel-first 失败审计与 boot resume 已由 M2-12 / D59 修复，历史诊断分支的宿主结果见 [M2-12 验证](../../.axiom-work/verifications/M2-12-1.md)；本候选仍须复验。`mission-attempt-launch.spec.ts` 保留重启身份/无重复启动的独立证据；M2-10 的五个既有宿主 spec 仍须回归。不得把未运行、skip、QUEUED 或 Worker 自报检查解释为独立验证 PASS。
 
-| 后续责任 | M2 出口边界 |
-|---|---|
-| M2 出口复验 | M2-12 已合入；verifier 运行本候选的出口与五个既有宿主 spec，填写证据并决定验收；不再保留已修复的审计/boot 缺口为待办 |
+| 后续责任                   | M2 出口边界                                                                                                                                                                        |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M2 出口复验                | M2-12 已合入；verifier 运行本候选的出口与五个既有宿主 spec，填写证据并决定验收；不再保留已修复的审计/boot 缺口为待办                                                               |
 | D58（ACCEPTED）/ D57 / D82 | Worker channel A headless、Claude Planner channel B structured 已接入；Codex 已有认证宿主证据，Claude provisional 仍待 verifier smoke。V1 真实 provider 范围为 Codex + Claude Code |
-| M3 | 独立 VerificationService、Candidate worktree、deterministic verdict、Reviewer advisory、失败证据与 NEEDS_FIX 重试；复审 DEF-4/5/6/9/10 对应项 |
-| M4 | 串行 Integration、Approval、Delivery、完成门与全对象恢复；集成基线在此之前不前进 |
-| M5 / M6 | 替代 PlanRevision、完整 replanning / 决策模型；远端扩展与 mixed-version 验证 |
+| M3                         | 独立 VerificationService、Candidate worktree、deterministic verdict、Reviewer advisory、失败证据与 NEEDS_FIX 重试；复审 DEF-4/5/6/9/10 对应项                                      |
+| M4                         | 串行 Integration、Approval、Delivery、完成门与全对象恢复；集成基线在此之前不前进                                                                                                   |
+| M5 / M6                    | 替代 PlanRevision、完整 replanning / 决策模型；远端扩展与 mixed-version 验证                                                                                                       |
 
 选择 Mission/Task 仍只保留在会话内，未交付跨重启 UI 选择持久化；不是权威对象丢失。本 Task 不扩展这项产品范围。verifier 核验宿主结果与已知缺口；M2 退出决定由 Henry 在证据与 D58 处置齐备后记录。
 

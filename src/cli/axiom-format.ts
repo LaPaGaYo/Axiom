@@ -2,6 +2,7 @@ import type { MissionResponse, MissionListResponse } from '../shared/axiom-contr
 import type { GoalResponse } from '../shared/axiom-contract/goal-params'
 import type { PlanResponse, PlanListResponse } from '../shared/axiom-contract/plan-params'
 import type { TaskResponse, TaskListResponse } from '../shared/axiom-contract/task-params'
+import { resolveAcceptance } from '../shared/axiom-contract/acceptance'
 import type {
   VerificationResponse,
   VerificationListResponse
@@ -46,7 +47,20 @@ export function formatTaskList({ tasks }: TaskListResponse): string {
   )
 }
 export function formatTask({ task }: TaskResponse): string {
-  return formatTaskList({ tasks: [task] })
+  const criteria = task.spec ? resolveAcceptance(task.spec) : []
+  return [
+    formatTaskList({ tasks: [task] }),
+    ...criteria.map(
+      ({ text, check }) =>
+        `[${check.kind}] ${text} — ${
+          check.kind === 'command'
+            ? check.command
+            : check.kind === 'artifact'
+              ? 'Artifact'
+              : 'human check'
+        }`
+    )
+  ].join('\n')
 }
 
 export function formatVerificationRunList({ runs }: VerificationListResponse): string {

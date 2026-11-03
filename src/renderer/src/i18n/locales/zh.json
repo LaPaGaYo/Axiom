@@ -20162,6 +20162,8 @@
     "goalObjective": "Goal 目标",
     "goal": "Goal",
     "acceptanceCriteria": "验收标准",
+    "acceptanceArtifact": "需要 Artifact",
+    "acceptanceHumanCheck": "人工确认",
     "criteriaHint": "每行一条标准。",
     "dismiss": "关闭",
     "executionProjection": "执行投影",

@@ -10,6 +10,9 @@ import {
 } from './controller-context'
 import { checkSubtask, type SubtaskSource } from '../messaging/subtask-checks'
 import { projectTask, recomputeReadiness } from './task-readiness'
+import { validateTaskAcceptance } from '../../../shared/axiom-contract/plan-proposal'
+import { VerificationRulesSchema } from '../../../shared/axiom-contract/verification-rules'
+import { validateTaskCommands } from './plan-materialization'
 
 export function createTask(
   ctx: ControllerContext,
@@ -28,6 +31,18 @@ export function createTask(
     throw new MissionControllerError('plan_pending', { missionId: mission.id })
   }
   const spec = { ...p.task, id: randomUUID() }
+  const acceptanceErrors = validateTaskAcceptance(spec, ['task'])
+  if (acceptanceErrors.length) {
+    throw new MissionControllerError('plan_invalid', { errors: acceptanceErrors })
+  }
+  const parsedRules = VerificationRulesSchema.safeParse(
+    ctx.store.getPolicy(mission.id)?.verificationRules
+  )
+  const rules = parsedRules.success ? parsedRules.data : VerificationRulesSchema.parse({})
+  const commandErrors = validateTaskCommands(spec, rules, ['task'])
+  if (commandErrors.length) {
+    throw new MissionControllerError('plan_invalid', { errors: commandErrors })
+  }
   const dependsOn = [...new Set([...(source ? [source.taskId] : []), ...p.dependsOn])]
   const checks = checkSubtask(ctx, { missionId: mission.id, task: spec, dependsOn, source })
   if (!checks.ok) {

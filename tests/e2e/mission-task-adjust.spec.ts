@@ -198,7 +198,12 @@ for (const { scenario, maxAttempts } of cases) {
           'src/services/date-range.ts',
           ...(scenario === 'no-change-declared' ? [testPath] : [])
         ],
-        requiredEvidence: [check]
+        acceptanceCriteria: [
+          {
+            text: 'The date-range contract rejects an empty entityId',
+            check: { kind: 'command', command: check }
+          }
+        ]
       }
     )
   })

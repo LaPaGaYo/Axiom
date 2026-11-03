@@ -1,3 +1,4 @@
+import { resolveAcceptance } from '../../shared/axiom-contract/acceptance'
 import {
   prepareCodexWorkerLaunchHome,
   readCodexAccountHomeAllowlist
@@ -56,7 +57,11 @@ function createControlPlane(runtime: OrcaRuntimeService, db: OrchestrationDb) {
       }
       try {
         if (provider === 'claude') {
-          return getSelectedClaudeAccountIdForTarget(runtime.requireStore().getSettings(), { runtime: 'host' }) !== null
+          return (
+            getSelectedClaudeAccountIdForTarget(runtime.requireStore().getSettings(), {
+              runtime: 'host'
+            }) !== null
+          )
         }
         return provider !== 'codex' || runtime.resolveCodexHomeForWorkerLaunch() !== null
       } catch {
@@ -265,7 +270,11 @@ export function taskListItem(
     title: task.title,
     stage: task.stage,
     orcaStatus: task.orcaStatus,
-    spec: task.spec,
+    spec: {
+      ...task.spec,
+      acceptanceCriteria: resolveAcceptance(task.spec),
+      requiredEvidence: undefined
+    },
     ...(task.previousStage === null ? {} : { previousStage: task.previousStage })
   }
 }

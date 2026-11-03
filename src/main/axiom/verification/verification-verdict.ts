@@ -1,6 +1,7 @@
 import type { DiffGateOutcome } from './diff-gate'
 import type { WorkerArtifactChecks } from './worker-artifacts'
 import type { VerificationRules } from '../../../shared/axiom-contract/verification-rules'
+import type { VerificationAcceptance } from '../../../shared/axiom-contract/verification-acceptance'
 
 export type CheckOutcome = {
   result: 'pass' | 'fail' | 'environmental' | 'inconclusive' | 'skipped'
@@ -25,8 +26,9 @@ export type VerificationVerdict = {
     | 'non_code'
     | 'policy_invalid'
     | 'plan_invalid'
+    | 'acceptance_human'
   escalation?: 'specialist' | 'human'
-  detail?: string
+  detail?: string | number
 }
 
 export function decideVerificationVerdict(
@@ -34,13 +36,26 @@ export function decideVerificationVerdict(
   rules: VerificationRules,
   gate: DiffGateOutcome,
   nonCodeTask: boolean,
-  artifacts: WorkerArtifactChecks
+  artifacts: WorkerArtifactChecks,
+  acceptance: VerificationAcceptance[] = []
 ): VerificationVerdict {
   if (gate.outcome === 'fail') {
     return { verdict: 'FAIL', reason: gate.reason }
   }
-  if (checks.some((check) => check.result === 'fail')) {
+  if (
+    checks.some((check) => check.result === 'fail') ||
+    acceptance.some((entry) => entry.result === 'fail' && entry.check.kind !== 'artifact')
+  ) {
     return { verdict: 'FAIL', reason: 'checks_failed' }
+  }
+  const missingArtifact = acceptance.find(
+    (entry) => entry.result === 'fail' && entry.check.kind === 'artifact'
+  )?.check
+  if (missingArtifact?.kind === 'artifact') {
+    const referenced = artifacts.checked.some(
+      (artifact) => !missingArtifact.artifactKind || artifact.kind === missingArtifact.artifactKind
+    )
+    return { verdict: 'FAIL', reason: referenced ? 'artifact_invalid' : 'artifact_missing' }
   }
   if (nonCodeTask) {
     if (!artifacts.counts.checked) {
@@ -91,7 +106,10 @@ export function decideVerificationVerdict(
     }
   }
   // A deadline can expire before the first process starts. Skipped work is never a PASS.
-  if (checks.some((check) => check.result === 'skipped')) {
+  if (
+    checks.some((check) => check.result === 'skipped') ||
+    acceptance.some((entry) => entry.result === 'skipped' || entry.result === 'inconclusive')
+  ) {
     return { verdict: 'INCONCLUSIVE', reason: 'environment', escalation: 'human' }
   }
   if (nonCodeTask) {
@@ -99,6 +117,15 @@ export function decideVerificationVerdict(
       verdict: 'INCONCLUSIVE',
       reason: 'non_code',
       escalation: rules.nonCodeTasks === 'human_confirm' ? 'human' : rules.inconclusiveRouting
+    }
+  }
+  const humanCount = acceptance.filter((entry) => entry.result === 'human').length
+  if (humanCount) {
+    return {
+      verdict: 'INCONCLUSIVE',
+      reason: 'acceptance_human',
+      escalation: 'human',
+      detail: humanCount
     }
   }
   return { verdict: 'PASS', reason: 'checks_passed' }

@@ -2,7 +2,10 @@ import { seedCodexTestAccount } from './codex-test-account'
 import { seedClaudeTestAccount } from './claude-test-account'
 import { desktopCall } from './axiom-desktop-call'
 import { readGoalFile } from '../../../src/cli/handlers/axiom/input-files'
-import { DEFAULT_MISSION_POLICY } from '../../../src/shared/axiom-contract/mission-objects'
+import {
+  DEFAULT_MISSION_POLICY,
+  type AcceptanceCriterion
+} from '../../../src/shared/axiom-contract/mission-objects'
 import { spawnSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
@@ -103,7 +106,7 @@ export async function withFixtureMission(
     holdExitSubmission?: boolean
     provider?: AxiomFixtureProvider
     taskIds?: string[]
-    requiredEvidence?: string[]
+    acceptanceCriteria?: AcceptanceCriterion[]
   } = {}
 ) {
   const provider = options.provider ?? 'codex'
@@ -187,8 +190,8 @@ process.exit(result.status ?? 1)
         proposal.milestones[0]!.exitCriteria = options.taskIds.map((id) => `${id} integrated`)
       }
       for (const task of proposal.tasks) {
-        if (options.requiredEvidence) {
-          task.requiredEvidence = options.requiredEvidence
+        if (options.acceptanceCriteria) {
+          task.acceptanceCriteria = options.acceptanceCriteria
         }
         if (options.maxAttempts !== undefined) {
           task.retryPolicy.maxAttempts = options.maxAttempts

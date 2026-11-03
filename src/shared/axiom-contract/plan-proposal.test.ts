@@ -3,6 +3,33 @@ import { PlanProposalSchema, validatePlanProposal } from './plan-proposal'
 import { decomposition, makeProposal } from './contract-fixtures.test-support'
 
 describe('PlanRevision proposal', () => {
+  it('rejects retired commands with a stable Task path while preserving schema compatibility', () => {
+    const proposal = makeProposal()
+    proposal.tasks[1].requiredEvidence = ['pnpm test']
+    expect(PlanProposalSchema.safeParse(proposal).success).toBe(true)
+    expect(validatePlanProposal(proposal)).toMatchObject({
+      ok: false,
+      errors: [{ code: 'required_evidence_retired', path: ['tasks', 1, 'requiredEvidence'] }]
+    })
+  })
+
+  it('rejects bare strings at the criterion index while preserving persisted schema reads', () => {
+    const proposal = makeProposal()
+    proposal.tasks[0].acceptanceCriteria.push('A person checks this')
+    expect(PlanProposalSchema.safeParse(proposal).success).toBe(true)
+    expect(validatePlanProposal(proposal)).toMatchObject({
+      ok: false,
+      errors: [{ code: 'criterion_shape', path: ['tasks', 0, 'acceptanceCriteria', 1] }]
+    })
+  })
+
+  it('allows an empty legacy command array without changing the proposal', () => {
+    const proposal = makeProposal()
+    proposal.tasks[0].requiredEvidence = []
+    const before = JSON.stringify(proposal)
+    expect(validatePlanProposal(proposal).ok).toBe(true)
+    expect(JSON.stringify(proposal)).toBe(before)
+  })
   it('validates the 12-task fixture, three roots and a longest chain of seven tasks', () => {
     const proposal = makeProposal()
     expect(PlanProposalSchema.safeParse(proposal).success).toBe(true)

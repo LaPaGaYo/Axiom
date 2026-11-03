@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import { isTuiAgent } from '../tui-agent-config'
-import { requiredString } from '../rpc-contract/rpc-param-primitives'
 import {
   GoalRevisionStatusSchema,
   MissionStatusSchema,
@@ -11,7 +10,48 @@ import {
 } from './lifecycle'
 
 export const AxiomIdSchema = z.string().min(1).max(128)
-const Text = requiredString('Expected non-empty text')
+const Text = z.string().min(1, 'Expected non-empty text')
+
+export const ArtifactKind = z.enum([
+  'context_package_manifest',
+  'context_package_render',
+  'worker_report',
+  'handoff',
+  'evidence',
+  'log',
+  'other'
+])
+export type ArtifactKind = z.infer<typeof ArtifactKind>
+
+export const AcceptanceCheckSchema = z
+  .discriminatedUnion('kind', [
+    z
+      .strictObject({ kind: z.literal('command'), command: Text })
+      .describe(
+        'One exact shell command; independent verification runs it verbatim from the repository root and requires exit 0. No shell operators; the program must be allowed by verification policy. Put expectations and descriptions in text, never in command.'
+      ),
+    z
+      .strictObject({ kind: z.literal('artifact'), artifactKind: ArtifactKind.optional() })
+      .describe(
+        'The submission must reference a readable, non-empty Artifact of artifactKind when given.'
+      ),
+    z
+      .strictObject({ kind: z.literal('human') })
+      .describe(
+        'Use only when neither a command nor an Artifact can prove the criterion; a person will confirm it.'
+      )
+  ])
+  .describe(
+    'How this criterion is proven: an exact command, a readable non-empty Artifact, or human confirmation.'
+  )
+
+export const AcceptanceCriterionSchema = z
+  .strictObject({ text: Text, check: AcceptanceCheckSchema })
+  .describe(
+    'A Task acceptance requirement and its proof. Use human only when neither a command nor an Artifact can prove it.'
+  )
+export type AcceptanceCheck = z.infer<typeof AcceptanceCheckSchema>
+export type AcceptanceCriterion = z.infer<typeof AcceptanceCriterionSchema>
 
 export const ProvenanceSchema = z.object({
   kind: z.enum(['user', 'planner', 'control_plane']),
@@ -74,11 +114,12 @@ export const TaskSpecSchema = z.object({
   objective: Text,
   scope: z.object({ allowedPaths: z.array(Text) }),
   role: Text.optional(),
-  acceptanceCriteria: z.array(Text),
+  acceptanceCriteria: z.array(z.union([Text, AcceptanceCriterionSchema])),
   requiredEvidence: z
     .array(Text)
+    .optional()
     .describe(
-      'requiredEvidence entries are exact shell commands; the independent verification runs each one verbatim from the repository root and requires exit 0; one command per entry, no shell operators; put expectations and descriptions in acceptanceCriteria, never in requiredEvidence (no "output", "with exit code 0" or other prose).'
+      'Deprecated; retired by D85 rule 2: put the command on the criterion. Read only for persisted compatibility; rejected in new proposals.'
     ),
   risk: RiskLevelSchema,
   retryPolicy: z.object({ maxAttempts: z.number().int().positive() }),

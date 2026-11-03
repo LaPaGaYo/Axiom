@@ -8,8 +8,9 @@ export const subtask = {
   title: 'Follow-up',
   objective: 'Validate migration',
   allowedPaths: ['src/storage/'],
-  acceptanceCriteria: ['Checks pass'],
-  requiredEvidence: ['pnpm test'],
+  acceptanceCriteria: [
+    { text: 'Checks pass', check: { kind: 'command' as const, command: 'pnpm test' } }
+  ],
   risk: 'low' as const
 }
 export const workerVerbs = ['inform', 'request', 'blocked', 'handoff', 'request-subtask'] as const

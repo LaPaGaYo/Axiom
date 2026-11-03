@@ -1,19 +1,9 @@
 import { z } from 'zod'
-import { AxiomIdSchema } from './mission-objects'
+import { ArtifactKind, AxiomIdSchema } from './mission-objects'
+export { ArtifactKind } from './mission-objects'
 
 export const MAX_ARTIFACT_BYTES = 8 * 1024 * 1024
 export const Sha256Schema = z.string().regex(/^[a-f0-9]{64}$/)
-export const ArtifactKind = z.enum([
-  'context_package_manifest',
-  'context_package_render',
-  'worker_report',
-  'handoff',
-  'evidence',
-  'log',
-  'other'
-])
-export type ArtifactKind = z.infer<typeof ArtifactKind>
-
 export const ArtifactMetaSchema = z.object({
   id: AxiomIdSchema,
   missionId: AxiomIdSchema,

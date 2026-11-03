@@ -1,4 +1,6 @@
 import type { VerificationRules } from './verification-rules'
+import type { AcceptanceCriterion } from './mission-objects'
+import { acceptanceCommands } from './acceptance'
 
 export type EvidenceCommandIssue = {
   index: number
@@ -45,15 +47,36 @@ export function validateEvidenceCommands(
   })
 }
 
+export function validateAcceptanceCommands(
+  criteria: AcceptanceCriterion[],
+  rules: VerificationRules
+): (EvidenceCommandIssue & { command: string })[] {
+  const commands = acceptanceCommands(criteria)
+  const normalizedIssues = new Map(
+    validateEvidenceCommands(commands, rules).map((issue) => [commands[issue.index], issue])
+  )
+  return criteria.flatMap(({ check }, index) => {
+    if (check.kind !== 'command') {
+      return []
+    }
+    // Trimming is compatible for execution, but must not hide a forbidden boundary newline.
+    const issue =
+      check.command === check.command.trim()
+        ? normalizedIssues.get(check.command)
+        : validateEvidenceCommands([check.command], rules)[0]
+    return issue ? [{ ...issue, index, command: check.command }] : []
+  })
+}
+
 export function evidenceCommandMessage(issue: EvidenceCommandIssue, entry: string): string {
   switch (issue.reason) {
     case 'multiline':
-      return 'Each requiredEvidence entry must be a single-line command; newlines are forbidden.'
+      return 'Each acceptance command must be a single-line command; newlines are forbidden.'
     case 'shell_operator':
-      return `Shell operator ${JSON.stringify(entry.match(shellOperator)?.[0])} is forbidden in requiredEvidence; use one command per entry.`
+      return `Shell operator ${JSON.stringify(entry.match(shellOperator)?.[0])} is forbidden in acceptance commands; use one command per criterion.`
     case 'program_not_allowed':
       return issue.program
-        ? `Program ${JSON.stringify(issue.program)} is not allowed for requiredEvidence commands.`
-        : 'Each requiredEvidence command must start with an allowed program; environment assignments are not programs.'
+        ? `Program ${JSON.stringify(issue.program)} is not allowed for acceptance commands.`
+        : 'Each acceptance command must start with an allowed program; environment assignments are not programs.'
   }
 }

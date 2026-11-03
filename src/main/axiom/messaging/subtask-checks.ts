@@ -5,7 +5,8 @@ import { orderPlanTasks } from '../../../shared/axiom-contract/plan-task-graph'
 import type { AxiomStore } from '../db/axiom-store'
 import type { OrchestrationDb } from '../../runtime/orchestration/db'
 import { VerificationRulesSchema } from '../../../shared/axiom-contract/verification-rules'
-import { validateEvidenceCommands } from '../../../shared/axiom-contract/evidence-commands'
+import { validateAcceptanceCommands } from '../../../shared/axiom-contract/evidence-commands'
+import { resolveAcceptance } from '../../../shared/axiom-contract/acceptance'
 
 export type Check =
   | 'scope'
@@ -90,7 +91,7 @@ export function checkSubtask(
   const policy = store.getPolicy(missionId)
   const parsedRules = VerificationRulesSchema.safeParse(policy?.verificationRules)
   const rules = parsedRules.success ? parsedRules.data : VerificationRulesSchema.parse({})
-  if (validateEvidenceCommands(task.requiredEvidence, rules).length) {
+  if (validateAcceptanceCommands(resolveAcceptance(task), rules).length) {
     failed.push('evidence')
   }
   if (
