@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import { HeadlessSubmissionReportSchema, SubmissionReportSchema } from './submission-params'
 
 const report = {
@@ -12,6 +13,29 @@ const report = {
   followUps: []
 }
 describe('Submission report contract', () => {
+  it('caps each item list at 20 entries of 2,000 characters on both channels and in the preamble schema', () => {
+    const { filesChanged: _filesChanged, ...headless } = { ...report, artifacts: [] }
+    for (const field of ['questions', 'followUps']) {
+      for (const [schema, base] of [
+        [SubmissionReportSchema, report],
+        [HeadlessSubmissionReportSchema, headless]
+      ] as const) {
+        expect(
+          schema.safeParse({ ...base, [field]: Array(20).fill('x'.repeat(2000)) }).success
+        ).toBe(true)
+        expect(schema.safeParse({ ...base, [field]: Array(21).fill('Q') }).success).toBe(false)
+        expect(schema.safeParse({ ...base, [field]: ['x'.repeat(2001)] }).success).toBe(false)
+      }
+      expect(z.toJSONSchema(HeadlessSubmissionReportSchema).properties?.[field]).toMatchObject({
+        maxItems: 20,
+        items: { maxLength: 2000 }
+      })
+    }
+  })
+  it('loads reports that omit the optional item lists', () => {
+    const { questions: _questions, followUps: _followUps, ...legacy } = report
+    expect(SubmissionReportSchema.parse(legacy)).toEqual(report)
+  })
   it('accepts the full contract and a 4,000-character summary', () => {
     expect(SubmissionReportSchema.parse(report)).toEqual(report)
     expect(SubmissionReportSchema.safeParse({ ...report, summary: 'x'.repeat(4000) }).success).toBe(

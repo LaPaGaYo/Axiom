@@ -28,6 +28,44 @@ const subtask = {
   acceptanceCriteria: [{ text: 'Pass', check: { kind: 'command', command: 'pnpm test' } }],
   risk: 'low'
 }
+it('accepts bounded optional question and follow-up payloads only on their product types', () => {
+  const question = { text: 'Which format?', options: ['JSON', 'CSV'] }
+  const followUp = { text: 'Add a regression test' }
+  for (const extra of [
+    { type: 'QUESTION', question },
+    { type: 'REQUEST', followUp }
+  ]) {
+    const payload = { axiom: { ...fields, ...extra } }
+    expect(AxiomMessagePayloadSchema.parse(payload)).toEqual(payload)
+    expect(parseAxiomMessagePayload(JSON.stringify(payload))).toEqual(payload)
+  }
+  expect(
+    AxiomMessagePayloadSchema.parse({
+      axiom: {
+        ...fields,
+        type: 'QUESTION',
+        question: { text: 'Which format?' }
+      }
+    }).axiom.question
+  ).toEqual({ text: 'Which format?', options: [] })
+  for (const extra of [
+    { type: 'REQUEST', question },
+    { type: 'QUESTION', followUp },
+    { type: 'QUESTION', question: { text: 'x'.repeat(2001) } },
+    { type: 'QUESTION', question: { text: 'Q', options: ['x'.repeat(201)] } },
+    { type: 'QUESTION', question: { text: 'Q', options: Array(9).fill('A') } },
+    { type: 'QUESTION', question: { text: 'Q', extra: true } },
+    { type: 'REQUEST', followUp: { text: 'x'.repeat(2001) } },
+    { type: 'REQUEST', followUp: { text: 'F', extra: true } }
+  ]) {
+    expect(AxiomMessagePayloadSchema.safeParse({ axiom: { ...fields, ...extra } }).success).toBe(
+      false
+    )
+  }
+  for (const type of ['QUESTION', 'REQUEST']) {
+    expect(AxiomMessagePayloadSchema.safeParse({ axiom: { ...fields, type } }).success).toBe(true)
+  }
+})
 it('maps all eight product types without extending Orca routing types', () => {
   expect(AXIOM_MESSAGE_TYPES.map(axiomMessageRoutingType)).toEqual([
     'status',

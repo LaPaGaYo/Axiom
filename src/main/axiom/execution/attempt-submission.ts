@@ -19,6 +19,7 @@ import { resolveAttemptSender } from './attempt-authority'
 import { snapshotCandidate } from './candidate-snapshot'
 import { archiveAttemptTranscript } from './attempt-transcript'
 import { scheduleSubmittedWorkerRelease } from './attempt-worker-release'
+import { routeSubmissionItems } from './submission-items'
 
 // Only concurrent Git work is serialized here. Durable idempotency remains in SQLite/receipts.
 const queues = new WeakMap<OrchestrationDb, Map<string, Promise<void>>>()
@@ -191,6 +192,7 @@ export async function settleSubmission(
       candidateId: candidate.id,
       report
     })
+    routeSubmissionItems({ db, store }, submission, sender)
     const homeReceivedAt = Date.now()
     const { sequence } = z
       .object({ sequence: z.number().nullable() })

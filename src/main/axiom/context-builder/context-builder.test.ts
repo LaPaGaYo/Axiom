@@ -36,7 +36,8 @@ const sections = [
   'Permissions, budget and submission contract',
   'Repository rules',
   'Required verification commands',
-  'Previous-Attempt failure evidence'
+  'Previous-Attempt failure evidence',
+  'Answered questions'
 ]
 const git = (args: string[]) => gitExecFileAsync(args, gitOptionsForWorktree(root))
 
@@ -115,7 +116,7 @@ describe('ContextBuilder', () => {
     const headless = await builder.build({ missionId, taskId, channel: 'headless' })
     const terminal = await builder.build({ missionId, taskId })
     expect(headless.packageId).toBe(
-      'ctx_090c732b19deca591a348562d574b810f40bdc91d2e030b800285509689a0508'
+      'ctx_8dc041d61d7f090c8cfe186c15bfcf14ae503b6e6da8049bc527df680f145cfd'
     )
     expect(headless.packageId).not.toBe(terminal.packageId)
     expect(headless.renderTemplate).toContain('re-read .axiom/prompt.md before continuing')
@@ -185,7 +186,7 @@ describe('ContextBuilder', () => {
     const first = await builder.build({ missionId, taskId })
     expect(upstream).toHaveLength(2)
     expect(first.packageId).toBe(
-      'ctx_0d21af9fc43fb6021bac4e49bb672180b48e95e68245ed973ea42022e24c74f3'
+      'ctx_4469ffd7f3acac6de8b92de9dc02dd577d7801e998d2da93939529f04ad6c412'
     )
     expect(first.manifest.mandatory.map((entry) => entry.section)).toEqual(sections)
     expect(first.packageId).toBe(`ctx_${sha256(canonicalContextManifest(first.manifest))}`)

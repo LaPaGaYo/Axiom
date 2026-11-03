@@ -3,7 +3,7 @@ import { AxiomIdSchema } from '../../../shared/axiom-contract/mission-objects'
 import {
   CandidateSchema,
   SubmissionSchema,
-  SubmissionReportSchema
+  StoredSubmissionReportSchema
 } from '../../../shared/axiom-contract/submission-params'
 import { VerificationRunStatusSchema } from '../../../shared/axiom-contract/lifecycle'
 import { VerificationRunSchema } from '../../../shared/axiom-contract/verification-params'
@@ -56,23 +56,23 @@ export const SubmissionRowCodec = SubmissionRowSchema.transform((r) =>
     attemptId: r.dispatch_id,
     candidateId: r.candidate_id,
     createdAt: r.created_at,
-    report: readJson(SubmissionReportSchema, r.report, 'submissions', r.id, 'report'),
+    report: readJson(StoredSubmissionReportSchema, r.report, 'submissions', r.id, 'report'),
     checksRun: readJson(
-      SubmissionReportSchema.shape.checksRun,
+      StoredSubmissionReportSchema.shape.checksRun,
       r.checks_run,
       'submissions',
       r.id,
       'checks_run'
     ),
     limitations: readJson(
-      SubmissionReportSchema.shape.limitations,
+      StoredSubmissionReportSchema.shape.limitations,
       r.limitations,
       'submissions',
       r.id,
       'limitations'
     ),
     followUps: readJson(
-      SubmissionReportSchema.shape.followUps,
+      StoredSubmissionReportSchema.shape.followUps,
       r.follow_ups,
       'submissions',
       r.id,

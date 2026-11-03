@@ -77,13 +77,19 @@ it.each(declarations)(
       status: 'ACTIVE',
       supersededBy: null
     })
-    await declare(outcome)
+    await declare(outcome, {
+      questions: ['May I edit the missing path?'],
+      followUps: ['Add coverage']
+    })
     expect(await submitExitedAttempt(f.runtime, f.t01.attemptId)).toBe('declared')
     const failures = f.store
       .listAuditEvents({ missionId: f.mission.id })
       .filter((e) => e.event === 'attempt.failed')
     expect(failures).toHaveLength(1)
     const artifact = f.store.listArtifacts({ missionId: f.mission.id, kind: 'worker_report' })[0]
+    const reportArtifact = f.put.mock.calls.find(([input]) => input.kind === 'worker_report')?.[0]
+    expect(reportArtifact?.content.toString()).toContain('May I edit the missing path?')
+    expect(reportArtifact?.content.toString()).toContain('Add coverage')
     const paths = 'paths' in outcome ? [...outcome.paths] : []
     expect(failures[0]).toMatchObject({
       actor: 'AttemptSettlement',

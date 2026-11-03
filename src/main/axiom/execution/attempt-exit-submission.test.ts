@@ -83,6 +83,33 @@ it('submits exactly once, with computed paths, attributed report, usage and sess
   expect(f.snapshot()).toEqual(before)
   expect(f.snapshotGit).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ headless: true }))
 })
+it('turns headless report items into the same pending Task messages exactly once', async () => {
+  const { filesChanged: _files, ...headlessReport } = report
+  await writeFile(
+    path.join(root, 'last-message.md'),
+    `\`\`\`json\n${JSON.stringify({
+      ...headlessReport,
+      questions: ['Keep the example rejected?'],
+      followUps: ['Add leap-day tests']
+    })}\n\`\`\``
+  )
+  expect(await submitExitedAttempt(f.runtime, f.t01.attemptId)).toBe('submitted')
+  const submission = f.store.getSubmissionByDispatch(f.t01.attemptId)
+  const messages = f.store.listMessages({ missionId: f.mission.id, pendingOnly: true })
+  expect(messages).toMatchObject([
+    { type: 'QUESTION', question: 'Keep the example rejected?', status: 'pending' },
+    { type: 'REQUEST', followUp: { text: 'Add leap-day tests' } }
+  ])
+  for (const message of messages) {
+    expect(message).toMatchObject({
+      taskId: f.t01.taskId,
+      attemptId: f.t01.attemptId,
+      related: { taskIds: [f.t01.taskId], submissionId: submission?.id }
+    })
+  }
+  expect(await submitExitedAttempt(f.runtime, f.t01.attemptId)).toBe('unchanged')
+  expect(f.store.listMessages({ missionId: f.mission.id, pendingOnly: true })).toEqual(messages)
+})
 it('ingests Worker artifacts confined to .axiom/artifacts with Attempt attribution', async () => {
   await mkdir(path.join(root, '.axiom', 'artifacts'), { recursive: true })
   await writeFile(path.join(root, '.axiom', 'artifacts', 'proof.txt'), 'evidence')

@@ -68,7 +68,7 @@ async function submitFixture(attemptId, missionId, taskId, outputPath) {
     'suppression': { file: 'clock.test.ts', expected: "test('fixed clocks normalize instants and reject malformed input', () => {" }
   }
   const tamper = tamperProbes[scenario]
-  if (!tamper && !['retry', 'deterministic-failure', 'agent-crash', 'scope-violation', 'secret-line', 'transcript-secret', 'self-approve', 'unchanged-fix', 'blocked-scope', 'no-change-declared'].includes(scenario)) throw new Error('Unknown fixture scenario')
+  if (!tamper && !['retry', 'deterministic-failure', 'agent-crash', 'scope-violation', 'secret-line', 'transcript-secret', 'self-approve', 'unchanged-fix', 'blocked-scope', 'no-change-declared', 'report-items'].includes(scenario)) throw new Error('Unknown fixture scenario')
   // Keep both the Worker Artifact and protocol envelope outside the Candidate snapshot.
   const temp = headless ? path.join(process.cwd(), '.axiom', 'artifacts') : mkdtempSync(path.join(os.tmpdir(), 'axiom-submit-report-'))
   if (headless) mkdirSync(temp, { recursive: true })
@@ -76,7 +76,7 @@ async function submitFixture(attemptId, missionId, taskId, outputPath) {
     if (scenario === 'transcript-secret') {
       process.stdout.write('Transcript redaction probe: ' + 'gh' + 'p_' + 'T'.repeat(36) + '\\n')
     }
-    const command = ['scenarios/stub-worker/worker.mjs', '--scenario', ['transcript-secret', 'unchanged-fix', 'blocked-scope', 'no-change-declared'].includes(scenario) ? 'retry' : scenario, '--attempt', String(Math.min(seq, 2)), '--mode', 'succeed', '--cwd', process.cwd()]
+    const command = ['scenarios/stub-worker/worker.mjs', '--scenario', ['transcript-secret', 'unchanged-fix', 'blocked-scope', 'no-change-declared', 'report-items'].includes(scenario) ? 'retry' : scenario, '--attempt', String(Math.min(seq, 2)), '--mode', 'succeed', '--cwd', process.cwd()]
     const started = Date.now()
     const unchanged = headless && scenario === 'unchanged-fix' && seq === 2
     const declared = headless && seq === 2 && ['blocked-scope', 'no-change-declared'].includes(scenario)
@@ -142,7 +142,9 @@ async function submitFixture(attemptId, missionId, taskId, outputPath) {
       checksRun: [{ command: providerOnly ? 'provider scenario ' + scenario : 'node ' + command.join(' '), result: 'pass', durationMs: Date.now() - started },
         { command: 'fixture verification', result: 'skipped', note: 'Stub Worker; independent verification is queued for M3.' }],
       artifacts: headless ? [{ path: '.axiom/artifacts/REPORT.md', kind: 'worker_report', mediaType: 'text/markdown' }] : [artifactId], limitations: ['Fixture stub; no independent verification run by Worker'],
-      risks: ['Write scope is enforced during M3 verification'], questions: [], followUps: ['VerificationService dequeues QUEUED']
+      risks: ['Write scope is enforced during M3 verification'],
+      questions: scenario === 'report-items' && seq === 1 ? ['Should the empty entityId example stay rejected?'] : [],
+      followUps: scenario === 'report-items' && seq === 1 ? ['Add a regression test for leap days'] : []
     }
     if (headless) {
       delete report.filesChanged

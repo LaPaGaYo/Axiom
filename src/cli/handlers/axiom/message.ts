@@ -1,8 +1,20 @@
 import type { CommandHandler } from '../../dispatch'
 import { getRequiredStringFlag as required, getOptionalStringFlag as optional } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
-import { MessageListResponseSchema } from '../../../shared/axiom-contract/message-params'
+import {
+  MessageListResponseSchema,
+  type MessageSummaryResponseSchema
+} from '../../../shared/axiom-contract/message-params'
+import type { z } from 'zod'
 import { callAxiom } from './rpc-command'
+
+function messageLine(m: z.infer<typeof MessageSummaryResponseSchema>): string {
+  if (m.type === 'QUESTION' && m.question !== undefined) {
+    return `${m.id}  QUESTION  ${m.status}  ${m.question}${m.answer !== null && m.answer !== undefined ? ` → ${m.answer}` : ''}`
+  }
+  const text = m.followUp ? `follow-up: ${m.followUp.text}` : m.summary
+  return `${m.id}  ${m.type}  ${m.pending ? 'pending' : 'resolved'}  ${text}${m.pending && m.blocked ? `  ${m.blocked.reason}${m.blocked.paths.length ? `: ${m.blocked.paths.join(', ')}` : ''}` : ''}`
+}
 
 export const AXIOM_MESSAGE_HANDLERS: Record<string, CommandHandler> = {
   'message list': async (ctx) => {
@@ -12,15 +24,9 @@ export const AXIOM_MESSAGE_HANDLERS: Record<string, CommandHandler> = {
       {
         missionId: required(ctx.flags, 'mission'),
         type: optional(ctx.flags, 'type'),
-        pendingOnly: ctx.flags.has('pending') ? true : undefined
+        pendingOnly: ctx.flags.has('pending') || ctx.flags.has('pending-only') ? true : undefined
       },
-      (value) =>
-        MessageListResponseSchema.parse(value)
-          .messages.map(
-            (m) =>
-              `${m.id}  ${m.type}  ${m.pending ? 'pending' : 'resolved'}  ${m.summary}${m.pending && m.blocked ? `  ${m.blocked.reason}${m.blocked.paths.length ? `: ${m.blocked.paths.join(', ')}` : ''}` : ''}`
-          )
-          .join('\n')
+      (value) => MessageListResponseSchema.parse(value).messages.map(messageLine).join('\n')
     )
   },
   'message answer': async (ctx) => {
@@ -51,7 +57,7 @@ export const AXIOM_MESSAGE_HANDLERS: Record<string, CommandHandler> = {
         decision: ctx.flags.has('accept') ? 'accept' : 'reject',
         rationale: required(ctx.flags, 'rationale')
       },
-      () => 'Subtask request resolved'
+      () => 'Message resolved'
     )
   }
 }

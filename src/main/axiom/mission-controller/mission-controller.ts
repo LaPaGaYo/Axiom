@@ -222,9 +222,9 @@ export class MissionController {
     this.scheduleAfterWrite(result.missionId, 'stage_change')
     return result
   }
-  recomputeReadiness(missionId: string) {
+  recomputeReadiness(missionId: string, admissionChanged = false) {
     const moved = this.write('recompute_readiness', () => recomputeReadiness(this.ctx, missionId))
-    if (moved.length) {
+    if (moved.length || admissionChanged) {
       this.scheduleAfterWrite(missionId, 'stage_change')
     }
     return moved

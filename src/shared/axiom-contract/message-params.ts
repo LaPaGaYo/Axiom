@@ -29,6 +29,12 @@ export function axiomMessageRoutingType(type: AxiomMessageType) {
 }
 
 export const MessageSummarySchema = z.string().trim().min(1).max(2000)
+const Text = z.string().trim().min(1)
+const QuestionMessageSchema = z.strictObject({
+  text: Text.max(2000),
+  options: z.array(Text.max(200)).max(8).default([])
+})
+const FollowUpMessageSchema = z.strictObject({ text: Text.max(2000) })
 export const BlockedMessageSchema = z.strictObject({
   reason: z.enum(['blocked_by_scope', 'candidate_already_correct', 'cannot_reproduce']),
   paths: z.array(z.string().trim().min(1)).max(50).default([])
@@ -62,7 +68,9 @@ const MessageFieldsSchema = z
     artifactIds: z.array(AxiomIdSchema),
     related: MessageRelatedSchema,
     subtask: SubtaskRequestSchema.optional(),
-    blocked: BlockedMessageSchema.optional()
+    blocked: BlockedMessageSchema.optional(),
+    question: QuestionMessageSchema.optional(),
+    followUp: FollowUpMessageSchema.optional()
   })
   .strict()
   .superRefine((p, ctx) => {
@@ -78,6 +86,20 @@ const MessageFieldsSchema = z
         code: 'custom',
         path: ['blocked'],
         message: 'blocked is only allowed for BLOCKED.'
+      })
+    }
+    if (p.question !== undefined && p.type !== 'QUESTION') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['question'],
+        message: 'question is only allowed for QUESTION.'
+      })
+    }
+    if (p.followUp !== undefined && p.type !== 'REQUEST') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['followUp'],
+        message: 'followUp is only allowed for REQUEST.'
       })
     }
   })
@@ -118,6 +140,7 @@ export const MessageSummaryResponseSchema = z.object({
   related: MessageRelatedSchema,
   subtask: SubtaskRequestSchema.optional(),
   blocked: BlockedMessageSchema.optional(),
+  followUp: FollowUpMessageSchema.optional(),
   createdAt: z.string(),
   pending: z.boolean(),
   question: z.string().optional(),

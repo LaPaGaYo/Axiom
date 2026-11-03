@@ -23,6 +23,13 @@ export function routeWorkerMessage(
   const { runtime, db, store } = ctx
   const { axiom } = AxiomMessagePayloadSchema.parse({ axiom: input.axiom })
   axiom.summary = redactContext(axiom.summary).content
+  if (axiom.question) {
+    axiom.question.text = redactContext(axiom.question.text).content
+    axiom.question.options = axiom.question.options.map((option) => redactContext(option).content)
+  }
+  if (axiom.followUp) {
+    axiom.followUp.text = redactContext(axiom.followUp.text).content
+  }
   if (axiom.blocked) {
     axiom.blocked.paths = axiom.blocked.paths.map((path) => redactContext(path).content)
   }
@@ -115,10 +122,21 @@ export function routeWorkerMessage(
         related: axiom.related,
         ...(axiom.subtask ? { subtask: axiom.subtask } : {}),
         ...(axiom.blocked ? { blocked: axiom.blocked } : {}),
+        ...(axiom.question
+          ? {
+              question: axiom.question.text,
+              options: axiom.question.options,
+              answer: null,
+              status: 'pending' as const
+            }
+          : {}),
+        ...(axiom.followUp ? { followUp: axiom.followUp } : {}),
         createdAt: message.created_at,
         pending:
           axiom.type === 'REQUEST_SUBTASK' ||
-          (axiom.type === 'BLOCKED' && axiom.blocked !== undefined)
+          (axiom.type === 'BLOCKED' && axiom.blocked !== undefined) ||
+          axiom.question !== undefined ||
+          axiom.followUp !== undefined
       },
       recipients: [...recipients]
     }

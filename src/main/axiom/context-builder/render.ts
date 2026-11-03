@@ -8,6 +8,7 @@ import { readRepositoryRules } from './repository-rules'
 import { redactContext } from './redaction'
 import { z } from 'zod'
 import { HeadlessSubmissionReportSchema } from '../../../shared/axiom-contract/submission-params'
+import { answeredQuestions } from './answered-questions'
 
 export type ContextSection = { section: string; source: string; text: string }
 
@@ -222,6 +223,10 @@ export async function mandatorySections(
     {
       section: 'Previous-Attempt failure evidence',
       ...previousAttempt
+    },
+    {
+      section: 'Answered questions',
+      ...answeredQuestions(store, missionId, taskId)
     }
   ]
   const sections: ContextSection[] = entries.map(({ section, source, content }) => {

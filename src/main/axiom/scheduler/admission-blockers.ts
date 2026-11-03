@@ -7,7 +7,8 @@ export function blockingQuestionOrApproval(
 ): 'none' | 'question' | 'approval' {
   if (
     ctx.db.listGates({ taskId: task.taskId, status: 'pending' }).length > 0 ||
-    ctx.store.hasPendingQuestionForTask(task.taskId)
+    ctx.store.hasPendingQuestionForTask(task.taskId) ||
+    ctx.store.hasPendingTypedQuestionForTask(task.taskId)
   ) {
     return 'question'
   }
