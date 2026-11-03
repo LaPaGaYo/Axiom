@@ -3,6 +3,8 @@
 #   AXIOM_INDEXES_AND_DELETE_TRIGGERS_SQL rows removed: the D72 renumbering moved its only use into migrate-v44.ts, an Axiom-added file the check excludes.
 #   isProviderActivated 9 -> 8: upstream deleted the real-home hook sweep (setSystemCodexHomeHookSweepSuppressed) whose extra suppression predicate was the ninth use.
 #   'axiom.cmd' 17 -> 15: upstream deleted the unused src/main/ssh/ssh-remote-cli-launcher.ts and its test (5651141700).
+#   2026-11-02 verifier, after M3-04b (merge 4932923d7a): AttemptBlockedParams 5 -> 2 in rpc-params-catalog.generated.ts — the schema is no longer an alias of
+#   AttemptMessageParams (it gains the optional `blocked` payload), so the generator stops emitting it for inform / request / handoff; those rows now name AttemptHandoffParams.
 import	already-starred-telemetry	trackStarNagAlreadyStarred	2
 import	artifact-cloud-auth-context	ArtifactAuthContext	2
 import	artifact-cloud-auth-context	explicitTokenAuthContext	2
@@ -11,7 +13,7 @@ import	artifact-params	ArtifactListParams	2
 import	artifact-params	ArtifactPutParams	2
 import	artifact-params	ArtifactReadParams	2
 import	attempt-params	AttemptAskParams	2
-import	attempt-params	AttemptBlockedParams	5
+import	attempt-params	AttemptBlockedParams	2
 import	attempt-params	AttemptCheckParams	2
 import	attempt-params	AttemptListParams	2
 import	attempt-params	AttemptRequestSubtaskParams	2
