@@ -3,12 +3,26 @@ import type { CommandHandler } from '../../dispatch'
 import {
   getRequiredStringFlag as required,
   getRepeatedStringFlag as repeated,
-  getOptionalStringFlag as optional
+  getOptionalStringFlag as optional,
+  getOptionalPositiveIntegerFlag
 } from '../../flags'
 import { formatTask, formatTaskList } from '../../axiom-format'
 import { callAxiom } from './rpc-command'
 
 export const AXIOM_TASK_HANDLERS: Record<string, CommandHandler> = {
+  'task adjust': async (ctx) => {
+    await callAxiom(
+      ctx,
+      'axiom.task.adjust',
+      {
+        taskId: required(ctx.flags, 'task'),
+        rationale: required(ctx.flags, 'rationale'),
+        addAllowedPaths: repeated(ctx.flags, 'add-path'),
+        maxAttempts: getOptionalPositiveIntegerFlag(ctx.flags, 'max-attempts')
+      },
+      formatTask
+    )
+  },
   'task create': async (ctx) => {
     const input = await readTaskFile(ctx.cwd, required(ctx.flags, 'file'))
     await callAxiom(

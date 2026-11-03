@@ -20,7 +20,8 @@ export function messagesStore(db: OrchestrationDb) {
       const rows = db.db
         .prepare(`SELECT m.id, m.payload, m.created_at,
         EXISTS(SELECT 1 FROM audit_events a WHERE a.mission_id = missions.id
-          AND a.event = 'subtask.resolved' AND a.object_kind = 'message' AND a.object_id = m.id) AS resolved
+          AND a.event IN ('subtask.resolved', 'blocked.resolved')
+          AND a.object_kind = 'message' AND a.object_id = m.id) AS resolved
         FROM messages m JOIN missions ON missions.run_id = m.run_id
         WHERE missions.id = ? ORDER BY m.sequence`)
         .all(p.missionId)
@@ -36,7 +37,9 @@ export function messagesStore(db: OrchestrationDb) {
         const pending =
           'pending' in projected
             ? projected.pending
-            : type === 'REQUEST_SUBTASK' && row.resolved === 0
+            : (type === 'REQUEST_SUBTASK' ||
+                (type === 'BLOCKED' && projected.blocked !== undefined)) &&
+              row.resolved === 0
         if (
           (p.type && p.type !== type) ||
           (p.taskId && p.taskId !== taskId) ||

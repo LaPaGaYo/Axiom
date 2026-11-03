@@ -16,6 +16,7 @@ export const MISSION_CONTROLLER_ERROR_CODES = [
   'plan_not_proposed',
   'replan_not_supported',
   'mission_not_executing',
+  'retry_budget_exhausted',
   'synthetic_session_id_invalid'
 ] as const
 

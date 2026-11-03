@@ -9,6 +9,7 @@ import {
   type AxiomMessagePayload
 } from '../../../shared/axiom-contract/message-params'
 import type { AxiomStore } from '../db/axiom-store'
+import { redactContext } from '../context-builder/redaction'
 
 export function routeWorkerMessage(
   ctx: {
@@ -21,6 +22,10 @@ export function routeWorkerMessage(
 ) {
   const { runtime, db, store } = ctx
   const { axiom } = AxiomMessagePayloadSchema.parse({ axiom: input.axiom })
+  axiom.summary = redactContext(axiom.summary).content
+  if (axiom.blocked) {
+    axiom.blocked.paths = axiom.blocked.paths.map((path) => redactContext(path).content)
+  }
   const type = axiomMessageRoutingType(axiom.type)
   const receipt = store.transaction('message_route', () => {
     const mission = store.getMission(axiom.missionId)
@@ -75,7 +80,7 @@ export function routeWorkerMessage(
           from: input.sender.address,
           to,
           subject: axiom.summary,
-          body: input.body,
+          body: input.body === undefined ? undefined : redactContext(input.body).content,
           type,
           payload: JSON.stringify({ axiom }),
           senderPaneKey: input.sender.paneKey ?? undefined,
@@ -109,8 +114,11 @@ export function routeWorkerMessage(
         artifactIds: axiom.artifactIds,
         related: axiom.related,
         ...(axiom.subtask ? { subtask: axiom.subtask } : {}),
+        ...(axiom.blocked ? { blocked: axiom.blocked } : {}),
         createdAt: message.created_at,
-        pending: axiom.type === 'REQUEST_SUBTASK'
+        pending:
+          axiom.type === 'REQUEST_SUBTASK' ||
+          (axiom.type === 'BLOCKED' && axiom.blocked !== undefined)
       },
       recipients: [...recipients]
     }

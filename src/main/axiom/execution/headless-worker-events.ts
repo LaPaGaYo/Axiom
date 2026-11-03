@@ -36,6 +36,7 @@ export function parseHeadlessWorkerEvents(text: string, provider = 'codex'): Hea
   let usage: z.infer<typeof Usage> | undefined
   let lastError: string | undefined
   let turnError: string | undefined
+  let turnFailed = false
   let hasEvents = false
   for (const line of text.split(/\r?\n/)) {
     let value: unknown
@@ -57,6 +58,7 @@ export function parseHeadlessWorkerEvents(text: string, provider = 'codex'): Hea
       usage = event.usage
     }
     if (event.type === 'turn.failed') {
+      turnFailed = true
       turnError = event.error?.message
     }
     if (event.type === 'error') {
@@ -66,7 +68,7 @@ export function parseHeadlessWorkerEvents(text: string, provider = 'codex'): Hea
   const failureMessage = turnError ?? lastError
   return {
     hasEvents,
-    turnFailed: turnError !== undefined,
+    turnFailed,
     lastError: failureMessage,
     ...(failureMessage !== undefined
       ? {

@@ -36,7 +36,7 @@ export const AXIOM_ATTEMPT_COMMAND_SPECS: CommandSpec[] = [
   ...['inform', 'request', 'blocked', 'handoff', 'request-subtask'].map((verb): CommandSpec => ({
     path: ['attempt', verb],
     summary: `Send a typed Worker ${verb} message`,
-    usage: `axiom attempt ${verb} --attempt <id> --summary <text> [--body <text> | --body-file <path>] [--artifact <id>] [--related-task <id>]${verb === 'request-subtask' ? ' --title <text> --objective <text> --allowed-path <path> --acceptance <text> --evidence <text> [--risk low|medium|high] [--depends-on <taskId>]' : ''} [--json]`,
+    usage: `axiom attempt ${verb} --attempt <id> --summary <text> [--body <text> | --body-file <path>] [--artifact <id>] [--related-task <id>]${verb === 'request-subtask' ? ' --title <text> --objective <text> --allowed-path <path> --acceptance <text> --evidence <text> [--risk low|medium|high] [--depends-on <taskId>]' : ''}${verb === 'blocked' ? ' [--reason blocked_by_scope|candidate_already_correct|cannot_reproduce] [--path <path>]' : ''} [--json]`,
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'attempt',
@@ -47,6 +47,7 @@ export const AXIOM_ATTEMPT_COMMAND_SPECS: CommandSpec[] = [
       'body-file',
       'artifact',
       'related-task',
+      ...(verb === 'blocked' ? ['reason', 'path'] : []),
       ...(verb === 'request-subtask'
         ? ['title', 'objective', 'allowed-path', 'acceptance', 'evidence', 'risk', 'depends-on']
         : [])
@@ -54,6 +55,7 @@ export const AXIOM_ATTEMPT_COMMAND_SPECS: CommandSpec[] = [
     repeatableFlags: [
       'artifact',
       'related-task',
+      ...(verb === 'blocked' ? ['path'] : []),
       ...(verb === 'request-subtask'
         ? ['allowed-path', 'acceptance', 'evidence', 'depends-on']
         : [])

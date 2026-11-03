@@ -68,7 +68,7 @@ async function submitFixture(attemptId, missionId, taskId, outputPath) {
     'suppression': { file: 'clock.test.ts', expected: "test('fixed clocks normalize instants and reject malformed input', () => {" }
   }
   const tamper = tamperProbes[scenario]
-  if (!tamper && !['retry', 'deterministic-failure', 'agent-crash', 'scope-violation', 'secret-line', 'transcript-secret', 'self-approve', 'unchanged-fix'].includes(scenario)) throw new Error('Unknown fixture scenario')
+  if (!tamper && !['retry', 'deterministic-failure', 'agent-crash', 'scope-violation', 'secret-line', 'transcript-secret', 'self-approve', 'unchanged-fix', 'blocked-scope', 'no-change-declared'].includes(scenario)) throw new Error('Unknown fixture scenario')
   // Keep both the Worker Artifact and protocol envelope outside the Candidate snapshot.
   const temp = headless ? path.join(process.cwd(), '.axiom', 'artifacts') : mkdtempSync(path.join(os.tmpdir(), 'axiom-submit-report-'))
   if (headless) mkdirSync(temp, { recursive: true })
@@ -76,13 +76,17 @@ async function submitFixture(attemptId, missionId, taskId, outputPath) {
     if (scenario === 'transcript-secret') {
       process.stdout.write('Transcript redaction probe: ' + 'gh' + 'p_' + 'T'.repeat(36) + '\\n')
     }
-    const command = ['scenarios/stub-worker/worker.mjs', '--scenario', ['transcript-secret', 'unchanged-fix'].includes(scenario) ? 'retry' : scenario, '--attempt', String(Math.min(seq, 2)), '--mode', 'succeed', '--cwd', process.cwd()]
+    const command = ['scenarios/stub-worker/worker.mjs', '--scenario', ['transcript-secret', 'unchanged-fix', 'blocked-scope', 'no-change-declared'].includes(scenario) ? 'retry' : scenario, '--attempt', String(Math.min(seq, 2)), '--mode', 'succeed', '--cwd', process.cwd()]
     const started = Date.now()
     const unchanged = headless && scenario === 'unchanged-fix' && seq === 2
-    const providerOnly = unchanged || Boolean(tamper) || scenario === 'scope-violation' || scenario === 'secret-line' || scenario === 'self-approve'
+    const declared = headless && seq === 2 && ['blocked-scope', 'no-change-declared'].includes(scenario)
+    const declarationSummary = scenario === 'blocked-scope' ? 'The failing check needs src/services/date-range.test.ts, which is outside allowedPaths.' : 'The Candidate is already correct; the failing check is wrong about this tree.'
+    const providerOnly = declared || unchanged || Boolean(tamper) || scenario === 'scope-violation' || scenario === 'secret-line' || scenario === 'self-approve'
     let reportText
     if (providerOnly) {
-      if (unchanged) {
+      if (declared) {
+        reportText = declarationSummary + '\\n'
+      } else if (unchanged) {
         reportText = 'The previous Candidate is unchanged; this Attempt made no file changes.\\n'
       } else if (scenario === 'self-approve') {
         const plans = cli(['plan', 'list', '--mission', missionId])
@@ -133,7 +137,7 @@ async function submitFixture(attemptId, missionId, taskId, outputPath) {
     const changed = spawnSync('git', ['diff', '--name-only', 'HEAD'], { cwd: process.cwd(), encoding: 'utf8' })
     if (changed.status !== 0) throw new Error('Fixture diff failed')
     const report = {
-      summary: unchanged ? 'No files changed; the previous Candidate needs the same fix.' : 'D49 ' + scenario + ' scenario attempt ' + seq + ' succeeded',
+      summary: declared ? declarationSummary : unchanged ? 'No files changed; the previous Candidate needs the same fix.' : 'D49 ' + scenario + ' scenario attempt ' + seq + ' succeeded',
       filesChanged: changed.stdout.trim().split(/\\r?\\n/).filter(Boolean),
       checksRun: [{ command: providerOnly ? 'provider scenario ' + scenario : 'node ' + command.join(' '), result: 'pass', durationMs: Date.now() - started },
         { command: 'fixture verification', result: 'skipped', note: 'Stub Worker; independent verification is queued for M3.' }],
@@ -142,6 +146,9 @@ async function submitFixture(attemptId, missionId, taskId, outputPath) {
     }
     if (headless) {
       delete report.filesChanged
+      if (declared) report.outcome = scenario === 'blocked-scope'
+        ? { outcome: 'blocked', reason: 'blocked_by_scope', paths: ['src/services/date-range.test.ts'] }
+        : { outcome: 'no_change', reason: 'candidate_already_correct' }
       writeFileSync(outputPath, reportText + '\\n\`\`\`json\\n' + JSON.stringify(report) + '\\n\`\`\`\\n')
       process.stdout.write(JSON.stringify({ type: 'item.completed', item: { id: 'item-1', type: 'agent_message', text: report.summary } }) + '\\n')
       process.stdout.write(JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 100, cached_input_tokens: 40, output_tokens: 25 } }) + '\\n')

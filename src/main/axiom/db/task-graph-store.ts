@@ -28,6 +28,12 @@ const UpdateSchema = z.object({
   previousStage: TaskStageSchema.nullable().optional(),
   attemptCountDelta: z.number().int().nonnegative().optional()
 })
+const UpdateSpecSchema = z.strictObject({
+  taskId: AxiomIdSchema,
+  expectedStage: TaskStageSchema,
+  spec: TaskStageRecordSchema.shape.spec,
+  retryPolicy: TaskStageRecordSchema.shape.retryPolicy
+})
 const CountsSchema = z.record(TaskStageSchema, z.number().int().nonnegative())
 const CountRowSchema = z.object({ stage: TaskStageSchema, count: z.number().int().nonnegative() })
 
@@ -91,6 +97,16 @@ export function taskGraphStore(db: OrchestrationDb) {
             p.taskId,
             p.from
           ).changes === 1
+      )
+    },
+    updateTaskSpec(input: z.input<typeof UpdateSpecSchema>): boolean {
+      const p = UpdateSpecSchema.parse(input)
+      return (
+        db.db
+          .prepare(`UPDATE task_stages SET spec = ?, retry_policy = ?,
+        updated_at = datetime('now') WHERE task_id = ? AND stage = ?`)
+          .run(JSON.stringify(p.spec), JSON.stringify(p.retryPolicy), p.taskId, p.expectedStage)
+          .changes === 1
       )
     },
     countTaskStages(missionId: string): Record<TaskStage, number> {

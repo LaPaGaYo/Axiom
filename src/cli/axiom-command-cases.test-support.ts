@@ -109,5 +109,16 @@ export const cases: {
     flags: { task: 't1', rationale: 'obsolete' },
     method: 'axiom.task.cancel',
     params: { taskId: 't1', rationale: 'obsolete' }
+  },
+  {
+    command: 'task adjust',
+    flags: { task: 't1', rationale: 'Reviewed', 'add-path': 'src/check.ts', 'max-attempts': '3' },
+    method: 'axiom.task.adjust',
+    params: {
+      taskId: 't1',
+      rationale: 'Reviewed',
+      addAllowedPaths: ['src/check.ts'],
+      maxAttempts: 3
+    }
   }
 ]

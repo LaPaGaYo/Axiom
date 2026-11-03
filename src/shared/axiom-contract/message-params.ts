@@ -28,6 +28,10 @@ export function axiomMessageRoutingType(type: AxiomMessageType) {
 }
 
 export const MessageSummarySchema = z.string().trim().min(1).max(2000)
+export const BlockedMessageSchema = z.strictObject({
+  reason: z.enum(['blocked_by_scope', 'candidate_already_correct', 'cannot_reproduce']),
+  paths: z.array(z.string().trim().min(1)).max(50).default([])
+})
 export const MessageRelatedSchema = z
   .object({
     taskIds: z.array(AxiomIdSchema).optional(),
@@ -57,7 +61,8 @@ const MessageFieldsSchema = z
     summary: MessageSummarySchema,
     artifactIds: z.array(AxiomIdSchema),
     related: MessageRelatedSchema,
-    subtask: SubtaskRequestSchema.optional()
+    subtask: SubtaskRequestSchema.optional(),
+    blocked: BlockedMessageSchema.optional()
   })
   .strict()
   .superRefine((p, ctx) => {
@@ -66,6 +71,13 @@ const MessageFieldsSchema = z
         code: 'custom',
         path: ['subtask'],
         message: 'subtask is required only for REQUEST_SUBTASK.'
+      })
+    }
+    if (p.blocked !== undefined && p.type !== 'BLOCKED') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['blocked'],
+        message: 'blocked is only allowed for BLOCKED.'
       })
     }
   })
@@ -103,6 +115,7 @@ export const MessageSummaryResponseSchema = z.object({
   artifactIds: z.array(AxiomIdSchema),
   related: MessageRelatedSchema,
   subtask: SubtaskRequestSchema.optional(),
+  blocked: BlockedMessageSchema.optional(),
   createdAt: z.string(),
   pending: z.boolean(),
   question: z.string().optional(),

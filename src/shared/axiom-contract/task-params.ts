@@ -11,6 +11,12 @@ export const TaskShowParams = z.object({ taskId: AxiomIdSchema })
 export const TaskCancelParams = TaskShowParams.extend({
   rationale: requiredString('Missing rationale')
 })
+export const TaskAdjustParams = z.strictObject({
+  taskId: AxiomIdSchema,
+  rationale: requiredString('Missing rationale'),
+  addAllowedPaths: z.array(z.string().trim().min(1)).max(50).default([]),
+  maxAttempts: z.number().int().positive().optional()
+})
 export const TaskCreateParams = z.strictObject({
   missionId: AxiomIdSchema,
   task: TaskSpecSchema.omit({ id: true }),

@@ -19,6 +19,7 @@ it('classifies exactly every registered Axiom method, including namespace discov
   for (const method of AXIOM_ATTEMPT_CALLER_METHODS) {
     expect(resolveAxiomCallerClass(method, { attemptId: 'attempt-1' })).toBe('attempt')
   }
+  expect(resolveAxiomCallerClass('axiom.task.adjust', {})).toBe('desktop_only')
 })
 it.each(['axiom.plan.propose', 'axiom.artifact.put'])(
   '%s selects authority by attemptId',

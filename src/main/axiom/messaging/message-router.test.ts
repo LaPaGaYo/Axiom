@@ -7,6 +7,30 @@ let f: ReturnType<typeof channelFixture>
 beforeEach(() => {
   f = channelFixture()
 })
+it('redacts typed BLOCKED Worker strings at the message boundary and keeps the live Task RUNNING', async () => {
+  const secret = 'ghp_1234567890abcdefghijklmnop'
+  const response = await f.call('axiom.attempt.blocked', {
+    from: f.t01.from,
+    attemptId: f.t01.attemptId,
+    summary: `Blocked ${secret}`,
+    body: `Evidence ${secret}`,
+    blocked: { reason: 'blocked_by_scope', paths: [`src/${secret}.ts`] }
+  })
+  expect(response).toMatchObject({
+    ok: true,
+    result: {
+      message: {
+        pending: true,
+        summary: 'Blocked [REDACTED]',
+        blocked: { reason: 'blocked_by_scope', paths: ['src/[REDACTED].ts'] }
+      }
+    }
+  })
+  const message = f.db.getUnreadRunMailbox(f.mission.runId)[0]!
+  expect(message.body).toBe('Evidence [REDACTED]')
+  expect(JSON.stringify(message)).not.toContain(secret)
+  expect(f.store.getTaskStage(f.t01.taskId)?.stage).toBe('RUNNING')
+})
 afterEach(() => {
   f.db.close()
   vi.restoreAllMocks()

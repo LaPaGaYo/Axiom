@@ -1,6 +1,6 @@
-# Control Plane 子系统参考（M2 出口）
+# Control Plane 子系统参考
 
-更新：2026-10-20 · 适用：截至 M2-12 / D59 已合入 main 的行为；M2-11 attempt 2 测试与证据索引见 [M2-exit-e2e.md](../review-evidence/axiom-m2/M2-exit-e2e.md)，本候选宿主结果待 verifier 填写。M1 历史证据见 [M1-exit-e2e.md](../review-evidence/axiom-m1/M1-exit-e2e.md)。
+更新：2026-11-02 · 适用：M2 出口基线及本文标注的 M3 增量；M3-04b 为本候选实现，宿主验收结果待 verifier 填写。M2-11 attempt 2 测试与证据索引见 [M2-exit-e2e.md](../review-evidence/axiom-m2/M2-exit-e2e.md)，M1 历史证据见 [M1-exit-e2e.md](../review-evidence/axiom-m1/M1-exit-e2e.md)。
 规范权威仍是 [Constitution](../PROJECT_CONSTITUTION.md) §1、ACCEPTED Decisions、[Glossary](../GLOSSARY.md) §4 与 [Architecture](../ARCHITECTURE.md)；本文定位实现，不新增权威或状态。
 
 ## 1. 用途与边界
@@ -16,7 +16,7 @@ Execution Kernel 继续拥有 Run、Orca Task、dispatch、PTY、进程、worktr
 | 路径 | 职责 |
 |---|---|
 | `src/main/axiom/db/` | `axiom-store.ts` 聚合已启用的 side table 的访问；`missions-store.ts`、`revisions-store.ts`、`task-graph-store.ts`、`policy-audit-store.ts`、`artifacts-store.ts`、`agent-specs-store.ts` 分域 SQL；`axiom-rows.ts` / `row-codec.ts` 校验数据库行 |
-| `src/main/axiom/mission-controller/` | `mission-controller.ts` 提供事务入口；`mission-lifecycle.ts`、`goal-lifecycle.ts`、`plan-materialization.ts`、`task-readiness.ts` 实现状态转换；`controller-context.ts` 定义错误与审计；`run-mailbox-consumer.ts` 消费 Run mailbox |
+| `src/main/axiom/mission-controller/` | `mission-controller.ts` 提供事务入口；`mission-lifecycle.ts`、`goal-lifecycle.ts`、`plan-materialization.ts`、`task-readiness.ts` 实现状态转换；`task-adjustment.ts` 调整 Task spec / 重试预算并解决 BLOCKED 待处理项；`controller-context.ts` 定义错误与审计；`run-mailbox-consumer.ts` 消费 Run mailbox |
 | `src/main/axiom/execution/attempt-launcher.ts` / `mission-caller.ts` | M2-05：预创建 Attempt worktree、合成 caller、D14 service 调用、dispatch 绑定与启动结算 |
 | `src/main/axiom/execution/integration-base.ts` | D51：start 前以目标分支 HEAD 创建集成基线；已存在只沿用，M4 前不移动 |
 | `src/main/axiom/execution/attempt-projection.ts` | `attempt_bindings` 与 Orca `projectFleetWorker` 投影，供 `axiom.attempt.show/list` 与 CLI 读接口 |
@@ -73,15 +73,15 @@ Milestone 存在 Plan JSON 内，没有独立表/状态机。Attempt 身份仍�
 
 ContextBuilder 固定强制顺序：(1) Task spec；(2) PlanRevision revision/milestone/带邻居标题的入出边；(3) ACCEPTED Decisions；(4) 权限、Mission/Task 预算、并发、重试与 `axiom-submission-v1` 字段清单；(5) 目标分支的 AGENTS.md/CLAUDE.md，各最多 16 KiB（缺文件省略，读失败不静默忽略）；(6) policy 验证命令；(7) Previous-Attempt failure evidence（M3-04，见下）。只读这两个规则文件，不读工作区版本或 `.env*`。
 
-M3-04：Worker context 在 admission 插入 binding 之前，以 `store.nextAttemptSeq(taskId)` 调用与 launcher 共用的 `resolveAttemptBaseline`。第 7 节由 `context-builder/previous-attempt.ts` 准备 `{source, content}`，仍逐节经过 `redactContext`；协议仍绑定第 4 节的 hash/token 数。首个 Attempt 的正文 `none (first attempt)`、source `previous-attempt:m2` 均不变，因此首个 package id 不变。后续 integration baseline 用一行说明从集成基线重来及原因（自然语言与固定 reason code），source 为 `previous-attempt:<reason>`；`secret_detected` 另列失败 run 的密钥路径、模式名，并明确不得重新引入秘密，不携带匹配文本或该候选的历史。
+M3-04：Worker context 在 admission 插入 binding 之前，以 `store.nextAttemptSeq(taskId)` 调用与 launcher 共用的 `resolveAttemptBaseline`。第 7 节由 `context-builder/previous-attempt.ts` 准备 `{source, content}`，仍逐节经过 `redactContext`；协议仍绑定第 4 节的 hash/token 数。首个 Attempt 的本节正文 `none (first attempt)`、source `previous-attempt:m2` 均不变；M3-04b 新增 Worker 协议会改变完整 render 与 package 的内容 hash。后续 integration baseline 用一行说明从集成基线重来及原因（自然语言与固定 reason code），source 为 `previous-attempt:<reason>`；`previous_attempt_not_submitted` 若带非空 `skippedAttempts`，也追加下述声明与人工调整行；`secret_detected` 另列失败 run 的密钥路径、模式名，并明确不得重新引入秘密，不携带匹配文本或该候选的历史。
 
 candidate baseline 的第 7 节按以下顺序渲染，source 为 `verification:<runId>`：
 
 1. `This Attempt continues the previous Candidate <commitSha> from Attempt <previousSeq>; fix the failures below in this tree. Do not weaken, skip or delete tests, assertions, lint rules or checks to make them pass.`
-2. D85：接续行之后按 seq 升序列出 `unchangedAttempts`：`Attempt <seq> exited without changing this Candidate; its report said: <summary>`，摘要先 `redactContext`、截取 500 字符、作为单行引用数据转义换行、反引号与角括号；无摘要用 `(no summary)`。其后提示 `If the failures below cannot be fixed inside allowedPaths, say so in limitations and name the paths or commands at fault; do not submit an unchanged tree.` 这些行与失败摘录共用 8 KiB UTF-8 预算；随后列失败 run 的 verdict 与 reason。
+2. D85 / M3-04b：接续行之后按 seq 升序列出 `skippedAttempts`。`unchanged` 保留 `Attempt <seq> exited without changing this Candidate; its report said: <summary>`；`no_change` 为 `Attempt <seq> declared no_change (<reason>); its report said: <summary>`；`blocked` 为 `Attempt <seq> declared blocked_by_scope naming <paths>; its report said: <summary>`。随后按审计顺序列出本 Task 的 `task.adjusted`：`A human adjusted this Task after Attempt <afterAttemptSeq>: ...`，仅列新增 allowedPaths、发生变化的 maxAttempts（前值 → 后值）及 rationale。candidate baseline 只纳入 `afterAttemptSeq >= previousSeq`；带 skipped Attempts 的 integration baseline 只纳入 `afterAttemptSeq >= 1`。摘要、路径与 rationale 均先脱敏、最多取 500 字符，再作 JSON 单行引用并转义反引号与角括号；无摘要用 `(no summary)`，路径列表另受显示预算限制。声明、调整行与失败摘录共用 8 KiB UTF-8 预算；`previous-attempt-text.ts` 在预算不足时优先保留最新声明和人工调整，再按原顺序显示所保留的行，明确提示省略的早期证据；最后保留 `If the failures below cannot be fixed inside allowedPaths, say so in limitations and name the paths or commands at fault; do not submit an unchanged tree.`，随后列失败 run 的 verdict 与 reason。
 3. `result: fail` 的 checks，按 index 升序：command、exitCode、最多 20 个失败名、verdict evidence Artifact（`verdictDetail.verdictArtifactId`）中对应 index 的 excerpt。每项摘录最多 40 行，全部摘录合计最多 8 KiB UTF-8，不截断多字节字符；用尽时标明省略。Artifact 缺失、读取/解析失败或找不到该项时写 `excerpt unavailable`，不阻止重试。
 4. `verdictDetail.diff` 中的 scope violations、secret findings（仅路径与模式名）、dangerous changes（路径与模式）。越界路径带明确的 remove/revert 指令：scope 对 merge-base 比较，留在树里会再次失败。
-5. Task 的全部 acceptanceCriteria，列在 `Not yet demonstrated` 下；逐条判定留给 M3-04b。
+5. Task 的全部 acceptanceCriteria，列在 `Not yet demonstrated` 下；逐条判定留给 M3-04b-2。
 6. 上一 Submission 的 transcript Artifact id（存在时）；`axiom mission artifact read --artifact <id>` 配方只给 terminal fallback，headless 不给 CLI 指令。与 `attempt show` 共用导出的 `findSubmissionTranscriptArtifactId`，不内联 transcript。
 
 只读已存 run、verdict Artifact、Task spec 与 transcript 元数据，不重跑检查、不读取 Worker 当前输出。相同输入得到相同 package id；run id 变化会改变 source 与 package id。
@@ -92,7 +92,9 @@ candidate baseline 的第 7 节按以下顺序渲染，source 为 `verification:
 
 canonical manifest 无空白、对象键序固定，保留数组顺序，id = `ctx_` + sha256(canonical)。manifest 与完整 render template 均作为 Artifact 持久化，context row 只保留 JSON manifest/hash/引用。相同输入重复 build 不新增行或文件。模板最后的 `Axiom Worker protocol` 按执行通道生成：headless 使用文件 Artifact 和最终 JSON report（见 M3-08 节），terminal fallback 保留 D16 八个 `axiom attempt` verb；两种模板的协议都参与 ContextPackage 内容寻址，launcher 在交付时替换 `{{attemptId}}`；D73 之后模板不含任何凭据（身份由宿主核实）。
 
-后续：M3-04b 负责逐条 acceptance、已答 Question 与跨 Attempt 未关闭发现；DEF-4/5 的 skills 与代码知识输入按登记触发点复审。
+M3-04b 的两种协议都要求结束前运行本 worktree 可执行的 `Required verification commands`，按 acceptanceCriteria 和现有 AGENTS.md / CLAUDE.md / REVIEW.md 重读完整 diff；未运行的检查逐项写 `checksRun {result: skipped, note}`，该报告不决定 verdict。只使用本 worktree 的工具链，不 symlink、复制或借用其它目录的 node_modules / .bin / caches；缺依赖写入 limitations。headless 以 `outcome` 声明 submitted / no_change / blocked（见 §4）；无可修时不改树，范围不足时停止且不得越界。terminal fallback 在停止前用 `axiom attempt blocked --reason … --path …` 报告相同结论。
+
+后续：M3-04b-2 负责逐条 acceptance、已答 Question 与跨 Attempt 未关闭发现；DEF-4/5 的 skills 与代码知识输入按登记触发点复审。
 
 ### Provider selection（M2-03）
 
@@ -130,11 +132,22 @@ Goal: 用户输入创建即 ACTIVE；后续 PROPOSED → ACTIVE，旧 ACTIVE →
 Plan: PROPOSED → APPROVED 或 REJECTED
 Task: approve → DEFINED；start → READY；admission → RUNNING；submit → SUBMITTED
       无 Submission 的失败 → NEEDS_FIX → READY（重试）或 BLOCKED（耗尽）；可授权 CANCELED
+      headless no_change / blocked → NEEDS_FIX → BLOCKED（交人调整，不自动重试）
 ```
 
 合法转换表包含未来阶段；M2 已推进 RUNNING / SUBMITTED，尚不执行独立验证、集成或 Mission 完成。Orca `completed` 仅指当前 Attempt 已结算，不能显示为 Task 完成；UI 只有 INTEGRATED 计入进度。
 
 暂停/阻塞前的 Mission 状态保存在 `missions.previous_status`；resume 只用于 PAUSED，内部 unblock 用于 BLOCKED，恢复目标必须等于该字段。嵌套 PAUSED/BLOCKED 经持久 `mission.status` 审计回放恢复更早返回点。Task 进入 BLOCKED 保存 `task_stages.previous_stage`，解除时只能返回该 stage（或取消），不能任意跳跃。条件更新不命中时抛 `stale_state`。
+
+M3-04b / D70 ② 的 Task 阻塞处置复用该返回点，不增加 stage：
+
+| BLOCKED reason | 来源 | 人工解除 |
+|---|---|---|
+| `scope` | headless 声明 `blocked_by_scope` | 桌面 `axiom.task.adjust` 扩大 allowedPaths，`BLOCKED → NEEDS_FIX → READY`（均为 reason=adjusted），或 cancel |
+| `candidate_disputed` | headless 声明 `candidate_already_correct` / `cannot_reproduce` | 人复核后以 rationale-only adjust 重开上述路径，或 cancel；不改写确定性 FAIL，同 Candidate 重验留给 M3-05 |
+| `retry_budget_exhausted` | 原失败 / 验证修复循环耗尽 Task 预算 | adjust 提高 maxAttempts 后经 previousStage 回 READY，或 cancel / replan |
+
+上述 NEEDS_FIX → READY 都要求调整后 `attemptCount < maxAttempts`；否则整笔调整回滚并返回 `retry_budget_exhausted`。声明 Attempt 仍占 seq、计入已消耗次数，扩大 scope 本身不退还预算。具体参数、审计与权限见 §6「人工 Task 调整」。
 
 M2 仍仅允许首个 Plan 批准；替代计划批准属于 M5。`plan-materialization.ts` 校验共享 schema、唯一 id、合法 milestone、端点、重复边、自环与 DAG 后，将提案 `T01` 等 id 映射为新 Orca Task id；Task 创建 `deps=[]`，Orca 投影即 `ready`，Axiom stage 为 DEFINED。批准后 Mission 为 PLANNED，此时不会 READY；必须 `mission start`。
 
@@ -178,12 +191,12 @@ M2 之后：M3 的验证结算接入既有调度触发；M4 接预算 Approval�
 
 启动顺序：读取已绑定 AgentSpec / ContextPackage render → 校验 Run/Task 与 prompt 大小 → `resolveAttemptBaseline` → 经现有 `createManagedWorktree` 预创建 `axiom/attempt/<taskId>/<seq>`（不传 startupAgent）→ 校验修复基线 HEAD、必要时重开 Orca task → 直接调 `startLocalWorker` → CAS 回填 `attempt_bindings.dispatch_id` → audit / stage settlement。没有 `worktree_id` side-table 列；worktree id 写入启动 audit，读接口经 fleet 的 dispatch/workspace 读取。
 
-M3-04 / D64 ①：`execution/attempt-baseline.ts` 是 ContextBuilder 与 launcher 共用的纯存储判定，从 seq−1 向前检查（M3-08i / D85）：无 Submission 时只有该 dispatch 的 `attempt.failed.after.settlement.kind = unchanged` 审计允许越过，最多走到 seq 1；缺 binding / dispatch、普通失败或其它无 Submission 情形立即回集成基线。找到 Submission 后，其 Candidate 仍为 ACTIVE、该 Candidate 最新 VerificationRun（按 createdAt 再 id 排序取最后一项，不预先过滤 FAIL）为 FAIL 且 reason 不是 `secret_detected`，才返回 candidate baseline（previousSeq、Candidate、VerificationRun、unchangedAttempts）。`previousSeq` 是 Candidate 所属 Attempt 的序号；`unchangedAttempts: {seq, attemptId, reportSummary: string | null}[]` 按 seq 升序记录被越过的 Attempt，无则空数组。其它情况按顺序返回 integration baseline：
+M3-04 / D64 ①：`execution/attempt-baseline.ts` 是 ContextBuilder 与 launcher 共用的纯存储判定，从 seq−1 向前检查（D85 / M3-04b）：无 Submission 时只有该 dispatch 的 `attempt.failed.after.settlement.kind` 为 `unchanged | no_change | blocked` 才允许越过，最多走到 seq 1；缺 binding / dispatch、普通失败或其它无 Submission 情形立即回集成基线。找到 Submission 后，其 Candidate 仍为 ACTIVE、该 Candidate 最新 VerificationRun（按 createdAt 再 id 排序取最后一项，不预先过滤 FAIL）为 FAIL 且 reason 不是 `secret_detected`，才返回 candidate baseline（previousSeq、Candidate、VerificationRun、skippedAttempts）。`previousSeq` 是 Candidate 所属 Attempt 的序号；`skippedAttempts: {seq, attemptId, kind, reason?, paths?, reportSummary: string | null}[]` 按 seq 升序记录被越过的 Attempt，无则空数组。`previous_attempt_not_submitted` 的 integration baseline 同样保留已越过的 skippedAttempts，例如 seq 1 声明 blocked、人工调整后的首次重试。其它情况按顺序返回 integration baseline：
 
 | reason | 条件 |
 | --- | --- |
 | `first_attempt` | seq 1 |
-| `previous_attempt_not_submitted` | 向前检查未找到 Submission，或遇到非 unchanged 的无 Submission Attempt（包括崩溃、放弃、launch 失败） |
+| `previous_attempt_not_submitted` | 向前检查未找到 Submission，或遇到未经上述三种 settlement 审计的无 Submission Attempt（包括崩溃、放弃、launch 失败）；附带已跨过的 skippedAttempts |
 | `previous_candidate_superseded` | Submission 的 Candidate 不再 ACTIVE（缺失也不采用） |
 | `previous_verification_not_failed` | 无 run，或最新 run 不是 FAIL |
 | `secret_detected` | 最新 FAIL 的 reason 为 secret_detected；附带该 run 供安全证据展示，历史含秘密的 Candidate 不可续接 |
@@ -251,13 +264,25 @@ macOS / Linux 的 Codex 与 Claude Worker 走 `channel=headless`、`posture=head
 
 D14 service-only `controlPlane.headless.prepare(dispatchId)` 在 dispatch 创建后、terminal spawn 前绑定 Attempt 并准备命令，RPC 不能请求该字段。强制 terminal mode，复用 `createTerminal({command, env})`，跳过 startupAgent/default args、交互 readiness 与 preamble paste。POSIX wrapper 用 tee 保存 JSONL，读取 `PIPESTATUS[0]`，临时文件 rename 发布 exit-code，再保持 shell 存活直到既有 D76 release；spawn 后即 ready。dispatch/custody/prepareStartingWorkerAuthority 与 PTY liveness 仍由内核负责，没有第二套进程生命周期。
 
-`execution/attempt-exit-submission.ts` 的串行队列与 CLI submit 共用。launch 后的 250 ms exit-file watcher 和恢复对账调用同一幂等入口；重启只凭持久 exit-code 结算，不对 headless Attempt 使用 D59 shell-foreground 证据。host 鉴权重新核对当前 dispatched dispatch、RUNNING Task、最新 binding、Mission/Run 与 worktree/branch。exit 0 且最终 fenced JSON 通过 `HeadlessSubmissionReportSchema` 时进入原 Submission transaction；schema 省略宿主计算的 filesChanged，artifacts 改为 `.axiom/artifacts/` 下的 path/kind/mediaType。路径必须解析到该目录内的普通、单链接文件，单个 Artifact 上限仍为 8 MiB。宿主把最终 report 存为 worker_report，并把所有 Worker Artifact 归属为 `createdBy=attempt:<id>`、`related=[taskId,attemptId]`。
+`execution/attempt-exit-submission.ts` 的串行队列与 CLI submit 共用。launch 后的 250 ms exit-file watcher 和恢复对账调用同一幂等入口；重启只凭持久 exit-code 结算，不对 headless Attempt 使用 D59 shell-foreground 证据。host 鉴权重新核对当前 dispatched dispatch、RUNNING Task、最新 binding、Mission/Run 与 worktree/branch。exit 0、provider turn 未失败且最终 fenced JSON 通过 `HeadlessSubmissionReportSchema` 时按 outcome 结算；schema 省略宿主计算的 filesChanged，artifacts 改为 `.axiom/artifacts/` 下的 path/kind/mediaType。路径必须解析到该目录内的普通、单链接文件，单个 Artifact 上限仍为 8 MiB。宿主把最终 report 存为 worker_report，并把所有 Worker Artifact 归属为 `createdBy=attempt:<id>`、`related=[taskId,attemptId]`。
 
-D85 / M3-08i：exit 0 的有效报告若收到精确 `OrchestrationError(invalid_argument, candidate_unchanged)`，结算为 `unchanged_candidate`（审计 `settlement.kind=unchanged`），watcher 停止、reconciliation 返回 failed / exited。摘要脱敏后 ≤2000 字符，limitations 脱敏后每项 ≤500 字符、最多 20 项，并保留 worker_report Artifact、ACTIVE Candidate id/commit/tree、lastMessageExcerpt 与原事件证据。失败后重复调用返回 unchanged、不追加审计；丢失释放定时器仍由既有恢复释放规则补齐。其它 Submission 错误仍交 watcher / recovery 重试，原 invalid-report 路径和终端提交行为不变。
+M3-04b 为 headless 报告增加可选的严格判别联合 `outcome`；省略等同 `{outcome: 'submitted'}`，沿用原 Submission 路径。另两种为 `{outcome: 'no_change', reason: 'candidate_already_correct' | 'cannot_reproduce'}`，以及 `{outcome: 'blocked', reason: 'blocked_by_scope', paths}`；blocked 的 paths 必须有 1–50 条 trim 后非空字符串，每条 ≤500 字符。终端 `SubmissionReportSchema` 不增加 outcome，旧报告仍可读取。
+
+D85 / M3-08i：exit 0 且 outcome=submitted（或省略）的有效报告若收到精确 `OrchestrationError(invalid_argument, candidate_unchanged)`，结算为 `unchanged_candidate`（审计 `settlement.kind=unchanged`），watcher 停止、reconciliation 返回 failed / exited。摘要脱敏后 ≤2000 字符，limitations 脱敏后每项 ≤500 字符、最多 20 项，并保留 worker_report Artifact、ACTIVE Candidate id/commit/tree、lastMessageExcerpt 与原事件证据。失败后重复调用返回 unchanged、不追加审计；丢失释放定时器仍由既有恢复释放规则补齐。其它 Submission 错误仍交 watcher / recovery 重试，原 invalid-report 路径和终端提交行为不变。
+
+**声明结算（M3-04b，D85 第 5 条 / D82 ③）**：有效 `no_change` / `blocked` 报告不调用 settleSubmission、不快照树、不创建 Submission / Candidate；先存报告及其 Artifacts，再由 `attempt-exit-declared.ts` 在 `headless_exit_declared` 事务内重新核实 host authority、`failDispatch(workerProcessExited=true, terminationReason=process_exited)`、写一次 attempt.failed、路由 typed BLOCKED 并转换 Task。audit 的 objectKind=attempt、objectId=attemptId，after 为 `{taskId, reason: process_exited, evidence: exit_code, exitCode: 0, settlement: {kind: no_change|blocked, reason, paths?}, candidate?: {id,commitSha,treeSha}, worktreeChanged, reportArtifactId, artifactIds, reportSummary, limitations, lastMessageExcerpt, ...eventAudit}`；candidate 仅引用仍 ACTIVE 的旧候选。paths 脱敏后最多 50×500 字符，reportSummary ≤2000，limitations ≤20×500；lastMessageExcerpt 与事件证据沿用退出路径的脱敏规则。`worktreeChanged` 是只读 `git status --porcelain` 的非空行数；即使树已改动，声明仍按下表结算，该计数只是证据，不是准入门。
+
+| 声明 reason | settlement.kind | Task stage 路径 |
+|---|---|---|
+| `blocked_by_scope` | `blocked` | RUNNING → NEEDS_FIX (`attempt_blocked`) → BLOCKED (`scope`) |
+| `candidate_already_correct` | `no_change` | RUNNING → NEEDS_FIX (`attempt_no_change`) → BLOCKED (`candidate_disputed`) |
+| `cannot_reproduce` | `no_change` | RUNNING → NEEDS_FIX (`attempt_no_change`) → BLOCKED (`candidate_disputed`) |
+
+路由只看类型化 reason，不分析报告文本；即使还剩重试次数，也不自动回 READY。`settleDeclaredAttempt` 与普通失败结算共用「最新 RUNNING binding、dispatch 匹配、无 Submission」栅栏；消息与 stage 同事务回滚。BLOCKED 消息含 `blocked: {reason,paths}`、Task/Attempt 身份、`related.taskIds=[taskId]`、`artifactIds=[reportArtifactId,...artifactIds]`，summary 为脱敏后的 `Attempt <seq> declared <reason>` 与路径（≤2000），body 为报告摘要（≤4000）；无路径时 paths=[]。它立即成为 pending 待处理项，直到人工 adjust / cancel 写 `blocked.resolved`。事务提交后安排既有失败 Worker release，结果为 `declared`；watcher 停止、reconciliation 返回 failed / exited，再调用返回 unchanged，不追加结算。确定性 FAIL 保留，后续 Attempt 必须重新独立验证。
 
 headless `snapshotCandidate` 使用临时私有 Git index，排除 `.axiom/`，不会删除已有 index.lock；commit-tree + 带旧值检查的 update-ref 只写 Attempt branch，并以空 hooksPath 禁用 hooks。filesChanged 从 launch baseline 到 Candidate commit 的 Git diff 计算。后续 Candidate / Submission / VerificationRun transaction、transcript archive 与 release 沿用现有实现，Worker 报告仍不等于独立验证。
 
-非零退出、缺报告、非法报告或非法 Artifact 通过 `settleAttemptWithoutSubmission` 处理。M3-08e 在失败结算后沿用 2 秒 grace 与 E2E hold，经 `releaseLocalWorker` 释放包装壳；恢复对账为满 60 秒且仍保留终端资源的失败 headless Attempt 补释放，即使其 Task 已完成。audit 保存 exitCode、脱敏 lastError / lastMessageExcerpt、reportError（适用时）及 D68 `settlement.kind`：无可识别 JSON event 或配额/认证错误为 interrupted，其他为 failed；重连 error 行本身不阻止有效成功报告。events 跳过未知类型和非 JSON 行，错误优先取 turn.failed.error.message，否则取最后 error.message；thread.started.thread_id 记为 providerSessionId，最后一次 turn.completed.usage 的数值原样记录，不累加事件、不把 cached/reasoning 重复加到 input/output。本任务增加 D68 退出分类与证据，复用现有 settlement 的 retry / attemptCount 规则；没有在此实现独立中断预算、退避或 provider fallback。
+非零退出、provider turn 失败（即使 exit 0）、缺报告、非法报告或非法 Artifact 通过 `settleAttemptWithoutSubmission` 处理。M3-08e 在失败结算后沿用 2 秒 grace 与 E2E hold，经 `releaseLocalWorker` 释放包装壳；恢复对账为满 60 秒且仍保留终端资源的失败 headless Attempt 补释放，即使其 Task 已完成。audit 保存 exitCode、脱敏 lastError / lastMessageExcerpt、reportError（适用时）及 D68 `settlement.kind`：无可识别 JSON event 或配额/认证错误为 interrupted，其他为 failed；重连 error 行本身不阻止有效成功报告。events 跳过未知类型和非 JSON 行，错误优先取 turn.failed.error.message，否则取最后 error.message；thread.started.thread_id 记为 providerSessionId，最后一次 turn.completed.usage 的数值原样记录，不累加事件、不把 cached/reasoning 重复加到 input/output。本任务增加 D68 退出分类与证据，复用现有 settlement 的 retry / attemptCount 规则；没有在此实现独立中断预算、退避或 provider fallback。
 
 ### Claude channels and invocation pins（M3-08b / M3-08f / M3-08h）
 
@@ -348,7 +373,7 @@ agent 退出后到下一次成功 reconcile（≤ 一个 60 s 间隔），`attem
 
 `attempt_observation_facts` 最新 liveness facet 的 homeReceivedAt 是持久的 unverifiable-since：进入 unverifiable 只写一条；连续 tick 不写；恢复 live 写一条 live，下一次失联重新计时。stop_unknown 的停止结果仍未确认，即使宿主再次 live，也不写 live fact 重置该时钟；runtime-budget stop 的下一 tick 开始按 e 计时。reconcile report 的 liveness 仍保留实际宿主折叠值，stop_unknown 的计时事实与证据明确记录 reason=stop_unknown。证据 JSON 含 taskId/attemptId/seq/branch/worktreeId、workerState/dispatchStatus、liveness/reason、since/abandonedAt/toleranceMinutes 与该 Attempt 的 observationFacts；Artifact kind=evidence、related=[Task,dispatch]。无宿主退出证据时不冷启动同一 Attempt/worktree。
 
-`settleAttemptWithoutSubmission` 在一个 store transaction 中只处理最新且无 Submission 的 RUNNING binding：RUNNING → NEEDS_FIX（原 reason），再按权威 attemptCount < retryPolicy.maxAttempts 转 READY（retry）或 BLOCKED（retry_budget_exhausted，previousStage=NEEDS_FIX）。不增加 attemptCount。launcher 的 launch_failed 与 Scheduler 的未绑定 launch_rejected 共用该入口；Orca Task failed/blocked 时，launcher 传最新 dispatch 为 retryOf，包含 abandoned/circuit_broken 后的新 Attempt。首次 failDispatch 将 Orca Task 置 ready，kernel 不接受 retryOf，故该重试的 `dispatch_contexts.retry_of_dispatch_id` 为 null；Axiom 重试关系由 `attempt_bindings` 的 seq 顺序及 `attempt.failed → attempt.started{seq:2}` 审计证明。READY 触发既有 stage_change 调度，暂停 Mission 不 admission。
+`settleAttemptWithoutSubmission` 在一个 store transaction 中只处理最新且无 Submission 的 RUNNING binding：RUNNING → NEEDS_FIX（原 reason），再按权威 attemptCount < retryPolicy.maxAttempts 转 READY（retry）或 BLOCKED（retry_budget_exhausted，previousStage=NEEDS_FIX）。不增加 attemptCount。M3-04b 的声明结算改走上述 `settleDeclaredAttempt`，始终进入 BLOCKED；恢复不把它改回自动重试。launcher 的 launch_failed 与 Scheduler 的未绑定 launch_rejected 共用普通失败入口；Orca Task failed/blocked 时，launcher 传最新 dispatch 为 retryOf，包含 abandoned/circuit_broken 后的新 Attempt。首次 failDispatch 将 Orca Task 置 ready，kernel 不接受 retryOf，故该重试的 `dispatch_contexts.retry_of_dispatch_id` 为 null；Axiom 重试关系由 `attempt_bindings` 的 seq 顺序及 `attempt.failed → attempt.started{seq:2}` 审计证明。READY 触发既有 stage_change 调度，暂停 Mission 不 admission。
 
 所有拥有 BEGIN IMMEDIATE 的 kernel 操作均在 Axiom transaction 外完成，再写 Axiom consequence；failDispatch 已用可嵌套 savepoint，可与 audit/两次 stage change 同事务。保留/释放遵守内核 disposition，不能强制清理 possibly-live 或 identity_unproven 资源。
 
@@ -370,7 +395,7 @@ M1-01 契约证据见 `kernel-contract/*.test.ts` 与 [D14 spike](../review-evid
 
 M2-09 增加 mutation `axiom.mission.plan {missionId}`，响应 `{attempt:{attemptId:string|null,seq,branch,worktreeId:string|null,provider}}`；CLI 成功文本为 `Planner started: attempt <id> on <branch>`。`axiom.plan.propose` 的两个互斥形式为 `{missionId,planRevision,provenance}`（既有人工作法）或 `{missionId,planRevision,attemptId,from?}`（Planner）。后者由 CLI 的 `--attempt` 指明 Attempt，调用方身份由宿主核实（D73），from 复用 Worker terminal/session 解析，仍使用既有契约版本与 mutation receipts。传入 attemptId 时不得自报 provenance。`plan_pending` / `illegal_transition` 继续由原 proposal settlement 返回。Planner 的 `planner_worktree_dirty` / `planner_worktree_missing` 与既有 `no_eligible_provider` 经共享 mapper 的 structured runtime passthrough 保留 code/data，不走 `invalid_argument` 的 computer-use recovery 分支。Attempt 1 的映射阻塞已在 Attempt 2 修复，验证见 `.axiom-work/reports/M2-09-2.md`；旧报告保留为历史记录。
 
-M1 已注册 `axiom.mission.create/show/list/start/pause/resume/cancel`、`axiom.goal.propose/activate/show`、`axiom.plan.propose/approve/reject/list/show`、`axiom.task.list/show/cancel`；M2-02 已注册 `axiom.artifact.put/read/list`（put 参与 mutation fence/收据）；M2-05 已注册只读 `axiom.attempt.show {attemptId}` / `list {missionId, taskId?}`；返回 `attempt` / `attempts`（Glossary §4.6），未知 dispatch 返回 `attempt_not_found`，CLI 为 `axiom attempt show/list`。M0 的 `axiom.namespace.get` 保留。M2 的 policy、Worker verbs、message、task.create 与 mission.plan 已注册（详见本节对应段）；未注册方法在映射 §4c 明确标为后续。
+M1 已注册 `axiom.mission.create/show/list/start/pause/resume/cancel`、`axiom.goal.propose/activate/show`、`axiom.plan.propose/approve/reject/list/show`、`axiom.task.list/show/cancel`；M2-02 已注册 `axiom.artifact.put/read/list`（put 参与 mutation fence/收据）；M2-05 已注册只读 `axiom.attempt.show {attemptId}` / `list {missionId, taskId?}`；返回 `attempt` / `attempts`（Glossary §4.6），未知 dispatch 返回 `attempt_not_found`，CLI 为 `axiom attempt show/list`。M0 的 `axiom.namespace.get` 保留。M2 的 policy、Worker verbs、message、task.create 与 mission.plan 已注册；M3-04b 增加桌面专用 mutation `axiom.task.adjust`（详见本节对应段）；未注册方法在映射 §4c 明确标为后续。
 
 `AXIOM_MUTATION_METHODS` → `isOrchestrationMutation` 同时接入契约栅栏与 durable mutation 收据。mutation envelope 必须带 `orchestrationContractVersion:1`，缺失/不匹配会被 `orchestration_migration_required` 拒绝；不要把版本字段放进 params。调用方按约定必须带 `orchestrationRequestId`；内核收到该字段时，以 caller fingerprint + id 查 `mutation_receipts`：同 payload 回放，异 payload 拒绝 `request_mismatch`。当前内核无 request id 时直接执行，不提供去重，调用方不得依赖它自动补幂等。
 
@@ -380,7 +405,7 @@ CLI JSON 输出是 `{ ok, result, ... }` / `{ ok:false, error:{code,...}, ... }`
 
 ### Terminal fallback Worker channel（M2-06a/b，D9 / D11 / D16）
 
-已注册五个 mutation：`axiom.attempt.inform` / `request` / `blocked` / `handoff` / `request-subtask`。参数为 `{attemptId, from, senderPaneKey?, summary, body?, artifactIds?, related?, subtask?}`；只有 `request-subtask` 接受且必须带 `subtask`。严格 schema 不接受 `to`、自报 `type` 或 Mission/Task 身份。summary 与可选 body 各 ≤ 2,000 字符；较长内容先 `axiom mission artifact put`，再引用 Artifact id。`artifactIds` / `related.artifactId` 必须属于同 Mission，显式 `related.taskIds` 必须属于同 Mission，否则 `invalid_argument`，不写消息或审计。
+已注册五个 mutation：`axiom.attempt.inform` / `request` / `blocked` / `handoff` / `request-subtask`。参数为 `{attemptId, from, senderPaneKey?, summary, body?, artifactIds?, related?, subtask?, blocked?}`；只有 `request-subtask` 接受且必须带 `subtask`；只有 `blocked` 接受可选的严格 `blocked: {reason, paths}`，reason 为 `blocked_by_scope | candidate_already_correct | cannot_reproduce`，paths 默认 []、最多 50 条 trim 后非空字符串。严格 schema 不接受 `to`、自报 `type` 或 Mission/Task 身份，消息载荷也拒绝在其它 type 下带 blocked。summary 与可选 body 各 ≤ 2,000 字符；较长内容先 `axiom mission artifact put`，再引用 Artifact id。MessageRouter 在持久化前脱敏 summary、body 与 blocked.paths。`artifactIds` / `related.artifactId` 必须属于同 Mission，显式 `related.taskIds` 必须属于同 Mission，否则 `invalid_argument`，不写消息或审计。
 
 `execution/attempt-authority.ts` 在写入前按以下顺序校验（含 ask 的七动词共用）：
 
@@ -393,15 +418,17 @@ CLI JSON 输出是 `{ ok, result, ... }` / `{ ok:false, error:{code,...}, ... }`
 
 CLI `axiom attempt <verb> --attempt <id> --summary <text>` 支持 `--body` / `--body-file`（互斥）、可重复 `--artifact` / `--related-task`；子任务另需 `--title --objective --allowed-path --acceptance --evidence`，risk 默认 low；M2-06b 可重复 `--depends-on` 对应 subtask.dependsOn。from 复用 `resolveOrchestrationTerminalHandle`（`--from` / `ORCA_TERMINAL_HANDLE`），pane metadata 来自 `ORCA_PANE_KEY`；runtime 自行解析 pane，不信任该参数授予权限。调用方身份由宿主核实（D73：终端 / 会话 → Dispatch → 进程代次，见 orca-mapping 的 Worker 身份一节），mutation 复用 `callOrchestrationMutation` 与 `--retry-request <原 UUID>`。失败的新请求不留收据；已完成请求沿用内核回放语义，同 id + 同 params 不重复写入，改变 params → `request_mismatch`。
 
+M3-04b：`axiom attempt blocked --attempt <id> --summary <text> [--reason blocked_by_scope|candidate_already_correct|cannot_reproduce] [--path <path>]... [--json]` 将 reason / 可重复 path 映射到 blocked；只给 path、不带 reason 会拒绝。不带 reason/path 时保持旧的普通 BLOCKED 报告。terminal Worker 可能仍在运行，发信不转换 Task 或 Attempt；typed payload 仅增加 pending 投影，退出结算仍由宿主负责。
+
 `axiom.attempt.check {attemptId, from, senderPaneKey?, wait?, timeoutMs?, type?}` 是 read，不进 mutation 集合；鉴权后调用 `checkWorkerMailbox` 读取 `dispatch:<attemptId>`。type 是内核路由类型（可逗号分隔），保留 delivery replay、generation fence 与长轮询。CLI 为等待显式加 10 秒 transport grace；不新增 ack 参数，返回内核 deliveryId 等证据。
 
-`axiom.message.list {missionId, type?, taskId?, attemptId?, pendingOnly?}` 是 read，按 messages.sequence 从旧到新返回 `{messages:[{id,type,taskId,attemptId,summary,artifactIds,related,subtask?,createdAt,pending}]}`。读取 Mission Run 的全部严格 Axiom 载荷（包括投递副本），跳过普通/非法载荷；`REQUEST_SUBTASK` 在没有同 Mission、`objectKind: message`、`objectId: messageId` 的 `subtask.resolved` 审计时为 pending。M2-06b 增加内核 question_threads 的 QUESTION 投影：即使无 payload.axiom，也按 question message id 与 dispatch 关联识别；附带 question、options、answer（answer_body）、status，pending 仅在 status=pending 时为 true。CLI：`axiom message list --mission <id> [--type <T>] [--pending] --json`。
+`axiom.message.list {missionId, type?, taskId?, attemptId?, pendingOnly?}` 是 read，按 messages.sequence 从旧到新返回 `{messages:[{id,type,taskId,attemptId,summary,artifactIds,related,subtask?,blocked?,createdAt,pending}]}`。读取 Mission Run 的全部严格 Axiom 载荷（包括投递副本），跳过普通/非法载荷；`REQUEST_SUBTASK` 与带 blocked 的 `BLOCKED` 在没有同 Mission、`objectKind: message`、`objectId: messageId` 的解决审计时为 pending，查询识别 `subtask.resolved | blocked.resolved`。不带 blocked 的普通 BLOCKED 保持非 pending。该标记只从审计派生，不增加状态表。M2-06b 增加内核 question_threads 的 QUESTION 投影：即使无 payload.axiom，也按 question message id 与 dispatch 关联识别；附带 question、options、answer（answer_body）、status，pending 仅在 status=pending 时为 true。CLI：`axiom message list --mission <id> [--type <T>] [--pending] [--json]`，文本输出为 pending BLOCKED 另列 reason 与 paths；对应处置卡片留给 M3-09。
 
 M2 之后：M3 复用 typed channel 投递验证证据；D58 的执行通道不能绕过身份 / 进程代次栅栏（D73）。
 
 ### Submission settlement（M2-07 / M3-08，D2 / D4 / D11 / D16）
 
-headless 宿主入口与下述 terminal fallback CLI 入口复用 caller-independent `settleSubmission` transaction；CLI 仍执行原调用方身份检查，host 使用当前 dispatch/binding 检查，参见 M3-08 节。下面的 CLI 命令与普通索引快照描述用于 terminal fallback。
+headless 的 submitted（含省略 outcome）宿主入口与下述 terminal fallback CLI 入口复用 caller-independent `settleSubmission` transaction；声明 no_change / blocked 走 §4 的独立声明结算。CLI 仍执行原调用方身份检查，host 使用当前 dispatch/binding 检查。下面的 CLI 命令与普通索引快照描述用于 terminal fallback。
 
 `axiom.attempt.submit` 已注册为 mutation，参数 `{attemptId, from, senderPaneKey?, report}`，Task/Mission 从 binding 解析，不能由 Worker 自报；响应 `{submission, candidate, duplicate}`。报告严格要求 summary（≤4,000）、filesChanged、checksRun（command/result=pass|fail|skipped、可选 durationMs/note）、artifacts、limitations、risks、questions、followUps；拒绝多余字段。每个 Artifact 必须属于同 Mission，且 related 包含 Task 或 Attempt；Artifact 内容先独立上传，本事务只保存引用，不复制内容。
 
@@ -634,13 +661,25 @@ const SUPPRESSIONS = [
 
 M2 之后：M3 复用 Question/待决项投影；M4 接 Approval，M5 使用 REQUEST_SUBTASK 作为 replan 输入。
 
+### 人工 Task 调整（M3-04b；D70 ② / D78 / D85）
+
+`axiom.task.adjust` 为 desktop_only mutation，严格参数 `{taskId, rationale, addAllowedPaths?: string[], maxAttempts?: positive integer}`；rationale 必填，addAllowedPaths 默认 []、最多 50 条 trim 后非空字符串，响应复用 `TaskResponseSchema`（`{task: TaskListItem}`）。Mission 必须为 PLANNED / EXECUTING，Task 必须属于该 Mission 当前 APPROVED 的 active PlanRevision，否则分别返回 `mission_not_executing` / `plan_pending`。只接受 DEFINED、READY、NEEDS_FIX、BLOCKED；其它 stage 返回 `illegal_transition {taskId,from,reason:task_not_adjustable}`，防止改写已有 ContextPackage 或 VerificationRun 所依赖的执行合同。
+
+`MissionController.adjustTask` 在 `write('adjust_task')` 内把旧 allowedPaths 与增量按原顺序取去重并集，maxAttempts 未给则不变；小于已消耗 attemptCount 返回 `invalid_argument`。`updateTaskSpec` 以 expectedStage 做 CAS，同时写既有 `task_stages.spec` 与 `retry_policy`，不建新表或 PlanRevision。BLOCKED 先按持久 previousStage 解锁；到 NEEDS_FIX 后仅在 `attemptCount < maxAttempts` 时继续 READY，两步 reason 均为 adjusted。预算仍耗尽则抛 `retry_budget_exhausted {taskId,attemptCount,maxAttempts}`，spec、审计、消息解决与 stage 全部回滚。DEFINED 保持原 stage，交 readiness 重算；READY 保持 READY。rationale-only 调整有效，可在人复核 candidate_disputed 后重开新 Attempt，不覆盖原 FAIL 或直接重验旧 Candidate。
+
+同一事务写 `task.adjusted`：before=`{allowedPaths,maxAttempts}`，after=`{allowedPaths,maxAttempts,addedPaths,rationale,afterAttemptSeq:nextAttemptSeq(taskId)-1,origin:user,resolvedMessageIds}`；以及 `plan.minor_adjustment`：after=`{classification:MINOR_ADJUSTMENT,origin:task_adjust,taskId,addedPaths,maxAttempts,rationale}`。每个本 Task 的 pending typed BLOCKED 消息写 `blocked.resolved`（objectKind=message、objectId=messageId，after=`{decision:adjusted,taskId,rationale}`）；`cancelTask` 在取消事务内同样写 decision=canceled。Task stage 是权威，pending 只是上述审计的投影。
+
+RPC 以 `task_adjust_receipt` 外层事务把调整和 mutation receipt 一起提交；`AXIOM_MUTATION_METHODS`、契约版本栅栏、同 request id 回放均复用 create 路径。成功提交后触发 `scheduleAfterWrite(missionId,'stage_change')`，嵌套事务回滚抑制通知，真正 admission 仍由 Scheduler 执行。V1 以桌面调用方作为人工范围 / Task 重试预算授权，M4 再接 Approval 对象；此方法不提高 Mission 总预算。
+
+CLI 形状为 `axiom task adjust --task <id> --rationale <text> [--add-path <path>]... [--max-attempts <n>] [--retry-request <id>] [--json]`；与其它人工 CLI 动作一样，非 desktop 传输仍收到 `caller_not_desktop`，Worker / Planner 不能用此命令自行扩权。桌面处置卡片留给 M3-09，当前 pending 项通过 message.list / CLI 读取。
+
 ### 调用方权限（D78）
 
 `src/main/axiom/authority/caller-authority.ts` 的 `AXIOM_METHOD_CALLER_CLASS` 覆盖所有已注册的 `axiom.*`，测试与 `AXIOM_METHODS` 双向对照，包含 `axiom.namespace.get`。方法只占一行；`resolveAxiomCallerClass` 按解析后的 `attemptId` 区分两种提案 / 上传入口。
 
 | 类别 | 方法（省略 axiom. 前缀） |
 | --- | --- |
-| desktop_only | mission.create / plan / start / pause / resume / cancel；goal.propose / activate；plan.approve / reject；policy.update；task.create / cancel；message.answer / resolve；无 attemptId 的 plan.propose / artifact.put |
+| desktop_only | mission.create / plan / start / pause / resume / cancel；goal.propose / activate；plan.approve / reject；policy.update；task.create / adjust / cancel；message.answer / resolve；无 attemptId 的 plan.propose / artifact.put |
 | attempt | attempt.submit / ask / inform / request / blocked / handoff / request-subtask / check；带 attemptId 的 plan.propose / artifact.put |
 | read | namespace.get；artifact.read / list；attempt.show / list；goal.show；message.list；mission.show / list；plan.show / list；policy.show；task.list / show；verification.show / list |
 
@@ -705,7 +744,7 @@ M3-08e / D83 ③④（Codex；Claude 见 §4「Claude channels and invocation pi
 
 M2-05 启动审计：`attempt.started` / `attempt.launch_failed` / `attempt.start_unknown` 的 objectKind 为 attempt，绑定后 objectId = dispatchId，after 含 taskId/seq/branch/worktreeId/provider；绑定前失败的 objectId = taskId/seq，after 含脱敏 message。`integration.base_created` / `integration.base_reused` 的 objectKind 为 mission，after 含 sha。这些事件不代表 Submission、验证或完成。
 
-M2-04：MissionController 在 startExecution 提交后触发 mission_start；resumeMission/unblockMission 提交后触发 resume；transitionTaskStage/cancelTask/recomputeReadiness 实际移动 stage 后触发 stage_change。recomputeReadiness 无变化不触发。嵌套事务（mailbox、RPC、admission）延至当前同步调用栈提交后才触发，并核对持久审计以抑制回滚事务的通知。control-plane.ts 以 fire-and-forget 调用 scheduleRound，拒绝仅 console.warn，不抛回生命周期调用者；manual 可由服务调用者显式请求。现有 RunMailboxConsumer 的 readiness 调用沿用此入口，无新增轮询。
+M2-04：MissionController 在 startExecution 提交后触发 mission_start；resumeMission/unblockMission 提交后触发 resume；transitionTaskStage/cancelTask/recomputeReadiness 实际移动 stage 后触发 stage_change。recomputeReadiness 无变化不触发；M3-04b 的 adjustTask 成功写入即触发 stage_change（包括只改 spec / rationale），由 Scheduler 重算 readiness。嵌套事务（mailbox、RPC、admission）延至当前同步调用栈提交后才触发，并核对持久审计以抑制回滚事务的通知。control-plane.ts 以 fire-and-forget 调用 scheduleRound，拒绝仅 console.warn，不抛回生命周期调用者；manual 可由服务调用者显式请求。现有 RunMailboxConsumer 的 readiness 调用沿用此入口，无新增轮询。
 
 `RunMailboxConsumer` 先注册 exclusive waiter 再 drain backlog，避免读空到订阅之间丢唤醒；waiter 的独占仅限进程。`getOrCreateRunDelivery` 与 `acknowledgeRunDelivery` 用启动时捕获的 generation 栅栏，不能重读并采用别人的新 generation。
 
@@ -713,7 +752,7 @@ M2-04：MissionController 在 startExecution 提交后触发 mission_start；res
 
 M2-06a `MessageRouter` 在 `store.transaction('message_route', …)` 内写 Control Plane 副本、下游副本与 `message.sent`（含 type/taskId/attemptId/recipients），并保存 mutation receipt；提交后向每个收件地址 `notifyMessageArrived`。Control Plane 地址必须为 `run:<runId>`：M1-08 的 `getOrCreateRunDelivery` 不消费 coordinator 的 `session:<id>` 直邮。INFORM/HANDOFF 默认只投 sender Task 的直接下游最新且 dispatched 的 Attempt；非空 `related.taskIds` 替换默认受众。REQUEST/BLOCKED/REQUEST_SUBTASK 只投 Control Plane；所有副本以 Control Plane 消息 id 为 threadId，从不使用群组地址。
 
-`message.received.after = {type, taskId, attemptId, messageId}`；REQUEST_SUBTASK 在同事务另写 `subtask.requested.after = {...ids, subtask}`，作为 D50 step 1 的可查询待决项；BLOCKED 另写 `attempt.blocked_reported`。这三个事件的 objectKind 都是 message，objectId 是收到的消息 id，重放不重复记录。BLOCKED 只是 Worker 报告，在 M2 不改 Task stage 或 Attempt：Worker 仍可能运行，后续 RecoveryService / submit 才结算。
+`message.received.after = {type, taskId, attemptId, messageId}`；REQUEST_SUBTASK 在同事务另写 `subtask.requested.after = {...ids, subtask}`，作为 D50 step 1 的可查询待决项；BLOCKED 另写 `attempt.blocked_reported`。这三个事件的 objectKind 都是 message，objectId 是收到的消息 id，重放不重复记录。消费者不因 BLOCKED 邮件转换 Task 或 Attempt：terminal Worker 仍可能运行；headless 声明的 stage 变化由退出结算事务负责，消费者只保留相同的收到报告审计。带 blocked 的待处理投影与 blocked.resolved 见 §6。
 
 `startAxiomControlPlane` 在桌面 `src/main/startup/main-process-runtime-service.ts` 与 daemon `src/main/orcad/orcad-entry.ts` 接入。每次启动先 `RecoveryService.recover()`，再为 ANALYZING / PLAN_REVIEW / PLANNED / EXECUTING 启消费者；全部消费者同步后，对 report.missions 中每个 EXECUTING 且不在 report.blocked 的 Mission 触发 `scheduleRound(missionId, 'resume')`（M2-12 / D59）。因此即使 Task 已 READY、readiness 没有移动，也会重新调度；按 Mission 合并，空轮不写 scheduler.round，PAUSED / BLOCKED / 终态不请求轮次。调用失败沿用 control-plane.ts 的 catch + console.warn，不抛回 boot。boot 幂等，quit 停止全部消费者。create/start/resume/unblock 同步启动，pause/block/cancel 停止；持久状态不依赖这些内存句柄。
 
@@ -721,7 +760,7 @@ M2-06a `MessageRouter` 在 `store.transaction('message_route', …)` 内写 Cont
 
 `reconcileAttempts()` 的 Attempt 子集由 M2-08 接入启动、周期与退出消息触发（§4 Recovery）。M3-01 的 VerificationService 负责 Verification 队列重驱；Integration 队列重驱与 Approval 过期由 M4 接入。`docs/plans/M1.md` 的早期 M1-01 笔记写过先 drain 后注册，实际 M1-08 实现与测试为先注册再 drain，以实现为本节事实来源。
 
-M2-06b 审计：question.created / question.answered 的 objectKind=message、objectId=question message id；前者带 Task/Attempt，后者带 answerMessageId 与 status，不复制回答正文。消费者按 question_threads 识别无 Axiom payload 的 QUESTION，写 message.received。REQUEST_SUBTASK 的 subtask.requested、checks_failed、resolved 与 Task 创建在同批事务内；重放不重复创建。task.created 带 origin/provenance/messageId?；plan.minor_adjustment 带 classification=MINOR_ADJUSTMENT、origin=user|request_subtask、Task 与边。人工接受失败在返回 invalid_argument 前保留 checks_failed 审计，仍可修复后重试或拒绝。
+M2-06b 审计：question.created / question.answered 的 objectKind=message、objectId=question message id；前者带 Task/Attempt，后者带 answerMessageId 与 status，不复制回答正文。消费者按 question_threads 识别无 Axiom payload 的 QUESTION，写 message.received。REQUEST_SUBTASK 的 subtask.requested、checks_failed、resolved 与 Task 创建在同批事务内；重放不重复创建。task.created 带 origin/provenance/messageId?；其 plan.minor_adjustment 带 classification=MINOR_ADJUSTMENT、origin=user|request_subtask、Task 与边。M3-04b 调整的 origin=task_adjust，字段和 task.adjusted / blocked.resolved 的事务关系见 §6。人工接受失败在返回 invalid_argument 前保留 checks_failed 审计，仍可修复后重试或拒绝。
 
 M3-01 已由 VerificationService 在启动时回收过期 RUNNING worktree 并重新 QUEUED，保留审计与 Artifact；M4 接 Integration 与 Approval 过期恢复，不以收件/ACK 代替完成证据。
 
@@ -741,7 +780,7 @@ axiom attempt list --mission <missionId> --json
 axiom attempt show --attempt <dispatchId> --json
 ```
 
-D78 之后，创建 Mission、启动 Planner、人工提案、批准计划与开始执行都经桌面 IPC；CLI 保留读取、Worker / Planner Attempt 命令与 Orca 仓库注册。人工 CLI 子命令即使参数合法也被调用方守卫拒绝。fixture decomposition 仍须转换为 PlanProposal JSON，由 e2e 的 desktopCall 传给相同 RPC。UI 从 Mission list 选择，Refresh 或 mutation 后重读；选择的 Mission id 不跨重启持久化。
+D78 之后，创建 Mission、启动 Planner、人工提案、批准计划、开始执行与 task.adjust 都经桌面 IPC；CLI 保留读取、Worker / Planner Attempt 命令与 Orca 仓库注册。人工 CLI 子命令即使参数合法也被调用方守卫拒绝。fixture decomposition 仍须转换为 PlanProposal JSON，由 e2e 的 desktopCall 传给相同 RPC。UI 从 Mission list 选择，Refresh 或 mutation 后重读；选择的 Mission id 不跨重启持久化。
 
 M2-10：Mission Home 的 Attempt 计数仅包含 `role=worker` 的 RUNNING / SUBMITTED；Planner 为 STARTING / RUNNING 时显示进行中。ANALYZING 可 Start Planner；进行中的 mutation、活跃 Planner 或 PROPOSED plan 禁用重复启动。Planner readiness 的长等待期间保留 busy。Pending items 用 `message.list({missionId,pendingOnly:true})` 列出 QUESTION / REQUEST_SUBTASK，点击跳到所属 Task Detail。Task Detail 读取 Task 范围的 Attempt / message 列表，展示最新提交的 Attempt 的 Candidate 证据与按时间升序的单列消息；pending QUESTION 可回答，pending REQUEST_SUBTASK 可附理由接受/拒绝。answer/resolve/plan 均走统一 request-id envelope，不确定重试复用同一载荷的 id；成功或失败都重读 RPC，不用 mutation 响应推断权威状态。Task 选择只在当前 Mission 会话内保留，切换 Mission 时清空。worktreeId 经既有 `activateWorktreeFromSidebar` 导航，不新增执行面板。
 
@@ -754,6 +793,7 @@ M2-10：Mission Home 的 Attempt 计数仅包含 `role=worker` 的 RUNNING / SUB
 | `run_binding_lost` | RecoveryService 诊断；关联审计 `recovery.run_binding_lost`，Mission BLOCKED，需保留证据后处理绑定，不把失联当成功恢复 |
 | `plan_pending` | 已有 PROPOSED 计划；先查看并 approve/reject，不重发新计划 |
 | `stale_state` | 预期源状态与数据库不符；重读当前对象再决定动作；不盲目覆盖 |
+| `retry_budget_exhausted`（task.adjust） | 调整后仍没有下一次 Attempt 额度；整笔调整已回滚，pending 项保留，需经桌面明确提高 Task maxAttempts 或取消 |
 | `plan_invalid` / `illegal_transition` | 提案结构/DAG/Goal 关联无效，或转换不合法；看错误 data，修正输入 |
 | `replan_not_supported` | M2 仍不能批准替代计划；Goal 在 EXECUTING 激活虽可进入 REPLANNING，完整替代闭环留给 M5 |
 | `orchestration_migration_required` / `request_mismatch` | 契约 envelope 缺失/不兼容，或同幂等 id 换了载荷；升级兼容客户端或为新意图使用新 id |

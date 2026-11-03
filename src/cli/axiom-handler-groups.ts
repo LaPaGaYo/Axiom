@@ -59,7 +59,7 @@ export const AXIOM_HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'axiom-task',
-    keys: ['task create', 'task list', 'task show', 'task cancel'],
+    keys: ['task create', 'task adjust', 'task list', 'task show', 'task cancel'],
     load: async () => (await import('./handlers/axiom/task.js')).AXIOM_TASK_HANDLERS
   }
 ]

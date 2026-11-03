@@ -114,7 +114,7 @@ describe('ContextBuilder', () => {
     const headless = await builder.build({ missionId, taskId, channel: 'headless' })
     const terminal = await builder.build({ missionId, taskId })
     expect(headless.packageId).toBe(
-      'ctx_84748e218015cde4a9e689a71dfa02d2d6226183b161196eea0c2b1b0a5ed373'
+      'ctx_64a14eafe9b0ca85a2b99825803765b5fc2a52cd97a410ade50855b6f4364238'
     )
     expect(headless.packageId).not.toBe(terminal.packageId)
     expect(headless.renderTemplate).toContain('re-read .axiom/prompt.md before continuing')
@@ -182,7 +182,7 @@ describe('ContextBuilder', () => {
     const first = await builder.build({ missionId, taskId })
     expect(upstream).toHaveLength(2)
     expect(first.packageId).toBe(
-      'ctx_0450de341480ecf59a850875ef64e452874f1288bdf2068a21d060e72e0ddc94'
+      'ctx_5b7a4c19957ef659dbe18158066dbff22b5f094011645e6e55829b1368bc9275'
     )
     expect(first.manifest.mandatory.map((entry) => entry.section)).toEqual(sections)
     expect(first.packageId).toBe(`ctx_${sha256(canonicalContextManifest(first.manifest))}`)

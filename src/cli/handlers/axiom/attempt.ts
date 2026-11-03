@@ -13,7 +13,10 @@ import { RuntimeClientError } from '../../runtime-client'
 import { printResult } from '../../format'
 import { callOrchestrationMutation } from '../orchestration/mutation-request'
 import { resolveOrchestrationTerminalHandle } from '../orchestration/terminal-identity'
-import { AttemptMessageResponseSchema } from '../../../shared/axiom-contract/message-params'
+import {
+  AttemptMessageResponseSchema,
+  BlockedMessageSchema
+} from '../../../shared/axiom-contract/message-params'
 import { ORCHESTRATION_MESSAGE_WAIT_DEFAULT_TIMEOUT_MS } from '../../../shared/orchestration-message-wait-timeout'
 import { MAX_TIMER_DELAY_MS } from '../../../shared/timer-delay'
 import {
@@ -36,6 +39,19 @@ async function sendWorkerMessage(ctx: HandlerContext, verb: string) {
     throw new RuntimeClientError('invalid_argument', 'Choose --body or --body-file, not both.')
   }
   const dependsOn = repeated(flags, 'depends-on')
+  const blocked =
+    verb === 'blocked' && (flags.has('reason') || flags.has('path'))
+      ? BlockedMessageSchema.safeParse({
+          reason: optional(flags, 'reason'),
+          paths: repeated(flags, 'path')
+        })
+      : undefined
+  if (blocked && !blocked.success) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'BLOCKED requires a valid --reason and up to 50 non-empty --path values.'
+    )
+  }
 
   const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
   const result = await callOrchestrationMutation(client, flags, `axiom.attempt.${verb}`, {
@@ -46,6 +62,7 @@ async function sendWorkerMessage(ctx: HandlerContext, verb: string) {
     body: bodyFile ? await readFile(path.resolve(cwd, bodyFile), 'utf8') : body,
     artifactIds: repeated(flags, 'artifact'),
     related: { taskIds: repeated(flags, 'related-task') },
+    ...(blocked?.success ? { blocked: blocked.data } : {}),
     ...(verb === 'request-subtask'
       ? {
           subtask: {

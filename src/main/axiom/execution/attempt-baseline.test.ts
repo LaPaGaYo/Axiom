@@ -27,7 +27,11 @@ it.each([undefined, null, 'not-submitted'])(
         contextPackageId: 'context'
       })
     }
-    expect(resolve()).toEqual({ kind: 'integration', reason: 'previous_attempt_not_submitted' })
+    expect(resolve()).toEqual({
+      kind: 'integration',
+      reason: 'previous_attempt_not_submitted',
+      skippedAttempts: []
+    })
   }
 )
 it('continues the ACTIVE Candidate with its latest failed run', () => {
@@ -37,7 +41,7 @@ it('continues the ACTIVE Candidate with its latest failed run', () => {
     previousSeq: 1,
     candidate,
     verificationRun,
-    unchangedAttempts: []
+    skippedAttempts: []
   })
 })
 it('does not continue a superseded Candidate', () => {
@@ -79,7 +83,11 @@ it('never reaches behind an unsubmitted immediately preceding Attempt', () => {
     agentSpecId: 'agent',
     contextPackageId: 'context'
   })
-  expect(resolve(3)).toEqual({ kind: 'integration', reason: 'previous_attempt_not_submitted' })
+  expect(resolve(3)).toEqual({
+    kind: 'integration',
+    reason: 'previous_attempt_not_submitted',
+    skippedAttempts: []
+  })
 })
 it('orders by createdAt then id, independently of insertion order', () => {
   const { verificationRun } = previousSubmission(f.store)
@@ -97,7 +105,7 @@ it('orders by createdAt then id, independently of insertion order', () => {
   expect(resolve()).toMatchObject({ kind: 'candidate', verificationRun: { id: 'z-new' } })
 })
 
-function unchanged(seq: number, kind = 'unchanged') {
+function unchanged(seq: number, kind = 'unchanged', reason?: string, paths?: string[]) {
   f.store.insertAttemptBinding({
     missionId: 'm',
     taskId: 't',
@@ -114,7 +122,10 @@ function unchanged(seq: number, kind = 'unchanged') {
     objectKind: 'attempt',
     objectId: `d${seq}`,
     before: null,
-    after: { settlement: { kind }, reportSummary: `Report ${seq}` }
+    after: {
+      settlement: { kind, ...(reason ? { reason } : {}), ...(paths ? { paths } : {}) },
+      reportSummary: `Report ${seq}`
+    }
   })
 }
 it.each([1, 2])('walks past %s unchanged Attempts to the failed ACTIVE Candidate', (count) => {
@@ -127,7 +138,8 @@ it.each([1, 2])('walks past %s unchanged Attempts to the failed ACTIVE Candidate
     previousSeq: 1,
     candidate,
     verificationRun,
-    unchangedAttempts: Array.from({ length: count }, (_, i) => ({
+    skippedAttempts: Array.from({ length: count }, (_, i) => ({
+      kind: 'unchanged',
       seq: i + 2,
       attemptId: `d${i + 2}`,
       reportSummary: `Report ${i + 2}`
@@ -143,15 +155,66 @@ it('does not revive a superseded Candidate behind an unchanged Attempt', () => {
 it('does not walk behind an ordinary failed Attempt', () => {
   previousSubmission(f.store)
   unchanged(2, 'failed')
-  expect(resolve(3)).toEqual({ kind: 'integration', reason: 'previous_attempt_not_submitted' })
+  expect(resolve(3)).toEqual({
+    kind: 'integration',
+    reason: 'previous_attempt_not_submitted',
+    skippedAttempts: []
+  })
 })
 it('falls back when the walk reaches seq 1 without a Submission', () => {
   unchanged(1)
   unchanged(2)
-  expect(resolve(3)).toEqual({ kind: 'integration', reason: 'previous_attempt_not_submitted' })
+  expect(resolve(3)).toEqual({
+    kind: 'integration',
+    reason: 'previous_attempt_not_submitted',
+    skippedAttempts: [
+      { seq: 1, attemptId: 'd1', kind: 'unchanged', reportSummary: 'Report 1' },
+      { seq: 2, attemptId: 'd2', kind: 'unchanged', reportSummary: 'Report 2' }
+    ]
+  })
 })
 it('still starts clean for secret detection behind an unchanged Attempt', () => {
   previousSubmission(f.store, { reason: 'secret_detected' })
   unchanged(2)
   expect(resolve(3)).toMatchObject({ kind: 'integration', reason: 'secret_detected' })
+})
+
+it.each([
+  ['blocked', 'blocked_by_scope', ['src/legacy.test.ts']],
+  ['no_change', 'candidate_already_correct', undefined],
+  ['no_change', 'cannot_reproduce', undefined]
+] as const)('walks past %s (%s) while preserving its declaration', (kind, reason, paths) => {
+  const { candidate } = previousSubmission(f.store)
+  unchanged(2, kind, reason, paths ? [...paths] : undefined)
+  expect(resolve(3)).toMatchObject({
+    kind: 'candidate',
+    candidate,
+    skippedAttempts: [
+      {
+        seq: 2,
+        attemptId: 'd2',
+        kind,
+        reason,
+        ...(paths ? { paths } : {}),
+        reportSummary: 'Report 2'
+      }
+    ]
+  })
+})
+it('preserves a first-attempt declaration on the integration baseline', () => {
+  unchanged(1, 'blocked', 'blocked_by_scope', ['src/legacy.test.ts'])
+  expect(resolve(2)).toEqual({
+    kind: 'integration',
+    reason: 'previous_attempt_not_submitted',
+    skippedAttempts: [
+      {
+        seq: 1,
+        attemptId: 'd1',
+        kind: 'blocked',
+        reason: 'blocked_by_scope',
+        paths: ['src/legacy.test.ts'],
+        reportSummary: 'Report 1'
+      }
+    ]
+  })
 })

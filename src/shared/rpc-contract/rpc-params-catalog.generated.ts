@@ -16,6 +16,7 @@ import {
   AttemptAskParams,
   AttemptBlockedParams,
   AttemptCheckParams,
+  AttemptHandoffParams,
   AttemptListParams,
   AttemptRequestSubtaskParams,
   AttemptShowParams,
@@ -42,6 +43,7 @@ import {
 } from '../axiom-contract/plan-params'
 import { PolicyShowParams, PolicyUpdateParams } from '../axiom-contract/policy-params'
 import {
+  TaskAdjustParams,
   TaskCancelParams,
   TaskCreateParams,
   TaskListParams,
@@ -829,10 +831,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'axiom.attempt.ask': AttemptAskParams,
   'axiom.attempt.blocked': AttemptBlockedParams,
   'axiom.attempt.check': AttemptCheckParams,
-  'axiom.attempt.handoff': AttemptBlockedParams,
-  'axiom.attempt.inform': AttemptBlockedParams,
+  'axiom.attempt.handoff': AttemptHandoffParams,
+  'axiom.attempt.inform': AttemptHandoffParams,
   'axiom.attempt.list': AttemptListParams,
-  'axiom.attempt.request': AttemptBlockedParams,
+  'axiom.attempt.request': AttemptHandoffParams,
   'axiom.attempt.request-subtask': AttemptRequestSubtaskParams,
   'axiom.attempt.show': AttemptShowParams,
   'axiom.attempt.submit': AttemptSubmitParams,
@@ -858,6 +860,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'axiom.plan.show': PlanShowParams,
   'axiom.policy.show': PolicyShowParams,
   'axiom.policy.update': PolicyUpdateParams,
+  'axiom.task.adjust': TaskAdjustParams,
   'axiom.task.cancel': TaskCancelParams,
   'axiom.task.create': TaskCreateParams,
   'axiom.task.list': TaskListParams,
