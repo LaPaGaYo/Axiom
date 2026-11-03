@@ -102,3 +102,25 @@ Run 1 and run 3 T02 failed on a test the Planner left out of `allowedPaths`; bot
 ## Verdict (2026-11-02, after the fix-loop runs)
 
 The M3 pipeline runs real plans into independently verified candidates with both certified harnesses and closes a real `FAIL → NEEDS_FIX → fix Attempt → PASS → VERIFIED` loop (run 3 T01: 62 s from the first submission to `VERIFIED`, Codex). Two product defects block the loop whenever a fix Worker legitimately changes nothing — a prose `requiredEvidence` contract (A) and the unsettled unchanged headless exit (B) — both small, both specified in `.axiom-work/briefs/M3-08i.md`; the scope-blocked Worker case (C) is M3-04b's typed BLOCKED path. No egress, credential or isolation finding in any of the four runs.
+
+
+## Runs 4–5 — the gated chain on main with M3-08i / D85, both harnesses (2026-11-02, 17:31–18:02 MST)
+
+Same chain, main `caa0e649ab` (M3-08i merged, CI #74 green), the Change-Note gate joining the policy only after every root was admitted (`policy-gate-added` 10 s after `first-worker-admitted`), **no Goal-constraint workaround** (`chain-config.json.goalConstraintWorkaround: null`), `enforce` egress, diagnostics on. Evidence `.axiom-work/smoke/real-chain-codex-change-note-enforce-20261102-173127/chain/` and `…/real-chain-claude-change-note-enforce-20261102-173127/chain/`; log `.axiom-work/logs/smoke-real-chain-20261102-173127.log`.
+
+| | Run 4 — Codex Workers (1096 s, settled) | Run 5 — Claude Code Workers (738 s, settled) |
+|---|---|---|
+| Planner (real Claude over MCP) | 279 s; `requiredEvidence` as commands without the workaround — the contract and the D85 boundary did the work (one `plan_propose` call, accepted) | 231 s; commands, one call, accepted |
+| T01 | seq 1 FAIL (gate + a `verify:full` type error) → seq 2 added the headers and typed the test table → PASS → `VERIFIED` | seq 1 FAIL (gate only) → seq 2 headers → PASS → `VERIFIED`; verification claimed 00:54:48, FAIL 00:55:05, fix PASS 00:55:36 — 31 s |
+| T03 | seq 1 FAIL (gate only) → seq 2 headers → PASS → `VERIFIED` | seq 1 FAIL (gate) → fix → PASS → `VERIFIED` (42 s from FAIL to PASS) |
+| T02 | seq 1 FAIL: gate + `verify:full` on the two legacy tests the Planner left outside `allowedPaths` (`src/api/transfer.test.ts`, `src/cli/catalog.test.ts`, the `kind,payload` header) + the Planner's own `pnpm run scenarios:check`; seq 2 added the headers (gate passes) but the out-of-scope tests stay red; seq 3 changed a helper, same → **`BLOCKED (retry_budget_exhausted)`** after `maxAttempts 3`. Every Attempt settled; the Workers named the two files and the scope limit in every report | seq 1 (17 files, $1.91, 32 turns) FAIL (gate only — this Planner's scope included the legacy tests) → seq 2 headers → PASS → `VERIFIED` |
+| Settlement | no `[axiom] … deferred to recovery` and no `reconcile_failed` in `electron-main.log`; the chain ended by the 60 s settle rule, not the stall detector | same |
+| Egress / accounts | zero refused hosts; Codex auth unchanged | zero refused hosts; fix Attempts $0.15–0.18 each (4–5 turns) |
+
+What this closes: the fix loop now closes with both certified harnesses on every root whose scope contains the fix (five of six roots: FAIL on an injected policy gate → `NEEDS_FIX` → fix Attempt continuing the Candidate with the gate's own message in its context → PASS → `VERIFIED`, 31–60 s from the first verdict to the second), and the one root whose scope cannot contain the fix ends in a terminal, honest `BLOCKED (retry_budget_exhausted)` instead of a Task stuck `RUNNING` — D85 rule 1 observed live. The Planner wrote commands under the contract alone; the boundary never had to reject anything (its rejection path is the host e2e's prose case). Observation C stays what it was: run 4's T02 burned three Attempts on a scope the Planner drew too narrowly — M3-04b's typed `blocked_by_scope` outcome (D85 rule 5) turns that into one pending item for a human.
+
+Smoke bookkeeping: the Playwright verdict was red on both runs only through two soft assertions — "every root reaches VERIFIED" (run 4's T02 is legitimately BLOCKED) and "the fix Attempt continues the first one" read from the kernel's `retry_of_dispatch_id`, which Axiom's fix launcher does not set (the link is the launch audit's `baseline {kind: candidate}`, visible in `fix-contexts.json`); the second assertion is removed from the spec. Every hard assertion held.
+
+## Verdict (2026-11-02 evening)
+
+With M3-08i on main, the M3 pipeline runs real plans into independently verified candidates with both harnesses and closes the real `FAIL → NEEDS_FIX → fix Attempt → PASS → VERIFIED` loop on every root it can fix, in well under a minute per fix; what it cannot fix ends `BLOCKED` with the reason in the Worker's own words. Remaining for M3-04b (typed outcome, pending item, `requiredEvidence` restructure) and M3-09 (the plan card showing the commands).
