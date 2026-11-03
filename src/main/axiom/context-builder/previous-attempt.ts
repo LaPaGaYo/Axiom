@@ -4,22 +4,15 @@ import type { ArtifactStore } from '../artifacts/artifact-store'
 import type { AttemptBaseline } from '../execution/attempt-baseline'
 import { findSubmissionTranscriptArtifactId } from '../execution/attempt-projection'
 import { redactContext } from './redaction'
+import { acceptanceLines, persistentFailures, PreviousChecks } from './previous-acceptance'
 import {
   quote,
   quotedPaths,
   boundedAttemptEvidence,
+  boundedEvidenceSection,
   type AttemptEvidenceLine
 } from './previous-attempt-text'
 
-const Checks = z.array(
-  z.object({
-    index: z.number(),
-    command: z.string(),
-    result: z.string(),
-    exitCode: z.number().nullable(),
-    failures: z.array(z.string()).default([])
-  })
-)
 const VerdictEvidence = z.object({
   checks: z.array(z.object({ index: z.number(), excerpt: z.string().optional() }))
 })
@@ -67,7 +60,7 @@ function secretFindings(diff: unknown): string[] {
   return parsed.success && parsed.data.secrets.length
     ? [
         'Secret findings (path and pattern only):',
-        ...parsed.data.secrets.map(({ path, pattern }) => `- ${path} (${pattern})`)
+        ...parsed.data.secrets.map(({ path, pattern }) => `- ${quote(path)} (${quote(pattern)})`)
       ]
     : []
 }
@@ -81,7 +74,7 @@ function contentFindings(detail: Record<string, unknown>): string[] {
         'Test tampering findings (path, rule, net count):',
         ...diff.data.tampering
           .slice(0, 50)
-          .map(({ path, rule, count }) => `- ${path} (${rule}, ${count})`),
+          .map(({ path, rule, count }) => `- ${quote(path)} (${rule}, ${count})`),
         'Restore the removed tests or assertions and remove the added skips or suppressions; the next verification applies the same rules.'
       )
     }
@@ -118,7 +111,7 @@ const Adjustment = z.object({
     rationale: z.string()
   })
 })
-function declarationLines(store: AxiomStore, baseline: AttemptBaseline) {
+function declarationLines(store: AxiomStore, baseline: AttemptBaseline, reservedLines: string[]) {
   const skippedAttempts = 'skippedAttempts' in baseline ? baseline.skippedAttempts : []
   const task =
     baseline.kind === 'candidate'
@@ -174,7 +167,7 @@ function declarationLines(store: AxiomStore, baseline: AttemptBaseline) {
       })
     }
   }
-  return boundedAttemptEvidence(lines)
+  return boundedAttemptEvidence(lines, reservedLines)
 }
 
 export async function previousAttemptSection(
@@ -183,7 +176,6 @@ export async function previousAttemptSection(
   baseline: AttemptBaseline,
   channel: 'tui' | 'headless' = 'tui'
 ): Promise<{ source: string; content: string }> {
-  const declarations = declarationLines(store, baseline)
   if (baseline.kind === 'integration') {
     if (baseline.reason === 'first_attempt') {
       return { source: 'previous-attempt:m2', content: 'none (first attempt)' }
@@ -191,6 +183,7 @@ export async function previousAttemptSection(
     const lines = [
       `This Attempt starts from the integration base because ${integrationReasons[baseline.reason]} (${baseline.reason}).`
     ]
+    lines.push(...declarationLines(store, baseline, lines).lines)
     if (baseline.reason === 'secret_detected') {
       lines.push(
         ...secretFindings(baseline.verificationRun.verdictDetail.diff),
@@ -198,28 +191,32 @@ export async function previousAttemptSection(
         ...contentFindings(baseline.verificationRun.verdictDetail)
       )
     }
-    lines.push(...declarations.lines)
-    return { source: `previous-attempt:${baseline.reason}`, content: lines.join('\n') }
+    return { source: `previous-attempt:${baseline.reason}`, content: boundedEvidenceSection(lines) }
   }
   const { candidate, verificationRun: run, previousSeq } = baseline
   const detail = run.verdictDetail
+  const introduction = `This Attempt continues the previous Candidate ${candidate.commitSha} from Attempt ${previousSeq}; fix the failures below in this tree. Do not weaken, skip or delete tests, assertions, lint rules or checks to make them pass.`
+  const verdict = `Verdict: ${run.status}; reason: ${quote(typeof detail.reason === 'string' ? detail.reason : 'unknown')}`
+  const declarations = declarationLines(store, baseline, [introduction, verdict])
   let remaining = declarations.remaining
-  const lines = [
-    `This Attempt continues the previous Candidate ${candidate.commitSha} from Attempt ${previousSeq}; fix the failures below in this tree. Do not weaken, skip or delete tests, assertions, lint rules or checks to make them pass.`,
-    ...declarations.lines,
-    `Verdict: ${run.status}; reason: ${typeof detail.reason === 'string' ? detail.reason : 'unknown'}`
-  ]
-  const checks = Checks.safeParse(detail.checks)
+  const lines = [introduction, ...declarations.lines, verdict, ...acceptanceLines(detail)]
+  const checks = PreviousChecks.safeParse(detail.checks)
+  const persisting = persistentFailures(store, run)
   const excerpts = await readExcerpts(artifacts, detail.verdictArtifactId)
   for (const check of (checks.success ? checks.data : [])
     .filter((c) => c.result === 'fail')
     .sort((a, b) => a.index - b.index)) {
     lines.push(
       `Failed check ${check.index}`,
-      `command: ${check.command}`,
+      `command: ${quote(check.command)}`,
       `exitCode: ${check.exitCode}`,
       'Failure names:',
-      ...check.failures.slice(0, 20).map((name) => `- ${name}`)
+      ...check.failures
+        .slice(0, 20)
+        .map(
+          (name) =>
+            `- ${quote(name)}${persisting.has(name) ? ` (persisting since Attempt ${persisting.get(name)})` : ''}`
+        )
     )
     const excerpt = excerpts.find((entry) => entry.index === check.index)?.excerpt
     if (excerpt === undefined) {
@@ -227,13 +224,17 @@ export async function previousAttemptSection(
     } else if (remaining === 0) {
       lines.push('excerpt omitted (8 KiB total limit)')
     } else {
-      const boundedLines = redactContext(excerpt).content.split(/\r?\n/).slice(0, 40).join('\n')
-      // Streaming decode drops an incomplete final UTF-8 sequence without adding replacement bytes.
-      const bounded = new TextDecoder().decode(Buffer.from(boundedLines).subarray(0, remaining), {
-        stream: true
-      })
-      remaining -= Buffer.byteLength(bounded, 'utf8')
-      lines.push(`Excerpt:\n${bounded}\nEnd excerpt`)
+      lines.push('Excerpt:')
+      for (const line of redactContext(excerpt).content.split(/\r?\n/).slice(0, 40)) {
+        const quoted = quote(line)
+        const bytes = Buffer.byteLength(quoted) + 1
+        if (bytes > remaining) {
+          break
+        }
+        lines.push(quoted)
+        remaining -= bytes
+      }
+      lines.push('End excerpt')
     }
   }
   const diff = Diff.safeParse(detail.diff)
@@ -241,7 +242,7 @@ export async function previousAttemptSection(
     if (diff.data.scopeViolations.length) {
       lines.push(
         'Scope violations:',
-        ...diff.data.scopeViolations.map((path) => `- ${path}`),
+        ...diff.data.scopeViolations.map((path) => `- ${quote(path)}`),
         'Remove or revert these paths. Scope is checked against the merge-base; leaving them in this tree fails again.'
       )
     }
@@ -249,17 +250,11 @@ export async function previousAttemptSection(
     if (diff.data.dangerous.length) {
       lines.push(
         'Dangerous changes:',
-        ...diff.data.dangerous.map(({ path, pattern }) => `- ${path} (${pattern})`)
+        ...diff.data.dangerous.map(({ path, pattern }) => `- ${quote(path)} (${quote(pattern)})`)
       )
     }
   }
   lines.push(...contentFindings(detail))
-  lines.push(
-    'Not yet demonstrated:',
-    ...(store.getTaskStage(run.taskId)?.spec.acceptanceCriteria ?? []).map(
-      (criterion) => `- ${criterion}`
-    )
-  )
   const submission = store.getSubmissionByDispatch(candidate.attemptId)
   const transcript = submission
     ? findSubmissionTranscriptArtifactId(store, run.missionId, submission.id)
@@ -270,5 +265,5 @@ export async function previousAttemptSection(
       ...(channel === 'headless' ? [] : [`axiom mission artifact read --artifact ${transcript}`])
     )
   }
-  return { source: `verification:${run.id}`, content: lines.join('\n') }
+  return { source: `verification:${run.id}`, content: boundedEvidenceSection(lines) }
 }

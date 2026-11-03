@@ -31,7 +31,14 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 function commands(requiredEvidence: string[], verificationRules = {}, maxAttempts = 2) {
-  const spec = { ...f.task.spec, requiredEvidence }
+  const spec = {
+    ...f.task.spec,
+    requiredEvidence: undefined,
+    acceptanceCriteria: requiredEvidence.map((command) => ({
+      text: `Command passes: ${command}`,
+      check: { kind: 'command', command }
+    }))
+  }
   f.db.db
     .prepare('UPDATE task_stages SET spec = ?, retry_policy = ? WHERE task_id = ?')
     .run(JSON.stringify(spec), JSON.stringify({ maxAttempts }), f.task.taskId)
@@ -422,7 +429,7 @@ it.each([
 ])(
   'checks non-code Artifacts after passing repository gates: $mode',
   async ({ mode, reason, status, problem }) => {
-    commands([' ', '\n\t'], { repositoryGates: { low: [node('process.exit(0)')] } })
+    commands([], { repositoryGates: { low: [node('process.exit(0)')] } })
     const ids: string[] = []
     if (mode !== 'missing') {
       const artifact = await f.artifacts.put({

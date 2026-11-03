@@ -125,7 +125,12 @@ for (const maxAttempts of [2, 3]) {
         restart: maxAttempts === 2,
         maxAttempts,
         extraAllowedPaths: ['src/services/date-range.ts', 'src/services/date-range.test.ts'],
-        requiredEvidence: [check]
+        acceptanceCriteria: [
+          {
+            text: 'The date-range contract rejects an empty entityId',
+            check: { kind: 'command', command: check }
+          }
+        ]
       }
     )
   })

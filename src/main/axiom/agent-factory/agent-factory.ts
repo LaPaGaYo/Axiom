@@ -7,6 +7,7 @@ import { isTuiAgent } from '../../../shared/tui-agent-config'
 import type { AxiomStore } from '../db/axiom-store'
 import type { DecisionEngine } from '../decision-engine/decision-engine'
 import { AgentFactoryError, selectProvider } from './provider-selection'
+import { resolveAcceptance } from '../../../shared/axiom-contract/acceptance'
 export { AgentFactoryError } from './provider-selection'
 
 const BuildParams = z.discriminatedUnion('role', [
@@ -150,7 +151,7 @@ export class AgentFactory {
               role: p.role,
               taskId: p.taskId,
               contextPackageId: p.contextPackageId,
-              acceptanceCriteria: task?.spec.acceptanceCriteria,
+              acceptanceCriteria: task ? resolveAcceptance(task.spec) : undefined,
               capabilities: [
                 ...new Set(
                   task?.spec.scope.allowedPaths

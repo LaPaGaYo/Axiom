@@ -125,17 +125,20 @@ it('resolves setup then unique evidence then additional risk gates in declaratio
     repositoryGates: { high: ['test', 'gate', 'gate', 'setup'] }
   })
   expect(
-    resolveVerificationPlan({ risk: 'high', requiredEvidence: [' test ', 'test', 'check'] }, rules)
+    resolveVerificationPlan(
+      { risk: 'high', acceptanceCriteria: [], requiredEvidence: [' test ', 'test', 'check'] },
+      rules
+    )
   ).toEqual([
-    { source: 'setup', command: 'setup' },
-    { source: 'setup', command: 'setup' },
-    { source: 'evidence', command: 'test' },
-    { source: 'evidence', command: 'check' },
-    { source: 'gate', command: 'gate' }
+    { source: 'setup', command: 'setup', criteria: [] },
+    { source: 'setup', command: 'setup', criteria: [] },
+    { source: 'evidence', command: 'test', criteria: [0] },
+    { source: 'evidence', command: 'check', criteria: [1] },
+    { source: 'gate', command: 'gate', criteria: [] }
   ])
   expect(
     resolveVerificationPlan(
-      { risk: 'low', requiredEvidence: [] },
+      { risk: 'low', acceptanceCriteria: [], requiredEvidence: [] },
       VerificationRulesSchema.parse({})
     )
   ).toEqual([])
@@ -145,17 +148,21 @@ it('trims required evidence and skips empty items before de-duplicating', () => 
   const rules = VerificationRulesSchema.parse({ repositoryGates: { low: ['test', 'gate'] } })
   expect(
     resolveVerificationPlan(
-      { risk: 'low', requiredEvidence: [' ', '\n\t', ' test ', 'test', ' check ', '\r\n'] },
+      {
+        risk: 'low',
+        acceptanceCriteria: [],
+        requiredEvidence: [' ', '\n\t', ' test ', 'test', ' check ', '\r\n']
+      },
       rules
     )
   ).toEqual([
-    { source: 'evidence', command: 'test' },
-    { source: 'evidence', command: 'check' },
-    { source: 'gate', command: 'gate' }
+    { source: 'evidence', command: 'test', criteria: [0] },
+    { source: 'evidence', command: 'check', criteria: [1] },
+    { source: 'gate', command: 'gate', criteria: [] }
   ])
   expect(
     resolveVerificationPlan(
-      { risk: 'low', requiredEvidence: [' ', '\n\t'] },
+      { risk: 'low', acceptanceCriteria: [], requiredEvidence: [' ', '\n\t'] },
       VerificationRulesSchema.parse({})
     )
   ).toEqual([])
@@ -171,4 +178,31 @@ it('validates additive regex sources without flags and replaces dangerous defaul
   for (const secretPatterns of [['('], [''], [1]]) {
     expect(VerificationRulesSchema.safeParse({ secretPatterns }).success).toBe(false)
   }
+})
+
+it('links shared commands to every criterion while preserving criterion order', () => {
+  const rules = VerificationRulesSchema.parse({
+    setupCommands: ['setup'],
+    repositoryGates: { low: ['pnpm test', 'gate'] }
+  })
+  expect(
+    resolveVerificationPlan(
+      {
+        risk: 'low',
+        acceptanceCriteria: [
+          { text: 'One', check: { kind: 'command', command: 'pnpm test' } },
+          { text: 'Deliverable', check: { kind: 'artifact' } },
+          { text: 'Two', check: { kind: 'command', command: 'pnpm test' } },
+          { text: 'Review', check: { kind: 'human' } },
+          { text: 'Types', check: { kind: 'command', command: 'pnpm tc' } }
+        ]
+      },
+      rules
+    )
+  ).toEqual([
+    { source: 'setup', command: 'setup', criteria: [] },
+    { source: 'evidence', command: 'pnpm test', criteria: [0, 2] },
+    { source: 'evidence', command: 'pnpm tc', criteria: [4] },
+    { source: 'gate', command: 'gate', criteria: [] }
+  ])
 })

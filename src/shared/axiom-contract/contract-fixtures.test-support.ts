@@ -1,4 +1,4 @@
-import { DEFAULT_ROUTING_POLICY } from './mission-objects'
+import { DEFAULT_ROUTING_POLICY, type TaskSpec } from './mission-objects'
 
 // Hand-written shape of LaPaGaYo/flowtask-fixture, fixture-v1,
 // scenarios/goal/decomposition.json. IDs and dependsOn edges match the frozen file.
@@ -122,13 +122,14 @@ export function makeProposal() {
   return {
     goalRevisionId: 'goal-1',
     milestones: [{ id: 'M1', title: 'Sprints', exitCriteria: ['Checks pass'] }],
-    tasks: decomposition.map((task) => ({
+    tasks: decomposition.map((task): TaskSpec => ({
       id: task.id,
       title: task.title,
       objective: task.title,
       scope: { allowedPaths: [...task.files] },
-      acceptanceCriteria: ['Checks pass'],
-      requiredEvidence: ['pnpm test'],
+      acceptanceCriteria: [
+        { text: 'Checks pass', check: { kind: 'command', command: 'pnpm test' } }
+      ],
       risk: 'low' as const,
       retryPolicy: { maxAttempts: 2 },
       milestoneId: 'M1',

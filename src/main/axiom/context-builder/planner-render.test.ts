@@ -28,10 +28,26 @@ it('explains exact bounded commands in the prompt and JSON Schema with policy pr
       role: 'planner',
       goalRevisionId: goalRevision.id
     })
-    expect(result.renderTemplate).toContain('requiredEvidence entries are exact shell commands')
+    expect(result.renderTemplate).toContain('Every acceptanceCriteria entry is { text, check }.')
+    expect(result.renderTemplate).toContain(
+      'check.kind = "command" carries one exact shell command'
+    )
+    expect(result.renderTemplate).toContain(
+      '"artifact" means the submission must reference a readable, non-empty Artifact'
+    )
+    expect(result.renderTemplate).toContain('"human" means no command or Artifact can prove it')
+    expect(result.renderTemplate).toContain('requiredEvidence is retired and rejected')
     expect(result.renderTemplate).toContain('the program must be one of: pnpm, toolchain, node')
     expect(result.renderTemplate).toContain('pnpm exec vitest run tests/example.test.ts')
     expect(result.renderTemplate).not.toContain('Test results')
+    expect(result.renderTemplate).not.toContain('requiredEvidence entries are exact shell commands')
+    const example = result.renderTemplate
+      .split('## Minimal example')[1]
+      .split('## Planner proposal recipe')[0]
+    expect(example).not.toContain('requiredEvidence')
+    for (const kind of ['command', 'artifact', 'human']) {
+      expect(example).toContain(`"kind": "${kind}"`)
+    }
     const jsonSchema = z.toJSONSchema(PlanProposalSchema)
     expect(jsonSchema).toMatchObject({
       properties: {
@@ -40,8 +56,21 @@ it('explains exact bounded commands in the prompt and JSON Schema with policy pr
             properties: {
               requiredEvidence: {
                 description: expect.stringContaining(
-                  'put expectations and descriptions in acceptanceCriteria, never in requiredEvidence'
+                  'retired by D85 rule 2: put the command on the criterion'
                 )
+              },
+              acceptanceCriteria: {
+                items: {
+                  anyOf: expect.arrayContaining([
+                    expect.objectContaining({
+                      type: 'object',
+                      properties: expect.objectContaining({
+                        text: expect.any(Object),
+                        check: expect.objectContaining({ oneOf: expect.any(Array) })
+                      })
+                    })
+                  ])
+                }
               }
             }
           }

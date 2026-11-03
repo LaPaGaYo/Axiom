@@ -1,4 +1,5 @@
 import type { VerificationRun } from '../../../shared/axiom-contract/verification-params'
+import { VerificationAcceptanceSchema } from '../../../shared/axiom-contract/verification-acceptance'
 import { settleVerificationFailure } from '../execution/attempt-settlement'
 import type { VerificationDependencies } from './verification-service'
 import type { VerificationVerdict } from './verification-verdict'
@@ -44,6 +45,7 @@ export function settleVerificationVerdict(
 ) {
   const { store, missions, runtimeEpoch } = deps
   const { run, verdict, result, verdictDetail, finishedAt, commands, gate } = input
+  const acceptance = VerificationAcceptanceSchema.array().parse(verdictDetail.acceptance ?? [])
   const fence = {
     id: run.id,
     expectedStatus: 'RUNNING' as const,
@@ -98,6 +100,7 @@ export function settleVerificationVerdict(
           : 'verification.inconclusive',
       {
         ...verdict,
+        acceptance,
         ...gateAuditFindings(verdict, gate),
         ...(verdict.verdict === 'FAIL'
           ? {

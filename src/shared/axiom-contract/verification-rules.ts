@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { TaskSpec } from './mission-objects'
+import { acceptanceCommands, resolveAcceptance } from './acceptance'
 
 const Command = z.string().trim().min(1)
 const Commands = z.array(Command)
@@ -121,7 +122,11 @@ export const VerificationRulesSchema = z.strictObject({
   knownFlaky: z.array(z.string()).default([])
 })
 export type VerificationRules = z.infer<typeof VerificationRulesSchema>
-export type VerificationCommand = { source: 'setup' | 'evidence' | 'gate'; command: string }
+export type VerificationCommand = {
+  source: 'setup' | 'evidence' | 'gate'
+  command: string
+  criteria: number[]
+}
 
 export function matchesRetryOnce(command: string, prefixes: string[]): boolean {
   const normalized = command.trim().replace(/\s+/g, ' ')
@@ -147,21 +152,30 @@ export function matchesKnownFlaky(failure: string, patterns: string[]): boolean 
 }
 
 export function resolveVerificationPlan(
-  task: Pick<TaskSpec, 'requiredEvidence' | 'risk'>,
+  task: Pick<TaskSpec, 'acceptanceCriteria' | 'requiredEvidence' | 'risk'>,
   rules: VerificationRules
 ): VerificationCommand[] {
   const plan: VerificationCommand[] = rules.setupCommands.map((command) => ({
     source: 'setup',
-    command
+    command,
+    criteria: []
   }))
-  const evidence = [
-    ...new Set(task.requiredEvidence.map((command) => command.trim()).filter(Boolean))
-  ]
-  plan.push(...evidence.map((command) => ({ source: 'evidence' as const, command })))
+  const criteria = resolveAcceptance(task)
+  for (const command of acceptanceCommands(criteria)) {
+    plan.push({
+      source: 'evidence',
+      command,
+      criteria: criteria.flatMap((criterion, index) =>
+        criterion.check.kind === 'command' && criterion.check.command.trim() === command
+          ? [index]
+          : []
+      )
+    })
+  }
   const listed = new Set(plan.map(({ command }) => command))
   for (const command of rules.repositoryGates[task.risk] ?? []) {
     if (!listed.has(command)) {
-      plan.push({ source: 'gate', command })
+      plan.push({ source: 'gate', command, criteria: [] })
       listed.add(command)
     }
   }

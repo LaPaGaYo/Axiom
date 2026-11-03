@@ -34,7 +34,13 @@ it.each(checks)(
     })
     const requested = {
       ...subtask,
-      ...(check === 'evidence' ? { requiredEvidence: ['Test results'] } : {}),
+      ...(check === 'evidence'
+        ? {
+            acceptanceCriteria: [
+              { text: 'Tests pass', check: { kind: 'command' as const, command: 'Test results' } }
+            ]
+          }
+        : {}),
       allowedPaths: [check === 'scope' ? 'src/storage-other/x.ts' : 'src/storage/migrate.ts'],
       ...(check === 'duplicate' ? { title: '  STORAGE MIGRATION  ' } : {}),
       ...(check === 'dependency' ? { dependsOn: ['foreign-task'] } : {})

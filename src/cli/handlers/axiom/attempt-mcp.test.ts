@@ -149,9 +149,9 @@ it('returns semantic validation errors as issues without losing the host details
     {
       code: 'evidence_command_invalid',
       severity: 'error',
-      message: 'Program "Test" is not allowed for requiredEvidence commands.',
+      message: 'Program "Test" is not allowed for acceptance commands.',
       taskIds: ['t1'],
-      path: ['tasks', 0, 'requiredEvidence', 0]
+      path: ['tasks', 0, 'acceptanceCriteria', 0, 'check', 'command']
     }
   ]
   call.mockRejectedValue(new RuntimeClientError('plan_invalid', 'plan_invalid', { errors: issues }))

@@ -78,8 +78,10 @@ function fixtureProposal(preamble) {
       title: task.title,
       objective: task.title,
       scope: { allowedPaths: task.scope },
-      acceptanceCriteria: task.acceptance.map((entry) => entry.must),
-      requiredEvidence: [...new Set(task.acceptance.map((entry) => entry.command))],
+      acceptanceCriteria: task.acceptance.map(({ must, command }) => ({
+        text: must,
+        check: { kind: 'command', command }
+      })),
       risk: 'low',
       retryPolicy: { maxAttempts: 2 },
       kind: 'task',
@@ -172,20 +174,23 @@ async function propose(preamble) {
       return
     }
     const proposal = fixtureProposal(preamble)
-    if (process.env.AXIOM_E2E_PLANNER_PROSE_EVIDENCE === '1') {
+    const legacyEvidence = process.env.AXIOM_E2E_PLANNER_LEGACY_EVIDENCE === '1'
+    if (legacyEvidence || process.env.AXIOM_E2E_PLANNER_PROSE_EVIDENCE === '1') {
       const invalid = structuredClone(proposal)
-      invalid.tasks[0].requiredEvidence = ['Test results']
+      if (legacyEvidence) {
+        invalid.tasks[0].requiredEvidence = ['pnpm run verify:full']
+      } else {
+        invalid.tasks[0].acceptanceCriteria[0].check.command = 'Test results'
+      }
+      const expectedCode = legacyEvidence ? 'required_evidence_retired' : 'evidence_command_invalid'
       const rejected = await request('tools/call', {
         name: 'plan_propose',
         arguments: { proposal: invalid }
       })
       const response = JSON.parse(rejected.content.find((item) => item.type === 'text').text)
       record({ kind: 'proposal', attemptId, response, isError: rejected.isError ?? false })
-      if (
-        response.ok ||
-        !response.error?.issues?.some((issue) => issue.code === 'evidence_command_invalid')
-      ) {
-        throw new Error('Expected evidence command rejection')
+      if (response.ok || !response.error?.issues?.some((issue) => issue.code === expectedCode)) {
+        throw new Error(`Expected ${expectedCode} rejection`)
       }
     }
     const result = await request('tools/call', {

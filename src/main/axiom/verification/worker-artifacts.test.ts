@@ -138,8 +138,9 @@ it('returns empty evidence without a Submission and inspects beyond the 50-entry
   const bad = await put(Buffer.from('{'), 'application/json')
   submit([...Array<string>(50).fill(good.id), bad.id])
   const result = await check()
-  expect(result.checked).toHaveLength(50)
-  expect(result.checked.every((entry) => !entry.problem)).toBe(true)
+  expect(result.checked).toHaveLength(51)
+  expect(result.checked.slice(0, 50).every((entry) => !entry.problem)).toBe(true)
+  expect(result.checked[50].problem).toBe('invalid_json')
   expect(result.counts).toEqual({
     checked: 51,
     unreadable: 0,

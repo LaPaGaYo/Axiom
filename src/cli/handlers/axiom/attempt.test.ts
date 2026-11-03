@@ -108,8 +108,9 @@ describe('Worker channel CLI routing', () => {
                   title: 'Follow-up',
                   objective: 'Check',
                   allowedPaths: ['src/', 'tests/'],
-                  acceptanceCriteria: ['Pass'],
-                  requiredEvidence: ['Tests'],
+                  acceptanceCriteria: [
+                    { text: 'Pass', check: { kind: 'command', command: 'Tests' } }
+                  ],
                   risk: 'medium'
                 }
               }
@@ -119,6 +120,59 @@ describe('Worker channel CLI routing', () => {
           orchestrationRequestId: '55cbf3b9-90ab-4ac0-a4e3-660c26727a1f'
         }
       )
+    }
+  )
+  it.each([
+    {
+      acceptance: ['First', 'Second'],
+      evidence: ['pnpm test'],
+      expected: [
+        { text: 'First', check: { kind: 'command', command: 'pnpm test' } },
+        { text: 'Second', check: { kind: 'human' } }
+      ]
+    },
+    {
+      acceptance: ['First'],
+      evidence: ['pnpm test', 'pnpm tc'],
+      expected: [
+        { text: 'First', check: { kind: 'command', command: 'pnpm test' } },
+        { text: 'Command passes: pnpm tc', check: { kind: 'command', command: 'pnpm tc' } }
+      ]
+    },
+    { acceptance: [], evidence: [], expected: [] }
+  ])(
+    'pairs subtask command flags positionally and appends artifact criteria ($acceptance)',
+    async ({ acceptance, evidence, expected }) => {
+      const f = setup()
+      await f.run([
+        'request-subtask',
+        '--attempt',
+        'a',
+        '--summary',
+        'Need work',
+        '--title',
+        'Work',
+        '--objective',
+        'Goal',
+        '--allowed-path',
+        'src/',
+        ...acceptance.flatMap((text) => ['--acceptance', text]),
+        ...evidence.flatMap((command) => ['--evidence', command]),
+        '--acceptance-artifact',
+        'Report',
+        '--acceptance-artifact',
+        'Design'
+      ])
+      expect(f.call.mock.calls[0]?.[1]).toMatchObject({
+        subtask: {
+          acceptanceCriteria: [
+            ...expected,
+            { text: 'Report', check: { kind: 'artifact' } },
+            { text: 'Design', check: { kind: 'artifact' } }
+          ]
+        }
+      })
+      expect(JSON.stringify(f.call.mock.calls[0]?.[1])).not.toContain('requiredEvidence')
     }
   )
   it('routes check with caller identity and a transport budget longer than the inner wait', async () => {

@@ -180,8 +180,10 @@ describe('fixture-v1 PlanProposal conversion', () => {
         title: task.title,
         objective: task.title,
         scope: { allowedPaths: task.scope },
-        acceptanceCriteria: task.acceptance.map((entry) => entry.must),
-        requiredEvidence: ['pnpm run verify:full'],
+        acceptanceCriteria: task.acceptance.map(({ must, command }) => ({
+          text: must,
+          check: { kind: 'command', command }
+        })),
         risk: 'low',
         retryPolicy: { maxAttempts: 2 },
         kind: 'task',
@@ -199,12 +201,18 @@ describe('fixture-v1 PlanProposal conversion', () => {
     )
   })
 
-  it('deduplicates evidence commands while retaining each acceptance criterion', () => {
+  it('keeps each criterion paired with its command, including shared commands', () => {
     const input = fixtureInput()
     input.tasks[0].acceptance.push({ command: 'pnpm run verify:full', must: 'Second criterion' })
     const task = fixturePlanProposal(input, 'goal-1', at).tasks[0]
-    expect(task.requiredEvidence).toEqual(['pnpm run verify:full'])
-    expect(task.acceptanceCriteria).toEqual(['T01 acceptance passes', 'Second criterion'])
+    expect(task).not.toHaveProperty('requiredEvidence')
+    expect(task.acceptanceCriteria).toEqual([
+      {
+        text: 'T01 acceptance passes',
+        check: { kind: 'command', command: 'pnpm run verify:full' }
+      },
+      { text: 'Second criterion', check: { kind: 'command', command: 'pnpm run verify:full' } }
+    ])
   })
 
   it('rejects malformed input and a cyclic converted graph before a file can be written', () => {

@@ -5,7 +5,8 @@ import {
   PlanRiskSchema,
   ProvenanceSchema,
   TaskEdgeSchema,
-  TaskSpecSchema
+  TaskSpecSchema,
+  type TaskSpec
 } from './mission-objects'
 import { orderPlanTasks } from './plan-task-graph'
 
@@ -31,6 +32,8 @@ export type PlanProposalError = {
     | 'insufficient_parallel_roots'
     | 'threshold_not_supported'
     | 'evidence_command_invalid'
+    | 'required_evidence_retired'
+    | 'criterion_shape'
   severity: 'error' | 'warning'
   message: string
   taskIds?: string[]
@@ -41,9 +44,37 @@ export type PlanProposalValidation =
   | { ok: true; order: string[] }
   | { ok: false; errors: PlanProposalError[] }
 
+export function validateTaskAcceptance(
+  task: TaskSpec,
+  path: (string | number)[]
+): PlanProposalError[] {
+  const errors: PlanProposalError[] = []
+  if (task.requiredEvidence?.length) {
+    errors.push({
+      code: 'required_evidence_retired',
+      severity: 'error',
+      message: 'requiredEvidence is retired; put each command on an acceptance criterion.',
+      taskIds: [task.id],
+      path: [...path, 'requiredEvidence']
+    })
+  }
+  task.acceptanceCriteria.forEach((criterion, index) => {
+    if (typeof criterion === 'string') {
+      errors.push({
+        code: 'criterion_shape',
+        severity: 'error',
+        message: 'Each acceptance criterion must be an object with text and check.',
+        taskIds: [task.id],
+        path: [...path, 'acceptanceCriteria', index]
+      })
+    }
+  })
+  return errors
+}
+
 export function validatePlanProposal(
   proposal: unknown,
-  options: { requireParallelRoots?: number } = {}
+  options: { requireParallelRoots?: number; persisted?: boolean } = {}
 ): PlanProposalValidation {
   const parsed = PlanProposalSchema.safeParse(proposal)
   if (!parsed.success) {
@@ -61,7 +92,10 @@ export function validatePlanProposal(
   const errors: PlanProposalError[] = []
   const ids = new Set<string>()
   const milestoneIds = new Set(milestones.map((milestone) => milestone.id))
-  for (const task of tasks) {
+  for (const [index, task] of tasks.entries()) {
+    if (!options.persisted) {
+      errors.push(...validateTaskAcceptance(task, ['tasks', index]))
+    }
     if (ids.has(task.id)) {
       errors.push({
         code: 'duplicate_task_id',

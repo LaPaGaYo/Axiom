@@ -1,4 +1,5 @@
 import { runAttemptMcp } from './attempt-mcp'
+import { acceptanceFromFlags } from './acceptance-flags'
 import { askAttempt } from './attempt-ask'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -69,8 +70,11 @@ async function sendWorkerMessage(ctx: HandlerContext, verb: string) {
             title: required(flags, 'title'),
             objective: required(flags, 'objective'),
             allowedPaths: repeated(flags, 'allowed-path'),
-            acceptanceCriteria: repeated(flags, 'acceptance'),
-            requiredEvidence: repeated(flags, 'evidence'),
+            acceptanceCriteria: acceptanceFromFlags(
+              repeated(flags, 'acceptance'),
+              repeated(flags, 'evidence'),
+              repeated(flags, 'acceptance-artifact')
+            ),
             risk: optional(flags, 'risk') ?? 'low',
             ...(dependsOn.length ? { dependsOn } : {})
           }

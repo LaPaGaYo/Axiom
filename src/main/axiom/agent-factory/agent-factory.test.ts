@@ -108,6 +108,17 @@ function patchTask(patch: Partial<TaskSpec>) {
 }
 
 describe('AgentFactory', () => {
+  it('passes resolved criteria to Workers while keeping persisted legacy Tasks unchanged', async () => {
+    patchTask({ acceptanceCriteria: ['Checks pass'], requiredEvidence: ['pnpm test'] })
+    const before = store.getTaskStage(taskId)
+    expect((await build()).spec).toMatchObject({
+      acceptanceCriteria: [
+        { text: 'Checks pass', check: { kind: 'human' } },
+        { text: 'Command passes: pnpm test', check: { kind: 'command', command: 'pnpm test' } }
+      ]
+    })
+    expect(store.getTaskStage(taskId)).toEqual(before)
+  })
   it('content-addresses fixture T04 with one row and audit, preserving all other state', async () => {
     const before = store.getTaskStage(taskId)
     const first = await build()
@@ -121,7 +132,9 @@ describe('AgentFactory', () => {
       provider: 'claude',
       model: 'policy-default',
       endpointProfile: 'subscription',
-      acceptanceCriteria: ['Checks pass'],
+      acceptanceCriteria: [
+        { text: 'Checks pass', check: { kind: 'command', command: 'pnpm test' } }
+      ],
       capabilities: ['src'],
       budget: { maxRuntimeMinutes: 120 },
       reasoning: { effort: 'medium' },

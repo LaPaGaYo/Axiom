@@ -3,7 +3,10 @@ import { readFile, stat } from 'node:fs/promises'
 import { extname, resolve } from 'node:path'
 import { z } from 'zod'
 import { GoalBodySchema, RoutingPolicySchema } from '../../../shared/axiom-contract/mission-objects'
-import { PlanProposalSchema } from '../../../shared/axiom-contract/plan-proposal'
+import {
+  PlanProposalSchema,
+  validateTaskAcceptance
+} from '../../../shared/axiom-contract/plan-proposal'
 import { RuntimeClientError } from '../../runtime/types'
 import { VerificationRulesSchema } from '../../../shared/axiom-contract/verification-rules'
 
@@ -64,8 +67,19 @@ export function readVerificationRulesFile(cwd: string, file: string) {
 }
 
 export function readTaskFile(cwd: string, file: string) {
-  return readInput(cwd, file, async (text, path) => ({
-    task: TaskCreateParams.shape.task.parse(JSON.parse(text)),
-    provenance: { kind: 'user' as const, actor: 'user', at: (await stat(path)).mtime.toISOString() }
-  }))
+  return readInput(cwd, file, async (text, path) => {
+    const task = TaskCreateParams.shape.task.parse(JSON.parse(text))
+    const errors = validateTaskAcceptance({ ...task, id: 'new-task' }, ['task'])
+    if (errors.length) {
+      throw new RuntimeClientError('plan_invalid', 'Invalid Task acceptance criteria.', { errors })
+    }
+    return {
+      task,
+      provenance: {
+        kind: 'user' as const,
+        actor: 'user',
+        at: (await stat(path)).mtime.toISOString()
+      }
+    }
+  })
 }

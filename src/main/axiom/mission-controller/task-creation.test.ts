@@ -62,6 +62,35 @@ it('extends the approved graph without altering the proposal and records origin/
     ])
   )
 })
+it.each([
+  ['required_evidence_retired', { requiredEvidence: ['pnpm test'] }, ['task', 'requiredEvidence']],
+  ['criterion_shape', { acceptanceCriteria: ['Checks pass'] }, ['task', 'acceptanceCriteria', 0]],
+  [
+    'evidence_command_invalid',
+    {
+      acceptanceCriteria: [
+        { text: 'Tests pass', check: { kind: 'command' as const, command: 'Test results' } }
+      ]
+    },
+    ['task', 'acceptanceCriteria', 0, 'check', 'command']
+  ]
+])('rejects %s for human-created Tasks before writing rows', (code, patch, path) => {
+  const p = input()
+  const before = ['tasks', 'task_stages', 'mission_task_edges', 'audit_events'].map((table) =>
+    f.db.db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all()
+  )
+  expect(() => f.controller.createTask({ ...p, task: { ...p.task, ...patch } })).toThrow(
+    expect.objectContaining({
+      code: 'plan_invalid',
+      data: { errors: [expect.objectContaining({ code, path })] }
+    })
+  )
+  expect(
+    ['tasks', 'task_stages', 'mission_task_edges', 'audit_events'].map((table) =>
+      f.db.db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all()
+    )
+  ).toEqual(before)
+})
 it.each(['duplicate', 'dependency', 'budget'] as const)(
   'rejects %s atomically for user creation',
   (check) => {
