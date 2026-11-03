@@ -1,5 +1,26 @@
 import type { AxiomStore } from '../db/axiom-store'
 import type { MissionController } from '../mission-controller/mission-controller'
+import type { HeadlessOutcome } from '../../../shared/axiom-contract/submission-params'
+
+type SettlementContext = { store: AxiomStore; missions: MissionController }
+type AttemptSettlement = {
+  taskId: string
+  seq: number
+  dispatchId: string | null
+  actor: string
+}
+
+function currentUnsubmittedTask(store: AxiomStore, input: AttemptSettlement) {
+  const task = store.getTaskStage(input.taskId)
+  const binding = store.getAttemptBinding(input.taskId, input.seq)
+  // An old callback or recovery snapshot cannot settle a newer admission.
+  return task?.stage === 'RUNNING' &&
+    binding?.dispatchId === input.dispatchId &&
+    store.nextAttemptSeq(input.taskId) === input.seq + 1 &&
+    !(input.dispatchId !== null && store.getSubmissionByDispatch(input.dispatchId))
+    ? task
+    : undefined
+}
 
 export function settleVerificationFailure(
   ctx: { store: AxiomStore; missions: MissionController },
@@ -38,16 +59,8 @@ export function settleAttemptWithoutSubmission(
   input: { taskId: string; seq: number; dispatchId: string | null; reason: string; actor: string }
 ): { settled: boolean } {
   return ctx.store.transaction('settle_attempt_without_submission', () => {
-    const task = ctx.store.getTaskStage(input.taskId)
-    const binding = ctx.store.getAttemptBinding(input.taskId, input.seq)
-    // An old launch callback or recovery snapshot cannot settle a newer admission.
-    if (
-      task?.stage !== 'RUNNING' ||
-      !binding ||
-      binding.dispatchId !== input.dispatchId ||
-      ctx.store.nextAttemptSeq(input.taskId) !== input.seq + 1 ||
-      (input.dispatchId !== null && ctx.store.getSubmissionByDispatch(input.dispatchId))
-    ) {
+    const task = currentUnsubmittedTask(ctx.store, input)
+    if (!task) {
       return { settled: false }
     }
     ctx.missions.transitionTaskStage({
@@ -61,6 +74,30 @@ export function settleAttemptWithoutSubmission(
       taskId: input.taskId,
       to: retry ? 'READY' : 'BLOCKED',
       reason: retry ? 'retry' : 'retry_budget_exhausted',
+      actor: input.actor
+    })
+    return { settled: true }
+  })
+}
+
+export function settleDeclaredAttempt(
+  ctx: SettlementContext,
+  input: AttemptSettlement & { outcome: Exclude<HeadlessOutcome, { outcome: 'submitted' }> }
+): { settled: boolean } {
+  return ctx.store.transaction('settle_declared_attempt', () => {
+    if (!currentUnsubmittedTask(ctx.store, input)) {
+      return { settled: false }
+    }
+    ctx.missions.transitionTaskStage({
+      taskId: input.taskId,
+      to: 'NEEDS_FIX',
+      reason: input.outcome.outcome === 'blocked' ? 'attempt_blocked' : 'attempt_no_change',
+      actor: input.actor
+    })
+    ctx.missions.transitionTaskStage({
+      taskId: input.taskId,
+      to: 'BLOCKED',
+      reason: input.outcome.reason === 'blocked_by_scope' ? 'scope' : 'candidate_disputed',
       actor: input.actor
     })
     return { settled: true }

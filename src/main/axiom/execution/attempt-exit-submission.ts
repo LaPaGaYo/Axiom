@@ -12,6 +12,7 @@ import { redactContext } from '../context-builder/redaction'
 import { resolveHostAttempt } from './attempt-authority'
 import { serializeAttemptSubmission, settleSubmission } from './attempt-submission'
 import { settleAttemptWithoutSubmission } from './attempt-settlement'
+import { settleDeclaredExit } from './attempt-exit-declared'
 import {
   parseHeadlessWorkerEvents,
   parseHeadlessReport,
@@ -115,7 +116,7 @@ async function submitExit(runtime: OrcaRuntimeService, attemptId: string) {
   ) {
     throw new Error('Headless launch binding mismatch')
   }
-  const failedResult = provider === 'claude' && events.turnFailed
+  const failedResult = events.turnFailed
   if (exitCode === 0 && !failedResult) {
     try {
       report = parseHeadlessReport(redactContext(lastMessage).content)
@@ -187,8 +188,21 @@ async function submitExit(runtime: OrcaRuntimeService, attemptId: string) {
     createdBy: `attempt:${attemptId}`,
     related: [authority.task.taskId, attemptId]
   })
+  if (report.outcome && report.outcome.outcome !== 'submitted') {
+    return settleDeclaredExit(runtime, {
+      attemptId,
+      worktree,
+      outcome: report.outcome,
+      report,
+      reportArtifactId: reportArtifact.id,
+      artifactIds,
+      lastMessage,
+      eventAudit
+    })
+  }
+  const { outcome: _outcome, ...submittedReport } = report
   const submissionReport = {
-    ...report,
+    ...submittedReport,
     artifacts: [reportArtifact.id, ...artifactIds],
     filesChanged: []
   }

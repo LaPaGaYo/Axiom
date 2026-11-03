@@ -71,6 +71,7 @@ export class AxiomStore {
   readonly getTaskStage: TaskGraph['getTaskStage']
   readonly listTaskStages: TaskGraph['listTaskStages']
   readonly updateTaskStage: TaskGraph['updateTaskStage']
+  readonly updateTaskSpec: TaskGraph['updateTaskSpec']
   readonly countTaskStages: TaskGraph['countTaskStages']
   readonly insertTaskEdges: TaskGraph['insertTaskEdges']
   readonly listTaskEdges: TaskGraph['listTaskEdges']
@@ -158,6 +159,7 @@ export class AxiomStore {
     this.getTaskStage = graph.getTaskStage
     this.listTaskStages = graph.listTaskStages
     this.updateTaskStage = graph.updateTaskStage
+    this.updateTaskSpec = graph.updateTaskSpec
     this.countTaskStages = graph.countTaskStages
     this.insertTaskEdges = graph.insertTaskEdges
     this.listTaskEdges = graph.listTaskEdges

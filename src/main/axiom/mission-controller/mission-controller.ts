@@ -1,5 +1,6 @@
 import type { ScheduleTrigger } from '../scheduler/scheduler'
 import { createTask } from './task-creation'
+import { adjustTask, resolveBlockedMessages } from './task-adjustment'
 import type { TaskCreateParams } from '../../../shared/axiom-contract/task-params'
 import type { SubtaskSource } from '../messaging/subtask-checks'
 import { randomUUID } from 'node:crypto'
@@ -134,6 +135,11 @@ export class MissionController {
     this.scheduleAfterWrite(input.missionId, 'stage_change')
     return result
   }
+  adjustTask(input: Parameters<typeof adjustTask>[1]) {
+    const result = this.write('adjust_task', () => adjustTask(this.ctx, input))
+    this.scheduleAfterWrite(result.missionId, 'stage_change')
+    return result
+  }
   startExecution(missionId: string) {
     const result = this.write('start_execution', () => {
       const mission = requireMission(this.ctx, missionId)
@@ -196,8 +202,8 @@ export class MissionController {
     return result
   }
   cancelTask(input: { taskId: string; rationale: string; actor: string }) {
-    const result = this.write('cancel_task', () =>
-      projectTask(
+    const result = this.write('cancel_task', () => {
+      const task = projectTask(
         this.ctx,
         transitionTaskStage(this.ctx, {
           taskId: input.taskId,
@@ -206,7 +212,13 @@ export class MissionController {
           actor: input.actor
         })
       )
-    )
+      resolveBlockedMessages(this.ctx, {
+        ...input,
+        missionId: task.missionId,
+        decision: 'canceled'
+      })
+      return task
+    })
     this.scheduleAfterWrite(result.missionId, 'stage_change')
     return result
   }

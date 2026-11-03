@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   TaskCancelParams,
+  TaskAdjustParams,
   TaskCreateParams,
   TaskListItemSchema,
   TaskListParams,
@@ -15,6 +16,33 @@ const create = {
   provenance
 }
 describe('axiom.task params', () => {
+  it('accepts rationale-only adjustment and bounded explicit scope and retry additions', () => {
+    expect(TaskAdjustParams.parse({ taskId: 't', rationale: 'Reviewed' })).toEqual({
+      taskId: 't',
+      rationale: 'Reviewed',
+      addAllowedPaths: []
+    })
+    expect(
+      TaskAdjustParams.parse({
+        taskId: 't',
+        rationale: 'Reviewed',
+        addAllowedPaths: [' src/check.ts '],
+        maxAttempts: 3
+      })
+    ).toMatchObject({ addAllowedPaths: ['src/check.ts'], maxAttempts: 3 })
+    for (const extra of [
+      { rationale: '' },
+      { addAllowedPaths: [' '] },
+      { addAllowedPaths: Array(51).fill('src/check.ts') },
+      { maxAttempts: 0 },
+      { maxAttempts: 1.5 },
+      { stage: 'READY' }
+    ]) {
+      expect(
+        TaskAdjustParams.safeParse({ taskId: 't', rationale: 'Reviewed', ...extra }).success
+      ).toBe(false)
+    }
+  })
   it.each([
     [
       'list',

@@ -20,6 +20,11 @@ export function workerProtocol(
   channel: 'tui' | 'headless' = 'tui',
   provider = 'codex'
 ): string {
+  const selfChecks = [
+    'Before finishing, run the commands under "Required verification commands" that can run in this worktree, then re-read the complete diff against acceptanceCriteria and the repository rules (AGENTS.md, CLAUDE.md and REVIEW.md where present).',
+    'List every check not run in checksRun with result: "skipped" and a note; checksRun never decides the verdict.',
+    "Use only this worktree's own toolchain: never symlink, copy or borrow node_modules, .bin or caches from any other directory; when dependencies are missing, say so in limitations."
+  ]
   if (channel === 'headless') {
     return markdownSection(
       'Axiom Worker protocol',
@@ -31,7 +36,11 @@ export function workerProtocol(
               'Read AGENTS.md and CLAUDE.md at the worktree root before changing anything; they are not auto-loaded in isolation mode. The Worker does not need the axiom CLI; the host submits on exit.'
             ]
           : []),
-        'The sandbox has no network and an empty package store, so do not try to install dependencies; verification runs the Mission’s setup commands; list checks you could not run in checksRun with result: "fail" and a note.',
+        'The sandbox has no network and an empty package store, so do not try to install dependencies; verification runs the Mission’s setup commands.',
+        ...selfChecks,
+        'Set outcome to {"outcome":"submitted"} when the tree contains the change.',
+        'Set outcome to {"outcome":"no_change","reason":"candidate_already_correct"} when the failing check is wrong about this tree, or use reason "cannot_reproduce" when the failure does not occur here; in both cases change nothing and explain in summary.',
+        'Set outcome to {"outcome":"blocked","reason":"blocked_by_scope","paths":["exact/path"]} when failing checks can only be fixed outside allowedPaths; stop, do not edit outside allowedPaths, and do not submit an unchanged tree as submitted.',
         'Never spawn Workers or mark Tasks verified, integrated, or complete. A submission is a report, not verification.',
         'Write non-code deliverables and required evidence under .axiom/artifacts/ and list their paths, kinds and media types in artifacts. The host stores and attributes them; .axiom/ is excluded from the Candidate.',
         'If your context gets compacted, re-read .axiom/prompt.md before continuing: this prompt is the recovery point for this Attempt.',
@@ -58,6 +67,8 @@ export function workerProtocol(
     [
       'Use only the Axiom CLI to communicate with the Control Plane. Add the verb-specific payload to each command.',
       'Never spawn Workers or mark Tasks verified, integrated, or complete. A submission is a report, not verification.',
+      ...selfChecks,
+      'If the failing check is wrong about this tree (candidate_already_correct), cannot be reproduced (cannot_reproduce), or requires files outside allowedPaths (blocked_by_scope), report the conclusion before stopping with axiom attempt blocked --attempt {{attemptId}} --reason <reason> --summary <explanation> and repeat --path <exact/path> for the out-of-scope files; do not edit outside allowedPaths.',
       '',
       '```sh',
       ...verbs.map(

@@ -4,6 +4,12 @@ import type { ArtifactStore } from '../artifacts/artifact-store'
 import type { AttemptBaseline } from '../execution/attempt-baseline'
 import { findSubmissionTranscriptArtifactId } from '../execution/attempt-projection'
 import { redactContext } from './redaction'
+import {
+  quote,
+  quotedPaths,
+  boundedAttemptEvidence,
+  type AttemptEvidenceLine
+} from './previous-attempt-text'
 
 const Checks = z.array(
   z.object({
@@ -103,12 +109,81 @@ async function readExcerpts(artifacts: ArtifactStore, artifactId: unknown) {
   }
 }
 
+const Adjustment = z.object({
+  before: z.object({ maxAttempts: z.number() }),
+  after: z.object({
+    afterAttemptSeq: z.number().int(),
+    addedPaths: z.array(z.string()).max(50),
+    maxAttempts: z.number(),
+    rationale: z.string()
+  })
+})
+function declarationLines(store: AxiomStore, baseline: AttemptBaseline) {
+  const skippedAttempts = 'skippedAttempts' in baseline ? baseline.skippedAttempts : []
+  const task =
+    baseline.kind === 'candidate'
+      ? store.getTaskStage(baseline.candidate.taskId)
+      : skippedAttempts[0]
+        ? store.getAttemptBindingByDispatch(skippedAttempts[0].attemptId)
+        : undefined
+  const lines: AttemptEvidenceLine[] = skippedAttempts.map((attempt) => {
+    const summary = attempt.reportSummary === null ? '(no summary)' : quote(attempt.reportSummary)
+    const declaration =
+      attempt.kind === 'unchanged'
+        ? 'exited without changing this Candidate'
+        : attempt.kind === 'no_change'
+          ? `declared no_change (${attempt.reason})`
+          : `declared blocked_by_scope naming ${quotedPaths(attempt.paths ?? [])}`
+    return {
+      seq: attempt.seq,
+      kind: 'declaration',
+      text: `Attempt ${attempt.seq} ${declaration}; its report said: ${summary}`
+    }
+  })
+  if (task) {
+    for (const audit of store.listAuditEvents({ missionId: task.missionId })) {
+      if (
+        audit.event !== 'task.adjusted' ||
+        audit.objectKind !== 'task' ||
+        audit.objectId !== task.taskId
+      ) {
+        continue
+      }
+      const parsed = Adjustment.safeParse(audit)
+      if (
+        !parsed.success ||
+        parsed.data.after.afterAttemptSeq <
+          (baseline.kind === 'candidate' ? baseline.previousSeq : 1)
+      ) {
+        continue
+      }
+      const { before, after } = parsed.data
+      const changes = [
+        ...(after.addedPaths.length
+          ? [`allowedPaths now also include ${quotedPaths(after.addedPaths)}`]
+          : []),
+        ...(before.maxAttempts !== after.maxAttempts
+          ? [`maxAttempts ${before.maxAttempts} → ${after.maxAttempts}`]
+          : []),
+        `rationale: ${quote(after.rationale)}`
+      ]
+      lines.push({
+        seq: after.afterAttemptSeq,
+        kind: 'adjustment',
+        text: `A human adjusted this Task after Attempt ${after.afterAttemptSeq}: ${changes.join('; ')}`
+      })
+    }
+  }
+  return boundedAttemptEvidence(lines)
+}
+
 export async function previousAttemptSection(
   store: AxiomStore,
   artifacts: ArtifactStore,
   baseline: AttemptBaseline,
   channel: 'tui' | 'headless' = 'tui'
 ): Promise<{ source: string; content: string }> {
+  const declarations = declarationLines(store, baseline)
   if (baseline.kind === 'integration') {
     if (baseline.reason === 'first_attempt') {
       return { source: 'previous-attempt:m2', content: 'none (first attempt)' }
@@ -123,38 +198,15 @@ export async function previousAttemptSection(
         ...contentFindings(baseline.verificationRun.verdictDetail)
       )
     }
+    lines.push(...declarations.lines)
     return { source: `previous-attempt:${baseline.reason}`, content: lines.join('\n') }
   }
   const { candidate, verificationRun: run, previousSeq } = baseline
   const detail = run.verdictDetail
-  let remaining = 8 * 1024
-  const unchangedLines: string[] = []
-  if (baseline.unchangedAttempts.length) {
-    const instruction =
-      'If the failures below cannot be fixed inside allowedPaths, say so in limitations and name the paths or commands at fault; do not submit an unchanged tree.'
-    remaining -= Buffer.byteLength(instruction) + 1
-    for (const attempt of baseline.unchangedAttempts) {
-      // Quote untrusted Worker text as a single line so it cannot introduce prompt sections.
-      const summary =
-        attempt.reportSummary === null
-          ? '(no summary)'
-          : JSON.stringify(redactContext(attempt.reportSummary).content.slice(0, 500))
-              .replaceAll('`', '\\u0060')
-              .replaceAll('<', '\\u003c')
-              .replaceAll('>', '\\u003e')
-      const line = `Attempt ${attempt.seq} exited without changing this Candidate; its report said: ${summary}`
-      const bytes = Buffer.byteLength(line) + 1
-      if (bytes > remaining) {
-        break
-      }
-      unchangedLines.push(line)
-      remaining -= bytes
-    }
-    unchangedLines.push(instruction)
-  }
+  let remaining = declarations.remaining
   const lines = [
     `This Attempt continues the previous Candidate ${candidate.commitSha} from Attempt ${previousSeq}; fix the failures below in this tree. Do not weaken, skip or delete tests, assertions, lint rules or checks to make them pass.`,
-    ...unchangedLines,
+    ...declarations.lines,
     `Verdict: ${run.status}; reason: ${typeof detail.reason === 'string' ? detail.reason : 'unknown'}`
   ]
   const checks = Checks.safeParse(detail.checks)

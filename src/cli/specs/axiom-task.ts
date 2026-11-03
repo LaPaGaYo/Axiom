@@ -3,6 +3,25 @@ import { GLOBAL_FLAGS } from '../args'
 
 export const AXIOM_TASK_COMMAND_SPECS: CommandSpec[] = [
   {
+    path: ['task', 'adjust'],
+    summary: 'Adjust an idle Task scope or retry budget with a recorded rationale',
+    usage:
+      'axiom task adjust --task <id> --rationale <text> [--add-path <path>] [--max-attempts <n>] [--retry-request <id>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'task',
+      'rationale',
+      'add-path',
+      'max-attempts',
+      'retry-request'
+    ],
+    repeatableFlags: ['add-path'],
+    examples: [
+      'axiom task adjust --task task_123 --rationale "Reviewed scope" --add-path src/check.ts'
+    ],
+    notes: ['Human Task adjustments are accepted only through the Axiom desktop app.']
+  },
+  {
     path: ['task', 'create'],
     summary: 'Add a Task to the approved Mission plan',
     usage:

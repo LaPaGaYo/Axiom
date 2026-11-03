@@ -5,6 +5,7 @@ export const AXIOM_MUTATION_METHODS = [
   'axiom.message.answer',
   'axiom.message.resolve',
   'axiom.task.create',
+  'axiom.task.adjust',
   'axiom.attempt.inform',
   'axiom.attempt.request',
   'axiom.attempt.blocked',

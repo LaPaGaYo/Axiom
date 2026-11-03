@@ -1,7 +1,12 @@
 import { z } from 'zod'
 import { AxiomIdSchema } from './mission-objects'
 import { AttemptStateSchema, type AttemptState } from './lifecycle'
-import { MessageRelatedSchema, MessageSummarySchema, SubtaskRequestSchema } from './message-params'
+import {
+  BlockedMessageSchema,
+  MessageRelatedSchema,
+  MessageSummarySchema,
+  SubtaskRequestSchema
+} from './message-params'
 import { CandidateSchema, SubmissionSchema, SubmissionReportSchema } from './submission-params'
 
 const AttemptSenderFields = {
@@ -29,7 +34,9 @@ export const AttemptMessageParams = z
   .strict()
 export const AttemptInformParams = AttemptMessageParams
 export const AttemptRequestParams = AttemptMessageParams
-export const AttemptBlockedParams = AttemptMessageParams
+export const AttemptBlockedParams = AttemptMessageParams.extend({
+  blocked: BlockedMessageSchema.optional()
+})
 export const AttemptHandoffParams = AttemptMessageParams
 export const AttemptRequestSubtaskParams = AttemptMessageParams.extend({
   subtask: SubtaskRequestSchema

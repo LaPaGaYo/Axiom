@@ -17,7 +17,8 @@ export const AXIOM_MESSAGE_HANDLERS: Record<string, CommandHandler> = {
       (value) =>
         MessageListResponseSchema.parse(value)
           .messages.map(
-            (m) => `${m.id}  ${m.type}  ${m.pending ? 'pending' : 'resolved'}  ${m.summary}`
+            (m) =>
+              `${m.id}  ${m.type}  ${m.pending ? 'pending' : 'resolved'}  ${m.summary}${m.pending && m.blocked ? `  ${m.blocked.reason}${m.blocked.paths.length ? `: ${m.blocked.paths.join(', ')}` : ''}` : ''}`
           )
           .join('\n')
     )

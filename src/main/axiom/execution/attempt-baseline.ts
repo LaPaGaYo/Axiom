@@ -3,20 +3,31 @@ import type { VerificationRun } from '../../../shared/axiom-contract/verificatio
 import type { AxiomStore } from '../db/axiom-store'
 import { z } from 'zod'
 
-const UnchangedFailure = z.object({
-  settlement: z.object({ kind: z.literal('unchanged') }),
+const SkippedFailure = z.object({
+  settlement: z.object({
+    kind: z.enum(['unchanged', 'no_change', 'blocked']),
+    reason: z
+      .enum(['blocked_by_scope', 'candidate_already_correct', 'cannot_reproduce'])
+      .optional(),
+    paths: z.array(z.string()).max(50).optional()
+  }),
   reportSummary: z.string().nullable().optional()
 })
-type UnchangedAttempt = { seq: number; attemptId: string; reportSummary: string | null }
+type SkippedAttempt = z.infer<typeof SkippedFailure>['settlement'] & {
+  seq: number
+  attemptId: string
+  reportSummary: string | null
+}
 
 export type AttemptBaseline =
   | {
       kind: 'integration'
-      reason:
-        | 'first_attempt'
-        | 'previous_attempt_not_submitted'
-        | 'previous_candidate_superseded'
-        | 'previous_verification_not_failed'
+      reason: 'first_attempt' | 'previous_candidate_superseded' | 'previous_verification_not_failed'
+    }
+  | {
+      kind: 'integration'
+      reason: 'previous_attempt_not_submitted'
+      skippedAttempts: SkippedAttempt[]
     }
   | { kind: 'integration'; reason: 'secret_detected'; verificationRun: VerificationRun }
   | {
@@ -24,7 +35,7 @@ export type AttemptBaseline =
       previousSeq: number
       candidate: Candidate
       verificationRun: VerificationRun
-      unchangedAttempts: UnchangedAttempt[]
+      skippedAttempts: SkippedAttempt[]
     }
 
 export function previousAttemptSubmission(
@@ -35,7 +46,7 @@ export function previousAttemptSubmission(
   return previous?.dispatchId ? store.getSubmissionByDispatch(previous.dispatchId) : undefined
 }
 
-/** D64 / D85: walk only across audited unchanged exits, never arbitrary failures. */
+/** D64 / D85: walk only across audited unchanged or declared exits, never arbitrary failures. */
 export function resolveAttemptBaseline(
   store: AxiomStore,
   input: { taskId: string; seq: number }
@@ -45,7 +56,7 @@ export function resolveAttemptBaseline(
   }
   let previousSeq = input.seq - 1
   let submission = previousAttemptSubmission(store, input)
-  const unchangedAttempts: UnchangedAttempt[] = []
+  const skippedAttempts: SkippedAttempt[] = []
   const binding = store.getAttemptBinding(input.taskId, previousSeq)
   const failures = new Map(
     (binding ? store.listAuditEvents({ missionId: binding.missionId }) : [])
@@ -54,11 +65,12 @@ export function resolveAttemptBaseline(
   )
   while (!submission && previousSeq >= 1) {
     const previous = store.getAttemptBinding(input.taskId, previousSeq)
-    const failure = UnchangedFailure.safeParse(failures.get(previous?.dispatchId ?? ''))
+    const failure = SkippedFailure.safeParse(failures.get(previous?.dispatchId ?? ''))
     if (!previous?.dispatchId || !failure.success) {
       break
     }
-    unchangedAttempts.push({
+    skippedAttempts.unshift({
+      ...failure.data.settlement,
       seq: previousSeq,
       attemptId: previous.dispatchId,
       reportSummary: failure.data.reportSummary ?? null
@@ -67,7 +79,7 @@ export function resolveAttemptBaseline(
     submission = previousAttemptSubmission(store, { taskId: input.taskId, seq: previousSeq + 1 })
   }
   if (!submission) {
-    return { kind: 'integration', reason: 'previous_attempt_not_submitted' }
+    return { kind: 'integration', reason: 'previous_attempt_not_submitted', skippedAttempts }
   }
   const candidate = store.getCandidate(submission.candidateId)
   if (candidate?.status !== 'ACTIVE') {
@@ -88,6 +100,6 @@ export function resolveAttemptBaseline(
     previousSeq,
     candidate,
     verificationRun,
-    unchangedAttempts: unchangedAttempts.sort((a, b) => a.seq - b.seq)
+    skippedAttempts
   }
 }

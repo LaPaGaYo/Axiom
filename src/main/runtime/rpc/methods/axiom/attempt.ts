@@ -4,6 +4,7 @@ import { submitAttempt } from '../../../../axiom/execution/attempt-submission'
 import type { z } from 'zod'
 import {
   AttemptMessageParams,
+  AttemptBlockedParams,
   AttemptSubmitParams,
   AttemptAskParams,
   AttemptRequestSubtaskParams,
@@ -26,7 +27,7 @@ import { parseMessageTypes } from '../orchestration/routing'
 
 function sendAttemptMessage(
   type: 'INFORM' | 'REQUEST' | 'BLOCKED' | 'HANDOFF' | 'REQUEST_SUBTASK',
-  p: z.infer<typeof AttemptMessageParams> | z.infer<typeof AttemptRequestSubtaskParams>,
+  p: z.infer<typeof AttemptBlockedParams> | z.infer<typeof AttemptRequestSubtaskParams>,
   ctx: RpcContext
 ) {
   const {
@@ -59,7 +60,8 @@ function sendAttemptMessage(
         summary: p.summary,
         artifactIds: p.artifactIds,
         related: p.related,
-        ...('subtask' in p ? { subtask: p.subtask } : {})
+        ...('subtask' in p ? { subtask: p.subtask } : {}),
+        ...('blocked' in p ? { blocked: p.blocked } : {})
       }
     }
   )
@@ -93,7 +95,7 @@ export const AXIOM_ATTEMPT_METHODS = [
   defineMethod({
     name: 'axiom.attempt.blocked',
     permission: 'workspace',
-    params: AttemptMessageParams,
+    params: AttemptBlockedParams,
     handler: (p, ctx) => sendAttemptMessage('BLOCKED', p, ctx)
   }),
   defineMethod({

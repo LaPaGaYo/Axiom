@@ -2,10 +2,12 @@ import { expect, it } from 'vitest'
 import {
   AXIOM_MESSAGE_TYPES,
   AxiomMessagePayloadSchema,
-  axiomMessageRoutingType
+  axiomMessageRoutingType,
+  parseAxiomMessagePayload
 } from './message-params'
 import {
   AttemptMessageParams,
+  AttemptBlockedParams,
   AttemptRequestSubtaskParams,
   AttemptCheckParams
 } from './attempt-params'
@@ -38,6 +40,43 @@ it('maps all eight product types without extending Orca routing types', () => {
     'escalation',
     'worker_done'
   ])
+})
+
+it('keeps typed BLOCKED reasons and paths through RPC and stored payload parsing', () => {
+  for (const reason of ['blocked_by_scope', 'candidate_already_correct', 'cannot_reproduce']) {
+    const blocked = { reason, paths: ['src/check.ts'] }
+    const payload = { axiom: { ...fields, type: 'BLOCKED', blocked } }
+    expect(AxiomMessagePayloadSchema.parse(payload).axiom.blocked).toEqual(blocked)
+    expect(parseAxiomMessagePayload(JSON.stringify(payload))?.axiom.blocked).toEqual(blocked)
+    expect(
+      AttemptBlockedParams.parse({
+        from: 'term_worker',
+        attemptId: 'a',
+        summary: 'Blocked',
+        blocked
+      }).blocked
+    ).toEqual(blocked)
+  }
+  expect(
+    AxiomMessagePayloadSchema.parse({
+      axiom: { ...fields, type: 'BLOCKED', blocked: { reason: 'cannot_reproduce' } }
+    }).axiom.blocked?.paths
+  ).toEqual([])
+})
+it('rejects blocked payloads on other types, invalid reasons, empty paths and unknown fields', () => {
+  const blocked = { reason: 'blocked_by_scope', paths: ['src/check.ts'] }
+  for (const extra of [
+    { type: 'INFORM', blocked },
+    { blocked: { reason: 'other' } },
+    { blocked: { ...blocked, paths: [' '] } },
+    { blocked: { ...blocked, paths: Array(51).fill('src/check.ts') } },
+    { blocked: { ...blocked, extra: true } }
+  ]) {
+    expect(
+      AxiomMessagePayloadSchema.safeParse({ axiom: { ...fields, type: 'BLOCKED', ...extra } })
+        .success
+    ).toBe(false)
+  }
 })
 it('requires subtask only for REQUEST_SUBTASK and rejects unknown payload fields/types', () => {
   expect(

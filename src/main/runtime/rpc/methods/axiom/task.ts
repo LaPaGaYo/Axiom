@@ -2,12 +2,26 @@ import { defineMethod } from '../../core'
 import {
   TaskListParams,
   TaskCreateParams,
+  TaskAdjustParams,
   TaskShowParams,
   TaskCancelParams
 } from '../../../../../shared/axiom-contract/task-params'
 import { getAxiomControlPlane, taskListItem } from '../../../../axiom/control-plane'
 
 export const AXIOM_TASK_METHODS = [
+  defineMethod({
+    name: 'axiom.task.adjust',
+    permission: 'workspace',
+    params: TaskAdjustParams,
+    handler: (p, { runtime, recordMutationReceipt }) => {
+      const { missions, store } = getAxiomControlPlane(runtime)
+      return store.transaction('task_adjust_receipt', () => {
+        const result = { task: taskListItem(missions.adjustTask({ ...p, actor: 'user' })) }
+        recordMutationReceipt?.(result)
+        return result
+      })
+    }
+  }),
   defineMethod({
     name: 'axiom.task.create',
     permission: 'workspace',

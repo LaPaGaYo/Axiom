@@ -5,6 +5,33 @@ let f: ReturnType<typeof channelFixture>
 beforeEach(() => {
   f = channelFixture()
 })
+it('derives typed BLOCKED pending state from resolution audits without making plain reports pending', async () => {
+  for (const blocked of [undefined, { reason: 'blocked_by_scope', paths: ['src/check.ts'] }]) {
+    expect(
+      await f.call('axiom.attempt.blocked', {
+        from: f.t01.from,
+        attemptId: f.t01.attemptId,
+        summary: 'Blocked',
+        ...(blocked ? { blocked } : {})
+      })
+    ).toMatchObject({ ok: true })
+  }
+  const messages = f.store.listMessages({ missionId: f.mission.id })
+  expect(messages).toMatchObject([
+    { pending: false },
+    { pending: true, blocked: { reason: 'blocked_by_scope', paths: ['src/check.ts'] } }
+  ])
+  f.store.appendAuditEvent({
+    missionId: f.mission.id,
+    actor: 'user',
+    objectKind: 'message',
+    objectId: messages[1]!.id,
+    event: 'blocked.resolved',
+    before: null,
+    after: { decision: 'adjusted' }
+  })
+  expect(f.store.listMessages({ missionId: f.mission.id, pendingOnly: true })).toEqual([])
+})
 afterEach(() => {
   f.db.close()
   vi.restoreAllMocks()

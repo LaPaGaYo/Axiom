@@ -77,3 +77,7 @@ it('validates the final fenced report, refusing supplied filesChanged and traili
     parseHeadlessReport(message.replace('"summary"', '"filesChanged":[],"summary"'))
   ).toThrow()
 })
+
+it('recognizes a failed turn even when the event has no error text', () => {
+  expect(parseHeadlessWorkerEvents(jsonl({ type: 'turn.failed' })).turnFailed).toBe(true)
+})

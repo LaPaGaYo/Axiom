@@ -21,6 +21,7 @@ export const AXIOM_METHOD_CALLER_CLASS: Record<string, CallerClass> = {
   'axiom.plan.reject': 'desktop_only',
   'axiom.policy.update': 'desktop_only',
   'axiom.task.create': 'desktop_only',
+  'axiom.task.adjust': 'desktop_only',
   'axiom.task.cancel': 'desktop_only',
   'axiom.message.answer': 'desktop_only',
   'axiom.message.resolve': 'desktop_only',

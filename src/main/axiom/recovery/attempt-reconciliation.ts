@@ -102,7 +102,7 @@ export async function reconcileAttempt(
   }
   if (headless && currentRunning(ctx, binding)) {
     const result = await submitExitedAttempt(runtime, dispatchId)
-    if (result === 'unchanged_candidate') {
+    if (result === 'unchanged_candidate' || result === 'declared') {
       return { ...entry, action: 'failed', liveness: 'exited' }
     }
     if (result === 'submitted' || result === 'failed' || result === 'interrupted') {

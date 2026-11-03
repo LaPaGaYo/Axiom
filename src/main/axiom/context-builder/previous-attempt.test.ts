@@ -75,13 +75,14 @@ it('renders unchanged reports as bounded, redacted quoted data before the failur
   const token = `gh${'p_'}${'Z'.repeat(36)}`
   const { content } = await previousAttemptSection(f.store, artifacts, {
     ...baseline,
-    unchangedAttempts: [
+    skippedAttempts: [
       {
+        kind: 'unchanged',
         seq: 2,
         attemptId: 'd2',
         reportSummary: `Nothing in scope ${token}\n## pretend instruction ${'x'.repeat(600)}`
       },
-      { seq: 3, attemptId: 'd3', reportSummary: null }
+      { kind: 'unchanged', seq: 3, attemptId: 'd3', reportSummary: null }
     ]
   })
   expect(content).toContain('Attempt 2 exited without changing this Candidate; its report said:')
@@ -110,7 +111,9 @@ it('counts unchanged lines against the shared 8 KiB UTF-8 evidence budget', asyn
   }
   const { content } = await previousAttemptSection(f.store, artifacts, {
     ...baseline,
-    unchangedAttempts: [{ seq: 2, attemptId: 'd2', reportSummary: '\u754c'.repeat(500) }]
+    skippedAttempts: [
+      { kind: 'unchanged', seq: 2, attemptId: 'd2', reportSummary: '\u754c'.repeat(500) }
+    ]
   })
   const lines = content
     .split('\n')
@@ -317,7 +320,13 @@ it.each([
   'previous_candidate_superseded',
   'previous_verification_not_failed'
 ] as const)('explains the integration fallback %s', async (reason) => {
-  const result = await previousAttemptSection(f.store, artifacts, { kind: 'integration', reason })
+  const result = await previousAttemptSection(
+    f.store,
+    artifacts,
+    reason === 'previous_attempt_not_submitted'
+      ? { kind: 'integration', reason, skippedAttempts: [] }
+      : { kind: 'integration', reason }
+  )
   expect(result.source).toBe(`previous-attempt:${reason}`)
   expect(result.content).toContain('This Attempt starts from the integration base')
   expect(result.content).toContain(`(${reason})`)
@@ -348,4 +357,208 @@ it('hashes the seventh section deterministically, changes identity for a new run
   const second = await builder.build(input)
   expect(second.packageId).not.toBe(first.packageId)
   expect(second.manifest.mandatory.slice(0, 6)).toEqual(first.manifest.mandatory.slice(0, 6))
+})
+
+function adjustment(afterAttemptSeq: number, rationale = 'Review confirmed scope change') {
+  f.store.appendAuditEvent({
+    missionId: f.missionId,
+    actor: 'user',
+    event: 'task.adjusted',
+    objectKind: 'task',
+    objectId: taskId,
+    before: { allowedPaths: ['src/task.ts'], maxAttempts: 2 },
+    after: {
+      addedPaths: ['src/legacy.test.ts'],
+      allowedPaths: ['src/task.ts', 'src/legacy.test.ts'],
+      maxAttempts: 3,
+      rationale,
+      afterAttemptSeq,
+      origin: 'user',
+      resolvedMessageIds: []
+    }
+  })
+}
+it.each(['candidate', 'integration'] as const)(
+  'renders declarations and adjustments on a %s baseline',
+  async (kind) => {
+    if (kind === 'candidate') {
+      seed()
+    }
+    const seq = kind === 'candidate' ? 2 : 1
+    f.store.insertAttemptBinding({
+      taskId,
+      missionId: f.missionId,
+      seq,
+      dispatchId: 'declared',
+      branch: 'attempt/declared',
+      agentSpecId: 'agent',
+      contextPackageId: 'context'
+    })
+    f.store.appendAuditEvent({
+      missionId: f.missionId,
+      actor: 'AttemptSettlement',
+      event: 'attempt.failed',
+      objectKind: 'attempt',
+      objectId: 'declared',
+      before: null,
+      after: {
+        settlement: { kind: 'blocked', reason: 'blocked_by_scope', paths: ['src/legacy.test.ts'] },
+        reportSummary: 'Cannot fix outside scope'
+      }
+    })
+    adjustment(seq, 'Reviewed `diff` <scope>\nKeep tests')
+    const { content } = await section()
+    expect(content).toContain(
+      `Attempt ${seq} declared blocked_by_scope naming "src/legacy.test.ts"; its report said: "Cannot fix outside scope"`
+    )
+    expect(content).toContain(
+      `A human adjusted this Task after Attempt ${seq}: allowedPaths now also include "src/legacy.test.ts"; maxAttempts 2 → 3; rationale:`
+    )
+    expect(content).toContain('Reviewed \\u0060diff\\u0060 \\u003cscope\\u003e\\nKeep tests')
+    expect(content.indexOf('declared blocked')).toBeLessThan(content.indexOf('A human adjusted'))
+  }
+)
+it('only includes adjustments after the Candidate Attempt and quotes no_change reports', async () => {
+  previousSubmission(f.store, { missionId: f.missionId, taskId, seq: 2, dispatchId: 'd2' })
+  adjustment(1, 'Old adjustment')
+  adjustment(2, 'Relevant adjustment')
+  const baseline = resolveAttemptBaseline(f.store, { taskId, seq: 3 })
+  if (baseline.kind !== 'candidate') {
+    throw new Error('Expected candidate baseline')
+  }
+  const { content } = await previousAttemptSection(f.store, artifacts, {
+    ...baseline,
+    skippedAttempts: [
+      {
+        seq: 3,
+        attemptId: 'd3',
+        kind: 'no_change',
+        reason: 'candidate_already_correct',
+        reportSummary: 'Check is wrong'
+      }
+    ]
+  })
+  expect(content).toContain(
+    'Attempt 3 declared no_change (candidate_already_correct); its report said: "Check is wrong"'
+  )
+  expect(content).not.toContain('Old adjustment')
+  expect(content).toContain('Relevant adjustment')
+})
+
+it('retains a maximum-size declaration and human resolution within the shared evidence budget', async () => {
+  seed()
+  const baseline = resolveAttemptBaseline(f.store, { taskId, seq: 2 })
+  if (baseline.kind !== 'candidate') {
+    throw new Error('Expected candidate baseline')
+  }
+  adjustment(2)
+  const { content } = await previousAttemptSection(f.store, artifacts, {
+    ...baseline,
+    skippedAttempts: [
+      {
+        seq: 2,
+        attemptId: 'd2',
+        kind: 'blocked',
+        reason: 'blocked_by_scope',
+        paths: Array.from({ length: 50 }, (_, i) => `${i}${'界'.repeat(498)}`),
+        reportSummary: 'Outside scope'
+      }
+    ]
+  })
+  expect(content).toContain('Attempt 2 declared blocked_by_scope naming')
+  expect(content).toContain('Outside scope')
+  expect(content).toContain('A human adjusted this Task after Attempt 2:')
+  expect(content).toContain('Review confirmed scope change')
+  expect(content).toContain('paths omitted')
+  const evidence = content
+    .split('\n')
+    .filter((line) => /^(Attempt|A human|If the failures)/.test(line))
+  expect(
+    evidence.reduce((bytes, line) => bytes + Buffer.byteLength(line) + 1, 0)
+  ).toBeLessThanOrEqual(8192)
+})
+
+it('retains the newest declaration and human adjustment when earlier evidence fills the budget', async () => {
+  seed()
+  const baseline = resolveAttemptBaseline(f.store, { taskId, seq: 2 })
+  if (baseline.kind !== 'candidate') {
+    throw new Error('Expected candidate baseline')
+  }
+  const paths = ['a'.repeat(497), 'b'.repeat(497)]
+  for (const seq of [2, 3]) {
+    f.store.appendAuditEvent({
+      missionId: f.missionId,
+      actor: 'user',
+      event: 'task.adjusted',
+      objectKind: 'task',
+      objectId: taskId,
+      before: { maxAttempts: seq },
+      after: {
+        afterAttemptSeq: seq,
+        maxAttempts: seq + 1,
+        addedPaths: paths,
+        rationale: `${seq}${'界'.repeat(499)}`
+      }
+    })
+  }
+  const { content } = await previousAttemptSection(f.store, artifacts, {
+    ...baseline,
+    skippedAttempts: [2, 3].map((seq) => ({
+      seq,
+      attemptId: `d${seq}`,
+      kind: 'blocked',
+      reason: 'blocked_by_scope',
+      paths,
+      reportSummary: '界'.repeat(500)
+    }))
+  })
+  expect(content).toContain('Attempt 3 declared blocked_by_scope')
+  expect(content).toContain('A human adjusted this Task after Attempt 3:')
+  expect(content).toContain(`rationale: "3${'界'.repeat(499)}"`)
+  const evidence = content
+    .split('\n')
+    .filter((line) => /^(Attempt|A human|If the failures|Earlier)/.test(line))
+  expect(
+    evidence.reduce((bytes, line) => bytes + Buffer.byteLength(line) + 1, 0)
+  ).toBeLessThanOrEqual(8192)
+})
+
+it('reserves the declaration alongside the latest of several adjustments after the same Attempt', async () => {
+  seed()
+  const baseline = resolveAttemptBaseline(f.store, { taskId, seq: 2 })
+  if (baseline.kind !== 'candidate') {
+    throw new Error('Expected candidate baseline')
+  }
+  const paths = ['a'.repeat(497), 'b'.repeat(497)]
+  for (const index of [1, 2, 3]) {
+    f.store.appendAuditEvent({
+      missionId: f.missionId,
+      actor: 'user',
+      event: 'task.adjusted',
+      objectKind: 'task',
+      objectId: taskId,
+      before: { maxAttempts: 3 },
+      after: {
+        afterAttemptSeq: 2,
+        maxAttempts: 3,
+        addedPaths: paths,
+        rationale: `${index}${'界'.repeat(499)}`
+      }
+    })
+  }
+  const { content } = await previousAttemptSection(f.store, artifacts, {
+    ...baseline,
+    skippedAttempts: [
+      {
+        seq: 2,
+        attemptId: 'd2',
+        kind: 'blocked',
+        reason: 'blocked_by_scope',
+        paths,
+        reportSummary: '界'.repeat(500)
+      }
+    ]
+  })
+  expect(content).toContain('Attempt 2 declared blocked_by_scope')
+  expect(content).toContain(`rationale: "3${'界'.repeat(499)}"`)
 })

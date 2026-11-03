@@ -102,7 +102,7 @@ READY_FOR_APPROVAL → FINALIZING（交付前目标分支 HEAD 已变，D70）
 ### 4.4 Task stage（项目级权威，`task_stages.stage`）
 ```text
 DEFINED → READY → RUNNING → SUBMITTED → VERIFYING → VERIFIED → INTEGRATION_READY → INTEGRATED
-RUNNING           → NEEDS_FIX（Attempt FAILED / STOPPED / ABANDONED 且重试预算未耗尽）
+RUNNING           → NEEDS_FIX（Attempt FAILED / STOPPED / ABANDONED；按原因与预算决定下一步）
 VERIFYING         → NEEDS_FIX（FAIL）
 INTEGRATION_READY → NEEDS_FIX（IntegrationBatch CONFLICT 或 FAILED，候选 SUPERSEDED，D79）
 NEEDS_FIX         → READY（新 Attempt）
@@ -111,9 +111,10 @@ BLOCKED           → 按原因解除（D70 修订）：回到进入前的非运
 ```
 - `READY` = 上游依赖全部 `INTEGRATED`（V1 只支持这一阈值，D69 修订）∧ PlanRevision APPROVED ∧ Mission EXECUTING ∧ 无阻塞 Question/Approval ∧ 预算未耗尽。
 - `INTEGRATION_READY` = `VERIFIED` ∧ 全部上游依赖 `INTEGRATED`；条件在进入时评估。高风险 Approval 只在批次 `PROMOTABLE` 之后（§4.9，D79），Task 级不再要求 Approval。
-- `BLOCKED` 的进入原因与解除（D70 修订、D79）：重试预算耗尽（`retry_budget_exhausted`：经 Approval 提升预算 → READY，或取消 / replan）、`HUMAN_REVIEW` 等待（review 收敛）、批次 Approval 被拒（`approval_denied`：带理由重做 → NEEDS_FIX，或取消）、阻塞 Question（答复后 Attempt 仍活着 → RUNNING，已结束 → READY，答复进强制上下文）；其余原因解除后回 READY，不回 RUNNING。
+- `BLOCKED` 的进入原因与解除（D70 修订、D79）：重试预算耗尽（`retry_budget_exhausted`：V1 经桌面 `axiom.task.adjust` 提升 Task maxAttempts → READY，M4 接 Approval；或取消 / replan）、`HUMAN_REVIEW` 等待（review 收敛）、批次 Approval 被拒（`approval_denied`：带理由重做 → NEEDS_FIX，或取消）、阻塞 Question（答复后 Attempt 仍活着 → RUNNING，已结束 → READY，答复进强制上下文）；其余原因解除后回 READY，不回 RUNNING。
 - `INTEGRATED` = 所属 IntegrationBatch 已 `PROMOTED`（候选已成为集成基线的一部分）。
-- 重试预算耗尽 → `BLOCKED(retry_budget_exhausted)`：人选经 Approval 加预算、取消，或重新规划（V1 的 replan 只由人发起，D8 修订；B4）。
+- D85 / M3-04b：headless 声明 `blocked_by_scope` → `BLOCKED(scope)`；`candidate_already_correct` / `cannot_reproduce` → `BLOCKED(candidate_disputed)`，均先经 `NEEDS_FIX`、不自动重试。桌面专用 `axiom.task.adjust`（CLI 形状 `axiom task adjust --task … --rationale … [--add-path …] [--max-attempts …]`）以 MINOR_ADJUSTMENT 调整范围 / 预算，或只记录复核 rationale，经持久化 `previousStage=NEEDS_FIX` 回 `READY`；也可取消。调整后须 `attemptCount < maxAttempts`，否则整笔回滚。V1 的人工预算授权使用 desktop-only 方法，Approval 对象留至 M4；已退出的声明 Attempt 仍占一个 seq 并计入 `maxAttempts`。声明不推翻确定性 FAIL；同 Candidate 重验留给 M3-05。
+- 重试预算耗尽 → `BLOCKED(retry_budget_exhausted)`：人选上述预算调整、取消，或重新规划（V1 的 replan 只由人发起，D8 修订；B4）。
 - 终态：`INTEGRATED`、`CANCELED`。
 
 ### 4.5 Task 执行投影（Orca `tasks.status`，非权威）
@@ -188,7 +189,11 @@ APPLYING / TESTING → QUEUED（应用重启时由 RecoveryService 丢弃临时�
 
 | 词汇 | 值与含义 |
 |---|---|
-| `settlement.kind` | Attempt 退出分类：`failed`、`interrupted`，以及 D85 的 `unchanged`（headless exit 0、有效报告、快照树等于 ACTIVE Candidate）。`unchanged` 仍记 `attempt.failed.reason = process_exited`，消耗一次重试；不是新生命周期状态。 |
+| `settlement.kind` | Attempt 退出分类：`failed`、`interrupted`，以及 D85 的 `unchanged`（headless exit 0、有效报告、快照树等于 ACTIVE Candidate）、`no_change`、`blocked`。后三者均记 `attempt.failed.reason = process_exited`；声明的两类不创建 Submission / Candidate、不自动重试，保留原因及只读 `worktreeChanged` 证据；不是新生命周期状态。 |
+| headless report `outcome` | 可选的判别联合：`{outcome: submitted}`（省略等同 submitted）、`{outcome: no_change, reason: candidate_already_correct \| cannot_reproduce}`、`{outcome: blocked, reason: blocked_by_scope, paths}`（1–50 条非空路径，每条 ≤500 字符）；是 Worker 声明，不能改变确定性 FAIL。终端 SubmissionReport 不变。 |
+| `task.adjusted` | 人经 `axiom.task.adjust` 改 Task spec / retryPolicy 的审计；记录前后 allowedPaths / maxAttempts、addedPaths、rationale、afterAttemptSeq、origin=user、resolvedMessageIds，并写 `plan.minor_adjustment`。调整与待处理项解决、stage 转换在同一事务。 |
+| `blocked.resolved` | 对带 `blocked {reason, paths}` 的 BLOCKED 消息的解决审计，objectKind=message / objectId=messageId，decision 为 adjusted 或 canceled；消息 pending 从是否存在该审计派生，无第二状态存储。 |
+| `skippedAttempts` | 基线回溯跨过的 `unchanged \| no_change \| blocked` Attempt（seq 升序）；下一 ContextPackage 引用声明与其后的人工作业调整，仍续 ACTIVE 且最新 FAIL 的 Candidate。首个 Attempt 声明后无 Submission 时从 integration 开始并保留这些行。 |
 | `evidence_command_invalid` | D85：模型提案的 `requiredEvidence` 不满足单行、无 shell 操作符、程序允许名单规则；`plan_invalid` 错误附精确字段 path，同回合退回 Planner；REQUEST_SUBTASK 对应 `evidence` 检查失败。 |
 | `plan_invalid` | D85 验证 verdict reason：evidence 命令失败且输出命中 `planInvalidPatterns`，check / run 为 INCONCLUSIVE、交人处置、Task 保持 VERIFYING；其他 check 的确定性 FAIL 仍优先。不是 Worker 的修复失败。 |
 | `TaskSpec.role` | 可选的非空字符串标签（M2-09 / DEF-4）；提案、批准物化与 Task spec 保留它，不参与 provider 路由、角色权限或 skills 物化。省略时保持既有行为。 |

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SubmissionReportSchema } from './submission-params'
+import { HeadlessSubmissionReportSchema, SubmissionReportSchema } from './submission-params'
 
 const report = {
   summary: 'Implemented the Task',
@@ -28,5 +28,37 @@ describe('Submission report contract', () => {
     { ...report, checksRun: [{ command: 'test', result: 'pass', extra: true }] }
   ])('rejects incomplete or untrusted report fields %#', (value) => {
     expect(SubmissionReportSchema.safeParse(value).success).toBe(false)
+  })
+})
+
+describe('Headless outcome contract', () => {
+  const { filesChanged: _filesChanged, ...headless } = { ...report, artifacts: [] }
+  it.each([
+    undefined,
+    { outcome: 'submitted' },
+    { outcome: 'no_change', reason: 'candidate_already_correct' },
+    { outcome: 'no_change', reason: 'cannot_reproduce' },
+    { outcome: 'blocked', reason: 'blocked_by_scope', paths: [' src/check.ts '] }
+  ])('accepts the declared outcome %j without adding it to terminal reports', (outcome) => {
+    const parsed = HeadlessSubmissionReportSchema.parse({ ...headless, outcome })
+    expect(parsed.outcome).toEqual(
+      outcome?.outcome === 'blocked' ? { ...outcome, paths: ['src/check.ts'] } : outcome
+    )
+    if (outcome) {
+      expect(SubmissionReportSchema.safeParse({ ...report, outcome }).success).toBe(false)
+    }
+  })
+  it.each([
+    { outcome: 'submitted', reason: 'cannot_reproduce' },
+    { outcome: 'no_change', reason: 'blocked_by_scope' },
+    { outcome: 'no_change' },
+    { outcome: 'blocked', reason: 'cannot_reproduce', paths: ['src/check.ts'] },
+    { outcome: 'blocked', reason: 'blocked_by_scope', paths: [] },
+    { outcome: 'blocked', reason: 'blocked_by_scope', paths: [' '] },
+    { outcome: 'blocked', reason: 'blocked_by_scope', paths: ['x'.repeat(501)] },
+    { outcome: 'blocked', reason: 'blocked_by_scope', paths: Array(51).fill('src/check.ts') },
+    { outcome: 'blocked', reason: 'blocked_by_scope', paths: ['src/check.ts'], extra: true }
+  ])('rejects invalid outcomes %j', (outcome) => {
+    expect(HeadlessSubmissionReportSchema.safeParse({ ...headless, outcome }).success).toBe(false)
   })
 })
