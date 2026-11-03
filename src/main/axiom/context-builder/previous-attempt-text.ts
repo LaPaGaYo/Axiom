@@ -41,11 +41,19 @@ export function quote(text: string): string {
   }
   return encode(characters.join(''))
 }
+/** Tool output (commands, test names, excerpt lines, paths): one JSON-quoted line, kept readable — no HTML escaping, so a name can be searched for verbatim. */
+export function quoteLine(text: string): string {
+  const characters = Array.from(redactContext(text).content.slice(0, 500))
+  while (Buffer.byteLength(JSON.stringify(characters.join(''))) > 1600) {
+    characters.pop()
+  }
+  return JSON.stringify(characters.join(''))
+}
 export function quotedPaths(paths: string[]): string {
   const displayed: string[] = []
   let remaining = 1024
   for (const path of paths) {
-    const quoted = quote(path)
+    const quoted = quoteLine(path)
     if (Buffer.byteLength(quoted) + 2 > remaining) {
       break
     }

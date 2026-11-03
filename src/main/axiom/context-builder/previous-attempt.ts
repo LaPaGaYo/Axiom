@@ -7,6 +7,7 @@ import { redactContext } from './redaction'
 import { acceptanceLines, persistentFailures, PreviousChecks } from './previous-acceptance'
 import {
   quote,
+  quoteLine,
   quotedPaths,
   boundedAttemptEvidence,
   boundedEvidenceSection,
@@ -60,7 +61,9 @@ function secretFindings(diff: unknown): string[] {
   return parsed.success && parsed.data.secrets.length
     ? [
         'Secret findings (path and pattern only):',
-        ...parsed.data.secrets.map(({ path, pattern }) => `- ${quote(path)} (${quote(pattern)})`)
+        ...parsed.data.secrets.map(
+          ({ path, pattern }) => `- ${quoteLine(path)} (${quoteLine(pattern)})`
+        )
       ]
     : []
 }
@@ -74,7 +77,7 @@ function contentFindings(detail: Record<string, unknown>): string[] {
         'Test tampering findings (path, rule, net count):',
         ...diff.data.tampering
           .slice(0, 50)
-          .map(({ path, rule, count }) => `- ${quote(path)} (${rule}, ${count})`),
+          .map(({ path, rule, count }) => `- ${quoteLine(path)} (${rule}, ${count})`),
         'Restore the removed tests or assertions and remove the added skips or suppressions; the next verification applies the same rules.'
       )
     }
@@ -196,7 +199,7 @@ export async function previousAttemptSection(
   const { candidate, verificationRun: run, previousSeq } = baseline
   const detail = run.verdictDetail
   const introduction = `This Attempt continues the previous Candidate ${candidate.commitSha} from Attempt ${previousSeq}; fix the failures below in this tree. Do not weaken, skip or delete tests, assertions, lint rules or checks to make them pass.`
-  const verdict = `Verdict: ${run.status}; reason: ${quote(typeof detail.reason === 'string' ? detail.reason : 'unknown')}`
+  const verdict = `Verdict: ${run.status}; reason: ${quoteLine(typeof detail.reason === 'string' ? detail.reason : 'unknown')}`
   const declarations = declarationLines(store, baseline, [introduction, verdict])
   let remaining = declarations.remaining
   const lines = [introduction, ...declarations.lines, verdict, ...acceptanceLines(detail)]
@@ -208,14 +211,14 @@ export async function previousAttemptSection(
     .sort((a, b) => a.index - b.index)) {
     lines.push(
       `Failed check ${check.index}`,
-      `command: ${quote(check.command)}`,
+      `command: ${quoteLine(check.command)}`,
       `exitCode: ${check.exitCode}`,
       'Failure names:',
       ...check.failures
         .slice(0, 20)
         .map(
           (name) =>
-            `- ${quote(name)}${persisting.has(name) ? ` (persisting since Attempt ${persisting.get(name)})` : ''}`
+            `- ${quoteLine(name)}${persisting.has(name) ? ` (persisting since Attempt ${persisting.get(name)})` : ''}`
         )
     )
     const excerpt = excerpts.find((entry) => entry.index === check.index)?.excerpt
@@ -226,7 +229,7 @@ export async function previousAttemptSection(
     } else {
       lines.push('Excerpt:')
       for (const line of redactContext(excerpt).content.split(/\r?\n/).slice(0, 40)) {
-        const quoted = quote(line)
+        const quoted = quoteLine(line)
         const bytes = Buffer.byteLength(quoted) + 1
         if (bytes > remaining) {
           break
@@ -242,7 +245,7 @@ export async function previousAttemptSection(
     if (diff.data.scopeViolations.length) {
       lines.push(
         'Scope violations:',
-        ...diff.data.scopeViolations.map((path) => `- ${quote(path)}`),
+        ...diff.data.scopeViolations.map((path) => `- ${quoteLine(path)}`),
         'Remove or revert these paths. Scope is checked against the merge-base; leaving them in this tree fails again.'
       )
     }
@@ -250,7 +253,9 @@ export async function previousAttemptSection(
     if (diff.data.dangerous.length) {
       lines.push(
         'Dangerous changes:',
-        ...diff.data.dangerous.map(({ path, pattern }) => `- ${quote(path)} (${quote(pattern)})`)
+        ...diff.data.dangerous.map(
+          ({ path, pattern }) => `- ${quoteLine(path)} (${quoteLine(pattern)})`
+        )
       )
     }
   }

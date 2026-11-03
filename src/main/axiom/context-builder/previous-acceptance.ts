@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { VerificationAcceptanceSchema } from '../../../shared/axiom-contract/verification-acceptance'
 import type { VerificationRun } from '../../../shared/axiom-contract/verification-params'
 import type { AxiomStore } from '../db/axiom-store'
-import { quote } from './previous-attempt-text'
+import { quote, quoteLine } from './previous-attempt-text'
 
 export const PreviousChecks = z.array(
   z.object({
@@ -31,7 +31,7 @@ export function acceptanceLines(detail: Record<string, unknown>): string[] {
           .filter((check) => criterion.checkIndexes.includes(check.index))
           .flatMap((check) => check.failures)
       )
-      return `${prefix} — ${quote(criterion.check.command)} (${failures.size} failures)`
+      return `${prefix} — ${quoteLine(criterion.check.command)} (${failures.size} failures)`
     }
     return prefix
   })
