@@ -17,10 +17,16 @@ export const SubmissionReportSchema = z.strictObject({
   artifacts: z.array(AxiomIdSchema),
   limitations: z.array(Text),
   risks: z.array(Text),
-  questions: z.array(Text),
-  followUps: z.array(Text)
+  questions: z.array(Text.max(2000)).max(20).default([]),
+  followUps: z.array(Text.max(2000)).max(20).default([])
 })
 export type SubmissionReport = z.infer<typeof SubmissionReportSchema>
+// Read compatibility: reports persisted before M3-04b-3 had no item-count/text caps.
+// New submissions must continue to use SubmissionReportSchema at the write boundary.
+export const StoredSubmissionReportSchema = SubmissionReportSchema.extend({
+  questions: z.array(Text).default([]),
+  followUps: z.array(Text).default([])
+})
 export const HeadlessOutcomeSchema = z.discriminatedUnion('outcome', [
   z
     .strictObject({ outcome: z.literal('submitted') })
@@ -78,9 +84,9 @@ export const SubmissionSchema = z.object({
   attemptId: AxiomIdSchema,
   taskId: AxiomIdSchema,
   candidateId: AxiomIdSchema,
-  report: SubmissionReportSchema,
+  report: StoredSubmissionReportSchema,
   checksRun: SubmissionReportSchema.shape.checksRun,
   limitations: SubmissionReportSchema.shape.limitations,
-  followUps: SubmissionReportSchema.shape.followUps,
+  followUps: StoredSubmissionReportSchema.shape.followUps,
   createdAt: Text
 })

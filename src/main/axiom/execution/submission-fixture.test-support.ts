@@ -16,7 +16,7 @@ export const report: SubmissionReport = {
   limitations: ['Write scope is verified in M3'],
   risks: [],
   questions: [],
-  followUps: ['Independent verification']
+  followUps: []
 }
 export function submissionFixture() {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })

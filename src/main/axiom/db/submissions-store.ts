@@ -1,5 +1,8 @@
 import type { z } from 'zod'
-import { SubmissionSchema } from '../../../shared/axiom-contract/submission-params'
+import {
+  SubmissionSchema,
+  SubmissionReportSchema
+} from '../../../shared/axiom-contract/submission-params'
 import { AxiomIdSchema } from '../../../shared/axiom-contract/mission-objects'
 import type { OrchestrationDb } from '../../runtime/orchestration/db'
 import { SubmissionRowCodec, SubmissionRowSchema } from './submission-rows'
@@ -11,7 +14,7 @@ const Insert = SubmissionSchema.omit({
   checksRun: true,
   limitations: true,
   followUps: true
-})
+}).extend({ report: SubmissionReportSchema })
 export function submissionsStore(db: OrchestrationDb) {
   return {
     insertSubmission(input: z.input<typeof Insert>) {

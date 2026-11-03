@@ -118,7 +118,7 @@ export const AttemptSummarySchema = z.object({
       checksRun: SubmissionReportSchema.shape.checksRun,
       limitations: SubmissionReportSchema.shape.limitations,
       risks: SubmissionReportSchema.shape.risks,
-      followUps: SubmissionReportSchema.shape.followUps
+      followUps: SubmissionSchema.shape.followUps
     })
     .optional()
 })

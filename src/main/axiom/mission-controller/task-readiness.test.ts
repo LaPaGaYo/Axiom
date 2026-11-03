@@ -41,6 +41,42 @@ function seedStage(
 }
 
 describe('database-derived readiness', () => {
+  it('waits for a typed report answer before making a DEFINED Task READY', () => {
+    const taskId = task('T01').taskId
+    const mission = f.store.getMission(f.missionId)!
+    const message = f.db.insertMessage({
+      from: 'settled-worker',
+      to: `run:${mission.runId}`,
+      runId: mission.runId,
+      type: 'question',
+      subject: 'Proceed?',
+      payload: JSON.stringify({
+        axiom: {
+          version: 1,
+          type: 'QUESTION',
+          missionId: f.missionId,
+          taskId,
+          attemptId: 'old-dispatch',
+          summary: 'Proceed?',
+          artifactIds: [],
+          related: {},
+          question: { text: 'Proceed?', options: [] }
+        }
+      })
+    })
+    f.controller.startExecution(f.missionId)
+    expect(task('T01').stage).toBe('DEFINED')
+    f.store.appendAuditEvent({
+      missionId: f.missionId,
+      actor: 'user',
+      objectKind: 'message',
+      objectId: message.id,
+      event: 'question.answered',
+      before: { status: 'pending' },
+      after: { status: 'answered', taskId, attemptId: 'old-dispatch', answer: 'Yes', by: 'user' }
+    })
+    expect(f.controller.recomputeReadiness(f.missionId)).toEqual([taskId])
+  })
   it('moves roots in Orca id order, is idempotent, and never demotes READY', () => {
     expect(f.controller.recomputeReadiness(f.missionId)).toEqual([])
     f.controller.startExecution(f.missionId)

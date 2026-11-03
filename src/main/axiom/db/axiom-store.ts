@@ -41,6 +41,12 @@ export class AxiomStore {
   readonly getVerificationRun: VerificationRuns['getVerificationRun']
   readonly listVerificationRuns: VerificationRuns['listVerificationRuns']
   readonly listMessages: ReturnType<typeof messagesStore>['listMessages']
+  readonly hasPendingTypedQuestionForTask: ReturnType<
+    typeof messagesStore
+  >['hasPendingTypedQuestionForTask']
+  readonly listAnsweredQuestionsForTask: ReturnType<
+    typeof messagesStore
+  >['listAnsweredQuestionsForTask']
   readonly insertAttemptBinding: AttemptBindings['insertAttemptBinding']
   readonly bindAttemptDispatch: AttemptBindings['bindAttemptDispatch']
   readonly getAttemptBindingByDispatch: AttemptBindings['getAttemptBindingByDispatch']
@@ -113,7 +119,10 @@ export class AxiomStore {
     this.insertVerificationRun = verification.insertVerificationRun
     this.getVerificationRun = verification.getVerificationRun
     this.listVerificationRuns = verification.listVerificationRuns
-    this.listMessages = messagesStore(db).listMessages
+    const messages = messagesStore(db)
+    this.listMessages = messages.listMessages
+    this.hasPendingTypedQuestionForTask = messages.hasPendingTypedQuestionForTask
+    this.listAnsweredQuestionsForTask = messages.listAnsweredQuestionsForTask
     const bindings = attemptBindingsStore(db)
     this.insertAttemptBinding = bindings.insertAttemptBinding
     this.bindAttemptDispatch = bindings.bindAttemptDispatch

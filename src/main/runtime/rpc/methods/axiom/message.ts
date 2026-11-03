@@ -6,7 +6,7 @@ import {
 } from '../../../../../shared/axiom-contract/message-params'
 import { getAxiomControlPlane } from '../../../../axiom/control-plane'
 import { answerMissionQuestion } from '../../../../axiom/messaging/question-answer'
-import { resolveSubtask } from '../../../../axiom/messaging/subtask-resolution'
+import { resolveMissionMessage } from '../../../../axiom/messaging/followup-resolution'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
 
 export const AXIOM_MESSAGE_METHODS = [
@@ -23,7 +23,10 @@ export const AXIOM_MESSAGE_METHODS = [
     handler: (p, { runtime, recordMutationReceipt }) => {
       const { store, missions } = getAxiomControlPlane(runtime)
       const result = store.transaction('subtask_resolution_receipt', () => {
-        const result = resolveSubtask({ db: runtime.getOrchestrationDb(), store, missions }, p)
+        const result = resolveMissionMessage(
+          { db: runtime.getOrchestrationDb(), store, missions },
+          p
+        )
         if (result.resolved) {
           recordMutationReceipt?.(result)
         }

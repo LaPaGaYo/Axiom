@@ -7,7 +7,11 @@ import {
   SubmissionRowSchema,
   VerificationRunRowSchema
 } from './submission-rows'
-import type { SubmissionReport } from '../../../shared/axiom-contract/submission-params'
+import {
+  SubmissionSchema,
+  type SubmissionReport
+} from '../../../shared/axiom-contract/submission-params'
+import { AttemptSummarySchema } from '../../../shared/axiom-contract/attempt-params'
 
 let db: OrchestrationDb
 let store: AxiomStore
@@ -70,6 +74,43 @@ it('round-trips immutable reports and refuses a second row for the same dispatch
     store.insertSubmission({ ...input, id: 'sub-2', report: { ...report, summary: 'replace' } })
   ).toThrow()
   expect(store.getSubmissionByDispatch('a')).toEqual(saved)
+})
+it.each([
+  { questions: Array(21).fill('Question?'), followUps: ['verify'] },
+  { questions: [], followUps: ['x'.repeat(2001)] }
+])('reads legacy item lists without weakening new-submission caps %#', (items) => {
+  const input = {
+    id: 'sub-legacy',
+    missionId: 'm',
+    taskId: 't',
+    attemptId: 'a',
+    candidateId: 'cand-1',
+    report
+  }
+  const legacy = { ...report, ...items }
+  expect(() => store.insertSubmission({ ...input, report: legacy })).toThrow()
+  const saved = store.insertSubmission(input)
+  db.db
+    .prepare('UPDATE submissions SET report = ?, follow_ups = ? WHERE id = ?')
+    .run(JSON.stringify(legacy), JSON.stringify(items.followUps), saved.id)
+  const expected = { ...saved, report: legacy, followUps: items.followUps }
+  expect(store.getSubmissionByDispatch('a')).toEqual(expected)
+  expect(store.listSubmissions('m')).toEqual([expected])
+  expect(SubmissionSchema.parse(expected)).toEqual(expected)
+  expect(
+    AttemptSummarySchema.shape.submission.unwrap().parse({
+      id: saved.id,
+      candidateId: saved.candidateId,
+      createdAt: saved.createdAt,
+      commitSha: candidate.commitSha,
+      treeSha: candidate.treeSha,
+      filesChanged: legacy.filesChanged,
+      checksRun: legacy.checksRun,
+      limitations: legacy.limitations,
+      risks: legacy.risks,
+      followUps: legacy.followUps
+    }).followUps
+  ).toEqual(items.followUps)
 })
 it('retains superseded identities and refuses the same Task/commit in another Attempt', () => {
   store.insertCandidate(candidate)

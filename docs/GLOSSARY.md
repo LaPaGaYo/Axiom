@@ -196,6 +196,12 @@ APPLYING / TESTING → QUEUED（应用重启时由 RecoveryService 丢弃临时�
 
 ### 4.12 Question
 
+M3-04b-3：报告中的 **typed QUESTION item** 是绑定 Task 的 `messages.payload.axiom.question = {text, options}`，与运行中 `axiom attempt ask` 的内核线程分开。它不随 Attempt 关闭；`pending | answered` 是 `question.answered` 审计的投影，不是新生命周期或表。未答时阻止该 Task 的后续 admission；已答内容进入后续 Attempt 的强制 `Answered questions` 上下文（引用文本、最新 10 条、总计 ≤4 KiB）。
+
+**Follow-up item** 是 `REQUEST` 消息的 `followUp: {text}`；由 `followup.resolved` 审计派生 pending。人可 accept / reject，accept 只记录决定，另用 `axiom.task.create` 创建 Task（MINOR_ADJUSTMENT）。报告的 questions / followUps 各最多 20 条、每条 2,000 字符，每类前 10 条转消息，超出数记 `submission.items_truncated`。
+
+`question.answered`（typed）：objectKind=`message`、objectId=问题消息 id、actor=`user`，after=`{status:'answered',taskId,attemptId,answer,by:'user'}`；answer ≤4,000 字符且只存于该审计。`followup.resolved` 同样关联消息，after=`{decision,rationale,taskId,attemptId}`。`secret_in_answer` 为 `invalid_argument` 的拒绝原因：typed / kernel answer 正文命中 `redactContext` 的秘密模式时拒绝且不写入。两条人工路径仍为 desktop_only；内核 Question 的状态与关闭规则不变。
+
 `OPEN → ANSWERED | WITHDRAWN`（映射 Orca `pending / answered / closed`）。
 
 ### 4.13 其它固定词汇

@@ -83,6 +83,44 @@ function seedDefined(id: string) {
 }
 
 describe('Scheduler admission', () => {
+  it('skips READY Tasks with a typed report question until its answer audit exists, including after restart', async () => {
+    const taskId = task('T01').taskId
+    const mission = f.store.getMission(f.missionId)!
+    const message = f.db.insertMessage({
+      from: 'settled-worker',
+      to: `run:${mission.runId}`,
+      runId: mission.runId,
+      type: 'question',
+      subject: 'Proceed?',
+      payload: JSON.stringify({
+        axiom: {
+          version: 1,
+          type: 'QUESTION',
+          missionId: f.missionId,
+          taskId,
+          attemptId: 'old-dispatch',
+          summary: 'Proceed?',
+          artifactIds: [],
+          related: {},
+          question: { text: 'Proceed?', options: [] }
+        }
+      })
+    })
+    expect((await round()).skipped).toContainEqual({ taskId, reason: 'question' })
+    expect(task('T01').stage).toBe('READY')
+    expect(f.store.listAttemptBindings({ missionId: f.missionId, taskId })).toEqual([])
+    expect((await round(makeScheduler())).skipped).toContainEqual({ taskId, reason: 'question' })
+    f.store.appendAuditEvent({
+      missionId: f.missionId,
+      actor: 'user',
+      objectKind: 'message',
+      objectId: message.id,
+      event: 'question.answered',
+      before: { status: 'pending' },
+      after: { status: 'answered', taskId, attemptId: 'old-dispatch', answer: 'Yes', by: 'user' }
+    })
+    expect((await round(makeScheduler())).admitted).toEqual([expect.objectContaining({ taskId })])
+  })
   it('orders the 12-Task fixture by longest downstream chain then id and launches after commit', async () => {
     const result = await round()
     expect(result.admitted.map((a) => f.store.getTaskStage(a.taskId)?.spec.id)).toEqual([

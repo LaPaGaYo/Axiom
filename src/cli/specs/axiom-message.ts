@@ -4,8 +4,8 @@ export const AXIOM_MESSAGE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['message', 'list'],
     summary: 'List Mission messages and pending items',
-    usage: 'axiom message list --mission <id> [--type <T>] [--pending] --json',
-    allowedFlags: [...GLOBAL_FLAGS, 'mission', 'type', 'pending']
+    usage: 'axiom message list --mission <id> [--type <T>] [--pending-only] --json',
+    allowedFlags: [...GLOBAL_FLAGS, 'mission', 'type', 'pending', 'pending-only']
   },
   {
     path: ['message', 'answer'],
@@ -16,7 +16,7 @@ export const AXIOM_MESSAGE_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['message', 'resolve'],
-    summary: 'Accept or reject a pending subtask request',
+    summary: 'Accept or reject a pending subtask request or follow-up',
     usage:
       'axiom message resolve --mission <id> --message <id> --accept|--reject --rationale <text> [--retry-request <id>] [--json]',
     allowedFlags: [
