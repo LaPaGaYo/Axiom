@@ -19989,6 +19989,8 @@
     "targetBranch": "Target branch",
     "goalObjective": "Goal objective",
     "acceptanceCriteria": "Acceptance criteria",
+    "acceptanceArtifact": "Artifact",
+    "acceptanceHumanCheck": "Human check",
     "criteriaHint": "One criterion per line.",
     "dismiss": "Dismiss",
     "submissionSummary": "Submission summary",

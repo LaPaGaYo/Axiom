@@ -38,5 +38,5 @@ it('shows command, Artifact, human and legacy criteria with their proof kinds', 
   expect(container.textContent).toContain('Artifact')
   expect(container.textContent).toContain('Visual judgment')
   expect(container.textContent).toContain('Legacy criterion')
-  expect(container.textContent?.match(/human check/g)).toHaveLength(2)
+  expect(container.textContent?.match(/Human check/g)).toHaveLength(2)
 })

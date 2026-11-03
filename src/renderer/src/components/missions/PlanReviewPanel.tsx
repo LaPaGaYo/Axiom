@@ -70,7 +70,11 @@ export function PlanReviewPanel({
                   {criterion.check.kind === 'command' ? (
                     <code className="font-mono">{criterion.check.command}</code>
                   ) : (
-                    <span>{criterion.check.kind === 'artifact' ? 'Artifact' : 'human check'}</span>
+                    <span>
+                      {criterion.check.kind === 'artifact'
+                        ? translate('missions.acceptanceArtifact', 'Artifact')
+                        : translate('missions.acceptanceHumanCheck', 'Human check')}
+                    </span>
                   )}
                 </li>
               ))}
