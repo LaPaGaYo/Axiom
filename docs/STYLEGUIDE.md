@@ -320,6 +320,24 @@ When there's no sibling, match the surrounding chrome — button sizes, icon wei
 
 `destructive` is for actions that lose data or can't be undone. **Cancel, Dismiss, Close, and Discard are not destructive** — they back the user out of an in-progress action and should stay quiet (default ghost button, no color, no keyboard chip, no animated affordance). Save the visual weight for the affirmative action so the two don't compete. Keyboard handlers can still honor Esc; the visible decoration is what stays minimal.
 
+### 4. No green without evidence (Axiom, D86)
+
+Axiom's product value is deterministic governance of verification and integration, so the UI must make that
+governance felt rather than hide it behind a generic success state. Three rules, which are also acceptance
+criteria for the M3-09 Mission UI:
+
+- **No green without evidence.** A `VERIFIED` or `INTEGRATED` indicator must open, in one click, the record
+  that justifies it: the per-criterion verdicts, the exact commands, the output excerpts, the merged-tree
+  regression. `SUBMITTED` always reads as "submitted, awaiting verification" and is never styled as done; a
+  stopped or idle agent is not a completed Task.
+- **Every state has a reason.** Render the Control Plane's own words — `waitingOn`, rejection codes, verdict
+  reasons, approval scopes — verbatim with a short gloss. Do not translate them into "something went wrong".
+  A Task that is not running must say what it is waiting on (dependency, question, approval, budget,
+  verification queue, integration queue, human disposition).
+- **Quiet.** Governance must not become friction: when nothing needs the person, show nothing — no toasts,
+  no badges, no modal. When something does, one pending item says what to do, why, and what happens if it is
+  left undone.
+
 ## Cross-platform
 
 Orca runs on macOS, Linux, and Windows. Every UI change must hold up on all three, in both light and dark mode.
