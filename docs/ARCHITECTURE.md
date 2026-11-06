@@ -1,6 +1,6 @@
 # Axiom：自主软件工程控制平台 · 整体架构 V1.1
 
-更新日期：2026-09-26
+更新日期：2026-11-05（§4.7 依赖方向与端口，D87）；其余 2026-09-26
 基于：整体设计 V1（2026-09-26）；代码审计快照 `stablyai/orca@646e9a5`（Orca 1.4.197），**fork 冻结基线 `3eb1adec2`（tag `axiom-base`，D19）**，审计结论已在基线上复核，见 `docs/reference/orca-mapping.md`
 仓库落位：`docs/ARCHITECTURE.md`
 术语与枚举以 `docs/GLOSSARY.md` 为准；决策编号见 `docs/decisions/DECISION_LOG.md`（D1–D8 已拍板；D6a、D7a 的修正与 D9–D16 已于 2026-10-17 拍板）。
@@ -133,6 +133,20 @@ Execution Kernel 只回答「在哪里、以什么进程和工作区执行」，
 
 ### 4.6 Worker Plane
 Claude Code、Codex、Antigravity（原 Gemini CLI）、OpenCode 等是可替换的临时执行者。Worker 接收 ContextPackage，在授权 worktree 内执行，通过 `axiom attempt <verb>` 发出类型化消息与 SUBMISSION；heartbeat 由执行内核维持，不是产品消息。
+
+### 4.7 依赖方向与端口（D87，2026-11-05）
+
+Control Plane 的代码结构是以权威核为主干的端口—适配器结构，从内到外四圈，依赖只能向内：
+
+| 圈 | 内容 | 落位 | 允许依赖 |
+|---|---|---|---|
+| 0 合同 | zod schema、id、错误码、stage 词汇、mutations 清单、effect 种类、harness 能力旗、证据导出格式 | `src/shared/axiom-contract/` | 无 |
+| 1 权威核 | MissionController、Scheduler / admission、VerificationService、IntegrationController、MessageRouter、ContextBuilder、RecoveryService、caller authority、policy、stores、DecisionEngine 接口与 RulesEngine 基线 | `src/main/axiom/` | 圈 0 + 自己声明的端口 |
+| 2 端口 | 核拥有的接口与契约测试：`DispatchHost`、`WorkspaceHost`、`MessageTransport`、`HarnessAdapter`、`VerificationRunner`、`SourceControlHost`、`DecisionEngine`、`CodeIntelligence`、`EvidenceExporter` | 接口在核内；契约测试 `src/main/axiom/kernel-contract/` | 圈 0 |
+| 3 适配器 | Orca 内核适配（dispatch、worktree、mailbox、orchestration SQLite）、RPC（`src/main/runtime/rpc/methods/axiom/`）、CLI、renderer、MCP 服务器、Jev、CodeGraph、源码托管、导出器 | 各自目录 | 圈 0–2 |
+| 4 宿主 | Orca 的 PTY / daemon / git / SSH / relay / 账号（§4.5） | `src/main/runtime` 等 | — |
+
+两条规则：**向内**——外圈可以 import 内圈，内圈不能 import 外圈（内核不 import Axiom；核不 import renderer / CLI；`src/main/runtime` 只在 `rpc/methods/axiom/` 接入）；**出口唯一**——核只通过持久化副作用 outbox 产生副作用（命令事务 = 审计 + 投影 + 收据 + outbox 一起提交，执行器在提交后取租约），只通过端口读外界。harness 适配器以能力旗声明它提供什么，核按旗与降级策略决定路由；没有证据的旗按不存在处理。边界由 `pnpm lint` 的规则与契约测试守住：现有核对内核的直接 import（接缝清单 `.axiom-work/upstream-3-seams.tsv`）是白名单的初稿，只收不放。端口只在 D55 路线图点名替换或第二个实现出现时抽，不预先抽象；不做插件系统或通用事件总线。分期与细节见 DEF-48 与 `claude/def-48-architecture-v1.md`。
 
 ## 5. 核心领域对象
 
