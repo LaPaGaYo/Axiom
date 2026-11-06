@@ -85,7 +85,7 @@ export function resolveAttemptBaseline(
   if (candidate?.status !== 'ACTIVE') {
     return { kind: 'integration', reason: 'previous_candidate_superseded' }
   }
-  // The store orders by created_at, id; do not filter by FAIL before selecting the latest run.
+  // The store preserves insertion order for same-second reruns; select latest before filtering FAIL.
   const verificationRun = store
     .listVerificationRuns({ missionId: candidate.missionId, candidateId: candidate.id })
     .at(-1)

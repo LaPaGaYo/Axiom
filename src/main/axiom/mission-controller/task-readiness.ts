@@ -83,7 +83,10 @@ export function transitionTaskStage(ctx: ControllerContext, input: TransitionTas
   }
   if (
     !isLegalTaskStageTransition(from, to) ||
-    (from === 'BLOCKED' && to !== 'CANCELED' && to !== task.previousStage)
+    (from === 'BLOCKED' &&
+      to !== 'CANCELED' &&
+      to !== task.previousStage &&
+      !(to === 'VERIFYING' && input.actor === 'user' && input.reason === 'rerun_requested'))
   ) {
     throw new MissionControllerError('illegal_transition', {
       taskId: task.taskId,

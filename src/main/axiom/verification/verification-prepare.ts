@@ -2,6 +2,7 @@ import type { VerificationRun } from '../../../shared/axiom-contract/verificatio
 import type { VerificationDependencies } from './verification-service'
 import { auditVerification } from './verification-claim'
 import { isLocalVerificationRepository } from './verification-checks'
+import { escalateVerification } from './verification-settlement'
 import {
   pinVerificationCandidate,
   removeVerificationWorktree,
@@ -119,6 +120,8 @@ export async function prepareVerification(
           )
     const verdictDetail = {
       phase: 'prepare_failed',
+      verdict: 'INCONCLUSIVE',
+      escalation: 'human',
       reason: failure.reason,
       detail: failure.message,
       ...(cleanupFailed ? { cleanupPending: true } : {})
@@ -139,6 +142,7 @@ export async function prepareVerification(
         status: 'INCONCLUSIVE',
         ...verdictDetail
       })
+      escalateVerification(deps, run, { reason: failure.reason, escalation: 'human' })
     })
   }
   return undefined

@@ -75,7 +75,7 @@ test('M3-03b: passing checks cannot hide skipped tests, removed assertions or su
       await expect
         .poll(
           () =>
-            list().filter((run) => ['PASS', 'FAIL', 'INCONCLUSIVE'].includes(run.status)).length,
+            list().filter((run) => ['PASS', 'FAIL', 'HUMAN_REVIEW'].includes(run.status)).length,
           {
             timeout: 480_000
           }
@@ -94,7 +94,7 @@ test('M3-03b: passing checks cannot hide skipped tests, removed assertions or su
         }
         const tampering = [{ path: expected.path, rule: expected.rule, count: 1 }]
         expect(run).toMatchObject({
-          status: 'INCONCLUSIVE',
+          status: 'HUMAN_REVIEW',
           phase: 'verdict',
           claimCount: 1,
           commands: ['pnpm install --frozen-lockfile --prefer-offline', 'pnpm run verify:full'],

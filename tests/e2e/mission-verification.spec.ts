@@ -32,7 +32,7 @@ test('M3-08i: plan_invalid stays VERIFYING without admitting a fix Attempt', asy
       releaseWorkers()
       await expect
         .poll(() => inspect().verification[0]?.status, { timeout: 90_000 })
-        .toBe('INCONCLUSIVE')
+        .toBe('HUMAN_REVIEW')
       expect(inspect().verification[0]).toMatchObject({
         verdictDetail: {
           verdict: 'INCONCLUSIVE',
@@ -121,7 +121,7 @@ for (const human of [false, true]) {
           releaseWorkers()
           await expect
             .poll(() => inspect().verification[0]?.status, { timeout: 90_000 })
-            .toBe(human ? 'INCONCLUSIVE' : 'FAIL')
+            .toBe(human ? 'HUMAN_REVIEW' : 'FAIL')
           const run = inspect().verification[0]
           if (!run) {
             throw new Error('Missing criterion VerificationRun')

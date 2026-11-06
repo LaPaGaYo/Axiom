@@ -2,6 +2,11 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { channelFixture } from '../execution/attempt-channel-fixture.test-support'
 import { routeWorkerMessage } from './message-router'
 import { resolveAttemptSender } from '../execution/attempt-authority'
+import { AXIOM_MESSAGE_TYPES } from '../../../shared/axiom-contract/message-params'
+import {
+  AttemptAskParams,
+  AttemptMessageParams
+} from '../../../shared/axiom-contract/attempt-params'
 
 let f: ReturnType<typeof channelFixture>
 beforeEach(() => {
@@ -34,6 +39,55 @@ it('redacts typed BLOCKED Worker strings at the message boundary and keeps the l
 afterEach(() => {
   f.db.close()
   vi.restoreAllMocks()
+})
+// DEF-21 (4), V1: a Worker never addresses another running Worker. QUESTION and every other
+// Control-Plane-only type reach only run:<runId>; INFORM / HANDOFF additionally fan out to the
+// direct downstream dispatched Attempts (M2-06a), which the tests below pin.
+it.each(AXIOM_MESSAGE_TYPES.filter((type) => type !== 'INFORM' && type !== 'HANDOFF'))(
+  'DEF-21 (4): typed %s is delivered only to the Run mailbox',
+  (type) => {
+    const downstream = f.bind('T04')
+    const { sender } = resolveAttemptSender({ ...f, ...f.t01 })
+    const result = routeWorkerMessage(f, {
+      sender,
+      axiom: {
+        version: 1,
+        type,
+        missionId: f.mission.id,
+        taskId: f.t01.taskId,
+        attemptId: f.t01.attemptId,
+        summary: 'For the Control Plane',
+        artifactIds: [],
+        related: { taskIds: [downstream.taskId] },
+        ...(type === 'QUESTION' ? { question: { text: 'Human input needed', options: [] } } : {}),
+        ...(type === 'REQUEST_SUBTASK'
+          ? {
+              subtask: {
+                title: 'Follow-up',
+                objective: 'Scoped follow-up',
+                allowedPaths: ['a.ts'],
+                acceptanceCriteria: [{ text: 'Reviewed', check: { kind: 'human' as const } }],
+                risk: 'low' as const
+              }
+            }
+          : {})
+      }
+    })
+    expect(result.recipients).toEqual([`run:${f.mission.runId}`])
+    expect(f.db.getInbox(100).map((message) => message.to_handle)).toEqual([
+      `run:${f.mission.runId}`
+    ])
+    expect(f.db.getUnreadMessages(`dispatch:${downstream.attemptId}`)).toEqual([])
+  }
+)
+it('strict Attempt message and question params reject an explicit recipient', () => {
+  const sender = { attemptId: f.t01.attemptId, from: f.t01.from }
+  expect(
+    AttemptAskParams.safeParse({ ...sender, question: 'Ask', to: 'another-worker' }).success
+  ).toBe(false)
+  expect(
+    AttemptMessageParams.safeParse({ ...sender, summary: 'Message', to: 'another-worker' }).success
+  ).toBe(false)
 })
 it.each(['inform', 'handoff', 'request'] as const)(
   '%s routes only to the Control Plane and eligible direct downstream Attempts',

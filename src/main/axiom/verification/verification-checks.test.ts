@@ -7,6 +7,7 @@ import { VerificationService } from './verification-service'
 import { runVerificationChecks } from './verification-checks'
 import { prepareVerification } from './verification-prepare'
 import { settleVerificationFailure } from '../execution/attempt-settlement'
+import { resolveVerification } from './verification-resolution'
 
 let root: string
 let f: Awaited<ReturnType<typeof verificationGitFixture>>
@@ -72,7 +73,7 @@ it.each([
   },
   {
     command: 'axiom_check_tool_missing_1243',
-    status: 'INCONCLUSIVE',
+    status: 'HUMAN_REVIEW',
     stage: 'VERIFYING',
     reason: 'environment',
     maxAttempts: 2
@@ -111,7 +112,11 @@ it.each([
       commands: [command],
       toolVersions: { node: expect.stringMatching(/^v/) },
       finishedAt: expect.any(String),
-      verdictDetail: { phase: 'verdict', verdict: status, reason }
+      verdictDetail: {
+        phase: 'verdict',
+        verdict: status === 'HUMAN_REVIEW' ? 'INCONCLUSIVE' : status,
+        reason
+      }
     })
     expect(saved().verdictDetail.artifacts).toMatchObject({
       required: false,
@@ -144,7 +149,7 @@ it('routes invalid stored policy to human without executing anything', async () 
   commands([node('process.exit(0)')], { commands: [] })
   await service.kick()
   expect(saved()).toMatchObject({
-    status: 'INCONCLUSIVE',
+    status: 'HUMAN_REVIEW',
     verdictDetail: { reason: 'policy_invalid', escalation: 'human' }
   })
   expect(f.artifacts.list({ missionId: f.missionId, kind: 'log' })).toEqual([])
@@ -161,7 +166,7 @@ it('rejects remote repositories without creating or running a local worktree', a
   })
   await service.kick()
   expect(saved()).toMatchObject({
-    status: 'INCONCLUSIVE',
+    status: 'HUMAN_REVIEW',
     verdictDetail: {
       reason: 'environment',
       detail: 'remote_repository_unsupported',
@@ -176,7 +181,7 @@ it('audits known flaky once and leaves the Task VERIFYING', async () => {
   })
   await service.kick()
   expect(saved()).toMatchObject({
-    status: 'INCONCLUSIVE',
+    status: 'HUMAN_REVIEW',
     verdictDetail: { reason: 'known_flaky', escalation: 'specialist' }
   })
   expect(events().filter((e) => e.event === 'verification.known_flaky')).toMatchObject([
@@ -199,6 +204,35 @@ it('keeps cleanupPending on a verdict and retries removal on the next kick', asy
     verdictDetail: { cleanupPending: false }
   })
 })
+it.each([false, true])(
+  'cleans up a human review even if resolution races removal: %s',
+  async (resolveDuringCleanup) => {
+    commands([node('process.exit(0)')], { commands: [] })
+    const remove = f.runtime.removeManagedWorktree.getMockImplementation()!
+    f.runtime.removeManagedWorktree.mockImplementationOnce(async (selector) => {
+      if (resolveDuringCleanup) {
+        resolveVerification(deps(), {
+          runId: f.run.id,
+          verdict: 'PASS',
+          rationale: 'Reviewed environment failure'
+        })
+      }
+      return remove(selector)
+    })
+    await service.kick()
+    expect(saved()).toMatchObject({
+      status: resolveDuringCleanup ? 'PASS' : 'HUMAN_REVIEW',
+      worktreeId: null,
+      verdictDetail: { cleanupPending: false }
+    })
+    if (resolveDuringCleanup) {
+      expect(saved().verdictDetail.resolution).toMatchObject({
+        verdict: 'PASS',
+        rationale: 'Reviewed environment failure'
+      })
+    }
+  }
+)
 it.each(['epoch', 'status'] as const)(
   'a stale %s writes nothing and still removes its worktree',
   async (stale) => {
@@ -333,7 +367,7 @@ it.each([false, true])(
     await changeCandidate('package.json', '{}')
     await service.kick()
     expect(saved()).toMatchObject({
-      status: explicit ? 'PASS' : 'INCONCLUSIVE',
+      status: explicit ? 'PASS' : 'HUMAN_REVIEW',
       verdictDetail: {
         reason: explicit ? 'checks_passed' : 'dangerous_change',
         ...(explicit ? {} : { escalation: 'human' })
@@ -357,7 +391,7 @@ it.each([0, 1])('missing integration base still runs commands (exit %s)', async 
   await f.git('branch', '-D', `axiom/integration/${f.missionId}`)
   await service.kick()
   expect(saved()).toMatchObject({
-    status: exit ? 'FAIL' : 'INCONCLUSIVE',
+    status: exit ? 'FAIL' : 'HUMAN_REVIEW',
     verdictDetail: {
       reason: exit ? 'checks_failed' : 'environment',
       ...(exit ? {} : { detail: 'integration_base_unavailable', escalation: 'human' }),
@@ -374,7 +408,7 @@ it.each([0, 1])('keeps tampering evidence even when checks exit %s', async (exit
   await changeCandidate('src/probe.test.ts', 'test.skip("tamper")\n')
   await service.kick()
   expect(saved()).toMatchObject({
-    status: exit ? 'FAIL' : 'INCONCLUSIVE',
+    status: exit ? 'FAIL' : 'HUMAN_REVIEW',
     verdictDetail: {
       reason: exit ? 'checks_failed' : 'test_tampering',
       ...(exit ? {} : { escalation: 'human' }),
@@ -425,7 +459,7 @@ it.each([
   { mode: 'empty', reason: 'artifact_invalid', status: 'FAIL', problem: 'empty' },
   { mode: 'utf8', reason: 'artifact_invalid', status: 'FAIL', problem: 'invalid_utf8' },
   { mode: 'json', reason: 'artifact_invalid', status: 'FAIL', problem: 'invalid_json' },
-  { mode: 'unreadable', reason: 'environment', status: 'INCONCLUSIVE', problem: 'unreadable' }
+  { mode: 'unreadable', reason: 'environment', status: 'HUMAN_REVIEW', problem: 'unreadable' }
 ])(
   'checks non-code Artifacts after passing repository gates: $mode',
   async ({ mode, reason, status, problem }) => {
@@ -487,7 +521,7 @@ it.each([
     submission([artifact.id])
     await service.kick()
     expect(saved()).toMatchObject({
-      status: 'INCONCLUSIVE',
+      status: 'HUMAN_REVIEW',
       verdictDetail: {
         reason: 'non_code',
         escalation,

@@ -4,7 +4,12 @@ import type { ArtifactStore } from '../artifacts/artifact-store'
 import type { AttemptBaseline } from '../execution/attempt-baseline'
 import { findSubmissionTranscriptArtifactId } from '../execution/attempt-projection'
 import { redactContext } from './redaction'
-import { acceptanceLines, persistentFailures, PreviousChecks } from './previous-acceptance'
+import {
+  acceptanceLines,
+  humanDispositionLines,
+  persistentFailures,
+  PreviousChecks
+} from './previous-acceptance'
 import {
   quote,
   quoteLine,
@@ -106,12 +111,16 @@ async function readExcerpts(artifacts: ArtifactStore, artifactId: unknown) {
 }
 
 const Adjustment = z.object({
-  before: z.object({ maxAttempts: z.number() }),
+  before: z.object({
+    maxAttempts: z.number(),
+    acceptanceCriteria: z.array(z.unknown()).optional()
+  }),
   after: z.object({
     afterAttemptSeq: z.number().int(),
     addedPaths: z.array(z.string()).max(50),
     maxAttempts: z.number(),
-    rationale: z.string()
+    rationale: z.string(),
+    acceptanceCriteria: z.array(z.unknown()).optional()
   })
 })
 function declarationLines(store: AxiomStore, baseline: AttemptBaseline, reservedLines: string[]) {
@@ -155,6 +164,11 @@ function declarationLines(store: AxiomStore, baseline: AttemptBaseline, reserved
       }
       const { before, after } = parsed.data
       const changes = [
+        ...(before.acceptanceCriteria && after.acceptanceCriteria
+          ? [
+              `acceptance criteria replaced (${before.acceptanceCriteria.length} → ${after.acceptanceCriteria.length})`
+            ]
+          : []),
         ...(after.addedPaths.length
           ? [`allowedPaths now also include ${quotedPaths(after.addedPaths)}`]
           : []),
@@ -200,9 +214,16 @@ export async function previousAttemptSection(
   const detail = run.verdictDetail
   const introduction = `This Attempt continues the previous Candidate ${candidate.commitSha} from Attempt ${previousSeq}; fix the failures below in this tree. Do not weaken, skip or delete tests, assertions, lint rules or checks to make them pass.`
   const verdict = `Verdict: ${run.status}; reason: ${quoteLine(typeof detail.reason === 'string' ? detail.reason : 'unknown')}`
-  const declarations = declarationLines(store, baseline, [introduction, verdict])
+  const humanLines = humanDispositionLines(store, run)
+  const criteriaLines = acceptanceLines(detail)
+  const declarations = declarationLines(store, baseline, [
+    introduction,
+    verdict,
+    ...humanLines,
+    ...criteriaLines
+  ])
   let remaining = declarations.remaining
-  const lines = [introduction, ...declarations.lines, verdict, ...acceptanceLines(detail)]
+  const lines = [introduction, ...declarations.lines, verdict, ...humanLines, ...criteriaLines]
   const checks = PreviousChecks.safeParse(detail.checks)
   const persisting = persistentFailures(store, run)
   const excerpts = await readExcerpts(artifacts, detail.verdictArtifactId)

@@ -153,7 +153,7 @@ it('retains failed cleanup ownership until boot can remove the detached worktree
     await first.kick()
     const failed = f.store.getVerificationRun(f.run.id)!
     expect(failed).toMatchObject({
-      status: 'INCONCLUSIVE',
+      status: 'HUMAN_REVIEW',
       worktreeId: expect.any(String),
       verdictDetail: { phase: 'prepare_failed', cleanupPending: true }
     })
@@ -163,7 +163,7 @@ it('retains failed cleanup ownership until boot can remove the detached worktree
     const next = new VerificationService({ ...deps, runtimeEpoch: 'epoch-after' })
     await next.recoverAtBoot()
     expect(f.store.getVerificationRun(f.run.id)).toMatchObject({
-      status: 'INCONCLUSIVE',
+      status: 'HUMAN_REVIEW',
       worktreeId: null,
       verdictDetail: { phase: 'prepare_failed', cleanupPending: false }
     })

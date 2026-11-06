@@ -1,6 +1,7 @@
 import type { AuditEvent } from '../../../shared/axiom-contract/mission-objects'
 import type { VerificationRun } from '../../../shared/axiom-contract/verification-params'
 import type { VerificationDependencies } from './verification-service'
+import { findVerificationRerun } from './verification-candidate'
 
 export function auditVerification(
   deps: Pick<VerificationDependencies, 'store'>,
@@ -30,12 +31,13 @@ export function claimVerification(
     for (const run of queued) {
       const candidate = store.getCandidate(run.candidateId)
       const task = store.getTaskStage(run.taskId)
-      // A restart does not move a Task backwards. Only that durable requeue may resume VERIFYING.
+      // Restart requeues and human reruns resume VERIFYING without admitting another Attempt.
       const resuming =
         task?.stage === 'VERIFYING' &&
-        run.verdictDetail.phase === 'requeued' &&
-        run.verdictDetail.reason === 'restart' &&
-        run.claimCount > 0
+        ((run.verdictDetail.phase === 'requeued' &&
+          run.verdictDetail.reason === 'restart' &&
+          run.claimCount > 0) ||
+          (run.claimCount === 0 && findVerificationRerun(store, run) !== undefined))
       const reason = !candidate
         ? 'candidate_missing'
         : candidate.status === 'SUPERSEDED'

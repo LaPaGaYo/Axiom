@@ -65,13 +65,17 @@ export function formatTask({ task }: TaskResponse): string {
 
 export function formatVerificationRunList({ runs }: VerificationListResponse): string {
   return [
-    'ID\tTASK\tCANDIDATE\tSTATUS\tPHASE\tCLAIM\tSTARTED\tWORKTREE',
+    'ID\tTASK\tCANDIDATE\tSTATUS\tREASON\tESCALATION\tPHASE\tCLAIM\tSTARTED\tWORKTREE',
     ...runs.map((run) =>
       [
         run.id,
         run.taskId,
         run.candidateCommitSha.slice(0, 8),
         run.status,
+        typeof run.verdictDetail.reason === 'string' ? run.verdictDetail.reason : '-',
+        run.status === 'HUMAN_REVIEW' && typeof run.verdictDetail.escalation === 'string'
+          ? run.verdictDetail.escalation
+          : '-',
         run.phase ?? '-',
         run.claimCount,
         run.startedAt ?? '-',

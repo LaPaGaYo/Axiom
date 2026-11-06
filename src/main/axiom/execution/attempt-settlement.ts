@@ -24,7 +24,7 @@ function currentUnsubmittedTask(store: AxiomStore, input: AttemptSettlement) {
 
 export function settleVerificationFailure(
   ctx: { store: AxiomStore; missions: MissionController },
-  input: { taskId: string; candidateId: string }
+  input: { taskId: string; candidateId: string; actor?: string }
 ): { settled: boolean } {
   return ctx.store.transaction('settle_verification_failure', () => {
     const task = ctx.store.getTaskStage(input.taskId)
@@ -40,14 +40,14 @@ export function settleVerificationFailure(
     ctx.missions.transitionTaskStage({
       taskId: task.taskId,
       to: 'NEEDS_FIX',
-      actor: 'VerificationService',
+      actor: input.actor ?? 'VerificationService',
       reason: 'verification_failed'
     })
     const retry = task.attemptCount < task.retryPolicy.maxAttempts
     ctx.missions.transitionTaskStage({
       taskId: task.taskId,
       to: retry ? 'READY' : 'BLOCKED',
-      actor: 'VerificationService',
+      actor: input.actor ?? 'VerificationService',
       reason: retry ? 'retry' : 'retry_budget_exhausted'
     })
     return { settled: true }

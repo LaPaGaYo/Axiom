@@ -9,6 +9,28 @@ import { auditVerification } from './verification-claim'
 
 export class VerificationInterrupted extends Error {}
 
+export function escalateVerification(
+  deps: Pick<VerificationDependencies, 'store'>,
+  run: VerificationRun,
+  verdict: { reason: string; escalation?: 'human' | 'specialist' }
+) {
+  if (
+    !deps.store.updateVerificationRun({
+      id: run.id,
+      expectedStatus: 'INCONCLUSIVE',
+      status: 'HUMAN_REVIEW'
+    })
+  ) {
+    throw new VerificationInterrupted()
+  }
+  auditVerification(deps, { ...run, status: 'INCONCLUSIVE' }, 'verification.escalated', {
+    to: 'HUMAN_REVIEW',
+    reason: verdict.reason,
+    escalation: verdict.escalation ?? 'human',
+    routing: verdict.escalation === 'specialist' ? 'specialist_unavailable' : 'human'
+  })
+}
+
 function gateAuditFindings(
   verdict: VerificationVerdict,
   gate?: DiffGate
@@ -109,6 +131,9 @@ export function settleVerificationVerdict(
           : {})
       }
     )
+    if (verdict.verdict === 'INCONCLUSIVE') {
+      escalateVerification(deps, run, verdict)
+    }
     return true
   })
 }

@@ -161,7 +161,7 @@ it('continues the boot-only orphan sweep past a failed removal and audits a know
   )
 })
 
-it('isolates INCONCLUSIVE cleanup failures and retries them without requeueing or reclaiming', async () => {
+it('isolates HUMAN_REVIEW cleanup failures and retries them without requeueing or reclaiming', async () => {
   const second = queueAnotherVerification(f)
   vi.mocked(pin.pinVerificationCandidate).mockRejectedValue(
     new pin.VerificationPreparationError('candidate_mismatch', 'Candidate mismatch.')
@@ -179,19 +179,19 @@ it('isolates INCONCLUSIVE cleanup failures and retries them without requeueing o
   const service = new VerificationService(dependencies('epoch-after'))
   await service.recoverAtBoot()
   expect(f.store.getVerificationRun(old.id)).toMatchObject({
-    status: 'INCONCLUSIVE',
+    status: 'HUMAN_REVIEW',
     worktreeId: old.worktreeId,
     verdictDetail: { phase: 'prepare_failed', cleanupPending: true }
   })
   expect(f.store.getVerificationRun(second.id)).toMatchObject({
-    status: 'INCONCLUSIVE',
+    status: 'HUMAN_REVIEW',
     worktreeId: null,
     verdictDetail: { phase: 'prepare_failed', cleanupPending: false }
   })
   runtime.removeManagedWorktree.mockImplementation(remove)
   await service.kick()
   expect(f.store.getVerificationRun(old.id)).toMatchObject({
-    status: 'INCONCLUSIVE',
+    status: 'HUMAN_REVIEW',
     claimCount: 1,
     worktreeId: null,
     verdictDetail: { phase: 'prepare_failed', cleanupPending: false }
@@ -200,6 +200,7 @@ it('isolates INCONCLUSIVE cleanup failures and retries them without requeueing o
   expect(events(old.id).map((e) => e.event)).toEqual([
     'verification.claimed',
     'verification.inconclusive',
+    'verification.escalated',
     'verification.recovery_failed'
   ])
 })

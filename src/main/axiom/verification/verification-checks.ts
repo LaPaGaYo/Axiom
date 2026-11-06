@@ -43,7 +43,10 @@ async function cleanupVerification(
   // An obsolete claim may remove its own tree, but cannot update a newer run's metadata.
   if (
     !current ||
-    current.status !== expectedStatus ||
+    (current.status !== expectedStatus &&
+      !(
+        expectedStatus === 'HUMAN_REVIEW' && ['PASS', 'FAIL', 'CANCELED'].includes(current.status)
+      )) ||
     current.worktreeId !== run.worktreeId ||
     current.runtimeEpoch !== run.runtimeEpoch ||
     current.claimCount !== run.claimCount
@@ -52,7 +55,7 @@ async function cleanupVerification(
   }
   deps.store.updateVerificationRun({
     id: run.id,
-    expectedStatus,
+    expectedStatus: current.status,
     expectedRuntimeEpoch: run.runtimeEpoch,
     expectedClaimCount: run.claimCount,
     worktreeId: cleanupPending ? run.worktreeId : null,
@@ -242,7 +245,7 @@ export async function runVerificationChecks(
       gate
     })
     if (settled) {
-      cleanupStatus = verdict.verdict
+      cleanupStatus = verdict.verdict === 'INCONCLUSIVE' ? 'HUMAN_REVIEW' : verdict.verdict
     }
   } catch (error) {
     if (!(error instanceof VerificationInterrupted)) {
