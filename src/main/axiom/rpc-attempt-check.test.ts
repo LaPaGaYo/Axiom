@@ -17,14 +17,6 @@ it('reads only the assignee dispatch mailbox without a mutation fence or receipt
     attemptId: f.t01.attemptId,
     summary: 'Downstream evidence'
   })
-  // Worker messages reach only the Mission Run. Only host-routed mail reaches a dispatch.
-  f.db.insertMessage({
-    runId: f.mission.runId,
-    from: `run:${f.mission.runId}`,
-    to: `dispatch:${t04.attemptId}`,
-    subject: 'Control Plane response',
-    type: 'status'
-  })
   const receipts = f.db.db.prepare('SELECT * FROM mutation_receipts').all()
   for (const worker of [t04, f.t01]) {
     const result = await f.call(
@@ -46,12 +38,10 @@ it('reads only the assignee dispatch mailbox without a mutation fence or receipt
 it('passes the dispatch waiter, timeout and routing-type filter to the kernel and returns arriving mail', async () => {
   const t04 = f.bind('T04')
   const wait = vi.spyOn(f.runtime, 'waitForMessage').mockImplementation(async () => {
-    f.db.insertMessage({
-      runId: f.mission.runId,
-      from: `run:${f.mission.runId}`,
-      to: `dispatch:${t04.attemptId}`,
-      subject: 'Arrived',
-      type: 'handoff'
+    await f.call('axiom.attempt.handoff', {
+      from: f.t01.from,
+      attemptId: f.t01.attemptId,
+      summary: 'Arrived'
     })
     return 'notified'
   })

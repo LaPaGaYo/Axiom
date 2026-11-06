@@ -265,16 +265,16 @@ M3-04b-3：报告中的 **typed QUESTION item** 是绑定 Task 的 `messages.pay
 
 | Axiom 类型        | 谁可发                | 典型接收者                     | Orca `messages.type`（仅路由） | 说明                                             |
 | ----------------- | --------------------- | ------------------------------ | ------------------------------ | ------------------------------------------------ |
-| `INFORM`          | Worker、Control Plane | MissionController           | `status`                       | 状态/兼容性变化                                  |
+| `INFORM`          | Worker、Control Plane | 受影响 Task 的订阅者           | `status`                       | 状态/兼容性变化                                  |
 | `REQUEST`         | Worker                | MissionController              | `escalation`                   | 资源、权限、Control Plane 动作                   |
 | `QUESTION`        | Worker、Control Plane | 人类（经 MissionController） | `question`（+ decision gate）  | 阻塞性问题                                       |
 | `DECISION`        | Control Plane         | 依赖该 Decision 的 Task        | `status`                       | 决策通知；正文在 `decisions` 表                  |
 | `BLOCKED`         | Worker                | MissionController              | `escalation`                   | 无法继续                                         |
-| `HANDOFF`         | Worker                | MissionController                | `handoff`                      | 产物与责任交接                                   |
+| `HANDOFF`         | Worker                | 下游 Task/Agent                | `handoff`                      | 产物与责任交接                                   |
 | `REQUEST_SUBTASK` | Worker                | MissionController              | `escalation`                   | 请求新范围工作；由 Control Plane 校验后创建 Task |
 | `SUBMISSION`      | Worker                | VerificationService            | `worker_done`（经 Axiom 结算） | 不可变候选 + 报告                                |
 
-- DEF-21 ④（V1）：QUESTION 只交人，不向运行中的 Worker 提问；MessageRouter 的所有 typed message 仅投递 `run:<runId>`。严格 Attempt 参数拒绝 `to`；related.taskIds 只表达关联，不选择收件 Worker。
+- DEF-21 ④（V1）：QUESTION 只交人，不向运行中的 Worker 提问；QUESTION / REQUEST / BLOCKED / REQUEST_SUBTASK 等 Control Plane 专属类型只投递 `run:<runId>`，INFORM / HANDOFF 仍按 M2-06a 投 Control Plane 与 sender Task 直接下游最新且 dispatched 的 Attempt（非空 `related.taskIds` 替换默认受众）。严格 Attempt 参数拒绝 `to`；Worker 不能自选收件 Worker。
 - `payload.axiom.type` 持久化产品类型；每条消息必须带 missionId 与相关 taskId / attemptId / decisionId / artifactId。
 - `merge_ready`、`dispatch`、`decision_gate` 不允许由 Worker 发出；`heartbeat` 是执行内核 liveness 信号，不是产品消息类型。
 - Worker CLI 命令统一挂在 `axiom attempt <verb>` 下：`axiom attempt submit | ask | blocked | handoff | inform | request | request-subtask | check`（`check` 读取自己的 mailbox）。不用顶层 `axiom check`——Orca CLI 已有顶层浏览器命令 `check`（`src/cli/specs/browser-basic.ts`）。调用方身份由宿主核实（D73：终端 / pane / Orca session，不接受命令行指定）；人做的决定不经 CLI，只接受桌面应用（D78）。

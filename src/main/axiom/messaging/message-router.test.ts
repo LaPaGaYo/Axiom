@@ -40,38 +40,46 @@ afterEach(() => {
   f.db.close()
   vi.restoreAllMocks()
 })
-it.each(AXIOM_MESSAGE_TYPES)('DEF-21: typed %s is delivered only to the Run mailbox', (type) => {
-  const downstream = f.bind('T04')
-  const { sender } = resolveAttemptSender({ ...f, ...f.t01 })
-  const result = routeWorkerMessage(f, {
-    sender,
-    axiom: {
-      version: 1,
-      type,
-      missionId: f.mission.id,
-      taskId: f.t01.taskId,
-      attemptId: f.t01.attemptId,
-      summary: 'For the Control Plane',
-      artifactIds: [],
-      related: { taskIds: [downstream.taskId] },
-      ...(type === 'QUESTION' ? { question: { text: 'Human input needed', options: [] } } : {}),
-      ...(type === 'REQUEST_SUBTASK'
-        ? {
-            subtask: {
-              title: 'Follow-up',
-              objective: 'Scoped follow-up',
-              allowedPaths: ['a.ts'],
-              acceptanceCriteria: [{ text: 'Reviewed', check: { kind: 'human' as const } }],
-              risk: 'low' as const
+// DEF-21 (4), V1: a Worker never addresses another running Worker. QUESTION and every other
+// Control-Plane-only type reach only run:<runId>; INFORM / HANDOFF additionally fan out to the
+// direct downstream dispatched Attempts (M2-06a), which the tests below pin.
+it.each(AXIOM_MESSAGE_TYPES.filter((type) => type !== 'INFORM' && type !== 'HANDOFF'))(
+  'DEF-21 (4): typed %s is delivered only to the Run mailbox',
+  (type) => {
+    const downstream = f.bind('T04')
+    const { sender } = resolveAttemptSender({ ...f, ...f.t01 })
+    const result = routeWorkerMessage(f, {
+      sender,
+      axiom: {
+        version: 1,
+        type,
+        missionId: f.mission.id,
+        taskId: f.t01.taskId,
+        attemptId: f.t01.attemptId,
+        summary: 'For the Control Plane',
+        artifactIds: [],
+        related: { taskIds: [downstream.taskId] },
+        ...(type === 'QUESTION' ? { question: { text: 'Human input needed', options: [] } } : {}),
+        ...(type === 'REQUEST_SUBTASK'
+          ? {
+              subtask: {
+                title: 'Follow-up',
+                objective: 'Scoped follow-up',
+                allowedPaths: ['a.ts'],
+                acceptanceCriteria: [{ text: 'Reviewed', check: { kind: 'human' as const } }],
+                risk: 'low' as const
+              }
             }
-          }
-        : {})
-    }
-  })
-  expect(result.recipients).toEqual([`run:${f.mission.runId}`])
-  expect(f.db.getInbox(100).map((message) => message.to_handle)).toEqual([`run:${f.mission.runId}`])
-  expect(f.db.getUnreadMessages(`dispatch:${downstream.attemptId}`)).toEqual([])
-})
+          : {})
+      }
+    })
+    expect(result.recipients).toEqual([`run:${f.mission.runId}`])
+    expect(f.db.getInbox(100).map((message) => message.to_handle)).toEqual([
+      `run:${f.mission.runId}`
+    ])
+    expect(f.db.getUnreadMessages(`dispatch:${downstream.attemptId}`)).toEqual([])
+  }
+)
 it('strict Attempt message and question params reject an explicit recipient', () => {
   const sender = { attemptId: f.t01.attemptId, from: f.t01.from }
   expect(
@@ -82,7 +90,7 @@ it('strict Attempt message and question params reject an explicit recipient', ()
   ).toBe(false)
 })
 it.each(['inform', 'handoff', 'request'] as const)(
-  '%s routes only to the Control Plane, even with eligible downstream Attempts',
+  '%s routes only to the Control Plane and eligible direct downstream Attempts',
   async (verb) => {
     const t04 = f.bind('T04')
     const t07 = f.bind('T07')
@@ -93,17 +101,20 @@ it.each(['inform', 'handoff', 'request'] as const)(
     })
     expect(response.ok).toBe(true)
     const cp = f.db.getUnreadRunMailbox(f.mission.runId)[0]!
-    expect(f.db.getInbox(100)).toHaveLength(1)
+    expect(f.db.getInbox(100)).toHaveLength(verb === 'request' ? 1 : 2)
     expect(f.db.getUnreadMessages(`dispatch:${t07.attemptId}`)).toEqual([])
     const downstream = f.db.getUnreadMessages(`dispatch:${t04.attemptId}`)
-    expect(downstream).toHaveLength(0)
-    expect(cp.to_handle).toBe(`run:${f.mission.runId}`)
-    expect(f.notify).toHaveBeenCalledExactlyOnceWith(`run:${f.mission.runId}`, cp.type)
+    expect(downstream).toHaveLength(verb === 'request' ? 0 : 1)
+    if (verb !== 'request') {
+      expect(downstream[0]).toMatchObject({ thread_id: cp.id, payload: cp.payload })
+      expect(f.notify).toHaveBeenCalledWith(`dispatch:${t04.attemptId}`, cp.type)
+    }
+    expect(f.notify).toHaveBeenCalledTimes(verb === 'request' ? 1 : 2)
     expect(f.db.getInbox(100).every((m) => !m.to_handle.startsWith('@'))).toBe(true)
   }
 )
 it.each(['inform', 'handoff'] as const)(
-  '%s related Task references never address another Worker',
+  '%s explicit related Task list replaces defaults and deduplicates',
   async (verb) => {
     const t04 = f.bind('T04')
     const t07 = f.bind('T07')
@@ -116,7 +127,7 @@ it.each(['inform', 'handoff'] as const)(
       })
     ).toMatchObject({ ok: true })
     expect(f.db.getUnreadMessages(`dispatch:${t04.attemptId}`)).toEqual([])
-    expect(f.db.getUnreadMessages(`dispatch:${t07.attemptId}`)).toHaveLength(0)
+    expect(f.db.getUnreadMessages(`dispatch:${t07.attemptId}`)).toHaveLength(1)
     expect(f.db.getUnreadRunMailbox(f.mission.runId)).toHaveLength(1)
   }
 )
