@@ -1,4 +1,5 @@
 import type { z } from 'zod'
+import type { TaskSpec } from '../../../shared/axiom-contract/mission-objects'
 import { TaskAdjustParams } from '../../../shared/axiom-contract/task-params'
 import { OrchestrationError } from '../../runtime/orchestration/orchestration-error'
 import {
@@ -9,6 +10,26 @@ import {
   type ControllerContext
 } from './controller-context'
 import { projectTask, transitionTaskStage } from './task-readiness'
+import { activeCandidateVerification } from '../verification/verification-candidate'
+import { validateTaskAcceptance } from '../../../shared/axiom-contract/plan-proposal'
+import { VerificationRulesSchema } from '../../../shared/axiom-contract/verification-rules'
+import { validateTaskCommands } from './plan-materialization'
+import { redactContext } from '../context-builder/redaction'
+
+function acceptanceForAudit(criteria: TaskSpec['acceptanceCriteria']) {
+  return criteria.map((criterion) =>
+    typeof criterion === 'string'
+      ? redactContext(criterion).content
+      : {
+          ...criterion,
+          text: redactContext(criterion.text).content,
+          check:
+            criterion.check.kind === 'command'
+              ? { ...criterion.check, command: redactContext(criterion.check.command).content }
+              : criterion.check
+        }
+  )
+}
 
 export function resolveBlockedMessages(
   ctx: ControllerContext,
@@ -62,12 +83,20 @@ export function adjustTask(
   ) {
     throw new MissionControllerError('plan_pending', { missionId: mission.id })
   }
-  if (!['DEFINED', 'READY', 'NEEDS_FIX', 'BLOCKED'].includes(task.stage)) {
+  const { candidate, latest } = activeCandidateVerification(ctx.store, task)
+  if (
+    (!['DEFINED', 'READY', 'NEEDS_FIX', 'BLOCKED'].includes(task.stage) &&
+      !(task.stage === 'VERIFYING' && latest?.status === 'HUMAN_REVIEW')) ||
+    (p.acceptanceCriteria && (latest?.status === 'QUEUED' || latest?.status === 'RUNNING'))
+  ) {
     throw new MissionControllerError('illegal_transition', {
       taskId: task.taskId,
       from: task.stage,
       reason: 'task_not_adjustable'
     })
+  }
+  if (redactContext(p.rationale).redacted) {
+    throw new OrchestrationError('invalid_argument', 'secret_in_rationale')
   }
   const maxAttempts = p.maxAttempts ?? task.retryPolicy.maxAttempts
   if (maxAttempts < task.attemptCount) {
@@ -85,6 +114,20 @@ export function adjustTask(
   const addedPaths = allowedPaths.filter((path) => !task.spec.scope.allowedPaths.includes(path))
   const retryPolicy = { ...task.retryPolicy, maxAttempts }
   const spec = { ...task.spec, scope: { ...task.spec.scope, allowedPaths }, retryPolicy }
+  if (p.acceptanceCriteria) {
+    spec.acceptanceCriteria = p.acceptanceCriteria
+    const parsedRules = VerificationRulesSchema.safeParse(
+      ctx.store.getPolicy(mission.id)?.verificationRules
+    )
+    const rules = parsedRules.success ? parsedRules.data : VerificationRulesSchema.parse({})
+    const errors = [
+      ...validateTaskAcceptance(spec, ['task']),
+      ...validateTaskCommands(spec, rules, ['task'])
+    ]
+    if (errors.length) {
+      throw new MissionControllerError('plan_invalid', { errors })
+    }
+  }
   if (
     !ctx.store.updateTaskSpec({ taskId: task.taskId, expectedStage: task.stage, spec, retryPolicy })
   ) {
@@ -105,7 +148,10 @@ export function adjustTask(
     event: 'task.adjusted',
     before: {
       allowedPaths: task.spec.scope.allowedPaths,
-      maxAttempts: task.retryPolicy.maxAttempts
+      maxAttempts: task.retryPolicy.maxAttempts,
+      ...(p.acceptanceCriteria
+        ? { acceptanceCriteria: acceptanceForAudit(task.spec.acceptanceCriteria) }
+        : {})
     },
     after: {
       allowedPaths,
@@ -114,7 +160,10 @@ export function adjustTask(
       rationale: p.rationale,
       afterAttemptSeq: ctx.store.nextAttemptSeq(task.taskId) - 1,
       origin: 'user',
-      resolvedMessageIds
+      resolvedMessageIds,
+      ...(p.acceptanceCriteria
+        ? { acceptanceCriteria: acceptanceForAudit(p.acceptanceCriteria) }
+        : {})
     }
   })
   audit(ctx, {
@@ -134,6 +183,16 @@ export function adjustTask(
     }
   })
   let adjusted = requireTask(ctx, task.taskId)
+  // Criteria-only corrections keep the immutable Candidate available for an explicit rerun.
+  if (
+    adjusted.stage === 'BLOCKED' &&
+    candidate &&
+    p.acceptanceCriteria &&
+    !p.addAllowedPaths.length &&
+    p.maxAttempts === undefined
+  ) {
+    return projectTask(ctx, adjusted)
+  }
   if (adjusted.stage === 'BLOCKED') {
     if (!adjusted.previousStage) {
       throw new MissionControllerError('illegal_transition', {

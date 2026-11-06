@@ -222,6 +222,6 @@ it('uses Attempt sequence when same-second run IDs sort in reverse order', () =>
     .prepare('UPDATE verification_runs SET id = ? WHERE id = ?')
     .run('a-second', latest.verificationRun.id)
   const stored = f.store.listVerificationRuns({ missionId: f.missionId, taskId })
-  expect(stored.map((run) => run.id)).toEqual(['a-second', 'z-first'])
-  expect([...persistentFailures(f.store, stored[0])]).toEqual([['persistent', 1]])
+  expect(stored.map((run) => run.id)).toEqual(['z-first', 'a-second'])
+  expect([...persistentFailures(f.store, stored[1])]).toEqual([['persistent', 1]])
 })

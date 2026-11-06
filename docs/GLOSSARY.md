@@ -118,9 +118,9 @@ BLOCKED           → 按原因解除（D70 修订）：回到进入前的非运
 
 - `READY` = 上游依赖全部 `INTEGRATED`（V1 只支持这一阈值，D69 修订）∧ PlanRevision APPROVED ∧ Mission EXECUTING ∧ 无阻塞 Question/Approval ∧ 预算未耗尽。
 - `INTEGRATION_READY` = `VERIFIED` ∧ 全部上游依赖 `INTEGRATED`；条件在进入时评估。高风险 Approval 只在批次 `PROMOTABLE` 之后（§4.9，D79），Task 级不再要求 Approval。
-- `BLOCKED` 的进入原因与解除（D70 修订、D79）：重试预算耗尽（`retry_budget_exhausted`：V1 经桌面 `axiom.task.adjust` 提升 Task maxAttempts → READY，M4 接 Approval；或取消 / replan）、`HUMAN_REVIEW` 等待（review 收敛）、批次 Approval 被拒（`approval_denied`：带理由重做 → NEEDS_FIX，或取消）、阻塞 Question（答复后 Attempt 仍活着 → RUNNING，已结束 → READY，答复进强制上下文）；其余原因解除后回 READY，不回 RUNNING。
+- `BLOCKED` 的进入原因与解除（D70 修订、D79）：重试预算耗尽（`retry_budget_exhausted`：V1 经桌面 `axiom.task.adjust` 提升 Task maxAttempts → READY，M4 接 Approval；或取消 / replan）、批次 Approval 被拒（`approval_denied`：带理由重做 → NEEDS_FIX，或取消）、阻塞 Question（答复后 Attempt 仍活着 → RUNNING，已结束 → READY，答复进强制上下文）；其余原因解除后回 READY，不回 RUNNING。
 - `INTEGRATED` = 所属 IntegrationBatch 已 `PROMOTED`（候选已成为集成基线的一部分）。
-- D85 / M3-04b：headless 声明 `blocked_by_scope` → `BLOCKED(scope)`；`candidate_already_correct` / `cannot_reproduce` → `BLOCKED(candidate_disputed)`，均先经 `NEEDS_FIX`、不自动重试。桌面专用 `axiom.task.adjust`（CLI 形状 `axiom task adjust --task … --rationale … [--add-path …] [--max-attempts …]`）以 MINOR_ADJUSTMENT 调整范围 / 预算，或只记录复核 rationale，经持久化 `previousStage=NEEDS_FIX` 回 `READY`；也可取消。调整后须 `attemptCount < maxAttempts`，否则整笔回滚。V1 的人工预算授权使用 desktop-only 方法，Approval 对象留至 M4；已退出的声明 Attempt 仍占一个 seq 并计入 `maxAttempts`。声明不推翻确定性 FAIL；同 Candidate 重验留给 M3-05。
+- D85 / M3-04b：headless 声明 `blocked_by_scope` → `BLOCKED(scope)`；`candidate_already_correct` / `cannot_reproduce` → `BLOCKED(candidate_disputed)`，均先经 `NEEDS_FIX`、不自动重试。桌面专用 `axiom.task.adjust`（CLI 形状 `axiom task adjust --task … --rationale … [--add-path …] [--max-attempts …]`）以 MINOR_ADJUSTMENT 调整范围 / 预算，或只记录复核 rationale，经持久化 `previousStage=NEEDS_FIX` 回 `READY`；也可取消。调整后须 `attemptCount < maxAttempts`，否则整笔回滚。V1 的人工预算授权使用 desktop-only 方法，Approval 对象留至 M4；已退出的声明 Attempt 仍占一个 seq 并计入 `maxAttempts`。声明不推翻确定性 FAIL。M3-05 增加 acceptanceCriteria 全量替换；仅改标准且已有 ACTIVE Candidate 时保持 BLOCKED，随后显式 `axiom.verification.rerun` 重验同一 Candidate，不消耗新 Attempt（见 §4.8）。原范围 / 预算调整与 rationale-only 重试规则不变。
 - 重试预算耗尽 → `BLOCKED(retry_budget_exhausted)`：人选上述预算调整、取消，或重新规划（V1 的 replan 只由人发起，D8 修订；B4）。
 - 终态：`INTEGRATED`、`CANCELED`。
 
@@ -146,12 +146,12 @@ BLOCKED           → 按原因解除（D70 修订）：回到进入前的非运
 
 ```text
 QUEUED → RUNNING → PASS | FAIL | INCONCLUSIVE
-INCONCLUSIVE → SPECIALIST_REVIEW | HUMAN_REVIEW → PASS | FAIL
+INCONCLUSIVE → HUMAN_REVIEW → PASS | FAIL（V1；SPECIALIST_REVIEW 保留给 DEF-40）
 任一非终态 → CANCELED（候选被 SUPERSEDED）
 RUNNING → QUEUED（应用启动时由 VerificationService 重排队，D64 修订）
 ```
 
-Review 只能收敛 `INCONCLUSIVE`，**不能**推翻 deterministic `FAIL`。
+Review 只能收敛 `INCONCLUSIVE`；已结算的 `PASS` / `FAIL` 不能改判。V1 没有 Reviewer（D82 / DEF-40），每个 INCONCLUSIVE 在同一结算事务内进入 HUMAN_REVIEW，Task 保持 VERIFYING；即使策略指定 specialist 也不进入 SPECIALIST_REVIEW。该保留状态仍在兼容转换表中。
 
 M3-02（D65 / D68）完整转换表：
 
@@ -164,13 +164,19 @@ M3-02（D65 / D68）完整转换表：
 | HUMAN_REVIEW         | PASS、FAIL、CANCELED                       |
 | PASS、FAIL、CANCELED | 无（终态；仍可更新 cleanupPending 元数据） |
 
-M3-02 新增 phase `checking`（确定性命令执行中）与 `verdict`（证据已持久化、判定已结算）。verdict reason：`checks_failed`（FAIL）、`environment`（环境失败，直接交人）、`flaky`（重跑通过）、`known_flaky`（人工隔离名单）、`non_code`（解析后的 Task 标准没有 command，必须先有有效 Artifact，再按 nonCodeTasks 路由人工处置）、`policy_invalid`（旧策略不符合严格 schema，直接交人）；PASS 的 reason 为 `checks_passed`。INCONCLUSIVE 保持 Task VERIFYING，后续 M3-05 才路由审查。verdictDetail 只存摘要与 Artifact 引用；完整命令输出及摘录在内容寻址的证据中。
+M3-02 新增 phase `checking`（确定性命令执行中）与 `verdict`（证据已持久化、判定已结算）。verdict reason：`checks_failed`（FAIL）、`environment`（环境失败，直接交人）、`flaky`（重跑通过）、`known_flaky`（人工隔离名单）、`non_code`（解析后的 Task 标准没有 command，必须先有有效 Artifact，再按 nonCodeTasks 路由人工处置）、`policy_invalid`（旧策略不符合严格 schema，直接交人）；PASS 的 reason 为 `checks_passed`。INCONCLUSIVE 保持 Task VERIFYING；M3-05 同事务追加 `verification.escalated {to:HUMAN_REVIEW,reason,escalation,routing}`，routing 为 human 或 specialist_unavailable。run.status 为 HUMAN_REVIEW，verdictDetail.verdict / reason / acceptance 保留原始判定。verdictDetail 只存摘要与 Artifact 引用；完整命令输出及摘录在内容寻址的证据中。
 
 M3-03（D65 2026-10-24 修订）新增 verdict reason：`scope_violation`（FAIL，候选改动越界）、`secret_detected`（FAIL，新增行命中密钥模式）、`dangerous_change`（INCONCLUSIVE，危险路径未在 scope 中明确命名）、`diff_too_large`（INCONCLUSIVE，patch 超过扫描上限）。diff 不可得仍为 `environment`，detail 为 `integration_base_unavailable` / `merge_base_unavailable` / `diff_unavailable`；diff 给出的 INCONCLUSIVE 一律 escalation=human。
 
 M3-03b（D65 修订 ⑦–⑨）新增 `test_tampering`（INCONCLUSIVE，测试删除、跳过 / 聚焦标记净增、断言净减或抑制注释净增，直接交人）、`artifact_missing`（FAIL，非代码 Task 没有引用 Artifact）、`artifact_invalid`（FAIL，非代码 Artifact 为空、UTF-8 无效或 JSON 无效）。非代码 Artifact 不可读为 `environment`，detail=`artifact_unreadable`，直接交人。`non_code` 取代旧 `no_checks`：即使仓库门禁全绿也不 PASS；`nonCodeTasks=human_confirm` 交人，`artifact_only` 按 `inconclusiveRouting`。代码 Task 未声明 artifact 标准时，Artifact 检查只记证据；声明时必须有至少一个符合 kind 的有效引用。
 
-M3-01 的 `verdictDetail.phase`：`claimed`（事务领取）、`prepared`（独立 worktree 已 detached 检出并核验 Candidate commit/tree）、`prepare_failed`（准备失败，INCONCLUSIVE）、`requeued`（重启回收后重排队）、`canceled`（Candidate SUPERSEDED、Candidate 行缺失 `candidate_missing` 或 Task stage 已改变）。`prepared` 仍是 RUNNING，不代表验证通过；M3-02 才执行检查并产生 verdict。重启重排队的 run 可续接已 `VERIFYING` 的 Task，不回退 stage；普通 QUEUED 仍要求 SUBMITTED。每次领取递增 `claimCount`，记录 `runtimeEpoch / worktreeId / startedAt / finishedAt`；VerificationService 在启动时先回收旧 worktree 再重排队，保留旧审计与 Artifact。回收失败的 run 保持 RUNNING 与旧 epoch，标记 cleanupPending，由后续 kick / 60 s tick 重试；不阻止其他 run 或 Control Plane 启动。
+M3-01 的 `verdictDetail.phase`：`claimed`（事务领取）、`prepared`（独立 worktree 已 detached 检出并核验 Candidate commit/tree）、`prepare_failed`（准备失败，INCONCLUSIVE）、`requeued`（重启回收后重排队）、`canceled`（Candidate SUPERSEDED、Candidate 行缺失 `candidate_missing` 或 Task stage 已改变）。`prepared` 仍是 RUNNING，不代表验证通过；M3-02 才执行检查并产生 verdict。重启重排队或带匹配 `verification.rerun_requested` 审计的新 run 可续接已 `VERIFYING` 的 Task，不回退 stage；其它 QUEUED 仍要求 SUBMITTED。每次领取递增 `claimCount`，记录 `runtimeEpoch / worktreeId / startedAt / finishedAt`；VerificationService 在启动时先回收旧 worktree 再重排队，保留旧审计与 Artifact。回收失败的 run 保持 RUNNING 与旧 epoch，标记 cleanupPending，由后续 kick / 60 s tick 重试；不阻止其他 run 或 Control Plane 启动。
+
+M3-05 人工处置：desktop-only `axiom.verification.resolve {runId,verdict:PASS|FAIL,rationale,criteria?:number[]}` 只接受 HUMAN_REVIEW、Task VERIFYING 及归属匹配的 ACTIVE Candidate。rationale 必填、最多 4,000 字符；`redactContext` 命中秘密返回 `invalid_argument / secret_in_rationale`，不写入；criteria 为本 run acceptance 的零基索引，最多 50 个，越界拒绝。`verdictDetail.resolution={verdict,rationale,criteria,by:user,at}` 与 `verification.resolved` 是人工判定的记录；原始 verdict / acceptance 不改写。PASS 推 Task VERIFIED（actor=user）；FAIL 沿既有 NEEDS_FIX → READY 或 BLOCKED(retry_budget_exhausted)，与确定性 FAIL 共用 maxAttempts。已 PASS / FAIL 返回 `illegal_transition / deterministic_verdict_final`，其它非待审状态返回 run_not_pending；收据与状态事务一起提交，重放不重复审计。
+
+`axiom.task.adjust.acceptanceCriteria` 全量替换标准，按提案校验对象与命令；VERIFYING 仅在 ACTIVE Candidate 最新 run 为 HUMAN_REVIEW 时可调整。desktop-only `axiom.verification.rerun {taskId,rationale}` 接受此 VERIFYING 状态，或有 ACTIVE Candidate 的 BLOCKED（无 QUEUED / RUNNING 验证）；其它状态返回 `illegal_transition / task_not_rerunnable`。它将待审 run CANCELED（保存 `verdictDetail.rerun={rationale,by:user,at}`），为同一不可变 Candidate 新建 QUEUED，必要时 BLOCKED → VERIFYING，并记录 `verification.rerun_requested` 与收据。已 PASS / FAIL run 不变，不新增 Attempt；重验执行完整验证计划。CLI 形状为 `axiom verification resolve --run … --verdict PASS|FAIL --rationale … [--criterion <n>]...`、`axiom verification rerun --task … --rationale …`；人工动作仍受 D78 desktop 调用方限制。`verification list --status HUMAN_REVIEW` 列待审 run，文本输出含 reason / escalation。
+
+下一 Attempt 的失败证据以引用后的 rationale 显示 `A human resolved verification run <id> as FAIL: ...`；被选 criterion 显示 `[fail] <text> — a human judged this failed: ...`；重验显示 `Verification was re-run on the same candidate after the criteria changed: ...`。PASS resolution 不增加失败行。调整行增加 `acceptance criteria replaced (<n> → <m>)`；引用、脱敏与 8 KiB 预算规则见 control-plane 的 ContextPackage 节。
 
 ### 4.9 IntegrationBatch
 
@@ -259,15 +265,16 @@ M3-04b-3：报告中的 **typed QUESTION item** 是绑定 Task 的 `messages.pay
 
 | Axiom 类型        | 谁可发                | 典型接收者                     | Orca `messages.type`（仅路由） | 说明                                             |
 | ----------------- | --------------------- | ------------------------------ | ------------------------------ | ------------------------------------------------ |
-| `INFORM`          | Worker、Control Plane | 受影响 Task 的订阅者           | `status`                       | 状态/兼容性变化                                  |
+| `INFORM`          | Worker、Control Plane | MissionController           | `status`                       | 状态/兼容性变化                                  |
 | `REQUEST`         | Worker                | MissionController              | `escalation`                   | 资源、权限、Control Plane 动作                   |
-| `QUESTION`        | Worker、Control Plane | 指定 Agent / specialist / 人类 | `question`（+ decision gate）  | 阻塞性问题                                       |
+| `QUESTION`        | Worker、Control Plane | 人类（经 MissionController） | `question`（+ decision gate）  | 阻塞性问题                                       |
 | `DECISION`        | Control Plane         | 依赖该 Decision 的 Task        | `status`                       | 决策通知；正文在 `decisions` 表                  |
 | `BLOCKED`         | Worker                | MissionController              | `escalation`                   | 无法继续                                         |
-| `HANDOFF`         | Worker                | 下游 Task/Agent                | `handoff`                      | 产物与责任交接                                   |
+| `HANDOFF`         | Worker                | MissionController                | `handoff`                      | 产物与责任交接                                   |
 | `REQUEST_SUBTASK` | Worker                | MissionController              | `escalation`                   | 请求新范围工作；由 Control Plane 校验后创建 Task |
 | `SUBMISSION`      | Worker                | VerificationService            | `worker_done`（经 Axiom 结算） | 不可变候选 + 报告                                |
 
+- DEF-21 ④（V1）：QUESTION 只交人，不向运行中的 Worker 提问；MessageRouter 的所有 typed message 仅投递 `run:<runId>`。严格 Attempt 参数拒绝 `to`；related.taskIds 只表达关联，不选择收件 Worker。
 - `payload.axiom.type` 持久化产品类型；每条消息必须带 missionId 与相关 taskId / attemptId / decisionId / artifactId。
 - `merge_ready`、`dispatch`、`decision_gate` 不允许由 Worker 发出；`heartbeat` 是执行内核 liveness 信号，不是产品消息类型。
 - Worker CLI 命令统一挂在 `axiom attempt <verb>` 下：`axiom attempt submit | ask | blocked | handoff | inform | request | request-subtask | check`（`check` 读取自己的 mailbox）。不用顶层 `axiom check`——Orca CLI 已有顶层浏览器命令 `check`（`src/cli/specs/browser-basic.ts`）。调用方身份由宿主核实（D73：终端 / pane / Orca session，不接受命令行指定）；人做的决定不经 CLI，只接受桌面应用（D78）。

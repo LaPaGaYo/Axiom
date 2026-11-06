@@ -1,7 +1,12 @@
 import { z } from 'zod'
 import { VerificationAcceptanceSchema } from '../../../shared/axiom-contract/verification-acceptance'
-import type { VerificationRun } from '../../../shared/axiom-contract/verification-params'
+import {
+  VerificationResolutionSchema,
+  VerificationRerunDetailSchema,
+  type VerificationRun
+} from '../../../shared/axiom-contract/verification-params'
 import type { AxiomStore } from '../db/axiom-store'
+import { findVerificationRerun } from '../verification/verification-candidate'
 import { quote, quoteLine } from './previous-attempt-text'
 
 export const PreviousChecks = z.array(
@@ -20,7 +25,15 @@ export function acceptanceLines(detail: Record<string, unknown>): string[] {
     return []
   }
   const checks = PreviousChecks.safeParse(detail.checks)
+  const resolution = VerificationResolutionSchema.safeParse(detail.resolution)
   return acceptance.data.map((criterion) => {
+    if (
+      resolution.success &&
+      resolution.data.verdict === 'FAIL' &&
+      resolution.data.criteria.includes(criterion.index)
+    ) {
+      return `[fail] ${quote(criterion.text)} — a human judged this failed: ${quote(resolution.data.rationale)}`
+    }
     const prefix = `[${criterion.result}] ${quote(criterion.text)}`
     if (criterion.result === 'human') {
       return `${prefix} — a person confirms this; do not try to prove it with code changes`
@@ -35,6 +48,26 @@ export function acceptanceLines(detail: Record<string, unknown>): string[] {
     }
     return prefix
   })
+}
+
+export function humanDispositionLines(store: AxiomStore, run: VerificationRun): string[] {
+  const lines: string[] = []
+  const resolution = VerificationResolutionSchema.safeParse(run.verdictDetail.resolution)
+  if (resolution.success && resolution.data.verdict === 'FAIL') {
+    lines.push(
+      `A human resolved verification run ${run.id} as FAIL: ${quote(resolution.data.rationale)}`
+    )
+  }
+  const rerun = VerificationRerunDetailSchema.safeParse(run.verdictDetail.rerun)
+  const rerunRationale = rerun.success
+    ? rerun.data.rationale
+    : findVerificationRerun(store, run)?.rationale
+  if (rerunRationale !== undefined) {
+    lines.push(
+      `Verification was re-run on the same candidate after the criteria changed: ${quote(rerunRationale)}`
+    )
+  }
+  return lines
 }
 
 function failureNames(run: VerificationRun): Set<string> {
@@ -62,12 +95,7 @@ export function persistentFailures(
       const binding = candidate && store.getAttemptBindingByDispatch(candidate.attemptId)
       return { run, seq: binding?.seq, failures: failureNames(run) }
     })
-    .sort(
-      (a, b) =>
-        (a.seq ?? Number.MAX_SAFE_INTEGER) - (b.seq ?? Number.MAX_SAFE_INTEGER) ||
-        a.run.createdAt.localeCompare(b.run.createdAt) ||
-        a.run.id.localeCompare(b.run.id)
-    )
+    .sort((a, b) => (a.seq ?? Number.MAX_SAFE_INTEGER) - (b.seq ?? Number.MAX_SAFE_INTEGER))
   const latestIndex = runs.findIndex(({ run }) => run.id === latest.id)
   if (latestIndex < 1) {
     return result

@@ -1,7 +1,12 @@
 import { z } from 'zod'
 import { requiredString } from '../rpc-contract/rpc-param-primitives'
 import { TaskStageSchema } from './lifecycle'
-import { AxiomIdSchema, ProvenanceSchema, TaskSpecSchema } from './mission-objects'
+import {
+  AcceptanceCriterionSchema,
+  AxiomIdSchema,
+  ProvenanceSchema,
+  TaskSpecSchema
+} from './mission-objects'
 
 export const TaskListParams = z.object({
   missionId: AxiomIdSchema,
@@ -15,7 +20,8 @@ export const TaskAdjustParams = z.strictObject({
   taskId: AxiomIdSchema,
   rationale: requiredString('Missing rationale'),
   addAllowedPaths: z.array(z.string().trim().min(1)).max(50).default([]),
-  maxAttempts: z.number().int().positive().optional()
+  maxAttempts: z.number().int().positive().optional(),
+  acceptanceCriteria: z.array(AcceptanceCriterionSchema).min(1).max(50).optional()
 })
 export const TaskCreateParams = z.strictObject({
   missionId: AxiomIdSchema,

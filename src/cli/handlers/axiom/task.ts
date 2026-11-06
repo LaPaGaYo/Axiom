@@ -8,9 +8,15 @@ import {
 } from '../../flags'
 import { formatTask, formatTaskList } from '../../axiom-format'
 import { callAxiom } from './rpc-command'
+import { acceptanceFromFlags } from './acceptance-flags'
 
 export const AXIOM_TASK_HANDLERS: Record<string, CommandHandler> = {
   'task adjust': async (ctx) => {
+    const acceptanceCriteria = acceptanceFromFlags(
+      repeated(ctx.flags, 'acceptance'),
+      repeated(ctx.flags, 'evidence'),
+      repeated(ctx.flags, 'acceptance-artifact')
+    )
     await callAxiom(
       ctx,
       'axiom.task.adjust',
@@ -18,7 +24,8 @@ export const AXIOM_TASK_HANDLERS: Record<string, CommandHandler> = {
         taskId: required(ctx.flags, 'task'),
         rationale: required(ctx.flags, 'rationale'),
         addAllowedPaths: repeated(ctx.flags, 'add-path'),
-        maxAttempts: getOptionalPositiveIntegerFlag(ctx.flags, 'max-attempts')
+        maxAttempts: getOptionalPositiveIntegerFlag(ctx.flags, 'max-attempts'),
+        ...(acceptanceCriteria.length ? { acceptanceCriteria } : {})
       },
       formatTask
     )

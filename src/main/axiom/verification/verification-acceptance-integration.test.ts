@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest'
 import type { AcceptanceCriterion } from '../../../shared/axiom-contract/mission-objects'
 import { verificationGitFixture } from './verification-fixture.test-support'
 import { VerificationService } from './verification-service'
+import { rerunVerification } from './verification-rerun'
 
 let root: string
 let f: Awaited<ReturnType<typeof verificationGitFixture>>
@@ -29,6 +30,53 @@ const passing: AcceptanceCriterion = {
   text: 'First passes',
   check: { kind: 'command', command: 'node -e "process.exit(0)"' }
 }
+it('executes a corrected plan on the same immutable Candidate without a new Attempt', async () => {
+  f.store.updateTaskSpec({
+    taskId: f.task.taskId,
+    expectedStage: 'SUBMITTED',
+    retryPolicy: f.task.retryPolicy,
+    spec: {
+      ...f.task.spec,
+      acceptanceCriteria: [passing, { text: 'Person judges', check: { kind: 'human' } }]
+    }
+  })
+  await service.kick()
+  expect(f.store.getVerificationRun(f.run.id)?.status).toBe('HUMAN_REVIEW')
+  const before = f.store.getCandidate(f.candidate.id)
+  f.controller.adjustTask({
+    taskId: f.task.taskId,
+    acceptanceCriteria: [passing],
+    rationale: 'The command proves the requirement.',
+    actor: 'user'
+  })
+  const rerun = rerunVerification(
+    { store: f.store, missions: f.controller },
+    { taskId: f.task.taskId, rationale: 'Recheck the corrected criteria.' }
+  )
+  await service.kick()
+  expect(f.store.getVerificationRun(f.run.id)).toMatchObject({
+    status: 'CANCELED',
+    verdictDetail: { verdict: 'INCONCLUSIVE', reason: 'acceptance_human' }
+  })
+  expect(f.store.getVerificationRun(rerun.runId)).toMatchObject({
+    status: 'PASS',
+    candidateId: f.candidate.id,
+    worktreeId: null,
+    commands: [passing.check.kind === 'command' ? passing.check.command : ''],
+    verdictDetail: {
+      verdict: 'PASS',
+      reason: 'checks_passed',
+      acceptance: [{ index: 0, result: 'pass' }]
+    }
+  })
+  expect(f.store.getCandidate(f.candidate.id)).toEqual(before)
+  expect(f.store.getTaskStage(f.task.taskId)).toMatchObject({ stage: 'VERIFIED', attemptCount: 1 })
+  expect(
+    f.store.listAttemptBindings({ missionId: f.missionId, taskId: f.task.taskId })
+  ).toHaveLength(1)
+  expect(f.runtime.createManagedWorktree).toHaveBeenCalledTimes(2)
+  expect(f.runtime.removeManagedWorktree).toHaveBeenCalledTimes(2)
+})
 it.each([
   {
     second: {
@@ -42,7 +90,7 @@ it.each([
   },
   {
     second: { text: 'Person judges', check: { kind: 'human' } },
-    status: 'INCONCLUSIVE',
+    status: 'HUMAN_REVIEW',
     reason: 'acceptance_human',
     results: ['pass', 'human'],
     stage: 'VERIFYING'

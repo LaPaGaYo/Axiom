@@ -61,25 +61,6 @@ export function routeWorkerMessage(
     }
     // The deterministic consumer reads run:<id>; a coordinator session address is direct mail.
     const recipients = new Set([`run:${mission.runId}`])
-    if (axiom.type === 'INFORM' || axiom.type === 'HANDOFF') {
-      const taskIds = relatedTasks.length
-        ? relatedTasks
-        : store.listDownstreamEdges(axiom.taskId).map((e) => e.toTaskId)
-      for (const taskId of new Set(taskIds)) {
-        const bindings = store.listAttemptBindings({ missionId: mission.id, taskId })
-        const latest = bindings.at(-1)
-        const dispatch = latest?.dispatchId
-          ? db.getDispatchContextById(latest.dispatchId)
-          : undefined
-        if (
-          dispatch?.status === 'dispatched' &&
-          dispatch.run_id === mission.runId &&
-          dispatch.task_id === taskId
-        ) {
-          recipients.add(`dispatch:${dispatch.id}`)
-        }
-      }
-    }
     const messages: MessageRow[] = []
     for (const to of recipients) {
       messages.push(

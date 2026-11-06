@@ -141,7 +141,7 @@ export function verificationRunsStore(db: OrchestrationDb) {
         VerificationRunRowCodec,
         db.db
           .prepare(
-            `SELECT ${columns} FROM verification_runs WHERE mission_id = ? AND (? IS NULL OR status = ?) AND (? IS NULL OR task_id = ?) AND (? IS NULL OR candidate_id = ?) ORDER BY created_at, id`
+            `SELECT ${columns} FROM verification_runs WHERE mission_id = ? AND (? IS NULL OR status = ?) AND (? IS NULL OR task_id = ?) AND (? IS NULL OR candidate_id = ?) ORDER BY created_at, rowid`
           )
           .all(
             p.missionId,

@@ -51,6 +51,8 @@ import {
 } from '../axiom-contract/task-params'
 import {
   VerificationListParams,
+  VerificationRerunParams,
+  VerificationResolveParams,
   VerificationShowParams
 } from '../axiom-contract/verification-params'
 import {
@@ -866,6 +868,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'axiom.task.list': TaskListParams,
   'axiom.task.show': TaskShowParams,
   'axiom.verification.list': VerificationListParams,
+  'axiom.verification.rerun': VerificationRerunParams,
+  'axiom.verification.resolve': VerificationResolveParams,
   'axiom.verification.show': VerificationShowParams,
   'browser.back': BrowserTarget,
   'browser.capture.start': BrowserTarget,

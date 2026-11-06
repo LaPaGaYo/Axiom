@@ -313,7 +313,7 @@ it('fences stale outcome writes by epoch and claim count', () => {
 })
 
 it.each(['candidate_missing', 'candidate_mismatch', 'worktree_unavailable'] as const)(
-  'records %s as INCONCLUSIVE, cleans up its worktree and leaves the Task VERIFYING',
+  'routes preparation failure %s to HUMAN_REVIEW, cleans up its worktree and leaves the Task VERIFYING',
   async (reason) => {
     if (reason === 'worktree_unavailable') {
       runtime.createManagedWorktree.mockRejectedValueOnce(new Error('unavailable'))
@@ -324,7 +324,7 @@ it.each(['candidate_missing', 'candidate_mismatch', 'worktree_unavailable'] as c
     }
     await service.kick()
     expect(f.store.getVerificationRun(f.run.id)).toMatchObject({
-      status: 'INCONCLUSIVE',
+      status: 'HUMAN_REVIEW',
       finishedAt: expect.any(String),
       worktreeId: null,
       verdictDetail: { phase: 'prepare_failed', reason, detail: expect.any(String) }
@@ -335,7 +335,8 @@ it.each(['candidate_missing', 'candidate_mismatch', 'worktree_unavailable'] as c
     expect(f.store.getTaskStage(f.task.taskId)?.stage).toBe('VERIFYING')
     expect(events().map((e) => e.event)).toEqual([
       'verification.claimed',
-      'verification.inconclusive'
+      'verification.inconclusive',
+      'verification.escalated'
     ])
   }
 )

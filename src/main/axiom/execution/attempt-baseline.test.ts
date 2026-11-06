@@ -89,12 +89,12 @@ it('never reaches behind an unsubmitted immediately preceding Attempt', () => {
     skippedAttempts: []
   })
 })
-it('orders by createdAt then id, independently of insertion order', () => {
+it('orders by createdAt, breaking same-second ties by insertion order', () => {
   const { verificationRun } = previousSubmission(f.store)
   for (const [id, status, at] of [
-    ['z-new', 'FAIL', '2026-10-24T00:02:00Z'],
+    ['z-new', 'PASS', '2026-10-24T00:02:00Z'],
     ['zz-old', 'PASS', '2026-10-24T00:01:00Z'],
-    ['a-new', 'PASS', '2026-10-24T00:02:00Z']
+    ['a-new', 'FAIL', '2026-10-24T00:02:00Z']
   ] as const) {
     f.store.insertVerificationRun({ ...verificationRun, id, status })
     f.db.db.prepare('UPDATE verification_runs SET created_at = ? WHERE id = ?').run(at, id)
@@ -102,7 +102,7 @@ it('orders by createdAt then id, independently of insertion order', () => {
   f.db.db
     .prepare('UPDATE verification_runs SET created_at = ? WHERE id = ?')
     .run('2026-10-24T00:00:00Z', verificationRun.id)
-  expect(resolve()).toMatchObject({ kind: 'candidate', verificationRun: { id: 'z-new' } })
+  expect(resolve()).toMatchObject({ kind: 'candidate', verificationRun: { id: 'a-new' } })
 })
 
 function unchanged(seq: number, kind = 'unchanged', reason?: string, paths?: string[]) {
