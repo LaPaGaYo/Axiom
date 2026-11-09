@@ -27,6 +27,7 @@ export const humanAcceptance: VerificationAcceptance[] = [
 
 export function humanReviewFixture(status: VerificationRunStatus = 'HUMAN_REVIEW') {
   const rpc = rpcFixture()
+  getAxiomControlPlane(rpc.runtime).effects.start()
   vi.spyOn(getAxiomControlPlane(rpc.runtime).scheduler, 'scheduleRound').mockResolvedValue({
     admitted: [],
     skipped: []
@@ -81,8 +82,8 @@ export function humanReviewFixture(status: VerificationRunStatus = 'HUMAN_REVIEW
     verifier: 'VerificationService'
   })
   const snapshot = () =>
-    ['verification_runs', 'task_stages', 'audit_events', 'mutation_receipts'].map((table) =>
-      f.db.db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all()
+    ['verification_runs', 'task_stages', 'audit_events', 'mutation_receipts', 'axiom_effects'].map(
+      (table) => f.db.db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all()
     )
   return { ...rpc, ...f, candidate, run, task, snapshot }
 }

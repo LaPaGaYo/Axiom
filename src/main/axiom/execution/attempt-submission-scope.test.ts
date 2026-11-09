@@ -13,11 +13,16 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-it('archives after settlement and verification kick, before mail and receipt, then releases after grace', async () => {
+it('archives after settlement and verification enqueue, before mail and receipt, then releases after grace', async () => {
   f.capture.mockImplementationOnce(async (input) => {
     expect(f.db.db.isTransaction).toBe(false)
     expect(f.store.getSubmissionByDispatch(input.dispatchId)).toBeDefined()
-    expect(f.kick).toHaveBeenCalledOnce()
+    expect(f.store.listEffects({ missionId: f.mission.id })).toEqual([
+      expect.objectContaining({
+        kind: 'verification.enqueue',
+        payload: { runId: f.store.listVerificationRuns({ missionId: f.mission.id })[0].id }
+      })
+    ])
     expect(f.store.getTaskStage(f.t01.taskId)?.stage).toBe('SUBMITTED')
     expect(f.db.getDispatchContextById(input.dispatchId)?.status).toBe('completed')
     expect(f.store.listVerificationRuns({ missionId: f.mission.id })).toHaveLength(1)
@@ -35,6 +40,7 @@ it('archives after settlement and verification kick, before mail and receipt, th
   })
   const result = await f.submit()
   expect(result, JSON.stringify(result)).toMatchObject({ ok: true })
+  expect(f.kick).toHaveBeenCalledOnce()
   expect(f.db.getWorkerTerminalResourceByOwner(f.t01.attemptId)?.release_state).toBe(
     'not_requested'
   )
@@ -105,6 +111,7 @@ it.each([2000, 2001, 4000])(
       report: { ...report, summary }
     })
     expect(result, JSON.stringify(result)).toMatchObject({ ok: true })
+    expect(f.kick).toHaveBeenCalledOnce()
     expect(f.store.getSubmissionByDispatch(f.t01.attemptId)?.report.summary).toBe(summary)
     expect(f.store.listMessages({ missionId: f.mission.id })[0]?.summary).toBe(
       length > 2000 ? `${'x'.repeat(1999)}…` : summary

@@ -11,6 +11,7 @@ export const AXIOM_METHOD_CALLER_CLASS: Record<string, CallerClass> = {
   'axiom.verification.resolve': 'desktop_only',
   'axiom.verification.rerun': 'desktop_only',
   'axiom.namespace.get': 'read',
+  'axiom.effect.list': 'read',
   'axiom.mission.create': 'desktop_only',
   'axiom.mission.plan': 'desktop_only',
   'axiom.mission.start': 'desktop_only',

@@ -22,6 +22,7 @@ it('classifies exactly every registered Axiom method, including namespace discov
   expect(resolveAxiomCallerClass('axiom.task.adjust', {})).toBe('desktop_only')
   expect(resolveAxiomCallerClass('axiom.verification.resolve', {})).toBe('desktop_only')
   expect(resolveAxiomCallerClass('axiom.verification.rerun', {})).toBe('desktop_only')
+  expect(resolveAxiomCallerClass('axiom.effect.list', {})).toBe('read')
 })
 it.each(['axiom.plan.propose', 'axiom.artifact.put'])(
   '%s selects authority by attemptId',

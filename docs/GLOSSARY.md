@@ -267,6 +267,16 @@ M3-04b-3：报告中的 **typed QUESTION item** 是绑定 Task 的 `messages.pay
 | `approval_denied` / `delivery_denied`     | 批次 Approval 被拒时 Task 的 BLOCKED 原因（D79）/ 交付 Approval 被拒时 Mission 的 BLOCKED 原因（D70）。                                                                                                                                                                                                                     |
 | `pauseMode`                               | `drain`（默认）\| `stop`：Mission PAUSED 时运行中 Attempt 的处理（D70）。                                                                                                                                                                                                                                                   |
 
+### Effect outbox（M3-06，D87 / DEF-48 ①）
+
+- **Effect / 副作用**：与命令的权威状态在同一事务写入 `axiom_effects` 的持久化执行请求；执行器仅在提交后、事务外执行。不是新的 Task / Attempt 生命周期。
+- **Effect outbox / 副作用发件箱**：Control Plane 的持久化副作用出口；v0 每个 `(kind, missionId)` 同时最多执行一个条目，不同 lane 独立。单进程持有数据库，租约按进程 epoch 识别，无时间过期。
+- **Effect kinds**：`attempt.dispatch`（key = `<taskId>/<seq>`，一个 Attempt 恰有一个 dispatch）；`verification.enqueue`（key = VerificationRun id，只唤醒既有验证队列）。
+- **Effect status**：`pending`（等待 dueAt）→ `running`（已租用）→ `done`（执行器完成）、`pending`（延后 / 有界重试）、`failed`（失败次数耗尽）或 `retired`（重启后无法安全重放）。`attempts` 只计抛出的执行失败，`later` 和 boot retry 不增加它。
+- **`effect.failed`**：`EffectOutbox` 对 `effect` 记录 `{ kind, key, attempts, lastError }`；错误通过 `redactContext` 脱敏且最多 2,000 字符。
+- **`effect.retired`**：`EffectOutbox` 对 `effect` 记录 `{ kind, key, reason }`；在途启动无绑定而内核已有未绑定 dispatch 时 reason 为 `dispatch_outcome_unknown`，交回既有 orphan 规则结算。
+- **Effect read surface**：`axiom.effect.list { missionId, status? }`（`read`）；CLI `axiom mission effect list --mission <id> [--status <s>] [--json]`。
+
 ## 5. 消息类型与 Orca 映射（D9）
 
 | Axiom 类型        | 谁可发                | 典型接收者                     | Orca `messages.type`（仅路由） | 说明                                             |

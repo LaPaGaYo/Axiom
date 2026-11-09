@@ -18,7 +18,8 @@ export const workerTypes = ['INFORM', 'REQUEST', 'BLOCKED', 'HANDOFF', 'REQUEST_
 
 export function channelFixture(dbPath = ':memory:') {
   const f = rpcFixture(dbPath)
-  const { missions } = getAxiomControlPlane(f.runtime)
+  const { missions, effects } = getAxiomControlPlane(f.runtime)
+  effects.start()
   const { mission, goalRevision } = missions.createMission(createInput)
   const plan = propose(missions, mission.id, goalRevision.id)
   missions.approvePlan({ planRevisionId: plan.id, resolver: actor, provenance })

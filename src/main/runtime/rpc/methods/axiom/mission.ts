@@ -11,8 +11,19 @@ import {
   MissionCancelParams
 } from '../../../../../shared/axiom-contract/mission-params'
 import { getAxiomControlPlane, missionSummary } from '../../../../axiom/control-plane'
+import { EffectListParams } from '../../../../../shared/axiom-contract/effects'
 
 export const AXIOM_MISSION_METHODS = [
+  defineMethod({
+    name: 'axiom.effect.list',
+    permission: 'workspace',
+    params: EffectListParams,
+    handler: (p, { runtime }) => {
+      const { missions, store } = getAxiomControlPlane(runtime)
+      missions.getMission(p.missionId)
+      return { effects: store.listEffects(p) }
+    }
+  }),
   defineMethod({
     name: 'axiom.mission.plan',
     permission: 'workspace',

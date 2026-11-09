@@ -21,10 +21,34 @@ export async function startAxiomControlPlane(
   if (!plane.started || generation !== plane.bootGeneration) {
     return
   }
+  try {
+    await plane.effects.recoverAtBoot()
+  } catch {
+    console.warn('[axiom] Effect recovery incomplete; continuing Control Plane startup')
+  }
+  if (!plane.started || generation !== plane.bootGeneration) {
+    return
+  }
+  plane.effects.start()
   const reconcile = () => {
-    void plane.recovery.reconcileAttempts().catch(() => {
-      console.warn('[axiom] Attempt reconciliation failed')
-    })
+    void plane.effects
+      .recoverAtBoot()
+      .catch(() => {
+        console.warn('[axiom] Effect recovery incomplete')
+      })
+      .then(() => {
+        if (plane.started && generation === plane.bootGeneration) {
+          const drain = plane.effects.kick()
+          void plane.recovery.reconcileAttempts().catch(() => {
+            console.warn('[axiom] Attempt reconciliation failed')
+          })
+          return drain
+        }
+        return undefined
+      })
+      .catch(() => {
+        console.warn('[axiom] Effect outbox drain failed')
+      })
     void plane.verification.kick().catch(() => {
       console.warn('[axiom] Verification preparation failed')
     })
@@ -50,6 +74,9 @@ export function stopAxiomControlPlane(runtime: OrcaRuntimeService): void {
   const plane = getAxiomControlPlane(runtime)
   plane.started = false
   plane.bootGeneration += 1
+  void plane.effects.stop().catch(() => {
+    console.warn('[axiom] Effect outbox shutdown did not complete')
+  })
   void plane.verification.stop().catch(() => {
     console.warn('[axiom] Verification shutdown did not complete')
   })

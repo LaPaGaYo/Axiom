@@ -33,11 +33,7 @@ export const AXIOM_VERIFICATION_METHODS = [
     params: VerificationRerunParams,
     handler: (p, { runtime, recordMutationReceipt }) => {
       const plane = getAxiomControlPlane(runtime)
-      const result = rerunVerification(plane, p, recordMutationReceipt)
-      void plane.verification.kick().catch(() => {
-        console.warn('[axiom] Verification rerun drain failed', { runId: result.runId })
-      })
-      return result
+      return rerunVerification(plane, p, recordMutationReceipt)
     }
   }),
   defineMethod({

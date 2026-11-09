@@ -225,6 +225,21 @@ CREATE TABLE IF NOT EXISTS audit_events (
   after TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS axiom_effects (
+  id TEXT PRIMARY KEY,
+  mission_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  effect_key TEXT NOT NULL,
+  payload TEXT NOT NULL DEFAULT '{}',
+  status TEXT NOT NULL,
+  due_at TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  lease_epoch TEXT,
+  last_error TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(kind, effect_key)
+);
 ${AXIOM_INDEXES_AND_DELETE_TRIGGERS_SQL}
 `
 }
@@ -242,6 +257,13 @@ CREATE INDEX IF NOT EXISTS idx_verification_runs_candidate ON verification_runs(
 CREATE INDEX IF NOT EXISTS idx_verification_runs_status ON verification_runs(status, created_at, id);
 CREATE INDEX IF NOT EXISTS idx_integration_batches_mission_status ON integration_batches(mission_id, status);
 CREATE INDEX IF NOT EXISTS idx_approvals_mission_status ON approvals(mission_id, status);
+CREATE INDEX IF NOT EXISTS idx_axiom_effects_status_due ON axiom_effects(status, due_at);
+
+CREATE TRIGGER IF NOT EXISTS trg_missions_delete_axiom_effects
+AFTER DELETE ON missions
+BEGIN
+  DELETE FROM axiom_effects WHERE mission_id = OLD.id;
+END;
 
 CREATE TRIGGER IF NOT EXISTS trg_tasks_delete_axiom
 AFTER DELETE ON tasks

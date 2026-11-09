@@ -5,6 +5,8 @@ import {
 } from '../codex/codex-worker-launch-home'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { EffectOutbox } from './outbox/effect-outbox'
+import { registerMissionEffectExecutors } from './outbox/mission-effect-executors'
 import { VerificationService } from './verification/verification-service'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { createAttemptLauncher } from './execution/attempt-launcher'
@@ -76,22 +78,22 @@ function createControlPlane(runtime: OrcaRuntimeService, db: OrchestrationDb) {
       })
     }
   })
-  const scheduler = new Scheduler(db, store, missions, contextBuilder, agentFactory, {
-    launch: createAttemptLauncher({
-      runtime,
-      db,
-      store,
-      missions,
-      artifacts,
-      codexWorkerHome: () =>
-        prepareCodexWorkerLaunchHome({
-          resolveHome: () => runtime.resolveCodexHomeForWorkerLaunch(),
-          allowlist: readCodexAccountHomeAllowlist(runtime.requireStore().getSettings())
-        })
-    })
+  const runtimeEpoch = `epoch_${randomUUID()}`
+  const effects = new EffectOutbox({ db, store, epoch: runtimeEpoch })
+  const scheduler = new Scheduler(db, store, missions, contextBuilder, agentFactory, { effects })
+  const launch = createAttemptLauncher({
+    runtime,
+    db,
+    store,
+    missions,
+    artifacts,
+    codexWorkerHome: () =>
+      prepareCodexWorkerLaunchHome({
+        resolveHome: () => runtime.resolveCodexHomeForWorkerLaunch(),
+        allowlist: readCodexAccountHomeAllowlist(runtime.requireStore().getSettings())
+      })
   })
   const recovery = new RecoveryService(db, store, missions, { runtime, artifacts })
-  const runtimeEpoch = `epoch_${randomUUID()}`
   const verification = new VerificationService({
     store,
     missions,
@@ -99,6 +101,7 @@ function createControlPlane(runtime: OrcaRuntimeService, db: OrchestrationDb) {
     runtime,
     runtimeEpoch
   })
+  registerMissionEffectExecutors({ db, store, missions, effects, launch, verification })
   const planner = createPlannerLauncher({
     runtime,
     db,
@@ -130,6 +133,7 @@ function createControlPlane(runtime: OrcaRuntimeService, db: OrchestrationDb) {
     planner,
     recovery,
     runtimeEpoch,
+    effects,
     verification,
     consumers,
     ...lifecycle,

@@ -47,6 +47,13 @@ it('cancels the human review and queues a claimable run for the same Candidate, 
   })
   const queued = runs().find((run) => run.status === 'QUEUED')
   expect(queued).toMatchObject({ candidateId: f.candidate.id, claimCount: 0 })
+  expect(f.store.listEffects({ missionId: f.missionId })).toEqual([
+    expect.objectContaining({
+      kind: 'verification.enqueue',
+      key: queued?.id,
+      payload: { runId: queued?.id }
+    })
+  ])
   expect(runs().at(-1)?.id).toBe(queued?.id)
   expect(f.store.getTaskStage(f.task.taskId)?.stage).toBe('VERIFYING')
   expect(f.store.listAuditEvents({ missionId: f.missionId }).at(-1)).toMatchObject({

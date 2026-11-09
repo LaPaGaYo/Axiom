@@ -1,3 +1,5 @@
+import { EffectOutbox } from '../outbox/effect-outbox'
+import { registerMissionEffectExecutors } from '../outbox/mission-effect-executors'
 import * as generated from '../../runtime/orchestration/db/generated-id'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -145,15 +147,27 @@ it('reopens a RUNNING file-DB Attempt without duplicate start, then retries only
       return { taskId: args.params.task, dispatchId: dispatch.id, state: 'ready' }
     }
   })
+  const effects = new EffectOutbox({ db, store: plane.store, epoch: 'test' })
+  registerMissionEffectExecutors({
+    db,
+    store: plane.store,
+    missions: plane.missions,
+    effects,
+    launch: launcher,
+    verification: { kick: async () => {} }
+  })
   const scheduler = new Scheduler(
     db,
     plane.store,
     plane.missions,
     new ContextBuilder(plane.store, artifacts),
     new AgentFactory(plane.store, plane.decisionEngine, async () => ['codex']),
-    { launch: launcher }
+    { effects }
   )
   const retry = await scheduler.scheduleRound(missionId, 'manual')
+  effects.start()
+  await effects.kick()
+  await effects.stop()
   expect(retry.admitted).toMatchObject([{ taskId, seq: 2 }])
   const next = plane.store.getAttemptBinding(taskId, 2)!
   expect(db.getDispatchContextById(next.dispatchId!)?.retry_of_dispatch_id).toBe(f.t01.attemptId)

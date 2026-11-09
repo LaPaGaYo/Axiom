@@ -70,7 +70,7 @@ export async function settleSubmission(
 ) {
   const { runtime, recordMutationReceipt } = ctx
   const db = runtime.getOrchestrationDb()
-  const { store, missions, verification: verificationService } = getAxiomControlPlane(runtime)
+  const { store, missions, effects } = getAxiomControlPlane(runtime)
   const { mission, task, binding, sender } = options.resolveAuthority()
   const parsed = SubmissionReportSchema.safeParse(input.report)
   if (!parsed.success) {
@@ -257,6 +257,12 @@ export async function settleSubmission(
       toolVersions: {},
       verifier: 'VerificationService'
     })
+    effects.enqueue({
+      missionId: mission.id,
+      kind: 'verification.enqueue',
+      key: verification.id,
+      payload: { runId: verification.id }
+    })
     for (const previous of superseded) {
       store.appendAuditEvent({
         missionId: mission.id,
@@ -285,9 +291,6 @@ export async function settleSubmission(
       }
     })
     return { submission, candidate, duplicate: false }
-  })
-  void verificationService.kick(mission.id).catch(() => {
-    console.warn('[axiom] Verification preparation failed', { missionId: mission.id })
   })
   await archiveAttemptTranscript(runtime, result.submission)
   // Never send worker_done through orchestration.send: the dispatch is already settled here.

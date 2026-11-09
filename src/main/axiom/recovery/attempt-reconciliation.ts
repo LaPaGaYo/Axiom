@@ -69,9 +69,14 @@ export async function reconcileAttempt(
       }
       return entry
     }
+    const effect = store.getEffect('attempt.dispatch', `${taskId}/${seq}`)
+    if (effect?.status === 'pending') {
+      return entry
+    }
+    const launchSince = effect?.status === 'running' ? effect.updatedAt : binding.createdAt
     if (
       currentRunning(ctx, binding) &&
-      ctx.now() - Date.parse(exposeUtcTimestamp(binding.createdAt)!) >
+      ctx.now() - Date.parse(exposeUtcTimestamp(launchSince)!) >
         2 * resolveWorkerStartReadinessTimeoutMs(undefined)
     ) {
       store.transaction('orphan_launch', () => {
