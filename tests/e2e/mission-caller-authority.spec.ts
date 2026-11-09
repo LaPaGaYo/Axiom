@@ -41,6 +41,11 @@ test('M3-04c: Worker human actions are refused and desktop policy changes succee
       if (!task) {
         throw new Error('Missing T01')
       }
+      await expect
+        .poll(() => inspect().bindings.find((row) => row.task_id === task.task_id)?.dispatch_id, {
+          timeout: 60_000
+        })
+        .toBeTruthy()
       const binding = inspect().bindings.find((row) => row.task_id === task.task_id)
       if (!binding?.dispatch_id) {
         throw new Error('Missing T01 Attempt')

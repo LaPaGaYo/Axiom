@@ -34,7 +34,7 @@ it('recovers and starts effects before initial reconciliation and resume, then i
   vi.spyOn(plane.verification, 'recoverAtBoot').mockImplementation(async () => {
     order.push('verification')
   })
-  vi.spyOn(plane.effects, 'recoverAtBoot').mockImplementation(async () => {
+  const recovery = vi.spyOn(plane.effects, 'recoverAtBoot').mockImplementation(async () => {
     order.push('effects')
   })
   const start = vi.spyOn(plane.effects, 'start').mockImplementation(() => {
@@ -51,10 +51,13 @@ it('recovers and starts effects before initial reconciliation and resume, then i
   })
   const stop = vi.spyOn(plane.effects, 'stop')
   await startAxiomControlPlane(runtime)
-  expect(order).toEqual(['verification', 'effects', 'start', 'reconcile', 'resume'])
+  await vi.advanceTimersByTimeAsync(0)
+  expect(order).toEqual(['verification', 'effects', 'start', 'effects', 'resume', 'reconcile'])
   expect(start).toHaveBeenCalledOnce()
+  expect(recovery).toHaveBeenCalledTimes(2)
   expect(tick).toHaveBeenCalledOnce()
   await vi.advanceTimersByTimeAsync(60_000)
+  expect(recovery).toHaveBeenCalledTimes(3)
   expect(tick).toHaveBeenCalledTimes(2)
   stopAxiomControlPlane(runtime)
   expect(stop).toHaveBeenCalledOnce()
@@ -83,19 +86,167 @@ it.each([false, true])(
     expect(plane.attemptReconcileTimer !== undefined).toBe(restart)
   }
 )
-it('does not schedule after effect recovery fails and permits a later boot', async () => {
-  const plane = getAxiomControlPlane(runtime)
-  vi.spyOn(plane.effects, 'recoverAtBoot').mockRejectedValueOnce(new Error('outbox unavailable'))
-  const start = vi.spyOn(plane.effects, 'start')
-  const reconcile = vi.spyOn(plane.recovery, 'reconcileAttempts')
-  await expect(startAxiomControlPlane(runtime)).rejects.toThrow('outbox unavailable')
-  expect(plane.started).toBe(false)
-  expect(start).not.toHaveBeenCalled()
-  expect(reconcile).not.toHaveBeenCalled()
-  await startAxiomControlPlane(runtime)
+it('continues startup when effect recovery fails', async () => {
+  const { plane, missionId } = executing()
+  vi.spyOn(plane.effects, 'recoverAtBoot').mockRejectedValue(new Error('outbox unavailable'))
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const start = vi.spyOn(plane.effects, 'start').mockImplementation(() => {})
+  const kick = vi.spyOn(plane.effects, 'kick').mockResolvedValue(undefined)
+  const reconcile = vi
+    .spyOn(plane.recovery, 'reconcileAttempts')
+    .mockResolvedValue({ attempts: [] })
+  const verification = vi.spyOn(plane.verification, 'kick').mockResolvedValue(undefined)
+  const sync = vi.spyOn(plane, 'syncConsumer')
+  const resume = vi.spyOn(plane.scheduler, 'scheduleRound').mockResolvedValue({
+    admitted: [],
+    skipped: []
+  })
+  await expect(startAxiomControlPlane(runtime)).resolves.toMatchObject({
+    missions: [expect.objectContaining({ id: missionId })]
+  })
+  await vi.advanceTimersByTimeAsync(0)
   expect(plane.started).toBe(true)
   expect(start).toHaveBeenCalledOnce()
+  expect(plane.attemptReconcileTimer).toBeDefined()
+  expect(reconcile).toHaveBeenCalledOnce()
+  expect(verification).toHaveBeenCalledOnce()
+  expect(kick).toHaveBeenCalledOnce()
+  expect(sync).toHaveBeenCalledWith(missionId)
+  expect(resume).toHaveBeenCalledExactlyOnceWith(missionId, 'resume')
+  expect(warning).toHaveBeenCalledWith(
+    '[axiom] Effect recovery incomplete; continuing Control Plane startup'
+  )
+  expect(warning.mock.calls.every((args) => args.length === 1)).toBe(true)
+  expect(JSON.stringify(warning.mock.calls)).not.toContain('outbox unavailable')
 })
+it('retries unrecovered orphans on the reconcile tick', async () => {
+  const plane = getAxiomControlPlane(runtime)
+  const recovery = vi.spyOn(plane.effects, 'recoverAtBoot').mockResolvedValue(undefined)
+  vi.spyOn(plane.effects, 'start').mockImplementation(() => {})
+  const kick = vi.spyOn(plane.effects, 'kick').mockResolvedValue(undefined)
+  const reconcile = vi
+    .spyOn(plane.recovery, 'reconcileAttempts')
+    .mockResolvedValue({ attempts: [] })
+  const verification = vi.spyOn(plane.verification, 'kick').mockResolvedValue(undefined)
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  await startAxiomControlPlane(runtime)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(recovery).toHaveBeenCalledTimes(2)
+  expect(kick).toHaveBeenCalledOnce()
+  const pending = Promise.withResolvers<void>()
+  recovery.mockReturnValueOnce(pending.promise)
+  await vi.advanceTimersByTimeAsync(60_000)
+  expect(recovery).toHaveBeenCalledTimes(3)
+  expect(kick).toHaveBeenCalledOnce()
+  expect(reconcile).toHaveBeenCalledOnce()
+  expect(verification).toHaveBeenCalledTimes(2)
+  pending.reject(new Error('tick recovery unavailable'))
+  await vi.advanceTimersByTimeAsync(0)
+  expect(warning).toHaveBeenCalledOnce()
+  expect(warning.mock.calls[0]).toHaveLength(1)
+  expect(JSON.stringify(warning.mock.calls)).not.toContain('tick recovery unavailable')
+  expect(kick).toHaveBeenCalledTimes(2)
+  expect(reconcile).toHaveBeenCalledTimes(2)
+  await vi.advanceTimersByTimeAsync(60_000)
+  expect(recovery).toHaveBeenCalledTimes(4)
+  expect(kick).toHaveBeenCalledTimes(3)
+  expect(reconcile).toHaveBeenCalledTimes(3)
+  expect(verification).toHaveBeenCalledTimes(3)
+  expect(plane.started).toBe(true)
+  expect(plane.attemptReconcileTimer).toBeDefined()
+})
+it('recovers an old lease on the reconcile tick before it can consume the unbound Attempt', async () => {
+  vi.useFakeTimers({
+    toFake: ['Date', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout']
+  })
+  const launch = vi.fn(async () => {})
+  vi.spyOn(launcher, 'createAttemptLauncher').mockReturnValue(launch)
+  const { plane, missionId, controller } = executing()
+  vi.spyOn(plane.scheduler, 'scheduleRound').mockResolvedValue({ admitted: [], skipped: [] })
+  const task = plane.store.listTaskStages({ missionId, stage: 'READY' })[0]
+  const payload = {
+    taskId: task.taskId,
+    seq: 1,
+    branch: `axiom/attempt/${task.taskId}/1`,
+    agentSpecId: 'spec',
+    contextPackageId: 'context'
+  }
+  const oldLease = new Date(Date.now() - 90_000).toISOString()
+  plane.store.transaction('seed_admission', () => {
+    plane.store.insertAttemptBinding({ missionId, ...payload, dispatchId: null })
+    controller.transitionTaskStage({
+      taskId: task.taskId,
+      to: 'RUNNING',
+      actor: 'Scheduler',
+      reason: 'admission',
+      attemptCountDelta: 1
+    })
+    plane.effects.enqueue({
+      missionId,
+      kind: 'attempt.dispatch',
+      key: `${task.taskId}/1`,
+      payload,
+      dueAt: oldLease
+    })
+  })
+  plane.store.leaseDueEffect({ missionId, kind: 'attempt.dispatch', now: oldLease, epoch: 'old' })
+  const original = plane.store.getEffect('attempt.dispatch', `${task.taskId}/1`)
+  db.db.exec(`CREATE TRIGGER reject_effect_recovery AFTER UPDATE ON axiom_effects
+    BEGIN SELECT RAISE(ABORT, 'temporary write failure'); END`)
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+  await startAxiomControlPlane(runtime)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(plane.store.getTaskStage(task.taskId)?.stage).toBe('RUNNING')
+  expect(plane.store.getEffect('attempt.dispatch', `${task.taskId}/1`)).toEqual(original)
+  expect(launch).not.toHaveBeenCalled()
+  db.db.exec('DROP TRIGGER reject_effect_recovery')
+  await vi.advanceTimersByTimeAsync(60_000)
+  await plane.effects.kick()
+  expect(launch).toHaveBeenCalledExactlyOnceWith({ missionId, ...payload })
+  expect(plane.store.getEffect('attempt.dispatch', `${task.taskId}/1`)?.status).toBe('done')
+  expect(plane.store.getTaskStage(task.taskId)).toMatchObject({ stage: 'RUNNING', attemptCount: 1 })
+  expect(plane.store.listAttemptBindings({ missionId }).map((binding) => binding.seq)).toEqual([1])
+  expect(
+    plane.store
+      .listAuditEvents({ missionId })
+      .filter((event) =>
+        ['attempt.launch_pending_orphan', 'attempt.launch_failed'].includes(event.event)
+      )
+  ).toEqual([])
+})
+it.each([false, true])(
+  'does not resume an obsolete reconcile tick after recovery rejects (restart=%s)',
+  async (restart) => {
+    const plane = getAxiomControlPlane(runtime)
+    const recovery = vi.spyOn(plane.effects, 'recoverAtBoot').mockResolvedValue(undefined)
+    vi.spyOn(plane.effects, 'start').mockImplementation(() => {})
+    const kick = vi.spyOn(plane.effects, 'kick').mockResolvedValue(undefined)
+    const reconcile = vi
+      .spyOn(plane.recovery, 'reconcileAttempts')
+      .mockResolvedValue({ attempts: [] })
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await startAxiomControlPlane(runtime)
+    await vi.advanceTimersByTimeAsync(0)
+    const pending = Promise.withResolvers<void>()
+    recovery.mockReturnValueOnce(pending.promise)
+    await vi.advanceTimersByTimeAsync(60_000)
+    stopAxiomControlPlane(runtime)
+    if (restart) {
+      await startAxiomControlPlane(runtime)
+      await vi.advanceTimersByTimeAsync(0)
+    }
+    const timer = plane.attemptReconcileTimer
+    const expectedCalls = restart ? 2 : 1
+    expect(kick).toHaveBeenCalledTimes(expectedCalls)
+    expect(reconcile).toHaveBeenCalledTimes(expectedCalls)
+    pending.reject(new Error('obsolete tick failed'))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(kick).toHaveBeenCalledTimes(expectedCalls)
+    expect(reconcile).toHaveBeenCalledTimes(expectedCalls)
+    expect(plane.started).toBe(restart)
+    expect(plane.attemptReconcileTimer).toBe(timer)
+  }
+)
 it('launches a previously committed admission exactly once on boot', async () => {
   const launch = vi.fn(async () => {})
   vi.spyOn(launcher, 'createAttemptLauncher').mockReturnValue(launch)
@@ -137,14 +288,21 @@ it('keeps the newer boot active when an older effect recovery rejects', async ()
     entered.resolve()
     await recovering.promise
   })
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const start = vi.spyOn(plane.effects, 'start')
   const first = startAxiomControlPlane(runtime)
-  const rejected = expect(first).rejects.toThrow('old recovery failed')
+  const resolved = expect(first).resolves.toBeUndefined()
   await entered.promise
   stopAxiomControlPlane(runtime)
   await startAxiomControlPlane(runtime)
   const timer = plane.attemptReconcileTimer
+  expect(timer).toBeDefined()
   recovering.reject(new Error('old recovery failed'))
-  await rejected
+  await resolved
+  expect(warning).toHaveBeenCalledExactlyOnceWith(
+    '[axiom] Effect recovery incomplete; continuing Control Plane startup'
+  )
+  expect(start).toHaveBeenCalledOnce()
   expect(plane.started).toBe(true)
   expect(plane.attemptReconcileTimer).toBe(timer)
 })

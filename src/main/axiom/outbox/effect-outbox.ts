@@ -84,12 +84,21 @@ export class EffectOutbox {
         if (this.deps.db.db.isTransaction) {
           throw new Error('Effect recovery requires a committed transaction')
         }
+        let failure: { error: unknown } | undefined
         for (const effect of this.deps.store.listOrphanedEffects(this.deps.epoch)) {
-          const executor = this.executors.get(effect.kind)
-          if (!executor) {
-            throw new Error(`Missing effect executor: ${effect.kind}`)
+          try {
+            const executor = this.executors.get(effect.kind)
+            if (!executor) {
+              throw new Error(`Missing effect executor: ${effect.kind}`)
+            }
+            await recoverEffect(this.deps.store, effect, executor)
+          } catch (error) {
+            // The unchanged lease closes only its lane; other Missions can still recover.
+            failure ??= { error }
           }
-          await recoverEffect(this.deps.store, effect, executor)
+        }
+        if (failure) {
+          throw failure.error
         }
       })
       .finally(() => {

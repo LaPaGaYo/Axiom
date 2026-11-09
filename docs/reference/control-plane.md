@@ -210,6 +210,8 @@ D87 / DEF-48 ① 的 v0 只迁移两个副作用，`plane.effects` 持有 `Effec
 
 启动顺序在第一次 reconcile 与 resume rounds 之前运行 `effects.recoverAtBoot()`、`effects.start()`。旧 epoch 的 running 逐项交给 onOrphan：`retry` 变 pending、due now、失败次数不变；`done` 完成；`{retire:reason}` 变 retired 并追加 `effect.retired {kind,key,reason}`（actor EffectOutbox、objectKind effect）。dispatch 已绑定 → done；未绑定而内核存在该 Task 的 dispatch 且没有任何 binding 引用它 → retired(`dispatch_outcome_unknown`)，保留原绑定交 orphan 规则，绝不二次启动；没有这种内核启动证据 → retry。verification 唤醒可安全 retry。v0 只有一个 Control Plane 进程持有数据库，无按时间过期的租约。
 
+恢复按 effect 隔离：某条缺少执行器、onOrphan 抛错 / 拒绝或存储写入失败时，保留该行原有的 running、旧 lease epoch 和全部字段，继续恢复后续条目；遍历结束后才以第一个错误拒绝。未恢复的租约只关闭自己的 `(kind,missionId)` lane，其它 lane 仍可执行。启动捕获失败，只警告 `[axiom] Effect recovery incomplete; continuing Control Plane startup`（不输出错误文本），继续启动 outbox、对账定时器、消费者与 resume rounds。既有 60 s reconcile tick 每次先重试旧 epoch 的恢复，再 kick effects 并启动 Attempt 对账（不等待 effect drain），防止刚可重试的旧租约先被 orphan 规则消耗；失败只警告，不停止本轮或后续对账。恢复成功后按同一 retry / done / retired 规则处理；持续失败的条目在 `axiom mission effect list` 中保持 running，直到问题修复。
+
 未绑定 Worker 的 reconcile：pending effect → unchanged，无论 binding 多旧；running effect 的 `2 × readiness timeout` 从 lease 的 updated_at 起算；retired / failed / done / 无行使用原 binding.created_at。Planner 不经过这个 effect，保留原直接启动及恢复。每次 drain 后仅一个 unref setTimeout 对准最早未来 dueAt；既有 60 s reconcile tick 也 kick。stop 清 timer、停止新领取并让正在执行的操作完成，下一次 start 前 kick 无效。done 行不自动清理；旧版本打开数据库会忽略 pending effects。
 
 只读 `axiom.effect.list {missionId,status?}` 返回 `{effects}`，按 `created_at,rowid` 排序；caller class 为 read，不是 mutation。CLI：`axiom mission effect list --mission <id> [--status <s>] [--json]`；文本列 `KIND KEY STATUS ATTEMPTS DUE LAST_ERROR`。

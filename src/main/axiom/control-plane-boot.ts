@@ -23,24 +23,32 @@ export async function startAxiomControlPlane(
   }
   try {
     await plane.effects.recoverAtBoot()
-  } catch (error) {
-    // Unknown leases must be reconciled before any new work can dispatch.
-    if (generation === plane.bootGeneration) {
-      plane.started = false
-    }
-    throw error
+  } catch {
+    console.warn('[axiom] Effect recovery incomplete; continuing Control Plane startup')
   }
   if (!plane.started || generation !== plane.bootGeneration) {
     return
   }
   plane.effects.start()
   const reconcile = () => {
-    void plane.effects.kick().catch(() => {
-      console.warn('[axiom] Effect outbox drain failed')
-    })
-    void plane.recovery.reconcileAttempts().catch(() => {
-      console.warn('[axiom] Attempt reconciliation failed')
-    })
+    void plane.effects
+      .recoverAtBoot()
+      .catch(() => {
+        console.warn('[axiom] Effect recovery incomplete')
+      })
+      .then(() => {
+        if (plane.started && generation === plane.bootGeneration) {
+          const drain = plane.effects.kick()
+          void plane.recovery.reconcileAttempts().catch(() => {
+            console.warn('[axiom] Attempt reconciliation failed')
+          })
+          return drain
+        }
+        return undefined
+      })
+      .catch(() => {
+        console.warn('[axiom] Effect outbox drain failed')
+      })
     void plane.verification.kick().catch(() => {
       console.warn('[axiom] Verification preparation failed')
     })
