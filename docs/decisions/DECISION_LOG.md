@@ -651,6 +651,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 
 **修订（2026-10-26，路线复审 A；Henry 2026-10-26："同意你的建议，ABC可以按照你的建议修正"）**：第 3 条的"不授权自动动作"只针对 DecisionEngine / LLM 的分类。确定性规则（Attempt 超过 `maxRuntimeMinutes`、token 用量超过预算、进程存活但连续 N 分钟无输出）由 policy 授权自动结算：停止 Worker 进程（经 Orca worker release）、按 D68 修订行的类别结算、在 Task 的重试策略内重试，用完 → `BLOCKED` 交人；每次自动动作审计 `attempt.supervised{rule, evidence}` 与结算事件，写明触发的规则与阈值。LLM / Jev 分类仍只给建议（V1.5 之后再议）。M3-06 brief 按此写。
 
+**修订（2026-11-09，D88；Henry："3的三处修改也批准"）**：2026-10-26 修订行授权的三条确定性规则，默认档按阈值的出处定——人设的上限（`maxRuntimeMinutes`、设了的 token 预算）`auto`；系统猜的停滞阈值先 `observe`，观察期由 Control Plane 自动对账成证据表、达到门槛时提议升档（人批准，DEF-35），停滞的第一档自动动作是待处理项、再下一档才是停。自动停止之前先保全工作树，后继从快照接着做。LLM / Jev 分类仍只给建议。M3-06-3 的 brief 按此写。
+
 ## D61 · M2 出口：Planning 与 Agent Factory 里程碑按六条出口准则关闭，D52 关闭 — ACCEPTED（Henry 2026-10-20："先把手上需要开发的做完"，验证者 2026-10-20 提议）
 
 **背景**：D52 把 M2 分解为 11 个 Task；实际执行 13 个 Task + 2 个上游同步（`docs/plans/M2.md`）：M2-00 … M2-05、M2-06a / 06b / 06c（D57）、M2-07、M2-08、UPSTREAM-1 / UPSTREAM-2（D56）、M2-09（+ 3 个 fix-up attempt）、M2-10、**M2-12（D59，由 M2-11 出口 e2e 发现）**、M2-11（2 个 attempt）。merge 清单：`0b4a67ced3`（M2-00）→ `669dd990f4`（M2-01）→ `a61072502a`（M2-02）→ `9c493465cb`（M2-03）→ `ab9d8e62fd`（M2-04）→ `f0ca598f4c`（M2-05）→ `e306ee73a5`（M2-06a）→ `ece8a4e1e6`（M2-06b）→ `8fb8d6d24f`（UPSTREAM-1）→ `30eaed93c7`（M2-06c）→ `b3d0c6edd9`（M2-07）→ `e0f92f3276`（M2-08）→ `5e1df6f29d`（UPSTREAM-2）→ `1c67a2c1e9` / `d50795c06e` / `1d8029764a`（M2-09）→ `d29f0aa316`（M2-10）→ `bc177584cd` / `814ddc8d9b`（M2-12）→ `06a502151c`（M2-11）。验证记录在 `.axiom-work/verifications/M2-*.md`、`UPSTREAM-*.md`；证据文档 `docs/review-evidence/axiom-m2/M2-exit-e2e.md`。
@@ -715,6 +717,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 1. **修复 Attempt 的基线**（`resolveAttemptBaseline`，ContextBuilder 与 launcher 共用）：只看紧邻的上一 Attempt——它有 Submission、Candidate 仍 `ACTIVE`、该 Candidate 最新的 VerificationRun 为 `FAIL` 且原因不是 `secret_detected` → 以该 Candidate commit 为基建 `axiom/attempt/<taskId>/<N+1>`，HEAD 必须等于该 commit（否则 `fix_base_mismatch`，不重置任何分支）；集成失败（D79）→ 基线 `integration_merge`：CONFLICT 从当前集成基线 + Control Plane 预合并的旧候选，FAILED 从失败批次的合并 commit；其余情况（首个 Attempt、上一 Attempt 无 Submission、候选已被取代、最新 run 不是 FAIL、`secret_detected`）从集成基线重来。上一 Attempt 已提交时，launcher 先把 Orca task 改回 `ready`（有活动 dispatch 时内核拒绝）。
 2. **验证 worktree**：由 Orca worktree service（`createManagedWorktree`）创建；分支 `axiom/verify/<runId>/<claimCount>` 建自 Attempt 分支，随后 `checkout --detach <Candidate>` 并 `branch -f` 到同一 commit，HEAD / tree / ref / detached 四项核验（偏离即 `candidate_mismatch`）；不开终端；验证结束（任何 verdict）即回收；应用重启时 `RUNNING` 的 run 回收 worktree 后重新 `QUEUED`（claimCount 递增，旧审计与 Artifact 保留）；不进 renderer 的 worktree 列表（M3-09 过滤）。
 3. **scope 判定基线 = 三点 diff**：`git diff --no-renames $(git merge-base <axiom/integration/<missionId> 的 HEAD> <候选>) <候选>`；verdictDetail.diff 记录集成基线分支与 sha、merge-base；"上一 Candidate"只用于证据展示（本次修复改了什么）。
+
+**修订（2026-11-09，D88）**：第 1 条"上一 Attempt 无 Submission → 从集成基线重来"收窄——上一 Attempt 没有 Submission 就结束（被打断、失败、被监工停止），且结算前拍下了非空、未越出 `allowedPaths` 的保全快照时，后继 Attempt 从该快照起步（新的基线种类，随 M3-06-2b；被打断的是修复 Attempt 时同时保留"失败候选 + 验证摘录"）。快照不是候选，第 3 条的三点 diff 与范围判定不变。快照为空、越界或拍不了 → 从被打断的 Attempt 自己的起点重来（基线回溯越过它，随 M3-06-2a）。
 
 ## D65 · V1 验证策略语义（`Policy.verificationRules` 的受支持键）— ACCEPTED（Henry 2026-10-20："先把手上需要开发的做完"，验证者 2026-10-20 提议）
 
@@ -827,6 +831,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 - **批准（2026-10-23，Henry："批准D68，可以按照计划继续"）**：按上文生效，不改内核枚举。验证侧（第 2、3 条：check 结果 `environmental`、`INCONCLUSIVE(environment)` 直接路由到人、`retryOnce` / `knownFlaky`）随 M3-02 实施；Attempt 侧（第 1 条：`interrupted` 结算类别与退避）随 M3-06 与 M2-08 的结算路径实施；术语表 §4.6 / §4.8 的新枚举随各自的 Task 更新。
 
 **修订（2026-10-26，路线复审 A；Henry 2026-10-26："同意你的建议，ABC可以按照你的建议修正"）**：`interrupted` 只用于第 1 条列出的环境性原因（出结果前退出、epoch 变化、配额 / 认证）。超时、超预算、停滞（进程存活但连续 N 分钟无输出）是工作性失败：结算为 FAILED，`reason` 分别为 `timeout` / `budget_exhausted` / `stalled`，计入 `maxAttempts`，按 D64 从集成基线重试，超时证据（最后输出摘录、用量）进下一次 Attempt 的失败证据段；Mission 预算耗尽仍是调度器的 `BLOCKED(budget)`。无界面 Worker 退出时的分类不变（M3-08）。
+
+**修订（2026-11-09，D88；Henry："同意"）**：① 第 1 条的 `interrupted`——判定以结构化字段为主、文本匹配兜底，失败原因按六类记（`usage_limit | provider_error | transport_error | permission_error | validation_error | unknown` + 是否可重试 + 重置时间）；退避之外加账号级冷却（重置时间之前不往该账号派新 Attempt）；后继不再一律从头重来，按 D88 第 2 条的表从保全快照接着做（探测通过后可恢复原 harness 会话）。不计入 `maxAttempts`、连续三次 → `BLOCKED(environment)` 不变。② 2026-10-26 修订行的"按 D64 从集成基线重试"改为：监工停止（`timeout` / `budget_exhausted` / `stalled`）仍结算为 FAILED、计入 `maxAttempts`，但停之前保全、后继从快照接着做并标"轨迹可疑，先复核"；停滞默认 `observe`（D88 第 9 条）。
 
 ## D69 · 依赖阈值 `VERIFIED` 的下游基线与失效规则 — ACCEPTED（修订版：V1 只支持 INTEGRATED；Henry 2026-10-25："按建议"；验证者 2026-10-21 提议）
 
@@ -1121,3 +1127,29 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **后果**：DEF-48 登记（触发点如第 4 条）；DEFERRED 的 DEF-7 / DEF-12 / DEF-14 / DEF-22 / DEF-27 / DEF-28 / DEF-33 / DEF-34 / DEF-37 / DEF-47 加 T3 评估（`claude/t3code-review-v1.md` §6）的并入项；D63 加审批桥约束句；M3.md 的 M3-06 / M3-10 行加 DEF-48 切片；M3-06 brief 须回答"provider_recovery 续作是同一 Attempt 的第二次 dispatch 还是新 Attempt"（Attempt 身份与 dispatch id 的分离，T3 评估 §3 #15）。
 
 **修订（2026-11-09，M3-06 brief 定稿时，验证者提议；Henry 2026-11-09："我同意你的意见"）**：① 第 4 条里 M3-06 的三件事拆成三段——**M3-06** = outbox v0（`attempt.dispatch`、`verification.enqueue`），**M3-06-2** = `interrupted` 的结算与到点续作（outbox 的 `Later` 条目），**M3-06-3** = 规则监工（出口 8，不属本决定）。② **`MessageTransport` 端口从 M3-06 移到 M3-10，随 DEF-47 一起抽**——第 3 条括号里的"mailbox 与 MCP 已是两个实现"与代码不符：Axiom 的 MCP 服务器今天只暴露 `plan_propose`（提案命令，不是消息传输），类型化消息只有内核邮箱一种传输；第二种传输要到 DEF-47 把 Worker 的类型化消息搬上 MCP 才出现，按第 3 条自己的规则届时再抽。③ `DispatchHost` 在 M3-06 不单独成接口：Scheduler 不再持有 launcher，圈 0 的 `attempt.dispatch` kind + 执行器登记就是那条接缝（第 3 条写的是"等到 M3-06 需要时再抽"，M3-06 不需要）。④ 后果段要求 brief 回答的问题：**续作是新 Attempt（seq + 1）**，Attempt 与 dispatch 一一对应、dispatch id 即 attempt id 不变（`attempt_bindings (task, seq)` 只有一个 dispatch，内核把重试建模为新的 dispatch context）；被打断的 Attempt 的后继从哪里开始（同一基线重来 / 接着在途工作做）另行讨论，M3-06-2 的 brief 之前定。
+
+**修订（2026-11-09，D88）**：上一条修订行 ④ 留下的"被打断的 Attempt 的后继从哪里开始"已定——保全工作树、后继从快照接着做，探测通过后可恢复原 harness 会话；M3-06-2 因此拆成 M3-06-2a / M3-06-2b（探测通过加 M3-06-2c）。见 D88。
+
+## D88 · 被打断的 Attempt 不从头重来：预防、保全、接着做、原会话续上，建在不改的 Orca 底座上；规则监工按阈值的出处定默认档、观察期自动对账、先保全再停 — ACCEPTED（Henry 2026-11-09："同意"、"3的三处修改也批准"；验证者同日提议，`claude/interrupted-continuation-discussion-v1.md`）
+
+**背景**：M3-06 brief 留下两处待定——② 被打断的 Attempt 的后继从哪里开始（D87 修订行 ④），③ 规则监工怎么上线。Henry 对 ② 问"选择A代价是不是之前的工作作废，同时之前使用的token也浪费了？有没有办法比如worker share memory，或者你是否有更好的解决方法？"，对 ③ 问有没有更优的做法，随后让复查先前评估过的项目，并问"基于我们现在的orca底座不修改，还是在orca底座的基础上使用T3 code做提升？"。查到的事实：今天的行为就是"同一基线重来"，还更差一点——无界面 Worker 没交结果就退出 → `interrupted` 或 failed → `NEEDS_FIX` → 立刻 `READY(retry)`，计入 `maxAttempts`、没有等待，被打断的修复 Attempt 丢掉候选基线；但被打断时什么都没销毁——Attempt 的工作树 Axiom 不删，harness 的会话记录在 Axiom 管的账号目录里，`providerSessionId` 已在审计里；宿主已有"把工作树拍成不可变提交"（`snapshotCandidate`）与"从非集成基线起步"（修复 Attempt）两套机制；两家 harness 的无界面模式都有官方的会话恢复；Orca 内核已有按账号的限额服务（`src/main/rate-limits/`）与用量上限判定器（`ClaudeUsageLimits` / `CodexUsageLimits`）。T3 Code、Orca 原生聊天、Super-agent、AICU-Graph、Ekko Studio 五个互不相干的系统做法一致：同一会话、同一工作目录、记成一次新的运行，恢复失败退到新会话 + 重建的上下文；没有一家因为"安静了一会儿"自动杀掉在干活的 agent，也没有一家强制 token 预算。验证者对 ② 的答复是"Orca 底座不改，T3 Code 只借规则；M3-06-2 拆成 2a / 2b，探测通过再加 2c"——Henry："同意"；对 ③ 提出三处修改（下文第 9 条）——Henry："3的三处修改也批准"。
+
+**决定**：
+1. **四层，逐层保住更多**：**预防**——账号撞到限额后，在重置时间之前不再往它身上派新 Attempt（账号级冷却，不只是那一个 Task 退避）；"接近上限时先停止放行"按配速（已用比例对窗口已过比例）判断，可选。**保全**——任何没有 Submission 就结束的 Attempt（被打断、失败、被监工停止），结算前把工作树拍成不可变提交（复用既有快照例程；拍不了记"缺失 + 原因"），会话 id、已知用量、最后一条消息摘录进审计。**接着做**——后继 Attempt（新会话）从这个快照起步，上下文写明被什么打断、留下了哪些改动、"先复核再继续"。**原会话续上**——同一 harness、会话记录还在、工作树等于快照时，后继 Attempt 恢复原 harness 会话、只补一句续作提示；先由验证者用真实 harness 探测，证据干净才进 V1（M3-06-2c），否则随能力旗进 V1.5。
+2. **选哪一层是确定性的表，不让模型挑**：外因打断（配额、认证、provider 故障、宿主重启 / 被杀）→ 原会话续上，条件不满足 → 接着做；监工停止（超时、停滞、token 预算）→ 接着做，并标"上一次的轨迹可疑，先复核"；外因打断但会话已经很长、或失败出在会话内容里（上下文溢出、输入不被支持）→ 接着做；快照为空、越出 `allowedPaths` 或拍不了 → 从被打断的 Attempt 自己的起点重来（今天的行为，基线回溯越过它）。每次选择写审计（策略 + 原因）。
+3. **不变的**：续作是新 Attempt（seq + 1），Attempt 与 dispatch 一一对应（D87 修订行 ④）；快照不是候选——最终候选照常整份过独立验证，范围门、篡改门不放松，确定性 FAIL 不可推翻；外因打断不计入 `maxAttempts`、按重置时间或 1 / 5 / 15 分钟退避、连续三次 → `BLOCKED(environment)` 交人（D68 第 1 条）；监工停止照旧计入 `maxAttempts`。
+4. **自动续作的护栏**：人停掉的不续；在等人（待处理项、未答的问题、Approval）的不续；之后已有更新工作的不续；一条链最多续三次；同一次失败只续一次（幂等键含失败的 Attempt 与重置时间）；重置时间不晚于失败时刻的不续；多个窗口同时拒绝时等最晚的那个重置。
+5. **判定以结构化字段为主，既有的错误文本匹配只作兜底**：失败原因记为 `usage_limit | provider_error | transport_error | permission_error | validation_error | unknown` + 是否可重试 + 重置时间；不读助手的文字。
+6. **建在不改的 Orca 底座上，T3 Code 只借规则**：预防与分类经窄适配器读内核现成的限额状态与 `ClaudeUsageLimits`，不在 Axiom 里另写一套解析；新增的内核 import 接缝在 brief 里点名并进接缝清单（D87 第 2 条 ④，只收不放）；M3-06-2a 的 brief 定稿前先核实内核限额服务是否覆盖 Mission 用的受管账号、在 Axiom 构建里是否启动。T3 Code 的恢复逻辑长在它自己的事件溯源编排器上、数据模型不同形，叠成中间层会出现两个生命周期权威（不变量 6），还要跟它的发版节奏——11 月 4 日评估定的"不换底座、不当多路复用器"不变。任何需要改内核的做法（含原会话续上接管旧工作树，若探测表明需要）另起内核 Decision（D56 流程）。
+7. **交给后继的是真实记录与指针，不是模型写的摘要**：宿主按预算挑原任务全文、最近的消息、命令与结果、改过的文件名，附可回查的 Artifact 引用；工作树本身就是"上一版产出"，只给指针；Worker 留了笔记就附上、标为线索，没有也不阻塞。续作提示带两条告诫：被切断的动作可能已经生效或仍在运行，重复有副作用的动作之前先确认；先看工作目录与 git 历史。提示文字自己写，不搬别家的。
+8. **"Worker 共享记忆"的边界**：要传下去的是同一个 Task 前后两次 Attempt 之间的记忆（第 1 条的后两层），载体是 harness 的会话记录与工作树，Axiom 只保全、定位、交接。Worker 之间的自由共享记忆不做——ContextPackage 要内容寻址、可复现，没经验证的判断不该变成另一个 Worker 的前提；跨 Task 的经验复用仍按 DEF-17 / DEF-32。
+9. **规则监工（③ 的三处修改）**：(a) **默认档按阈值的出处定，不按规则的新旧**——人明确设的上限（`maxRuntimeMinutes`、设了的话还有 token 预算）是预算，直接 `auto`；系统自己猜的阈值（多久没输出算停滞）先 `observe`；没设 token 预算就没有那条规则，不替人编一个数。(b) **观察期自动对账，系统提议升档**——`observe` 记"本来会在 T 时刻停"，该 Attempt 结算时 Control Plane 补一条"后来实际怎样"（后来通过验证 → 误伤；仍超时 / 失败 → 命中，本来能省多少分钟与 token），按规则汇成只读的证据表；达到门槛时系统生成一条待处理项"建议把 X 升为自动"并附表，升档仍由人批准（DEF-35）。(c) **先保全再停**——停之前先拍快照，先给 harness 一次收尾的机会（SIGINT）再终止（SIGTERM），后继按第 2 条接着做；经内核现有的 worker / 终端接口做，做不到"先收尾"就保全后直接终止，由 M3-06-3 的 brief 核实。另：**停滞**的第一档自动动作是一条待处理项，再下一档才是停；阈值取正常节奏的两倍，正常节奏用通过验证的 Attempt 里实测的最大事件间隔。
+10. **如实的限制**：token 预算在 V1 只能中途拦住 Claude 的 Worker（逐回合用量在事件流里）；Codex `exec --json` 的用量只在回合结束时出现一次，只能事后记账、由运行时长兜底（DEF-13 ②）。停滞用事件文件的最后写入时间判断，V1 只设一个阈值。不做 LLM / Jev 分类（D82）。
+
+**备选**：(a) 同一基线重来（今天的行为）——在途改动与已花的 token 全部作废；(b) 一律在原工作树、原会话上续——卡住或被污染的会话会原样再失败，且还没有探测证据；(c) 把 T3 Code 叠在 Orca 之上做提升——见第 6 条；(d) Worker 之间的共享黑板——见第 8 条；(e) 监工规则一律 `observe` 或一律 `auto`——前者让人设的预算不被执行，后者让系统猜的阈值误停在干活的 Worker。
+
+**理由**：被打断时东西都还在，缺的只是把它交给后继；所需零件 Orca 与 Axiom 都已有，只改 Axiom 这一层；五家的做法收敛到同一条阶梯。先把"停"变便宜，自动档的误伤才只值几分钟加一次重读。
+
+**后果**：M3-06-2 拆成 **M3-06-2a**（分类、等待与预防）与 **M3-06-2b**（保全与接着做）；探测（验证者，冒烟账号，只记非账号信息，开跑前向 Henry 报具体范围）通过后加 **M3-06-2c**（原会话续上）；M3-06-3 按第 9、10 条写；M3 出口 8 的"停滞 → 停止进程"按第 9 条改；D60、D64、D68、D87 各加修订行；DEFERRED 的 DEF-13 / DEF-22 / DEF-35 / DEF-48 加注；M3-09 多两处可见性（被打断 / 续作的状态、监工的证据表）；术语表随各 Task 更新。数值（升档门槛、摘录预算、冷却何时解除、停滞阈值的初值）由各自的 brief 提出并写进 policy 默认值，细则以 `claude/interrupted-continuation-discussion-v1.md` §2、§3、§7.3 为输入。
+
+**取代规则**：M3-06-2c 是否进 V1 以修订行记录并附探测证据；需要改内核的做法另起内核 Decision；某条规则的升档是人的批准（DEF-35），不是 Decision。
