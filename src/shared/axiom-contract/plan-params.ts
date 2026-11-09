@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { requiredString } from '../rpc-contract/rpc-param-primitives'
 import { AxiomIdSchema, ProvenanceSchema, PlanRevisionSchema } from './mission-objects'
 import { PlanProposalSchema } from './plan-proposal'
+import { PlanCoverageSchema } from './plan-coverage'
 
 // §4c keeps provenance beside planRevision; validatePlanProposal receives their
 // combination. Shape parsing alone does not replace the controller's DAG check.
@@ -28,7 +29,10 @@ export const PlanRejectParams = PlanApproveParams.extend({
 export const PlanListParams = z.object({ missionId: AxiomIdSchema })
 export const PlanShowParams = z.object({ planRevisionId: AxiomIdSchema })
 
-export const PlanResponseSchema = z.object({ planRevision: PlanRevisionSchema })
+export const PlanResponseSchema = z.object({
+  planRevision: PlanRevisionSchema,
+  coverage: PlanCoverageSchema.optional()
+})
 export const PlanListResponseSchema = z.object({ planRevisions: z.array(PlanRevisionSchema) })
 export type PlanResponse = z.infer<typeof PlanResponseSchema>
 export type PlanListResponse = z.infer<typeof PlanListResponseSchema>

@@ -1,8 +1,34 @@
 import { describe, expect, it } from 'vitest'
-import { PlanProposalSchema, validatePlanProposal } from './plan-proposal'
+import { PlanProposalSchema, validatePlanProposal, validateTaskAcceptance } from './plan-proposal'
 import { decomposition, makeProposal } from './contract-fixtures.test-support'
 
 describe('PlanRevision proposal', () => {
+  it.each(
+    [[], [{ text: 'Looks correct', check: { kind: 'human' as const } }]].map(
+      (acceptanceCriteria) => ({ acceptanceCriteria })
+    )
+  )('rejects uncheckable acceptance with one Task-level error', ({ acceptanceCriteria }) => {
+    const task = { ...makeProposal().tasks[0], acceptanceCriteria }
+    expect(validateTaskAcceptance(task, ['tasks', 0])).toEqual([
+      {
+        code: 'acceptance_uncheckable',
+        severity: 'error',
+        message: 'Every Task needs at least one command or artifact acceptance criterion.',
+        taskIds: ['T01'],
+        path: ['tasks', 0, 'acceptanceCriteria']
+      }
+    ])
+  })
+  it('accepts artifact and mixed criteria and preserves persisted legacy validation', () => {
+    const proposal = makeProposal()
+    proposal.tasks[0].acceptanceCriteria = [
+      { text: 'Report attached', check: { kind: 'artifact' } },
+      { text: 'Looks correct', check: { kind: 'human' } }
+    ]
+    expect(validatePlanProposal(proposal).ok).toBe(true)
+    proposal.tasks[0].acceptanceCriteria = []
+    expect(validatePlanProposal(proposal, { persisted: true }).ok).toBe(true)
+  })
   it('rejects retired commands with a stable Task path while preserving schema compatibility', () => {
     const proposal = makeProposal()
     proposal.tasks[1].requiredEvidence = ['pnpm test']
@@ -43,7 +69,8 @@ describe('PlanRevision proposal', () => {
     expect(Math.max(...depths.values())).toBe(7)
     expect(validatePlanProposal(proposal, { requireParallelRoots: 3 })).toEqual({
       ok: true,
-      order: decomposition.map((task) => task.id)
+      order: decomposition.map((task) => task.id),
+      warnings: []
     })
   })
   it('sorts ties by id independent of task/edge input order without mutating input', () => {
@@ -52,7 +79,7 @@ describe('PlanRevision proposal', () => {
     proposal.edges.reverse()
     const before = JSON.stringify(proposal)
     const first = validatePlanProposal(proposal)
-    expect(first).toEqual({ ok: true, order: decomposition.map((task) => task.id) })
+    expect(first).toEqual({ ok: true, order: decomposition.map((task) => task.id), warnings: [] })
     expect(JSON.stringify(validatePlanProposal(proposal))).toBe(JSON.stringify(first))
     expect(JSON.stringify(proposal)).toBe(before)
   })
@@ -60,7 +87,11 @@ describe('PlanRevision proposal', () => {
     const proposal = makeProposal()
     proposal.tasks = proposal.tasks.slice(0, 3)
     proposal.edges = [{ fromTaskId: 'T03', toTaskId: 'T01', readinessThreshold: 'INTEGRATED' }]
-    expect(validatePlanProposal(proposal)).toEqual({ ok: true, order: ['T02', 'T03', 'T01'] })
+    expect(validatePlanProposal(proposal)).toEqual({
+      ok: true,
+      order: ['T02', 'T03', 'T01'],
+      warnings: []
+    })
   })
   it.each([
     ['duplicate_task_id', (p: ReturnType<typeof makeProposal>) => p.tasks.push(p.tasks[0])],
@@ -143,9 +174,9 @@ describe('PlanRevision proposal', () => {
     proposal.edges.push({ fromTaskId: 'T01', toTaskId: 'T02', readinessThreshold: 'INTEGRATED' })
     expect(validatePlanProposal(proposal).ok).toBe(true)
     expect(validatePlanProposal(proposal, { requireParallelRoots: 3 })).toMatchObject({
-      ok: false,
-      errors: [
-        { code: 'insufficient_parallel_roots', severity: 'warning', taskIds: ['T01', 'T03'] }
+      ok: true,
+      warnings: [
+        { code: 'insufficient_parallel_roots', taskIds: ['T01', 'T03'], expected: 3, found: 2 }
       ]
     })
   })

@@ -53,7 +53,7 @@ it.each([
   expect(() => propose(f.controller, mission.id, goalRevision.id, proposal)).toThrowError(
     expect.objectContaining({
       code: 'plan_invalid',
-      data: { errors: [expect.objectContaining({ code, path })] }
+      data: { errors: expect.arrayContaining([expect.objectContaining({ code, path })]) }
     })
   )
   expect(f.store.listPlanRevisions(mission.id)).toEqual([])

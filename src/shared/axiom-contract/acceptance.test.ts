@@ -44,8 +44,9 @@ describe('acceptance contracts', () => {
     expect(
       SubtaskRequestSchema.safeParse({ ...request, acceptanceCriteria: ['Tests pass'] }).success
     ).toBe(false)
+    // The shared acceptance validator owns the empty / human-only semantic rejection.
     expect(SubtaskRequestSchema.safeParse({ ...request, acceptanceCriteria: [] }).success).toBe(
-      false
+      true
     )
   })
 })

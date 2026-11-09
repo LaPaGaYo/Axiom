@@ -49,7 +49,10 @@ it('advertises the real Planner proposal schema and maps the host receipt withou
         id: 'plan_1',
         status: 'PROPOSED',
         tasks: proposal.tasks,
-        edges: proposal.edges
+        edges: proposal.edges,
+        warnings: [
+          { code: 'scope_overlap', taskIds: ['T03', 'T08'], message: 'Shared files', paths: [] }
+        ]
       }
     }
   })
@@ -69,7 +72,8 @@ it('advertises the real Planner proposal schema and maps the host receipt withou
           planRevisionId: 'plan_1',
           status: 'PROPOSED',
           taskCount: proposal.tasks.length,
-          edgeCount: proposal.edges.length
+          edgeCount: proposal.edges.length,
+          warnings: [{ code: 'scope_overlap', taskIds: ['T03', 'T08'] }]
         })
       }
     ]

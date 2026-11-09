@@ -111,7 +111,7 @@ export const PlanRowCodec = PlanRowSchema.transform((row) =>
     status: row.status,
     goalRevisionId: row.goal_revision_id,
     ...readJson(
-      PlanRevisionSchema.pick({ tasks: true, edges: true }),
+      PlanRevisionSchema.pick({ tasks: true, edges: true, warnings: true }),
       row.proposal,
       'plan_revisions',
       row.id,

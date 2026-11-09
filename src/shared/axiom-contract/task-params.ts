@@ -21,7 +21,7 @@ export const TaskAdjustParams = z.strictObject({
   rationale: requiredString('Missing rationale'),
   addAllowedPaths: z.array(z.string().trim().min(1)).max(50).default([]),
   maxAttempts: z.number().int().positive().optional(),
-  acceptanceCriteria: z.array(AcceptanceCriterionSchema).min(1).max(50).optional()
+  acceptanceCriteria: z.array(AcceptanceCriterionSchema).max(50).optional()
 })
 export const TaskCreateParams = z.strictObject({
   missionId: AxiomIdSchema,

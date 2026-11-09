@@ -21,6 +21,33 @@ const adjust = (extra = {}) =>
     ...extra
   })
 
+it.each(
+  [[], [{ text: 'Looks right', check: { kind: 'human' } }]].map((acceptanceCriteria) => ({
+    acceptanceCriteria
+  }))
+)(
+  'rejects uncheckable replacement without changing the Task or audits',
+  async ({ acceptanceCriteria }) => {
+    const before = f.snapshot()
+    expect(await adjust({ acceptanceCriteria })).toMatchObject({
+      ok: false,
+      error: {
+        code: 'plan_invalid',
+        data: {
+          errors: [
+            {
+              code: 'acceptance_uncheckable',
+              path: ['task', 'acceptanceCriteria'],
+              taskIds: [f.task.spec.id]
+            }
+          ]
+        }
+      }
+    })
+    expect(f.snapshot()).toEqual(before)
+  }
+)
+
 it.each(['NEEDS_FIX', 'BLOCKED', 'VERIFYING'] as const)(
   'replaces acceptance in %s and records both versions',
   async (stage) => {

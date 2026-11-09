@@ -63,6 +63,13 @@ it('extends the approved graph without altering the proposal and records origin/
   )
 })
 it.each([
+  ['acceptance_uncheckable', { acceptanceCriteria: [] }, ['task', 'acceptanceCriteria']],
+  [
+    'acceptance_uncheckable',
+    { acceptanceCriteria: [{ text: 'Review', check: { kind: 'human' as const } }] },
+    ['task', 'acceptanceCriteria']
+  ],
+  ['coverage_index_out_of_range', { coversGoalCriteria: [1] }, ['task', 'coversGoalCriteria', 0]],
   ['required_evidence_retired', { requiredEvidence: ['pnpm test'] }, ['task', 'requiredEvidence']],
   ['criterion_shape', { acceptanceCriteria: ['Checks pass'] }, ['task', 'acceptanceCriteria', 0]],
   [
@@ -82,7 +89,7 @@ it.each([
   expect(() => f.controller.createTask({ ...p, task: { ...p.task, ...patch } })).toThrow(
     expect.objectContaining({
       code: 'plan_invalid',
-      data: { errors: [expect.objectContaining({ code, path })] }
+      data: { errors: expect.arrayContaining([expect.objectContaining({ code, path })]) }
     })
   )
   expect(
