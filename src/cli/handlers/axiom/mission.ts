@@ -10,10 +10,36 @@ import { DEFAULT_MISSION_POLICY } from '../../../shared/axiom-contract/mission-o
 import { formatMission, formatMissionList, formatGoal } from '../../axiom-format'
 import { readGoalFile } from './input-files'
 import { callAxiom } from './rpc-command'
+import { EffectListResponseSchema } from '../../../shared/axiom-contract/effects'
 
 export const AXIOM_MISSION_HANDLERS: Record<string, CommandHandler> = {
   ...AXIOM_ARTIFACT_HANDLERS,
   ...AXIOM_POLICY_HANDLERS,
+  'mission effect list': async (ctx) => {
+    await callAxiom(
+      ctx,
+      'axiom.effect.list',
+      { missionId: required(ctx.flags, 'mission'), status: optional(ctx.flags, 'status') },
+      (value) => {
+        const { effects } = EffectListResponseSchema.parse(value)
+        return [
+          'KIND\tKEY\tSTATUS\tATTEMPTS\tDUE\tLAST_ERROR',
+          ...effects.map((effect) =>
+            [
+              effect.kind,
+              effect.key,
+              effect.status,
+              effect.attempts,
+              effect.dueAt,
+              effect.lastError ?? ''
+            ]
+              .map((cell) => String(cell).replace(/\s+/g, ' '))
+              .join('\t')
+          )
+        ].join('\n')
+      }
+    )
+  },
   'mission plan': async (ctx) => {
     await callAxiom(
       ctx,

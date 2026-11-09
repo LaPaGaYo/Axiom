@@ -13,7 +13,7 @@ import { buildWorkerContracts, type AgentFactory } from '../agent-factory/agent-
 import { AgentFactoryError } from '../agent-factory/provider-selection'
 import { blockingQuestionOrApproval } from './admission-blockers'
 import { orderByCriticalPath } from './critical-path'
-import { settleAttemptWithoutSubmission } from '../execution/attempt-settlement'
+import type { EffectOutbox } from '../outbox/effect-outbox'
 
 export type ScheduleTrigger = 'mission_start' | 'stage_change' | 'resume' | 'manual'
 export type AdmittedAttempt = {
@@ -58,7 +58,7 @@ export class Scheduler {
     private readonly missions: MissionController,
     private readonly contextBuilder: ContextBuilder,
     private readonly agentFactory: AgentFactory,
-    private readonly deps: { launch: AttemptLaunch; now?: () => string }
+    private readonly deps: { effects: Pick<EffectOutbox, 'enqueue'>; now?: () => string }
   ) {
     this.now = deps.now ?? (() => new Date().toISOString())
   }
@@ -162,7 +162,6 @@ export class Scheduler {
       this.store,
       this.store.listTaskStages({ missionId, stage: 'READY' })
     )
-    const launch = this.deps.launch
     try {
       for (const candidate of candidates) {
         const before = this.store.transaction('scheduler_precheck', () => {
@@ -210,28 +209,6 @@ export class Scheduler {
           continue
         }
         result.admitted.push(admitted)
-        try {
-          await launch(admitted)
-        } catch {
-          // Provider errors may contain credentials; preserve identity, not arbitrary text.
-          this.audit(
-            missionId,
-            'attempt.launch_failed',
-            'attempt',
-            `${admitted.taskId}/${admitted.seq}`,
-            { reason: 'launch_rejected' }
-          )
-          // The helper only settles this unbound admission; bound dispatches belong to recovery.
-          settleAttemptWithoutSubmission(
-            { store: this.store, missions: this.missions },
-            {
-              ...admitted,
-              dispatchId: null,
-              reason: 'launch_rejected',
-              actor: 'Scheduler'
-            }
-          )
-        }
       }
       return result
     } finally {
@@ -306,6 +283,12 @@ export class Scheduler {
         actor: 'Scheduler',
         reason: 'admission',
         attemptCountDelta: 1
+      })
+      this.deps.effects.enqueue({
+        missionId,
+        kind: 'attempt.dispatch',
+        key: `${taskId}/${seq}`,
+        payload: { taskId, seq, branch: attempt.branch, ...contracts }
       })
       this.audit(missionId, 'attempt.admitted', 'attempt', `${taskId}/${seq}`, attempt)
       return attempt

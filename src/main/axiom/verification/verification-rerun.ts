@@ -6,10 +6,13 @@ import { MissionControllerError } from '../mission-controller/controller-context
 import { redactContext } from '../context-builder/redaction'
 import { auditVerification } from './verification-claim'
 import { activeCandidateVerification } from './verification-candidate'
+import type { EffectOutbox } from '../outbox/effect-outbox'
 import type { VerificationDependencies } from './verification-service'
 
 export function rerunVerification(
-  deps: Pick<VerificationDependencies, 'store' | 'missions'>,
+  deps: Pick<VerificationDependencies, 'store' | 'missions'> & {
+    effects: Pick<EffectOutbox, 'enqueue'>
+  },
   input: z.input<typeof VerificationRerunParams>,
   recordMutationReceipt?: (result: unknown) => void
 ) {
@@ -61,6 +64,12 @@ export function rerunVerification(
       commands: [],
       toolVersions: {},
       verifier: 'VerificationService'
+    })
+    deps.effects.enqueue({
+      missionId: task.missionId,
+      kind: 'verification.enqueue',
+      key: run.id,
+      payload: { runId: run.id }
     })
     if (task.stage === 'BLOCKED') {
       missions.transitionTaskStage({

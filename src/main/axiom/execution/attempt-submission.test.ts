@@ -1,3 +1,4 @@
+import { getAxiomControlPlane } from '../control-plane'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AttemptSubmitResponseSchema } from '../../../shared/axiom-contract/attempt-params'
 import { submissionFixture, report } from './submission-fixture.test-support'
@@ -22,6 +23,23 @@ async function accepted(worker = f.t01) {
 }
 
 describe('Attempt submission settlement', () => {
+  it('rolls back the verification effect and settlement when its submission audit fails', async () => {
+    const store = getAxiomControlPlane(f.runtime).store
+    const append = store.appendAuditEvent.bind(store)
+    vi.spyOn(store, 'appendAuditEvent').mockImplementation((input) => {
+      if (input.event === 'attempt.submitted') {
+        throw new Error('Submission audit unavailable')
+      }
+      return append(input)
+    })
+    const before = f.snapshot()
+    expect(await f.submit()).toMatchObject({ ok: false })
+    expect(f.snapshot()).toEqual(before)
+    expect(f.store.listEffects({ missionId: f.mission.id })).toEqual([])
+    expect(f.store.getTaskStage(f.t01.taskId)).toMatchObject({ stage: 'RUNNING', attemptCount: 1 })
+    expect(f.kick).not.toHaveBeenCalled()
+  })
+
   it('writes one immutable Candidate/report, both facets, queued verification and a truthful message', async () => {
     const originalInsert = f.db.insertMessage.bind(f.db)
     vi.spyOn(f.db, 'insertMessage').mockImplementation((input) => {
@@ -31,7 +49,14 @@ describe('Attempt submission settlement', () => {
     })
     const { candidate, submission, duplicate } = await accepted()
     expect(duplicate).toBe(false)
-    expect(f.kick).toHaveBeenCalledExactlyOnceWith(f.mission.id)
+    expect(f.store.listEffects({ missionId: f.mission.id })).toEqual([
+      expect.objectContaining({
+        kind: 'verification.enqueue',
+        key: f.store.listVerificationRuns({ missionId: f.mission.id })[0].id,
+        payload: { runId: f.store.listVerificationRuns({ missionId: f.mission.id })[0].id }
+      })
+    ])
+    expect(f.kick).toHaveBeenCalledExactlyOnceWith()
     expect(candidate).toMatchObject({
       status: 'ACTIVE',
       commitSha: 'a'.repeat(40),

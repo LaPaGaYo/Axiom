@@ -1,3 +1,5 @@
+import { registerMissionEffectExecutors } from '../outbox/mission-effect-executors'
+import { EffectOutbox } from '../outbox/effect-outbox'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -66,9 +68,13 @@ async function launch(home = true, refusal = false, inherited: NodeJS.ProcessEnv
   const factory = new AgentFactory(f.store, new RulesEngine(PROVIDER_SELECTION_RULES), async () => [
     provider
   ])
-  const scheduler = new Scheduler(f.db, f.store, f.controller, context, factory, {
-    launch: async () => {}
-  })
+  const policy = f.store.getPolicy(f.missionId)
+  if (!policy) {
+    throw new Error('Expected a Mission policy')
+  }
+  f.store.upsertPolicy(f.missionId, { ...policy, concurrencyLimit: 1 })
+  const effects = new EffectOutbox({ db: f.db, store: f.store, epoch: 'test' })
+  const scheduler = new Scheduler(f.db, f.store, f.controller, context, factory, { effects })
   const attempt = (await scheduler.scheduleRound(f.missionId, 'manual')).admitted[0]
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake kernel only consumes the worktree id and path.
   const worktree = { worktree: { id: 'wt-created', path: root } } as CreateWorktreeResult
@@ -92,7 +98,7 @@ async function launch(home = true, refusal = false, inherited: NodeJS.ProcessEnv
     return { taskId: args.params.task, dispatchId: 'dispatch', state: 'ready' }
   })
   const resolveBaseEnvironment = vi.fn(async () => inherited)
-  await createAttemptLauncher({
+  const launchAttempt = createAttemptLauncher({
     runtime,
     db: f.db,
     store: f.store,
@@ -115,7 +121,19 @@ async function launch(home = true, refusal = false, inherited: NodeJS.ProcessEnv
             })
         }
       : {})
-  })(attempt)
+  })
+  registerMissionEffectExecutors({
+    db: f.db,
+    store: f.store,
+    missions: f.controller,
+    effects,
+    launch: launchAttempt,
+    verification: { kick: async () => {} }
+  })
+  effects.start()
+  await effects.kick()
+  await effects.stop()
+  expect(f.store.getEffect('attempt.dispatch', `${attempt.taskId}/1`)?.status).toBe('done')
   return { command, attempt, resolveBaseEnvironment }
 }
 const events = (event: string) =>

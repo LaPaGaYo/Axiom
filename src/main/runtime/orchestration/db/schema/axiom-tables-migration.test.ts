@@ -41,7 +41,9 @@ const TABLE_COLUMNS: Record<string, string> = {
     'id mission_id action_kind inputs_hash risk status expires_at resolver requested_by resolution outcome executed_at created_at updated_at',
   mission_policies:
     'mission_id concurrency_limit budget readiness_threshold approval_rules verification_rules nested_worker_max_depth unverifiable_tolerance_minutes created_at updated_at routing',
-  audit_events: 'sequence mission_id actor object_kind object_id event before after created_at'
+  audit_events: 'sequence mission_id actor object_kind object_id event before after created_at',
+  axiom_effects:
+    'id mission_id kind effect_key payload status due_at attempts lease_epoch last_error created_at updated_at'
 }
 
 const INDEX_COLUMNS: Record<string, string[]> = {
@@ -54,10 +56,16 @@ const INDEX_COLUMNS: Record<string, string[]> = {
   idx_verification_runs_candidate: ['candidate_id'],
   idx_verification_runs_status: ['status', 'created_at', 'id'],
   idx_integration_batches_mission_status: ['mission_id', 'status'],
-  idx_approvals_mission_status: ['mission_id', 'status']
+  idx_approvals_mission_status: ['mission_id', 'status'],
+  idx_axiom_effects_status_due: ['status', 'due_at']
 }
 
-const TRIGGERS = ['trg_tasks_delete_axiom', 'trg_dispatches_delete_axiom', 'trg_runs_delete_axiom']
+const TRIGGERS = [
+  'trg_tasks_delete_axiom',
+  'trg_dispatches_delete_axiom',
+  'trg_runs_delete_axiom',
+  'trg_missions_delete_axiom_effects'
+]
 
 function axiomSchema(db: Database): string {
   return JSON.stringify(
@@ -153,7 +161,15 @@ function seedMission(db: Database, id: string): void {
       requested_by: 'user'
     },
     mission_policies: { concurrency_limit: 3 },
-    audit_events: { actor: 'user', object_kind: 'mission', object_id: id, event: 'created' }
+    audit_events: { actor: 'user', object_kind: 'mission', object_id: id, event: 'created' },
+    axiom_effects: {
+      id,
+      kind: 'verification.enqueue',
+      effect_key: id,
+      payload: JSON.stringify({ runId: id }),
+      status: 'pending',
+      due_at: '2026-11-09T00:00:00.000Z'
+    }
   }
   for (const [table, row] of Object.entries(rows)) {
     const values = { mission_id: id, ...row }
@@ -196,11 +212,11 @@ describe('Axiom v44 side tables', () => {
     }
   })
 
-  it('creates all 17 tables, specified columns, indexes and three triggers on a fresh database', () => {
+  it('creates all 18 tables, specified columns, indexes and four triggers on a fresh database', () => {
     const { db } = open()
     expect(SCHEMA_VERSION).toBe(46)
     expect(db.pragma('user_version', { simple: true })).toBe(46)
-    expect(Object.keys(TABLE_COLUMNS)).toHaveLength(17)
+    expect(Object.keys(TABLE_COLUMNS)).toHaveLength(18)
     for (const [table, columns] of Object.entries(TABLE_COLUMNS)) {
       expect(
         db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(table)
@@ -344,11 +360,44 @@ describe('Axiom v44 side tables', () => {
     expect(axiomSchema(open(path).db)).toBe(before)
   })
 
-  it.each([43, 45])('upgrades old Axiom numbering %s and respells all session addresses', (version) => {
+  it('adds effects to an existing v46 database without changing rows or its run cleanup trigger', () => {
     const path = filePath()
     const first = open(path)
-    seedMission(first.db, 'legacy')
-    first.db.exec(`
+    seedMission(first.db, 'existing')
+    first.db.exec('DROP TRIGGER trg_missions_delete_axiom_effects; DROP TABLE axiom_effects')
+    const mission = first.db.prepare('SELECT * FROM missions').get()
+    const run = first.db.prepare('SELECT * FROM runs').get()
+    const trigger = first.db
+      .prepare("SELECT sql FROM sqlite_master WHERE name = 'trg_runs_delete_axiom'")
+      .get()
+    close(first)
+    const upgraded = open(path)
+    expect(upgraded.db.pragma('user_version', { simple: true })).toBe(46)
+    expect(upgraded.db.prepare('SELECT * FROM missions').get()).toEqual(mission)
+    expect(upgraded.db.prepare('SELECT * FROM runs').get()).toEqual(run)
+    expect(
+      upgraded.db
+        .prepare("SELECT sql FROM sqlite_master WHERE name = 'trg_runs_delete_axiom'")
+        .get()
+    ).toEqual(trigger)
+    upgraded.db.exec(`INSERT INTO axiom_effects (id, mission_id, kind, effect_key, status, due_at)
+      VALUES ('effect', 'existing', 'verification.enqueue', 'existing', 'pending', '2026-11-09T00:00:00.000Z')`)
+    const schema = axiomSchema(upgraded.db)
+    close(upgraded)
+    const reopened = open(path)
+    expect(axiomSchema(reopened.db)).toBe(schema)
+    expect(reopened.db.prepare('SELECT id FROM axiom_effects').all()).toEqual([{ id: 'effect' }])
+    reopened.db.exec("DELETE FROM runs WHERE id = 'run-existing'")
+    expect(reopened.db.prepare('SELECT * FROM axiom_effects').all()).toEqual([])
+  })
+
+  it.each([43, 45])(
+    'upgrades old Axiom numbering %s and respells all session addresses',
+    (version) => {
+      const path = filePath()
+      const first = open(path)
+      seedMission(first.db, 'legacy')
+      first.db.exec(`
       INSERT INTO messages (id, run_id, from_handle, to_handle, subject, body)
       VALUES ('legacy-mail', 'run-legacy', 'session:sender', 'session:recipient', 'kept', 'session:body');
       INSERT INTO coordinator_runs (id, spec, coordinator_handle)
@@ -359,49 +408,86 @@ describe('Axiom v44 side tables', () => {
         (mailbox_handle, session_id, operation_id, batch_fingerprint, minted_at_ms)
       VALUES ('session:recipient', 'recipient', 'operation', 'fingerprint', 1);
     `)
-    if (version === 43) {
-      first.db.exec('ALTER TABLE agent_specs DROP COLUMN spec')
-      first.db.exec('ALTER TABLE mission_policies DROP COLUMN routing')
-      first.db.exec('DROP INDEX idx_verification_runs_status')
-      for (const column of ['runtime_epoch', 'claim_count', 'worktree_id', 'started_at', 'finished_at']) {
-        first.db.exec(`ALTER TABLE verification_runs DROP COLUMN ${column}`)
+      if (version === 43) {
+        first.db.exec('ALTER TABLE agent_specs DROP COLUMN spec')
+        first.db.exec('ALTER TABLE mission_policies DROP COLUMN routing')
+        first.db.exec('DROP INDEX idx_verification_runs_status')
+        for (const column of [
+          'runtime_epoch',
+          'claim_count',
+          'worktree_id',
+          'started_at',
+          'finished_at'
+        ]) {
+          first.db.exec(`ALTER TABLE verification_runs DROP COLUMN ${column}`)
+        }
       }
-    }
-    first.db.pragma(`user_version = ${version}`)
-    close(first)
+      first.db.pragma(`user_version = ${version}`)
+      close(first)
 
-    const upgraded = open(path)
-    expect(upgraded.db.pragma('user_version', { simple: true })).toBe(46)
-    expect(upgraded.db.prepare('SELECT from_handle, to_handle, body FROM messages WHERE id = ?').get('legacy-mail')).toEqual({
-      from_handle: 'orca_session_id:sender',
-      to_handle: 'orca_session_id:recipient',
-      body: 'session:body'
-    })
-    expect(upgraded.db.prepare('SELECT coordinator_handle FROM coordinator_runs WHERE id = ?').get('legacy-coordinator')).toEqual({
-      coordinator_handle: 'orca_session_id:coordinator'
-    })
-    expect(upgraded.db.prepare('SELECT terminal_handle FROM run_coordinator_handles WHERE run_id = ?').all('run-legacy')).toContainEqual({
-      terminal_handle: 'orca_session_id:coordinator'
-    })
-    expect(upgraded.db.prepare('SELECT mailbox_handle FROM structured_pointer_operations').all()).toEqual([
-      { mailbox_handle: 'orca_session_id:recipient' }
-    ])
-    for (const [table, column] of [
-      ['messages', 'from_handle'], ['messages', 'to_handle'],
-      ['coordinator_runs', 'coordinator_handle'], ['run_coordinator_handles', 'terminal_handle'],
-      ['structured_pointer_operations', 'mailbox_handle']
-    ]) {
-      expect(upgraded.db.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE ${column} LIKE 'session:%'`).get()).toEqual({ count: 0 })
+      const upgraded = open(path)
+      expect(upgraded.db.pragma('user_version', { simple: true })).toBe(46)
+      expect(
+        upgraded.db
+          .prepare('SELECT from_handle, to_handle, body FROM messages WHERE id = ?')
+          .get('legacy-mail')
+      ).toEqual({
+        from_handle: 'orca_session_id:sender',
+        to_handle: 'orca_session_id:recipient',
+        body: 'session:body'
+      })
+      expect(
+        upgraded.db
+          .prepare('SELECT coordinator_handle FROM coordinator_runs WHERE id = ?')
+          .get('legacy-coordinator')
+      ).toEqual({
+        coordinator_handle: 'orca_session_id:coordinator'
+      })
+      expect(
+        upgraded.db
+          .prepare('SELECT terminal_handle FROM run_coordinator_handles WHERE run_id = ?')
+          .all('run-legacy')
+      ).toContainEqual({
+        terminal_handle: 'orca_session_id:coordinator'
+      })
+      expect(
+        upgraded.db.prepare('SELECT mailbox_handle FROM structured_pointer_operations').all()
+      ).toEqual([{ mailbox_handle: 'orca_session_id:recipient' }])
+      for (const [table, column] of [
+        ['messages', 'from_handle'],
+        ['messages', 'to_handle'],
+        ['coordinator_runs', 'coordinator_handle'],
+        ['run_coordinator_handles', 'terminal_handle'],
+        ['structured_pointer_operations', 'mailbox_handle']
+      ]) {
+        expect(
+          upgraded.db
+            .prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE ${column} LIKE 'session:%'`)
+            .get()
+        ).toEqual({ count: 0 })
+      }
+      expect(
+        upgraded.db
+          .prepare(
+            'SELECT runtime_epoch, claim_count, worktree_id, started_at, finished_at FROM verification_runs'
+          )
+          .get()
+      ).toEqual({
+        runtime_epoch: null,
+        claim_count: 0,
+        worktree_id: null,
+        started_at: null,
+        finished_at: null
+      })
+      expect(upgraded.db.prepare('SELECT spec FROM agent_specs').get()).toEqual({ spec: '{}' })
+      expect(upgraded.db.prepare('SELECT routing FROM mission_policies').get()).toEqual({
+        routing: '{}'
+      })
+      const schema = axiomSchema(upgraded.db)
+      close(upgraded)
+      expect(axiomSchema(open(path).db)).toBe(schema)
     }
-    expect(upgraded.db.prepare('SELECT runtime_epoch, claim_count, worktree_id, started_at, finished_at FROM verification_runs').get()).toEqual({
-      runtime_epoch: null, claim_count: 0, worktree_id: null, started_at: null, finished_at: null
-    })
-    expect(upgraded.db.prepare('SELECT spec FROM agent_specs').get()).toEqual({ spec: '{}' })
-    expect(upgraded.db.prepare('SELECT routing FROM mission_policies').get()).toEqual({ routing: '{}' })
-    const schema = axiomSchema(upgraded.db)
-    close(upgraded)
-    expect(axiomSchema(open(path).db)).toBe(schema)
-  })
+  )
 
   it('repairs indexes and triggers in v44 only when the prior version requires migration', () => {
     const orchestration = open()

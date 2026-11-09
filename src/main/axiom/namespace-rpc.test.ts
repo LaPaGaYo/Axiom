@@ -15,6 +15,7 @@ describe('Axiom RPC namespace', () => {
     expect(AXIOM_MUTATION_METHODS).toContain('axiom.mission.plan')
     const reads = [
       'axiom.namespace.get',
+      'axiom.effect.list',
       'axiom.attempt.show',
       'axiom.attempt.list',
       'axiom.attempt.check',

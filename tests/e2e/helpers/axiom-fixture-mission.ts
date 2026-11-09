@@ -104,6 +104,7 @@ export async function withFixtureMission(
     extraAllowedPaths?: string[]
     noCodexAccount?: boolean
     holdExitSubmission?: boolean
+    holdAttemptDispatch?: boolean
     provider?: AxiomFixtureProvider
     taskIds?: string[]
     acceptanceCriteria?: AcceptanceCriterion[]
@@ -138,6 +139,7 @@ process.exit(result.status ?? 1)
     PATH: `${temp}${path.delimiter}${process.env.PATH ?? ''}`,
     AXIOM_E2E_LEDGER: ledgerPath,
     ...(options.holdExitSubmission ? { AXIOM_E2E_HOLD_EXIT_SUBMISSION: '1' } : {}),
+    ...(options.holdAttemptDispatch ? { AXIOM_E2E_HOLD_ATTEMPT_DISPATCH: '1' } : {}),
     ...(options.runVerification ? {} : { AXIOM_E2E_HOLD_VERIFICATION: '1' }),
     ...(options.releaseTerminals ? {} : { AXIOM_E2E_HOLD_WORKER_RELEASE: '1' }),
     ORCA_E2E_CLI_ENTRY: cliEntry
@@ -268,7 +270,10 @@ process.exit(result.status ?? 1)
               await session.close(app)
               app = undefined
               const next = await session.launch({
-                extraEnv: { AXIOM_E2E_HOLD_EXIT_SUBMISSION: '0' }
+                extraEnv: {
+                  AXIOM_E2E_HOLD_EXIT_SUBMISSION: '0',
+                  AXIOM_E2E_HOLD_ATTEMPT_DISPATCH: '0'
+                }
               })
               app = next.app
               await waitForSessionReady(next.page)

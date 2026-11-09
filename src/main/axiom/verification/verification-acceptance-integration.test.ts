@@ -1,3 +1,5 @@
+import { EffectOutbox } from '../outbox/effect-outbox'
+import { registerMissionEffectExecutors } from '../outbox/mission-effect-executors'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -10,9 +12,11 @@ import { rerunVerification } from './verification-rerun'
 let root: string
 let f: Awaited<ReturnType<typeof verificationGitFixture>>
 let service: VerificationService
+let effects: EffectOutbox
 beforeEach(async () => {
   root = await mkdtemp(path.join(tmpdir(), 'axiom-acceptance-'))
   f = await verificationGitFixture(root)
+  effects = new EffectOutbox({ db: f.db, store: f.store, epoch: 'acceptance-test' })
   service = new VerificationService({
     store: f.store,
     missions: f.controller,
@@ -20,8 +24,18 @@ beforeEach(async () => {
     runtime: f.runtime,
     runtimeEpoch: 'acceptance-test'
   })
+  registerMissionEffectExecutors({
+    db: f.db,
+    store: f.store,
+    missions: f.controller,
+    effects,
+    launch: async () => {},
+    verification: service
+  })
+  effects.start()
 })
 afterEach(async () => {
+  await effects.stop()
   await service.stop()
   f.db.close()
   await rm(root, { recursive: true, force: true })
@@ -50,9 +64,11 @@ it('executes a corrected plan on the same immutable Candidate without a new Atte
     actor: 'user'
   })
   const rerun = rerunVerification(
-    { store: f.store, missions: f.controller },
+    { store: f.store, missions: f.controller, effects },
     { taskId: f.task.taskId, rationale: 'Recheck the corrected criteria.' }
   )
+  await effects.kick()
+  expect(f.store.getEffect('verification.enqueue', rerun.runId)?.status).toBe('done')
   await service.kick()
   expect(f.store.getVerificationRun(f.run.id)).toMatchObject({
     status: 'CANCELED',

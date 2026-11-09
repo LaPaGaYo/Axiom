@@ -12,6 +12,7 @@ import { messagesStore } from './messages-store'
 import { candidatesStore } from './candidates-store'
 import { submissionsStore } from './submissions-store'
 import { verificationRunsStore } from './verification-runs-store'
+import { effectsStore } from './effects-store'
 
 type AttemptBindings = ReturnType<typeof attemptBindingsStore>
 
@@ -24,9 +25,19 @@ type PolicyAudit = ReturnType<typeof policyAuditStore>
 type Candidates = ReturnType<typeof candidatesStore>
 type Submissions = ReturnType<typeof submissionsStore>
 type VerificationRuns = ReturnType<typeof verificationRunsStore>
+type Effects = ReturnType<typeof effectsStore>
 
 // One injected store; table modules keep SQL and validation within the file-size gate.
 export class AxiomStore {
+  readonly enqueueEffect: Effects['enqueueEffect']
+  readonly leaseDueEffect: Effects['leaseDueEffect']
+  readonly completeEffect: Effects['completeEffect']
+  readonly deferEffect: Effects['deferEffect']
+  readonly failEffectAttempt: Effects['failEffectAttempt']
+  readonly retireEffect: Effects['retireEffect']
+  readonly getEffect: Effects['getEffect']
+  readonly listEffects: Effects['listEffects']
+  readonly listOrphanedEffects: Effects['listOrphanedEffects']
   readonly insertCandidate: Candidates['insertCandidate']
   readonly getCandidate: Candidates['getCandidate']
   readonly listCandidates: Candidates['listCandidates']
@@ -103,6 +114,16 @@ export class AxiomStore {
   readonly getContextTokenBudget: Artifacts['getContextTokenBudget']
 
   constructor(private readonly db: OrchestrationDb) {
+    const effects = effectsStore(db)
+    this.enqueueEffect = effects.enqueueEffect
+    this.leaseDueEffect = effects.leaseDueEffect
+    this.completeEffect = effects.completeEffect
+    this.deferEffect = effects.deferEffect
+    this.failEffectAttempt = effects.failEffectAttempt
+    this.retireEffect = effects.retireEffect
+    this.getEffect = effects.getEffect
+    this.listEffects = effects.listEffects
+    this.listOrphanedEffects = effects.listOrphanedEffects
     const candidates = candidatesStore(db)
     this.insertCandidate = candidates.insertCandidate
     this.getCandidate = candidates.getCandidate

@@ -1,3 +1,5 @@
+import { registerMissionEffectExecutors } from '../outbox/mission-effect-executors'
+import { EffectOutbox } from '../outbox/effect-outbox'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -77,7 +79,7 @@ afterEach(async () => {
 })
 async function admit(count = 1) {
   const scheduler = new Scheduler(f.db, f.store, f.controller, context, factory, {
-    launch: async () => {}
+    effects: new EffectOutbox({ db: f.db, store: f.store, epoch: 'test' })
   })
   attempt = (await scheduler.scheduleRound(f.missionId, 'manual')).admitted[0]
   if (count > 1) {
@@ -213,10 +215,20 @@ it.each([1, 2])(
   }
 )
 it('launches the three fixture roots through the adapter and does nothing on the next round', async () => {
-  const scheduler = new Scheduler(f.db, f.store, f.controller, context, factory, {
-    launch: launcher()
+  const effects = new EffectOutbox({ db: f.db, store: f.store, epoch: 'test' })
+  registerMissionEffectExecutors({
+    db: f.db,
+    store: f.store,
+    missions: f.controller,
+    effects,
+    launch: launcher(),
+    verification: { kick: async () => {} }
   })
+  const scheduler = new Scheduler(f.db, f.store, f.controller, context, factory, { effects })
   expect((await scheduler.scheduleRound(f.missionId, 'manual')).admitted).toHaveLength(3)
+  effects.start()
+  await effects.kick()
+  await effects.stop()
   expect((await scheduler.scheduleRound(f.missionId, 'manual')).admitted).toEqual([])
   expect(startWorker).toHaveBeenCalledTimes(3)
   expect(f.store.listAttemptBindings({ missionId: f.missionId }).every((b) => b.dispatchId)).toBe(
@@ -441,4 +453,106 @@ it('leaves completed without a previous Submission unstartable', async () => {
   expect(events('attempt.launch_failed').at(-1)?.after).toMatchObject({
     message: expect.stringContaining('only a ready Task can start')
   })
+})
+
+it('skips a recovered superseded admission before host launch while the current Attempt remains authoritative', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  const effects = new EffectOutbox({ db: f.db, store: f.store, epoch: 'restarted' })
+  try {
+    const policy = f.store.getPolicy(f.missionId)
+    if (!policy) {
+      throw new Error('Expected the Mission policy')
+    }
+    f.store.upsertPolicy(f.missionId, { ...policy, concurrencyLimit: 1 })
+    const scheduler = new Scheduler(f.db, f.store, f.controller, context, factory, { effects })
+    const first = (await scheduler.scheduleRound(f.missionId, 'manual')).admitted[0]
+    const leased = f.store.leaseDueEffect({
+      kind: 'attempt.dispatch',
+      missionId: f.missionId,
+      now: new Date().toISOString(),
+      epoch: 'previous'
+    })
+    expect(leased).toMatchObject({ key: `${first.taskId}/1`, status: 'running' })
+    expect(
+      settleAttemptWithoutSubmission(
+        { store: f.store, missions: f.controller },
+        { ...first, dispatchId: null, reason: 'launch_pending_orphan', actor: 'RecoveryService' }
+      )
+    ).toEqual({ settled: true })
+    vi.setSystemTime(Date.now() + 1_000)
+    const second = (await scheduler.scheduleRound(f.missionId, 'manual')).admitted[0]
+    expect(second).toMatchObject({ taskId: first.taskId, seq: 2 })
+    const starts: { seq: number; latestSeq: number }[] = []
+    startWorker.mockImplementation(async (args) => {
+      const taskId = args.params.task
+      if (!taskId) {
+        throw new Error('Expected the admitted Task')
+      }
+      const { dispatch } = f.db.createStartingWorkerDispatch({
+        taskId,
+        creator: { kind: 'system' },
+        maxDepth: 1,
+        startOptions: {},
+        retryOf: args.params.retryOf
+      })
+      f.db.prepareStartingWorkerAuthority({
+        dispatchId: dispatch.id,
+        handle: `term_${dispatch.id}`,
+        paneKey: `pane_${dispatch.id}`,
+        processIncarnation: `process_${dispatch.id}`,
+        worktreeId: 'wt-created',
+        setupState: 'not_applicable',
+        effects: [],
+        terminalOwnership: 'created'
+      })
+      f.db.markWorkerDispatchReady(dispatch.id)
+      return { taskId, dispatchId: dispatch.id, state: 'ready' }
+    })
+    const launch = launcher()
+    registerMissionEffectExecutors({
+      db: f.db,
+      store: f.store,
+      missions: f.controller,
+      effects,
+      verification: { kick: async () => {} },
+      launch: async (admitted) => {
+        starts.push({ seq: admitted.seq, latestSeq: f.store.nextAttemptSeq(admitted.taskId) - 1 })
+        await launch(admitted)
+        if (admitted.seq === 2) {
+          const binding = f.store.getAttemptBinding(admitted.taskId, 2)
+          if (!binding?.dispatchId) {
+            throw new Error('Expected the current Attempt to bind its dispatch')
+          }
+          // The host exits before RecoveryService changes the Task's RUNNING projection.
+          f.db.failDispatch(binding.dispatchId, 'Host exited before reconciliation', {
+            workerProcessExited: true,
+            terminationReason: 'process_exited'
+          })
+        }
+      }
+    })
+    vi.setSystemTime(Date.now() + 1_000)
+    await effects.recoverAtBoot()
+    expect(f.store.getEffect('attempt.dispatch', `${first.taskId}/1`)).toMatchObject({
+      status: 'pending',
+      dueAt: new Date().toISOString()
+    })
+    effects.start()
+    await effects.kick()
+    expect(starts).toEqual([{ seq: 2, latestSeq: 2 }])
+    expect(startWorker).toHaveBeenCalledOnce()
+    expect(createManagedWorktree).toHaveBeenCalledOnce()
+    expect(f.store.getAttemptBinding(first.taskId, 1)?.dispatchId).toBeNull()
+    expect(f.store.getAttemptBinding(first.taskId, 2)?.dispatchId).toBe(
+      f.db.getDispatchContext(first.taskId)?.id
+    )
+    expect(f.store.getTaskStage(first.taskId)).toMatchObject({ stage: 'RUNNING', attemptCount: 2 })
+    expect(f.store.listEffects({ missionId: f.missionId })).toMatchObject([
+      { key: `${first.taskId}/1`, status: 'done', attempts: 0 },
+      { key: `${first.taskId}/2`, status: 'done', attempts: 0 }
+    ])
+  } finally {
+    await effects.stop()
+    vi.useRealTimers()
+  }
 })

@@ -21,7 +21,23 @@ export async function startAxiomControlPlane(
   if (!plane.started || generation !== plane.bootGeneration) {
     return
   }
+  try {
+    await plane.effects.recoverAtBoot()
+  } catch (error) {
+    // Unknown leases must be reconciled before any new work can dispatch.
+    if (generation === plane.bootGeneration) {
+      plane.started = false
+    }
+    throw error
+  }
+  if (!plane.started || generation !== plane.bootGeneration) {
+    return
+  }
+  plane.effects.start()
   const reconcile = () => {
+    void plane.effects.kick().catch(() => {
+      console.warn('[axiom] Effect outbox drain failed')
+    })
     void plane.recovery.reconcileAttempts().catch(() => {
       console.warn('[axiom] Attempt reconciliation failed')
     })
@@ -50,6 +66,9 @@ export function stopAxiomControlPlane(runtime: OrcaRuntimeService): void {
   const plane = getAxiomControlPlane(runtime)
   plane.started = false
   plane.bootGeneration += 1
+  void plane.effects.stop().catch(() => {
+    console.warn('[axiom] Effect outbox shutdown did not complete')
+  })
   void plane.verification.stop().catch(() => {
     console.warn('[axiom] Verification shutdown did not complete')
   })

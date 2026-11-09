@@ -11,6 +11,8 @@ import * as rules from '../context-builder/repository-rules'
 import { AgentFactory } from '../agent-factory/agent-factory'
 import { PROVIDER_SELECTION_RULES } from '../agent-factory/provider-selection'
 import { RulesEngine } from '../decision-engine/rules-engine'
+import { EffectOutbox } from '../outbox/effect-outbox'
+import { registerMissionEffectExecutors } from '../outbox/mission-effect-executors'
 import { Scheduler, type AdmittedAttempt, type AttemptLaunch } from './scheduler'
 
 let f: ReturnType<typeof planned>
@@ -21,6 +23,8 @@ let installed: string[]
 let launched: AdmittedAttempt[]
 let launch: AttemptLaunch
 let scheduler: Scheduler
+let effects: EffectOutbox
+let activeLaunch: AttemptLaunch
 
 beforeEach(async () => {
   let next = 0
@@ -48,16 +52,27 @@ beforeEach(async () => {
     expect(f.store.getTaskStage(attempt.taskId)?.stage).toBe('RUNNING')
     launched.push(attempt)
   }
+  effects = new EffectOutbox({ db: f.db, store: f.store, epoch: 'test' })
+  registerMissionEffectExecutors({
+    db: f.db,
+    store: f.store,
+    missions: f.controller,
+    effects,
+    launch: (attempt) => activeLaunch(attempt),
+    verification: { kick: async () => {} }
+  })
   scheduler = makeScheduler()
 })
 afterEach(async () => {
+  await effects.stop()
   vi.restoreAllMocks()
   f.db.close()
   await rm(root, { recursive: true, force: true })
 })
 
 function makeScheduler(launcher: AttemptLaunch = launch, now?: () => string) {
-  return new Scheduler(f.db, f.store, f.controller, context, factory, { launch: launcher, now })
+  activeLaunch = launcher
+  return new Scheduler(f.db, f.store, f.controller, context, factory, { effects, now })
 }
 function task(id: string) {
   const row = f.store.listTaskStages({ missionId: f.missionId }).find((t) => t.spec.id === id)
@@ -69,8 +84,11 @@ function task(id: string) {
 function policy(patch: Partial<Policy>) {
   f.store.upsertPolicy(f.missionId, { ...f.store.getPolicy(f.missionId)!, ...patch })
 }
-function round(s = scheduler) {
-  return s.scheduleRound(f.missionId, 'manual')
+async function round(s = scheduler) {
+  const result = await s.scheduleRound(f.missionId, 'manual')
+  effects.start()
+  await effects.kick()
+  return result
 }
 function events(name: string) {
   return f.store.listAuditEvents({ missionId: f.missionId }).filter((e) => e.event === name)
@@ -83,6 +101,22 @@ function seedDefined(id: string) {
 }
 
 describe('Scheduler admission', () => {
+  it('commits a dispatch effect with each admission before any launch', async () => {
+    const result = await scheduler.scheduleRound(f.missionId, 'manual')
+    expect(f.store.listEffects({ missionId: f.missionId })).toEqual(
+      result.admitted.map(({ missionId, ...payload }) =>
+        expect.objectContaining({
+          missionId,
+          kind: 'attempt.dispatch',
+          key: `${payload.taskId}/${payload.seq}`,
+          payload,
+          status: 'pending'
+        })
+      )
+    )
+    expect(launched).toEqual([])
+  })
+
   it('skips READY Tasks with a typed report question until its answer audit exists, including after restart', async () => {
     const taskId = task('T01').taskId
     const mission = f.store.getMission(f.missionId)!
@@ -329,10 +363,12 @@ describe('Scheduler admission', () => {
   it('coalesces overlapping requests to one follow-up round without duplicate admission', async () => {
     const entered = Promise.withResolvers<void>()
     const release = Promise.withResolvers<void>()
-    scheduler = makeScheduler(async (attempt) => {
-      await launch(attempt)
+    const build = context.build.bind(context)
+    vi.spyOn(context, 'build').mockImplementationOnce(async (input) => {
+      const result = await build(input)
       entered.resolve()
       await release.promise
+      return result
     })
     const readiness = vi.spyOn(f.controller, 'recomputeReadiness')
     const first = round()
@@ -385,6 +421,7 @@ describe('Scheduler admission', () => {
     })
     await expect(round()).rejects.toThrow('audit failed')
     expect(f.store.listAttemptBindings({ missionId: f.missionId })).toEqual([])
+    expect(f.store.listEffects({ missionId: f.missionId })).toEqual([])
     expect(task('T01')).toMatchObject({ stage: 'READY', attemptCount: 0 })
     expect(launched).toEqual([])
   })

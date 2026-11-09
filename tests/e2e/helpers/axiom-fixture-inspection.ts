@@ -3,6 +3,7 @@ import path from 'node:path'
 import { z } from 'zod'
 import Database from '../../../src/main/sqlite/sync-database'
 import { isTransientSqliteContention } from '../../../src/main/sqlite/sqlite-read-failure'
+import { EffectRowCodec } from '../../../src/main/axiom/db/effect-rows'
 
 /** The exec provider exits before submission. The harness records only observed host receipts. */
 export function recordHeadlessFixtureReceipts(
@@ -16,7 +17,9 @@ export function recordHeadlessFixtureReceipts(
     state = inspectFixtureMission(userData, missionId)
   } catch (error) {
     // Restart can briefly lock SQLite; the receipt timer retries on its next tick.
-    if (isTransientSqliteContention(error)) {return}
+    if (isTransientSqliteContention(error)) {
+      return
+    }
     throw error
   }
   for (const submission of state.submissions) {
@@ -86,6 +89,9 @@ export function inspectFixtureMission(userData: string, missionId: string) {
       verification: db
         .prepare('SELECT * FROM verification_runs WHERE mission_id = ? ORDER BY task_id, id')
         .all(missionId),
+      effects: db
+        .prepare('SELECT * FROM axiom_effects WHERE mission_id = ? ORDER BY created_at, rowid')
+        .all(missionId),
       dispatches: db
         .prepare(
           'SELECT d.* FROM dispatch_contexts d JOIN attempt_bindings b ON b.dispatch_id = d.id WHERE b.mission_id = ? ORDER BY d.id'
@@ -127,6 +133,7 @@ export function inspectFixtureMission(userData: string, missionId: string) {
       submissions: z.array(SubmissionRowCodec).parse(rows.submissions),
       // v45 codec exposes runtimeEpoch, claimCount, worktreeId and start/finish timestamps.
       verification: z.array(VerificationRunRowCodec).parse(rows.verification),
+      effects: z.array(EffectRowCodec).parse(rows.effects),
       dispatches: z
         .array(
           z.object({
