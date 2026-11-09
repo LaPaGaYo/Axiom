@@ -9,6 +9,7 @@ import {
 import { getAxiomControlPlane } from '../../../../axiom/control-plane'
 import { proposePlannerPlan } from '../../../../axiom/execution/planner-proposal'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
+import { planCoverage } from '../../../../../shared/axiom-contract/plan-coverage'
 
 export const AXIOM_PLAN_METHODS = [
   defineMethod({
@@ -53,9 +54,15 @@ export const AXIOM_PLAN_METHODS = [
     name: 'axiom.plan.show',
     permission: 'workspace',
     params: PlanShowParams,
-    handler: (p, { runtime }) => ({
-      planRevision: getAxiomControlPlane(runtime).missions.getPlan(p.planRevisionId)
-    })
+    handler: (p, { runtime }) => {
+      const { missions } = getAxiomControlPlane(runtime)
+      const planRevision = missions.getPlan(p.planRevisionId)
+      const goal = missions.getGoal({
+        missionId: planRevision.missionId,
+        goalRevisionId: planRevision.goalRevisionId
+      })
+      return { planRevision, coverage: planCoverage(planRevision, goal.acceptanceCriteria) }
+    }
   }),
   defineMethod({
     name: 'axiom.plan.list',

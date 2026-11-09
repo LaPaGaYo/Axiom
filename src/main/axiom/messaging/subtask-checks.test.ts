@@ -19,12 +19,22 @@ const checks: Check[] = [
   'dependency',
   'budget',
   'attempt',
-  'evidence'
+  'evidence',
+  'acceptance_uncheckable'
 ]
 
-it.each(checks)(
-  '%s fails deterministically and keeps an auto-create request pending',
-  async (check) => {
+it.each(
+  checks.flatMap<{ check: Check; empty: boolean }>((check) =>
+    check === 'acceptance_uncheckable'
+      ? [
+          { check, empty: false },
+          { check, empty: true }
+        ]
+      : [{ check, empty: false }]
+  )
+)(
+  '$check fails deterministically and keeps an auto-create request pending (empty=$empty)',
+  async ({ check, empty }) => {
     const worker = f.bind('T04')
     const policy = f.store.getPolicy(f.mission.id)!
     f.store.upsertPolicy(f.mission.id, {
@@ -34,6 +44,11 @@ it.each(checks)(
     })
     const requested = {
       ...subtask,
+      ...(check === 'acceptance_uncheckable'
+        ? {
+            acceptanceCriteria: empty ? [] : [{ text: 'Review', check: { kind: 'human' as const } }]
+          }
+        : {}),
       ...(check === 'evidence'
         ? {
             acceptanceCriteria: [

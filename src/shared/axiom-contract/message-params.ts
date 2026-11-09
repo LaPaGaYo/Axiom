@@ -52,7 +52,7 @@ export const SubtaskRequestSchema = z
     title: z.string().trim().min(1),
     objective: z.string().trim().min(1),
     allowedPaths: z.array(z.string().min(1)).min(1),
-    acceptanceCriteria: z.array(AcceptanceCriterionSchema).min(1),
+    acceptanceCriteria: z.array(AcceptanceCriterionSchema),
     risk: z.enum(['low', 'medium', 'high']).default('low'),
     dependsOn: z.array(AxiomIdSchema).optional()
   })

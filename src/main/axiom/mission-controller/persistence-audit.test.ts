@@ -96,7 +96,13 @@ it('records the full ordered create/propose/approve/start audit with every requi
       'plan.approved',
       actor,
       { status: 'PROPOSED', activePlanRevisionId: null },
-      { status: 'APPROVED', activePlanRevisionId: plan.id, provenance }
+      {
+        status: 'APPROVED',
+        activePlanRevisionId: plan.id,
+        provenance,
+        warnings: [{ code: 'incomplete_coverage', taskIds: [] }],
+        coverage: { covered: 0, total: 1 }
+      }
     ),
     ...creationOrder.map((t) =>
       base('task', t.taskId, 'task.created', actor, null, {

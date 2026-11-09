@@ -7,6 +7,7 @@ import type { OrchestrationDb } from '../../runtime/orchestration/db'
 import { VerificationRulesSchema } from '../../../shared/axiom-contract/verification-rules'
 import { validateAcceptanceCommands } from '../../../shared/axiom-contract/evidence-commands'
 import { resolveAcceptance } from '../../../shared/axiom-contract/acceptance'
+import { validateTaskAcceptance } from '../../../shared/axiom-contract/plan-proposal'
 
 export type Check =
   | 'scope'
@@ -16,6 +17,7 @@ export type Check =
   | 'budget'
   | 'attempt'
   | 'evidence'
+  | 'acceptance_uncheckable'
 export type SubtaskSource = { taskId: string; attemptId: string; messageId: string }
 const normalize = (value: string) =>
   path.posix.normalize(value.replaceAll('\\', '/')).replace(/\/$/, '') || '/'
@@ -93,6 +95,11 @@ export function checkSubtask(
   const rules = parsedRules.success ? parsedRules.data : VerificationRulesSchema.parse({})
   if (validateAcceptanceCommands(resolveAcceptance(task), rules).length) {
     failed.push('evidence')
+  }
+  if (
+    validateTaskAcceptance(task, ['task']).some((error) => error.code === 'acceptance_uncheckable')
+  ) {
+    failed.push('acceptance_uncheckable')
   }
   if (
     !policy ||

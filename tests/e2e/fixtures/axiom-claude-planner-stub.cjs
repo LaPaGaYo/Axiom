@@ -175,14 +175,17 @@ async function propose(preamble) {
     }
     const proposal = fixtureProposal(preamble)
     const legacyEvidence = process.env.AXIOM_E2E_PLANNER_LEGACY_EVIDENCE === '1'
-    if (legacyEvidence || process.env.AXIOM_E2E_PLANNER_PROSE_EVIDENCE === '1') {
+    const uncheckable = process.env.AXIOM_E2E_PLANNER_UNCHECKABLE === '1'
+    if (legacyEvidence || uncheckable || process.env.AXIOM_E2E_PLANNER_PROSE_EVIDENCE === '1') {
       const invalid = structuredClone(proposal)
-      if (legacyEvidence) {
+      if (uncheckable) {
+        invalid.tasks[0].acceptanceCriteria = [{ text: 'A person checks this', check: { kind: 'human' } }]
+      } else if (legacyEvidence) {
         invalid.tasks[0].requiredEvidence = ['pnpm run verify:full']
       } else {
         invalid.tasks[0].acceptanceCriteria[0].check.command = 'Test results'
       }
-      const expectedCode = legacyEvidence ? 'required_evidence_retired' : 'evidence_command_invalid'
+      const expectedCode = uncheckable ? 'acceptance_uncheckable' : legacyEvidence ? 'required_evidence_retired' : 'evidence_command_invalid'
       const rejected = await request('tools/call', {
         name: 'plan_propose',
         arguments: { proposal: invalid }

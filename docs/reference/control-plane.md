@@ -45,7 +45,7 @@ Execution Kernel 继续拥有 Run、Orca Task、dispatch、PTY、进程、worktr
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `missions`            | 使用：repository、target branch、Run/session 绑定、status、active revisions、`previous_status`                                               |
 | `goal_revisions`      | 使用：版本化正文、约束、验收、provenance、ACTIVE/SUPERSEDED                                                                                  |
-| `plan_revisions`      | 使用：milestones/risks/proposal JSON、版本、Goal 关联、审批与拒绝理由                                                                        |
+| `plan_revisions`      | 使用：milestones/risks/proposal JSON（tasks、edges、warnings）、版本、Goal 关联、审批与拒绝理由                                                                        |
 | `task_stages`         | 使用：Orca Task id、Plan 关联、权威 stage、`previous_stage`、spec、retry policy、attempt count                                               |
 | `mission_task_edges`  | 使用：物化后 Orca Task id 间的有向边及 readiness threshold                                                                                   |
 | `mission_policies`    | 使用：默认 concurrency/预算/阈值/审批与验证规则；v44 `routing` 由 policy RPC 更新；`nested_worker_max_depth=1`                               |
@@ -70,6 +70,8 @@ Milestone 存在 Plan JSON 内，没有独立表/状态机。Attempt 身份仍�
 ### Task spec：逐条验收合同（M3-04b-2）
 
 Task 的 `acceptanceCriteria` 为 `{text, check}` 数组：`check.kind=command` 带一个精确 shell `command`；`artifact` 可带 `artifactKind`，要求 Submission 引用可读、非空且种类匹配的 Artifact；`human` 只用于命令和 Artifact 都不能证明、必须由人确认的要求。GoalRevision 的用户文本仍为 `string[]`。AgentFactory 将解析后的对象写入内容寻址 AgentSpec；Plan review 显示文本及 command / Artifact / human check 标记。
+
+M3-05-2：新 Task 至少有一个 command 或 artifact criterion；空标准或纯 human 经唯一的 `validateTaskAcceptance` 返回 `acceptance_uncheckable` error，message 同时指出这两种可检查类型。`TaskSpec.coversGoalCriteria?: number[]` 最多 50 个非负整数，是该 Task 帮助满足的 active Goal acceptanceCriteria 零基索引；Goal 有标准时 Planner 应为每个 Task 声明，没有标准时可省略。字段是声明的覆盖关系，不证明验收已满足；旧 Task 不设置它仍能读取。
 
 `acceptance.ts` 的纯函数 `resolveAcceptance` 是兼容解释的唯一入口：已存字符串变为同文本的 human criterion；已存 `requiredEvidence` 中尚无 criterion 携带的非空命令，按原顺序追加为 `{text: 'Command passes: <command>', check: {kind: 'command', command}}`。`acceptanceCommands` 去重并保留 criterion 顺序。`requiredEvidence` 已退役，只作兼容读取；不迁移或重写已存 PlanRevision / Task JSON。验证、上下文、CLI、renderer 和 AgentFactory 都消费解析结果。`axiom task show --json` 暴露解析后的 spec，文本输出列出证明方式。
 
@@ -247,6 +249,20 @@ ContextBuilder 的 planner 形式为 `{missionId,role:'planner',goalRevisionId}`
 M3-04b-2 / D85 rule 2 修订：每个 `acceptanceCriteria` 项都是 `{text, check}`。最小示例横跨两个 Task 展示 command、artifact 和 human 三种 check。command 从仓库根原样执行且须 exit 0，单行、一个命令，不含 `;`、`&`（含 `&&`）、`|`（含 `||`）、`>`、`<`、反引号、`$(`；首个空白分隔 token 必须是允许程序（按完整名称或 basename 匹配，含 `=` 的 token 不是程序）。允许集为 `verificationRules.evidenceCommands.allowedPrograms` 加全部 setupCommands / repositoryGates 使用的程序，提示词列出解析后的集合。期望与描述只写 `text`，不在 `command` 加 “output” 或 “with exit code 0”。artifact 表示提交引用可读、非空 Artifact，指定 artifactKind 时须匹配；human 只在命令和 Artifact 都无法证明时使用，由人确认，应少用且计划会标明。`requiredEvidence` 已退役并拒绝新写入。同一 schema 的 `.describe()` 进入提示词 JSON Schema 与 MCP plan_propose 输入 schema；持久合同不含 transform，JSON Schema 转换不需特殊 io / unrepresentable 选项。
 
 提案在结构验证后、插入 PlanRevision 前检查：非空 legacy 字段 → `plan_invalid` / `required_evidence_retired`，path=`['tasks',i,'requiredEvidence']`；字符串 criterion → `criterion_shape`，path=`['tasks',i,'acceptanceCriteria',j]`。随后对 `resolveAcceptance` / `acceptanceCommands` 的命令执行 D85 边界检查；非法项为 `evidence_command_invalid`，path=`['tasks',i,'acceptanceCriteria',j,'check','command']`，j 是 criterion index，不是去重后的命令 index。CLI / MCP 保留 code、severity、message、path、taskIds，Planner 同回合可修正，失败不插入 PlanRevision。已存旧提案审批保留兼容读取。Human `axiom.task.create` 使用相同检查，路径从 `['task',…]` 开始；REQUEST_SUBTASK 使用同一命令验证，失败 reason 为 `evidence`。旧 policy 无法解析时以默认 VerificationRules 检查，边界不失效；执行时不重复检查。边界限制形状与程序，不限制程序能力（验证沙盒属 M3-10 / DEF-46）；`pnpm run verify:full output with exit code 0` 的程序合法，故仍通过，靠 planInvalidPatterns 与 M3-09 计划卡处置，不启发式检测参数或读取 package.json。
+
+M3-05-2 的 proposal-side checks 在同一回合区分 error 与 advisory warning：
+
+- `acceptance_uncheckable`：`plan_invalid {errors:[{code,severity:'error',message,taskIds:[task.id],path:['tasks',i,'acceptanceCriteria']}]}`；Task create / adjust 使用 `['task','acceptanceCriteria']`，REQUEST_SUBTASK 的 `checkSubtask` 调用同一 validator，在既有检查拒绝路径返回 failed reason `acceptance_uncheckable`，不创建 Task。
+- `coverage_index_out_of_range`：proposePlan / createTask 解析 active Goal 后检查；索引 ≥ Goal 标准数为 `plan_invalid` error，path 指向 `coversGoalCriteria` 的项位置。纯 proposal validator 不猜测 Goal。
+- `incomplete_coverage`：Goal 有标准且存在未声明覆盖的项时，单条 warning 带 `taskIds:[]`、`uncovered:[{index,text}]`。
+- `scope_overlap`：每个没有任一方向依赖路径的无序 Task 对至多一条，带 `taskIds:[a,b]`、全部重叠条目 `paths:[{a:entry,b:entry}]`；literal / literal 互作路径前缀匹配，literal / glob 用 literal 匹配 glob，glob / glob 只在原字符串相等时重叠，`.` 与所有路径重叠（复用 `matchesPathPattern`，不改 diff gate）。该保守规则可能漏掉不同 glob 的相交；共享 dependency manifests / lockfiles 应集中到一个 Task 或加依赖（DEF-21 ⑦）。
+- `insufficient_parallel_roots`：仅显式要求根数量时产生，带 roots 的 taskIds、expected、found；改为可接受的 warning，不是 error。
+
+三种 warning 均为严格的 code 判别合同，顺序按 code 再按 taskIds，路径与 id 也保持确定性。proposePlan 在 schema、acceptance、command、Goal 归属和索引检查通过后计算并一次性写入 `plan_revisions.proposal.warnings`；旧 blob 缺少 warnings 解码为 `[]`，不加表、列或 stage。读方和批准不重算 warning。`plan.proposed.after` 保持整个 PlanRevision（现在包含 warnings）；`plan.approved.after` 在既有 status / activePlanRevisionId / provenance 旁增加 `warnings:[{code,taskIds}]` 与 `coverage:{covered,total}`，将批准绑定到当时可读的 warnings。它们是 advisory，人可带着 warning 批准；本 Task 不增加 renderer 告警 UI，也不把审计当成阅读行为的观测。
+
+`axiom.plan.show / list` 的 PlanRevision 返回持久 warnings。show 另外从存储的 plan.tasks 与其 `goalRevisionId` 对应 Goal（不是当前 active Goal）计算 `coverage:{criteria:[{index,text,taskIds}],uncovered:number[]}`，供 M4 completion gate（DEF-20 ②）消费；taskIds 为提案 id、去重排序。list 不增加 coverage。CLI `axiom plan show` 表格后打印 `WARNINGS`（如 `[scope_overlap] T03 ∥ T08: <path>, <path>`、`[incomplete_coverage] uncovered: #0 "<text>"`）和 `COVERAGE`（`#0 "<text>" ← T01, T04` 或 `← (none)`）；空列表为 `none`。MCP `plan_propose` 成功收据增加 `warnings:[{code,taskIds}]`；它是交给人的收据，不是重试要求，已有 PROPOSED 时仍返回 `plan_pending`。Planner prompt 要求声明覆盖、每个 Task 可检查、并行 scope 不重叠；最小示例仅在 Goal 有标准时为两个 Task 添加 `coversGoalCriteria:[0]`。
+
+后加的 desktop / REQUEST_SUBTASK Task 仍跑 acceptance 与 coverage-index 检查，但不修改已存 proposal，也不重算 warnings：warnings 描述被批准的提案，后加 Task 在其范围之外；show 的 coverage 同样只投影存储的提案。M4 如何结合实际集成与验证证据判定完成不在本 Task 范围内。
 
 Planner 无 PlanRevision，因此只持久化 `context_package_manifest` 与 `context_package_render` 两个内容寻址 Artifacts，**不插入 context_packages**（其 plan_revision_id 为 NOT NULL）。binding.contextPackageId 为 render Artifact 的 `art_…` id；launcher 用 `artifacts.read` 取模板。preamble 由 preambleBuilder 交付时只替换 `{{attemptId}}`，D73 之后不含任何凭据。Planner dispatch 在该回调交付 preamble 前绑定，以支持快速 provider 在 readiness receipt 返回前提交。
 

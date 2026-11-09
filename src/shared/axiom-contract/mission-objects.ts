@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { isTuiAgent } from '../tui-agent-config'
+import { PlanWarningSchema } from './plan-warnings'
 import {
   GoalRevisionStatusSchema,
   MissionStatusSchema,
@@ -115,6 +116,13 @@ export const TaskSpecSchema = z.object({
   scope: z.object({ allowedPaths: z.array(Text) }),
   role: Text.optional(),
   acceptanceCriteria: z.array(z.union([Text, AcceptanceCriterionSchema])),
+  coversGoalCriteria: z
+    .array(z.number().int().nonnegative())
+    .max(50)
+    .optional()
+    .describe(
+      "zero-based indexes into the active Goal's acceptanceCriteria this Task helps satisfy; declare for every Task; omit only when the Goal lists no criteria"
+    ),
   requiredEvidence: z
     .array(Text)
     .optional()
@@ -144,6 +152,7 @@ export const PlanRevisionSchema = z.object({
   risks: z.array(PlanRiskSchema),
   tasks: z.array(TaskSpecSchema),
   edges: z.array(TaskEdgeSchema),
+  warnings: z.array(PlanWarningSchema).default([]),
   provenance: ProvenanceSchema,
   supersedesId: AxiomIdSchema.optional(),
   rejectedReason: Text.optional()

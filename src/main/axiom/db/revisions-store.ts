@@ -22,6 +22,7 @@ const PlanBodySchema = PlanRevisionSchema.pick({
   risks: true,
   tasks: true,
   edges: true,
+  warnings: true,
   provenance: true
 })
 const PlanOptionsSchema = PlanRevisionSchema.pick({
@@ -119,7 +120,7 @@ export function revisionsStore(db: OrchestrationDb) {
               b.goalRevisionId,
               JSON.stringify(b.milestones),
               JSON.stringify(b.risks),
-              JSON.stringify({ tasks: b.tasks, edges: b.edges }),
+              JSON.stringify({ tasks: b.tasks, edges: b.edges, warnings: b.warnings }),
               JSON.stringify(b.provenance),
               p.supersedesId ?? null
             )

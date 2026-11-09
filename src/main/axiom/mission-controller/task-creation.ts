@@ -12,7 +12,8 @@ import { checkSubtask, type SubtaskSource } from '../messaging/subtask-checks'
 import { projectTask, recomputeReadiness } from './task-readiness'
 import { validateTaskAcceptance } from '../../../shared/axiom-contract/plan-proposal'
 import { VerificationRulesSchema } from '../../../shared/axiom-contract/verification-rules'
-import { validateTaskCommands } from './plan-materialization'
+import { validateTaskCommands } from './plan-validation'
+import { validateGoalCoverage } from '../../../shared/axiom-contract/plan-coverage'
 
 export function createTask(
   ctx: ControllerContext,
@@ -42,6 +43,16 @@ export function createTask(
   const commandErrors = validateTaskCommands(spec, rules, ['task'])
   if (commandErrors.length) {
     throw new MissionControllerError('plan_invalid', { errors: commandErrors })
+  }
+  const goal = mission.activeGoalRevisionId
+    ? ctx.store.getGoalRevision(mission.activeGoalRevisionId)
+    : undefined
+  if (!goal || goal.missionId !== mission.id || goal.status !== 'ACTIVE') {
+    throw new MissionControllerError('goal_revision_not_found', { missionId: mission.id })
+  }
+  const coverageErrors = validateGoalCoverage(spec, goal.acceptanceCriteria.length, ['task'])
+  if (coverageErrors.length) {
+    throw new MissionControllerError('plan_invalid', { errors: coverageErrors })
   }
   const dependsOn = [...new Set([...(source ? [source.taskId] : []), ...p.dependsOn])]
   const checks = checkSubtask(ctx, { missionId: mission.id, task: spec, dependsOn, source })

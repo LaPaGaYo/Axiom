@@ -13,7 +13,7 @@ import { projectTask, transitionTaskStage } from './task-readiness'
 import { activeCandidateVerification } from '../verification/verification-candidate'
 import { validateTaskAcceptance } from '../../../shared/axiom-contract/plan-proposal'
 import { VerificationRulesSchema } from '../../../shared/axiom-contract/verification-rules'
-import { validateTaskCommands } from './plan-materialization'
+import { validateTaskCommands } from './plan-validation'
 import { redactContext } from '../context-builder/redaction'
 
 function acceptanceForAudit(criteria: TaskSpec['acceptanceCriteria']) {

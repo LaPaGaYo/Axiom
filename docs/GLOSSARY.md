@@ -104,6 +104,12 @@ READY_FOR_APPROVAL → FINALIZING（交付前目标分支 HEAD 已变，D70）
 
 `PROPOSED → APPROVED → SUPERSEDED`；`PROPOSED → REJECTED`。同一 Mission 任一时刻只有一个 APPROVED（active）。新 revision 生效时旧 Task 按 `inherit / cancel / rebind` 三种方式处理并记录。
 
+M3-05-2：`TaskSpec.coversGoalCriteria` 可选，最多 50 个非负整数，指向 active Goal 的 acceptanceCriteria 零基索引；Goal 有标准时 Planner 应为每个 Task 声明。`coverage_index_out_of_range` 是提案 / Task 创建的 `plan_invalid` error。`validateTaskAcceptance` 对没有 command 或 artifact 标准的 Task 返回 `acceptance_uncheckable`（空或纯 human），同回合拒绝；适用于提案、Task 创建、REQUEST_SUBTASK 检查与标准替换，旧持久化计划仍兼容读取。
+
+`PlanWarning` 是严格按 code 判别的数据：`incomplete_coverage` 带空 taskIds 和 uncovered `{index,text}`；`scope_overlap` 带两个 Task id 和 paths `{a,b}`；`insufficient_parallel_roots` 带根 Task id、expected / found。warning 不拒绝提案，按 code、taskIds 排序，只在提案时计算并存于 `plan_revisions.proposal.warnings`（旧行默认为 `[]`）；`plan.proposed` 含完整 warning，`plan.approved.after` 含 warnings `{code,taskIds}` 与 coverage `{covered,total}`。后加 Task 不属于该提案的 warnings。
+
+无任一方向依赖路径的 Task 对才检查 scope：两个 literal 互作路径前缀匹配，literal / glob 用 literal 匹配 glob，两个 glob 只在字符串相等时重叠，`.` 与所有路径重叠。`axiom.plan.show / list` 返回持久 warnings；show 另从该 plan 的 GoalRevision 投影 coverage `{criteria:[{index,text,taskIds}],uncovered:number[]}`，供 M4 completion gate（DEF-20 ②）消费。覆盖是 Planner 的声明，不是证明。`axiom plan show` 文本含 WARNINGS / COVERAGE（空为 none）；MCP `plan_propose` 收据含 warnings `{code,taskIds}`，不是重提循环（PROPOSED 时仍为 plan_pending）。warning 可被人批准接受，不替代独立验证。
+
 ### 4.4 Task stage（项目级权威，`task_stages.stage`）
 
 ```text

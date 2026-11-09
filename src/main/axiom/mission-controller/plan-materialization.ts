@@ -1,15 +1,9 @@
 import type { z } from 'zod'
 import type { PlanProposeParams } from '../../../shared/axiom-contract/plan-params'
-import {
-  PlanProposalSchema,
-  validatePlanProposal,
-  type PlanProposalError
-} from '../../../shared/axiom-contract/plan-proposal'
 import type {
   PlanRevision,
   Provenance,
-  TaskEdge,
-  TaskSpec
+  TaskEdge
 } from '../../../shared/axiom-contract/mission-objects'
 import {
   audit,
@@ -19,39 +13,14 @@ import {
   type ControllerContext
 } from './controller-context'
 import { moveMission } from './mission-lifecycle'
+import { VerificationRulesSchema } from '../../../shared/axiom-contract/verification-rules'
+import { validatedProposal, validateTaskCommands } from './plan-validation'
 import {
-  VerificationRulesSchema,
-  type VerificationRules
-} from '../../../shared/axiom-contract/verification-rules'
-import {
-  evidenceCommandMessage,
-  validateAcceptanceCommands
-} from '../../../shared/axiom-contract/evidence-commands'
-import { redactContext } from '../context-builder/redaction'
-import { resolveAcceptance } from '../../../shared/axiom-contract/acceptance'
-
-function validatedProposal(input: unknown, persisted = false) {
-  const validation = validatePlanProposal(input, { persisted })
-  if (!validation.ok) {
-    throw new MissionControllerError('plan_invalid', { errors: validation.errors })
-  }
-  return { proposal: PlanProposalSchema.parse(input), order: validation.order }
-}
-
-export function validateTaskCommands(
-  task: TaskSpec,
-  rules: VerificationRules,
-  path: (string | number)[]
-): PlanProposalError[] {
-  const criteria = resolveAcceptance(task)
-  return validateAcceptanceCommands(criteria, rules).map((issue) => ({
-    code: 'evidence_command_invalid',
-    severity: 'error',
-    message: redactContext(evidenceCommandMessage(issue, issue.command)).content,
-    path: [...path, 'acceptanceCriteria', issue.index, 'check', 'command'],
-    taskIds: [task.id]
-  }))
-}
+  coverageWarnings,
+  planCoverage,
+  validateGoalCoverage
+} from '../../../shared/axiom-contract/plan-coverage'
+import { scopeOverlaps } from '../../../shared/axiom-contract/plan-overlap'
 
 export function proposePlan(
   ctx: ControllerContext,
@@ -72,7 +41,10 @@ export function proposePlan(
       to: 'PLAN_REVIEW'
     })
   }
-  const { proposal } = validatedProposal({ ...input.planRevision, provenance: input.provenance })
+  const { proposal, warnings } = validatedProposal({
+    ...input.planRevision,
+    provenance: input.provenance
+  })
   const parsedRules = VerificationRulesSchema.safeParse(
     ctx.store.getPolicy(mission.id)?.verificationRules
   )
@@ -103,7 +75,24 @@ export function proposePlan(
       ]
     })
   }
-  const plan = ctx.store.insertPlanRevision(proposal, { missionId: mission.id, status: 'PROPOSED' })
+  const coverageErrors = proposal.tasks.flatMap((task, i) =>
+    validateGoalCoverage(task, goal.acceptanceCriteria.length, ['tasks', i])
+  )
+  if (coverageErrors.length) {
+    throw new MissionControllerError('plan_invalid', { errors: coverageErrors })
+  }
+  const plan = ctx.store.insertPlanRevision(
+    {
+      ...proposal,
+      // Each source is ordered by Task id; code order is coverage, roots, overlap.
+      warnings: [
+        ...coverageWarnings(proposal, goal.acceptanceCriteria),
+        ...warnings,
+        ...scopeOverlaps(proposal)
+      ]
+    },
+    { missionId: mission.id, status: 'PROPOSED' }
+  )
   audit(ctx, {
     missionId: mission.id,
     actor: input.provenance.actor,
@@ -139,6 +128,13 @@ export function approvePlan(
     })
   }
   const { proposal, order } = validatedProposal(plan, true)
+  const goal = ctx.store.getGoalRevision(plan.goalRevisionId)
+  if (!goal || goal.missionId !== mission.id) {
+    throw new MissionControllerError('goal_revision_not_found', {
+      goalRevisionId: plan.goalRevisionId
+    })
+  }
+  const coverage = planCoverage(plan, goal.acceptanceCriteria)
   if (!ctx.store.updatePlanRevisionStatus({ id: plan.id, from: 'PROPOSED', to: 'APPROVED' })) {
     throw new MissionControllerError('stale_state', {
       planRevisionId: plan.id,
@@ -154,7 +150,16 @@ export function approvePlan(
     objectId: plan.id,
     event: 'plan.approved',
     before: { status: 'PROPOSED', activePlanRevisionId: mission.activePlanRevisionId },
-    after: { status: 'APPROVED', activePlanRevisionId: plan.id, provenance: input.provenance }
+    after: {
+      status: 'APPROVED',
+      activePlanRevisionId: plan.id,
+      provenance: input.provenance,
+      warnings: plan.warnings.map(({ code, taskIds }) => ({ code, taskIds })),
+      coverage: {
+        covered: coverage.criteria.length - coverage.uncovered.length,
+        total: coverage.criteria.length
+      }
+    }
   })
   const specs = new Map(proposal.tasks.map((task) => [task.id, task]))
   const ids = new Map<string, string>()

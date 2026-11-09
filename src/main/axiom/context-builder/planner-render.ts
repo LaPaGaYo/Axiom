@@ -48,6 +48,7 @@ export async function buildPlannerContext(
       title: i ? 'Verify the change' : 'Implement the change',
       objective: i ? 'Add regression coverage' : 'Implement the requested behavior',
       scope: { allowedPaths: [i ? 'tests/' : 'src/'] },
+      ...(goal.acceptanceCriteria.length ? { coversGoalCriteria: [0] } : {}),
       acceptanceCriteria: i
         ? [
             {
@@ -99,6 +100,9 @@ export async function buildPlannerContext(
         'Name dependency manifests, lockfiles, CI workflows, hooks, test or lint configuration and agent instruction files (AGENTS.md, CLAUDE.md, .claude/, .codex/, .agents/, .mcp.json) in allowedPaths when a Task must change them; otherwise such a change goes to human review.',
         'Name a test file in allowedPaths when a Task must delete it.',
         'Every acceptanceCriteria entry is { text, check }.',
+        'Declare coversGoalCriteria on every Task when the Goal lists acceptance criteria; the Control Plane warns on uncovered criteria.',
+        'Every Task needs at least one command or artifact criterion; a Task with only human criteria is rejected (acceptance_uncheckable).',
+        'Two Tasks with no dependency between them must not list overlapping allowedPaths; put shared files in one Task or add the dependency (dependency manifests and lockfiles especially — DEF-21 ⑦); the Control Plane records scope_overlap warnings for the human.',
         `check.kind = "command" carries one exact shell command; the independent verification runs it verbatim from the repository root and requires exit 0; one command per criterion, no shell operators; the program must be one of: ${allowedEvidencePrograms(rules).join(', ')}; put expectations and descriptions in text, never in command (no "output", "with exit code 0" or other prose).`,
         '"artifact" means the submission must reference a readable, non-empty Artifact (of artifactKind when given).',
         '"human" means no command or Artifact can prove it and a person will confirm it — use it sparingly, the plan shows it.',
@@ -113,7 +117,7 @@ export async function buildPlannerContext(
       (p.provider === 'claude'
         ? [
             'Deliver by calling the MCP tool plan_propose with { "proposal": <complete PlanProposal> }. This is your only output channel.',
-            'The tool returns ok or schema issues. Fix the issues and call again; the Control Plane keeps one PlanRevision per Attempt.',
+            'The tool returns ok with warnings or validation issues. Fix rejected issues and call again; warnings are a receipt for human review, not a retry request. A PROPOSED revision prevents re-proposal (plan_pending). The Control Plane keeps one PlanRevision per Attempt.',
             'Do not create, edit or commit any file. Do not run commands beyond the read-only git log, git diff and git show commands.',
             'This is a read-only planning Attempt: permissions.write = []. The worktree must stay clean.'
           ]

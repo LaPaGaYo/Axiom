@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { resolveAcceptance } from './acceptance'
+import type { PlanWarning } from './plan-warnings'
 import {
   AxiomIdSchema,
   MilestoneSchema,
@@ -34,6 +36,8 @@ export type PlanProposalError = {
     | 'evidence_command_invalid'
     | 'required_evidence_retired'
     | 'criterion_shape'
+    | 'acceptance_uncheckable'
+    | 'coverage_index_out_of_range'
   severity: 'error' | 'warning'
   message: string
   taskIds?: string[]
@@ -41,7 +45,7 @@ export type PlanProposalError = {
 }
 
 export type PlanProposalValidation =
-  | { ok: true; order: string[] }
+  | { ok: true; order: string[]; warnings: PlanWarning[] }
   | { ok: false; errors: PlanProposalError[] }
 
 export function validateTaskAcceptance(
@@ -69,6 +73,19 @@ export function validateTaskAcceptance(
       })
     }
   })
+  if (
+    !resolveAcceptance(task).some(
+      ({ check }) => check.kind === 'command' || check.kind === 'artifact'
+    )
+  ) {
+    errors.push({
+      code: 'acceptance_uncheckable',
+      severity: 'error',
+      message: 'Every Task needs at least one command or artifact acceptance criterion.',
+      taskIds: [task.id],
+      path: [...path, 'acceptanceCriteria']
+    })
+  }
   return errors
 }
 
@@ -166,13 +183,15 @@ export function validatePlanProposal(
       taskIds: cycle
     })
   }
+  const warnings: PlanWarning[] = []
   if (options.requireParallelRoots !== undefined && roots.length < options.requireParallelRoots) {
-    errors.push({
+    warnings.push({
       code: 'insufficient_parallel_roots',
-      severity: 'warning',
       message: `Expected at least ${options.requireParallelRoots} root tasks; found ${roots.length}`,
-      taskIds: roots
+      taskIds: roots,
+      expected: options.requireParallelRoots,
+      found: roots.length
     })
   }
-  return errors.length > 0 ? { ok: false, errors } : { ok: true, order }
+  return errors.length > 0 ? { ok: false, errors } : { ok: true, order, warnings }
 }

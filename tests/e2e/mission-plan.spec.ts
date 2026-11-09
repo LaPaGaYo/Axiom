@@ -9,7 +9,7 @@ import { desktopCall } from './helpers/axiom-desktop-call'
 import { readGoalFile } from '../../src/cli/handlers/axiom/input-files'
 import { DEFAULT_MISSION_POLICY } from '../../src/shared/axiom-contract/mission-objects'
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { ElectronApplication } from '@stablyai/playwright-test'
@@ -27,7 +27,10 @@ import {
   MissionResponseSchema,
   MissionPlanResponseSchema
 } from '../../src/shared/axiom-contract/mission-params'
-import { PlanListResponseSchema } from '../../src/shared/axiom-contract/plan-params'
+import {
+  PlanListResponseSchema,
+  PlanResponseSchema
+} from '../../src/shared/axiom-contract/plan-params'
 import { TaskListResponseSchema } from '../../src/shared/axiom-contract/task-params'
 import { fixturePlanProposal } from './helpers/fixture-plan-proposal'
 import { expectHarnessEgress } from './helpers/harness-egress-expectations'
@@ -120,7 +123,14 @@ function ledger(file: string) {
           z
             .object({
               kind: z.string().optional(),
-              response: z.object({ ok: z.boolean() }).optional()
+              response: z
+                .object({
+                  ok: z.boolean(),
+                  warnings: z
+                    .array(z.object({ code: z.string(), taskIds: z.array(z.string()) }))
+                    .optional()
+                })
+                .optional()
             })
             .passthrough()
             .parse(JSON.parse(line))
@@ -128,29 +138,84 @@ function ledger(file: string) {
     : []
 }
 
-for (const { provider, noProposal, proseEvidence, legacyEvidence } of [
-  { provider: 'codex', noProposal: false, proseEvidence: false, legacyEvidence: false },
-  { provider: 'claude', noProposal: false, proseEvidence: false, legacyEvidence: false },
-  { provider: 'claude', noProposal: true, proseEvidence: false, legacyEvidence: false },
-  { provider: 'claude', noProposal: false, proseEvidence: true, legacyEvidence: false },
-  { provider: 'claude', noProposal: false, proseEvidence: false, legacyEvidence: true }
+for (const { provider, noProposal, proseEvidence, legacyEvidence, uncheckable, jsonGoal } of [
+  {
+    provider: 'codex',
+    noProposal: false,
+    proseEvidence: false,
+    legacyEvidence: false,
+    uncheckable: false,
+    jsonGoal: false
+  },
+  {
+    provider: 'claude',
+    noProposal: false,
+    proseEvidence: false,
+    legacyEvidence: false,
+    uncheckable: false,
+    jsonGoal: false
+  },
+  {
+    provider: 'claude',
+    noProposal: true,
+    proseEvidence: false,
+    legacyEvidence: false,
+    uncheckable: false,
+    jsonGoal: false
+  },
+  {
+    provider: 'claude',
+    noProposal: false,
+    proseEvidence: true,
+    legacyEvidence: false,
+    uncheckable: false,
+    jsonGoal: false
+  },
+  {
+    provider: 'claude',
+    noProposal: false,
+    proseEvidence: false,
+    legacyEvidence: true,
+    uncheckable: false,
+    jsonGoal: false
+  },
+  {
+    provider: 'claude',
+    noProposal: false,
+    proseEvidence: false,
+    legacyEvidence: false,
+    uncheckable: true,
+    jsonGoal: false
+  },
+  {
+    provider: 'codex',
+    noProposal: false,
+    proseEvidence: false,
+    legacyEvidence: false,
+    uncheckable: false,
+    jsonGoal: true
+  }
 ] as const) {
   test(
-    legacyEvidence
-      ? 'M3-04b-2: Claude corrects required_evidence_retired in the same MCP turn'
-      : proseEvidence
-        ? 'M3-08i: Claude corrects evidence_command_invalid in the same MCP turn'
-        : noProposal
-          ? 'M3-08h: a finished Claude turn without a proposal settles and permits a new Planner'
-          : provider === 'codex'
-            ? 'M2-09: a read-only Planner proposes the fixture DAG and releases after PLAN_REVIEW'
-            : 'M3-08b: a claude structured Planner proposes the fixture DAG and releases after PLAN_REVIEW',
+    uncheckable
+      ? 'M3-05-2: Claude corrects acceptance_uncheckable in the same MCP turn'
+      : jsonGoal
+        ? 'M3-05-2: uncovered JSON Goal criteria persist as incomplete_coverage warnings'
+        : legacyEvidence
+          ? 'M3-04b-2: Claude corrects required_evidence_retired in the same MCP turn'
+          : proseEvidence
+            ? 'M3-08i: Claude corrects evidence_command_invalid in the same MCP turn'
+            : noProposal
+              ? 'M3-08h: a finished Claude turn without a proposal settles and permits a new Planner'
+              : provider === 'codex'
+                ? 'M2-09: a read-only Planner proposes the fixture DAG and releases after PLAN_REVIEW'
+                : 'M3-08b: a claude structured Planner proposes the fixture DAG and releases after PLAN_REVIEW',
     async (
       // oxlint-disable-next-line no-empty-pattern -- Restart helper owns the background app lifecycle.
       {},
       testInfo
     ) => {
-      test.setTimeout(legacyEvidence ? 240_000 : 300_000)
+      test.setTimeout(legacyEvidence || uncheckable ? 240_000 : 300_000)
       test.skip(
         provider === 'claude' && process.platform === 'win32',
         'Claude Mission support requires a POSIX host'
@@ -173,6 +238,7 @@ for (const { provider, noProposal, proseEvidence, legacyEvidence } of [
         AXIOM_E2E_PLANNER_NO_PROPOSAL: noProposal ? '1' : '0',
         AXIOM_E2E_PLANNER_PROSE_EVIDENCE: proseEvidence ? '1' : '0',
         AXIOM_E2E_PLANNER_LEGACY_EVIDENCE: legacyEvidence ? '1' : '0',
+        AXIOM_E2E_PLANNER_UNCHECKABLE: uncheckable ? '1' : '0',
         ORCA_E2E_CLI_ENTRY: path.join(process.cwd(), 'out', 'cli', 'index.js')
       })
       let app: ElectronApplication | undefined
@@ -194,11 +260,19 @@ for (const { provider, noProposal, proseEvidence, legacyEvidence } of [
         const { repo } = z
           .object({ repo: z.object({ id: z.string() }) })
           .parse(cli(userData, ['repo', 'add', '--path', clone]))
+        const goal = await readGoalFile(clone, 'GOAL.md')
+        const goalCriteria = ['Sprint reports are available', 'Reports have regression coverage']
+        if (jsonGoal) {
+          writeFileSync(
+            path.join(temp, 'goal.json'),
+            JSON.stringify({ ...goal, acceptanceCriteria: goalCriteria })
+          )
+        }
         const { mission } = MissionResponseSchema.parse(
           await desktopCall(first.page, 'axiom.mission.create', {
             repo: `id:${repo.id}`,
             targetBranch: 'main',
-            goal: await readGoalFile(clone, 'GOAL.md'),
+            goal: jsonGoal ? await readGoalFile(temp, 'goal.json') : goal,
             policy: DEFAULT_MISSION_POLICY
           })
         )
@@ -313,7 +387,7 @@ for (const { provider, noProposal, proseEvidence, legacyEvidence } of [
         await expect
           .poll(() => ledger(ledgerPath).findLast((e) => e.kind === 'proposal')?.response?.ok)
           .toBe(true)
-        if (proseEvidence || legacyEvidence) {
+        if (proseEvidence || legacyEvidence || uncheckable) {
           const calls = ledger(ledgerPath).filter((e) => e.kind === 'proposal')
           expect(calls).toHaveLength(2)
           // The ledger reader validates the envelope; inspect the original issue payload too.
@@ -329,23 +403,39 @@ for (const { provider, noProposal, proseEvidence, legacyEvidence } of [
               error: {
                 code: 'plan_invalid',
                 issues: [
-                  legacyEvidence
+                  uncheckable
                     ? {
-                        code: 'required_evidence_retired',
-                        path: ['tasks', 0, 'requiredEvidence'],
+                        code: 'acceptance_uncheckable',
+                        path: ['tasks', 0, 'acceptanceCriteria'],
                         message:
-                          'requiredEvidence is retired; put each command on an acceptance criterion.'
+                          'Every Task needs at least one command or artifact acceptance criterion.'
                       }
-                    : {
-                        code: 'evidence_command_invalid',
-                        path: ['tasks', 0, 'acceptanceCriteria', 0, 'check', 'command'],
-                        message: 'Program "Test" is not allowed for acceptance commands.'
-                      }
+                    : legacyEvidence
+                      ? {
+                          code: 'required_evidence_retired',
+                          path: ['tasks', 0, 'requiredEvidence'],
+                          message:
+                            'requiredEvidence is retired; put each command on an acceptance criterion.'
+                        }
+                      : {
+                          code: 'evidence_command_invalid',
+                          path: ['tasks', 0, 'acceptanceCriteria', 0, 'check', 'command'],
+                          message: 'Program "Test" is not allowed for acceptance commands.'
+                        }
                 ]
               }
             }
           })
-          expect(calls[1]).toMatchObject({ response: { ok: true } })
+          expect(calls[1]).toMatchObject({
+            response: { ok: true, warnings: [{ code: 'scope_overlap', taskIds: ['T03', 'T08'] }] }
+          })
+          expect(settled.audits.filter((entry) => entry.event === 'plan.proposed')).toHaveLength(1)
+          expect(settled.audits.filter((entry) => entry.event === 'planner.proposed')).toHaveLength(
+            1
+          )
+          expect(
+            settled.audits.filter((entry) => entry.event === 'planner.attempt_failed')
+          ).toEqual([])
         }
         expect(ledger(ledgerPath).filter((e) => e.kind === 'error')).toEqual([])
         const egressAudit = settled.audits.find(
@@ -454,6 +544,44 @@ for (const { provider, noProposal, proseEvidence, legacyEvidence } of [
           MissionResponseSchema.parse(cli(userData, ['mission', 'show', '--mission', mission.id]))
             .mission.status
         ).toBe('PLANNED')
+        const shown = PlanResponseSchema.parse(cli(userData, ['plan', 'show', '--plan', plan.id]))
+        const overlap = {
+          code: 'scope_overlap',
+          message: 'Parallel Tasks T03 and T08 have overlapping allowedPaths.',
+          taskIds: ['T03', 'T08'],
+          paths: [
+            { a: 'src/services/reports.test.ts', b: 'src/services/reports.test.ts' },
+            { a: 'src/services/run-report.ts', b: 'src/services/run-report.ts' }
+          ]
+        }
+        expect(shown.planRevision.warnings).toEqual(
+          jsonGoal
+            ? [
+                {
+                  code: 'incomplete_coverage',
+                  message: 'Goal acceptance criteria are not covered by any Task: #0, #1',
+                  taskIds: [],
+                  uncovered: goalCriteria.map((text, index) => ({ index, text }))
+                },
+                overlap
+              ]
+            : [overlap]
+        )
+        expect(shown.coverage).toEqual(
+          jsonGoal
+            ? {
+                criteria: goalCriteria.map((text, index) => ({ index, text, taskIds: [] })),
+                uncovered: [0, 1]
+              }
+            : { criteria: [], uncovered: [] }
+        )
+        const approval = inspect(userData, mission.id).audits.find(
+          (entry) => entry.event === 'plan.approved'
+        )
+        expect(JSON.parse(approval?.after ?? 'null')).toMatchObject({
+          warnings: shown.planRevision.warnings.map(({ code, taskIds }) => ({ code, taskIds })),
+          coverage: { covered: 0, total: jsonGoal ? 2 : 0 }
+        })
         const tasks = TaskListResponseSchema.parse(
           cli(userData, ['task', 'list', '--mission', mission.id])
         ).tasks

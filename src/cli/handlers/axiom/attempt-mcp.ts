@@ -35,7 +35,11 @@ export function createAttemptMcpServer(ctx: HandlerContext, version: string): Mc
               planRevisionId: planRevision.id,
               status: planRevision.status,
               taskCount: planRevision.tasks.length,
-              edgeCount: planRevision.edges.length
+              edgeCount: planRevision.edges.length,
+              warnings: (planRevision.warnings ?? []).map(({ code, taskIds }) => ({
+                code,
+                taskIds
+              }))
             })
           }
         ]

@@ -37,8 +37,33 @@ export function formatPlanList({ planRevisions }: PlanListResponse): string {
     planRevisions.map((p) => ({ id: p.id, status: p.status, title: `Revision ${p.revision}` }))
   )
 }
-export function formatPlan({ planRevision }: PlanResponse): string {
-  return formatPlanList({ planRevisions: [planRevision] })
+export function formatPlan({ planRevision, coverage }: PlanResponse): string {
+  const warnings = (planRevision.warnings ?? []).map((warning) => {
+    if (warning.code === 'incomplete_coverage') {
+      return `[${warning.code}] uncovered: ${warning.uncovered.map(({ index, text }) => `#${index} ${JSON.stringify(text)}`).join(', ')}`
+    }
+    if (warning.code === 'scope_overlap') {
+      const paths = [...new Set(warning.paths.map(({ a, b }) => (a === b ? a : `${a} ∩ ${b}`)))]
+      return `[${warning.code}] ${warning.taskIds.join(' ∥ ')}: ${paths.join(', ')}`
+    }
+    return `[${warning.code}] ${warning.taskIds.join(', ')}: expected ${warning.expected}, found ${warning.found}`
+  })
+  return [
+    formatPlanList({ planRevisions: [planRevision] }),
+    'WARNINGS',
+    ...(warnings.length ? warnings : ['none']),
+    ...(coverage
+      ? [
+          'COVERAGE',
+          ...(coverage.criteria.length
+            ? coverage.criteria.map(
+                ({ index, text, taskIds }) =>
+                  `#${index} ${JSON.stringify(text)} ← ${taskIds.join(', ') || '(none)'}`
+              )
+            : ['none'])
+        ]
+      : [])
+  ].join('\n')
 }
 export function formatTaskList({ tasks }: TaskListResponse): string {
   return table(
