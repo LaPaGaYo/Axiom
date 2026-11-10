@@ -174,7 +174,8 @@ test('M3-06-2a: three Codex interruptions block the environment until a desktop 
           rationale: 'The fixture usage limit has cleared; continue the Task.'
         })
       ).task
-      expect(adjusted).toMatchObject({ stage: 'READY', attemptCount: 0 })
+      // The desktop Task projection has no Attempt count; the task rows before and after prove it.
+      expect(adjusted).toMatchObject({ stage: 'READY' })
       await expect.poll(() => inspect().tasks[0]?.stage, { timeout: 120_000 }).toBe('VERIFIED')
       const completed = inspect()
       expect(completed.bindings.map((row) => row.seq)).toEqual([1, 2, 3, 4])
