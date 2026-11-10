@@ -12,12 +12,23 @@ import * as account from './attempt-account'
 import { z } from 'zod'
 import { AttemptFailureSchema } from '../../../shared/axiom-contract/attempt-failure'
 
+type FsPromisesModule = typeof fs
+// Node refuses to spy on a built-in module namespace (Bun allows it): replace the one export.
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<FsPromisesModule>()
+  return { ...actual, open: vi.fn(actual.open) }
+})
+
 let f: ReturnType<typeof interruptionFixture>
 let home: string
 const reset = interruptionNow + 8000
 const textFailure = { class: 'usage_limit', retryable: true, source: 'text' }
+let actualOpen: FsPromisesModule['open']
 
 beforeEach(async () => {
+  actualOpen = (await vi.importActual<FsPromisesModule>('node:fs/promises')).open
+  vi.mocked(fs.open).mockReset()
+  vi.mocked(fs.open).mockImplementation(actualOpen)
   f = interruptionFixture()
   home = await mkdtemp(path.join(os.tmpdir(), 'axiom-rollout-settlement-'))
   f.db.db
@@ -75,6 +86,12 @@ async function rollout(rateLimits: unknown) {
   return file
 }
 
+/** Counts only the opens that follow, as a spy created at this point would. */
+function openCalls() {
+  const open = vi.mocked(fs.open)
+  open.mockClear()
+  return open
+}
 function failure() {
   return f.store
     .listAuditEvents({ missionId: f.mission.id })
@@ -86,10 +103,9 @@ function observedFailure() {
 
 it('adds the reset time that Codex recorded in its rollout', async () => {
   const readAccount = vi.spyOn(account, 'readAttemptAccount')
-  const original = fs.open
-  vi.spyOn(fs, 'open').mockImplementation(async (...args) => {
+  vi.mocked(fs.open).mockImplementation(async (...args) => {
     expect(f.db.db.isTransaction).toBe(false)
-    return original(...args)
+    return actualOpen(...args)
   })
   await rollout({
     limit_id: 'codex',
@@ -192,7 +208,7 @@ it.each(['missing file', 'missing home', 'unreadable file', 'kernel exception'])
         after: { combination: { effective: {} } }
       })
     } else if (cause === 'unreadable file') {
-      vi.spyOn(fs, 'open').mockRejectedValue(new Error('private path and conversation'))
+      vi.mocked(fs.open).mockRejectedValue(new Error('private path and conversation'))
     } else if (cause === 'kernel exception') {
       vi.spyOn(CodexUsageLimits.prototype, 'observe').mockImplementation(() => {
         throw new Error('kernel')
@@ -211,7 +227,7 @@ it('never lets a rollout decide the failure class', async () => {
     { type: 'turn.failed', error: { message: 'fixture work failed' } }
   ])
   const read = vi.spyOn(reader, 'readCodexRolloutLimit')
-  const open = vi.spyOn(fs, 'open')
+  const open = openCalls()
   expect(await submitExitedAttempt(f.runtime, f.t01.attemptId)).toBe('failed')
   expect(observedFailure()).toEqual({ class: 'unknown', retryable: false, source: 'absent' })
   expect(read).not.toHaveBeenCalled()
@@ -220,7 +236,7 @@ it('never lets a rollout decide the failure class', async () => {
 })
 it('never opens a rollout for a non-quota Codex interruption', async () => {
   f.setEvents([{ type: 'turn.failed', error: { message: 'Authentication failed' } }])
-  const open = vi.spyOn(fs, 'open')
+  const open = openCalls()
   const read = vi.spyOn(reader, 'readCodexRolloutLimit')
   expect(await submitExitedAttempt(f.runtime, f.t01.attemptId)).toBe('interrupted')
   expect(observedFailure()).toEqual({ class: 'permission_error', retryable: true, source: 'text' })
@@ -238,7 +254,7 @@ it('never opens a session record for a Claude Worker', async () => {
       session_id: 'fixture-attempt-1'
     }
   ])
-  const open = vi.spyOn(fs, 'open')
+  const open = openCalls()
   const read = vi.spyOn(reader, 'readCodexRolloutLimit')
   expect(await submitExitedAttempt(f.runtime, f.t01.attemptId)).toBe('interrupted')
   expect(observedFailure()).toEqual(textFailure)

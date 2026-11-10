@@ -5,13 +5,30 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { CodexUsageLimits } from '../../codex/codex-usage-limits'
 import { readCodexRolloutLimit } from './codex-rollout-limit'
 
+type FsPromisesModule = typeof fs
+// Node refuses to spy on a built-in module namespace (Bun allows it): replace the one export.
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<FsPromisesModule>()
+  return { ...actual, open: vi.fn(actual.open) }
+})
+
 const now = new Date(2026, 10, 10, 12).getTime()
 const reset = now + 8000
 const primary = { used_percent: 100, window_minutes: 300, resets_at: reset / 1000 }
 let home: string
+let actualOpen: FsPromisesModule['open']
 beforeEach(async () => {
+  actualOpen = (await vi.importActual<FsPromisesModule>('node:fs/promises')).open
+  vi.mocked(fs.open).mockReset()
+  vi.mocked(fs.open).mockImplementation(actualOpen)
   home = await fs.mkdtemp(path.join(os.tmpdir(), 'axiom-rollout-'))
 })
+/** Counts only the opens that follow, as a spy created at this point would. */
+function openCalls() {
+  const open = vi.mocked(fs.open)
+  open.mockClear()
+  return open
+}
 afterEach(async () => {
   vi.restoreAllMocks()
   await fs.rm(home, { recursive: true, force: true })
@@ -144,7 +161,7 @@ it.each([
   '[a]',
   'x'.repeat(129)
 ])('never opens a file for an unsafe or missing thread id (%s)', async (threadId) => {
-  const open = vi.spyOn(fs, 'open')
+  const open = openCalls()
   expect(await read({ threadId })).toBeUndefined()
   expect(open).not.toHaveBeenCalled()
 })
@@ -153,7 +170,7 @@ it('never follows a symlink out of sessions', async () => {
   const outside = path.join(home, 'outside.jsonl')
   await fs.rename(file, outside)
   await fs.symlink(outside, file)
-  const open = vi.spyOn(fs, 'open')
+  const open = openCalls()
   expect(await read()).toBeUndefined()
   expect(open).not.toHaveBeenCalled()
 })
@@ -178,7 +195,7 @@ it('opens only the most recently modified match across the Attempt local days', 
   const newer = await write(record({ primary }))
   await fs.utimes(older, new Date(now - 2000), new Date(now - 2000))
   await fs.utimes(newer, new Date(now), new Date(now))
-  const open = vi.spyOn(fs, 'open')
+  const open = openCalls()
   expect(await read({ startedAt: now - 86400000 })).toEqual({ window: 'session', resetsAt: reset })
   expect(open).toHaveBeenCalledTimes(1)
   expect(open.mock.calls[0]?.[0]).toBe(await fs.realpath(newer))
@@ -192,10 +209,9 @@ it('reads at most the last 256 KiB and drops the leading partial line', async ()
   const file = await write(
     `${record({ secondary: { ...primary, window_minutes: 10080 } })}\n${'x'.repeat(300000)}\n${record({ primary })}\n`
   )
-  const original = fs.open
   let reads: unknown[][] = []
-  vi.spyOn(fs, 'open').mockImplementation(async (...args) => {
-    const handle = await original(...args)
+  vi.mocked(fs.open).mockImplementation(async (...args) => {
+    const handle = await actualOpen(...args)
     reads = vi.spyOn(handle, 'read').mock.calls
     return handle
   })
@@ -215,7 +231,7 @@ it('returns no evidence for absent, unreadable or wholly malformed files', async
   await write('{malformed\nnull\n')
   expect(await read()).toBeUndefined()
   await write(record({ primary }))
-  vi.spyOn(fs, 'open').mockRejectedValue(new Error('private file error'))
+  vi.mocked(fs.open).mockRejectedValue(new Error('private file error'))
   expect(await read()).toBeUndefined()
 })
 it('returns no evidence if the kernel throws', async () => {
