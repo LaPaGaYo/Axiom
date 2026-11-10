@@ -6,6 +6,8 @@ import { HandoffRecordsSchema } from '../execution/headless-handoff-records'
 import { PRESERVATION_CONTEXT_BYTES } from '../execution/preservation-policy'
 import { boundedEvidenceSection, quote, quoteLine, quotedPaths } from './previous-attempt-text'
 
+// quote() renders the first 500 characters of its input; a message is stored by its tail.
+const QUOTED_MESSAGE_CHARS = 500
 type Section = { source: string; content: string }
 type RenderPrevious = (
   store: AxiomStore,
@@ -85,7 +87,7 @@ async function snapshotLines(artifacts: ArtifactStore, baseline: SnapshotAttempt
   const commands = (records?.commands ?? []).toReversed()
   for (let i = 0; i < Math.max(messages.length, commands.length); i++) {
     if (messages[i] !== undefined) {
-      optional.push(`Message: ${quote(messages[i])}`)
+      optional.push(`Message: ${quote(messages[i].slice(-QUOTED_MESSAGE_CHARS))}`)
     }
     const command = commands[i]
     if (command) {

@@ -99,7 +99,11 @@ export function resolveAttemptBaseline(
         allowedPaths: store.getTaskStage(input.taskId)?.spec.scope.allowedPaths ?? []
       })
       if ('usable' in evidence) {
-        const underlying = resolveAttemptBaseline(store, { taskId: input.taskId, seq: previousSeq })
+        // What the continued Attempt itself did not inherit is its history, not this baseline.
+        const { notContinued: _below, ...underlying } = resolveAttemptBaseline(store, {
+          taskId: input.taskId,
+          seq: previousSeq
+        })
         return finish({
           ...evidence.usable,
           skippedAttempts,
