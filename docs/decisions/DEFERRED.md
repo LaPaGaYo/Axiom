@@ -222,6 +222,13 @@ M3-06（merge `ddf038b3b5`）：`attempt.dispatch` 与 `verification.enqueue` �
 
 M3-06-2a（merge `57606ffb8e`）：无界面 Worker 的失败按类型化的原因结算。可自行恢复的打断（用量上限、provider 故障、应用重启带走 Worker、出事件之前就退出）不消耗 `maxAttempts`，Task 带着持久化的"不早于"时间回到 `READY`，到点由 `attempt.continue` effect 请求调度、起新 Attempt；等也没用的（结构化的登录 / 账单类，或连续第三次打断）进 `BLOCKED(environment)` 并留一条类型化待处理项，人用 `task.adjust` 恢复。DEF-22 ⑪ 仍 OPEN 的部分：Limited / Resume at reset 的可见形态（M3-09）。D88 其余：预防（账号级冷却、Codex 的重置时间）= M3-06-2a-2；保全 = M3-06-2b；原会话续上 = M3-06-2c（等真实 harness 探测）。DEF-48 ①：outbox 现有三种 effect，integration / delivery 的 effect 仍在 M4。
 
+## 2026-11-10 M3-06-2a-2 合入：账号级冷却落地；D88 修订行落库（DEF-13 ②、DEF-22 ⑪、DEF-48 ①）
+
+- **DEF-22 ⑪（限流恢复）**：机制又落一段——撞到用量上限的账号在它的续作到点之前不再接新的 Worker Attempt（跨 Mission），到点或被人 adjust 取消时所有 EXECUTING Mission 自动重新调度。可见形态（冷却到几点、由哪些等待推出、一键解除）仍归 M3-09。
+- **DEF-13 ②（Codex 的用量与限额）**：重置时间的来源按 D88 的 2026-11-10 修订行定为 Worker 自己的 rollout（经内核 `CodexUsageLimits` 解释），由 M3-06-2a-3 落地；在那之前 Codex 的冷却只有一个阶梯档那么长。
+- **DEF-48 ①（outbox）**：没有新增 effect 种类；`attempt.continue` 的载荷多一个可选的 `account`（旧行照常解码，旧构建读不了带它的行）。
+- 下一条目（brief 时）列的五个缺口原样保留。
+
 ## 2026-11-10 M3-06-2a-2 brief：账号级冷却留下的缺口（DEF-13、DEF-22 ⑪）
 
 - **不可重试的账号级失败不产生冷却**：登录失效、账单类直接把 Task 置为 `BLOCKED(environment)`，没有续作，也就没有冷却；同一账号上其余 READY Task 仍各启动一次、各自交人。要做就是"账号级的阻塞直到人处理"，状态挂在哪一级（Mission 还是 provider）要先定，随 M3-09 的可见性一起看。
