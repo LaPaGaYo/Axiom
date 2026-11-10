@@ -345,7 +345,7 @@ headless `snapshotCandidate` 使用临时私有 Git index，排除 `.axiom/`，�
 | d. assistant overloaded / server_error，或失败 result HTTP 408 / 409 / ≥500 | provider_error | true | structured | interrupted |
 | e. assistant invalid_request / model_not_found / max_output_tokens，或 result HTTP 400 / 404 / 413 / 422、terminal_reason=prompt_too_long | validation_error | false | structured | failed |
 | f. result HTTP 401 / 403 | permission_error | false | structured | interrupted |
-| Codex 错误文本（Claude 未命中 a–f 的 fallback）：quota / rate.?limit / usage limit / insufficient.credit / 429 | usage_limit | true | text | interrupted |
+| Codex 错误文本（Claude 未命中 a–f 的 fallback）：quota / rate.?limit / usage limit / insufficient.credit / 429；仅 Codex 可再从自己的 rollout 补 window / resetsAt（M3-06-2a-3） | usage_limit | true | text | interrupted |
 | 同一 fallback：auth(?:entication\|orization)? / unauthori[sz]ed / login / log(?:ged)? in / invalid.token / 401 | permission_error | true | text | interrupted |
 | g. 无可识别 event，或文本 / event 解析的外层异常 | unknown | true | absent | interrupted |
 | g. 其余有 event 的失败（包括 fixture work failed / Fixture Worker crashed） | unknown | false | absent | failed |
@@ -355,6 +355,14 @@ M3-06-2a-2 删除未被生产调用的 `headlessFailureKind`，原两份测试�
 两组正则保持原词汇、大小写不敏感；文本认证证据弱，只走等待与三次上限。`transport_error` 只在词汇中，本 Task 没有可靠信号，因此从不产生。裸 HTTP 429 没有 assistant quota evidence 时由内核拒绝推断限额，仍可走原文本 fallback。failure 的 `resetsAt` 只用于 usage_limit（ISO datetime），window 为 session / weekly / weeklyModel / credits；两者均来自内核 failure.usageLimit。只保留 `now < resetsAt ≤ now + 8 days`，过期或越界 reset 丢弃。
 
 usage_limit 的退出结算从本 dispatch 的 `attempt.headless_prepared` audit 用 zod 读取 `combination.effective.claudeConfigDir` 或 `codexHome`（`{kind:account,path}`，非空 path）。若有效，continuation payload 可选增加 `account: {provider,key}`；key 统一经 `accountKey` 计算为 `sha256(JSON.stringify([provider, exactHomePath]))` 的小写十六进制，effect 不存 path。当前选中 home 也经同一个函数计算。缺失 / 非法 audit 只省略 account，不阻断结算；旧 payload / AgentSpec 仍可解码。restart 的 unknown 路径不加 account。
+
+M3-06-2a-3：`readAttemptAccount` 一次读取该 dispatch 的启动审计，同时给出单向 account key 与临时 home path；path 只到 reader，不进入退出审计、effect 或日志。仅 Codex 且纯文本分类已是 `usage_limit` 时，在 `headless_exit_failure` 事务开始前 await `readCodexRolloutLimit`，事务内没有异步文件读取。线程 id 来自已退出 Worker 的首个 stdout `thread_id`；Attempt 起点来自 `worker_dispatches.created_at`（SQLite UTC 经既有转换后使用），不是 rollout 自述。reader 不改变 class / retryable / source / settlement.kind，source 仍为 text；Claude 与其它 Codex 失败完全不调用 reader。
+
+reader 只接受 1–128 位 ASCII 字母、数字、下划线或连字符的 thread id，不接受点、分隔符或 glob。只枚举启动日到今天的本地日期目录 `<account home>/sessions/YYYY/MM/DD`，不递归扫描 home；匹配 `rollout-*-<thread id>.jsonl`，选修改时间最新的一份普通文件。真实路径必须在 sessions 内，sessions 根本身不能是外跳的符号链接，日期目录与文件外跳也返回无证据；只读打开最终文件，核对 inode / device 和真实路径，不跟随被替换的最终符号链接，不读 FIFO。只读该文件尾部最多 256 KiB，截断时丢掉首行（无换行则整个尾部不解析）。
+
+只解析 `event_msg / token_count` 的 `rate_limits`：`limit_id`、`primary / secondary` 中的 `used_percent / window_minutes / resets_at`、`rate_limit_reached_type`。其它内容在白名单校验边界丢弃；无对话内容、账号信息或路径被返回或记入错误。窗口映射为 app-server 字段，null 保持 null；按文件顺序喂给一个内核 `CodexUsageLimits`，调用其 usageLimitExceeded failure 查询，只取 usageLimit 的 window / resetsAt。Axiom 不比较比例、不选窗口。window 原样保留，reset 只在 `now < reset ≤ now + 8 days` 时转 ISO 写 failure。缺 home / thread、非法 id、文件缺失 / 不可读、全部行畸形、内核异常均不抛错且不补证据；混入的畸形行跳过。无写入、网络、刷新、timer 或策略键。
+
+限制：真实账号撞限时的 rollout 值尚未观察，reset 是 best-effort；没有证据仍按 M3-06-2a 阶梯和每 Task 三连规则。spent 窗口只与 quota 文本一起被信任；若账号仍能用 credits 工作，却因临时 quota-like 错误退出，仍会等待该 spent 窗口。其它 limit id 被内核忽略（包括上游 #58413 所述 all-null 快照），不能提供 reset。特别大的最后一轮可能让最后一个有效记录落在 256 KiB 尾部之外。依赖 Codex 0.163.0 的目录 / 字段名和内核解释行为，升级可能改变两者；此处不读轮询快照、不做撞限前配速、不保全工作树或恢复 session。
 
 同一 `headless_exit_failure` 事务做 failDispatch、attempt.failed、`RUNNING → NEEDS_FIX(interrupted)` 并 `attemptCountDelta=-1`，撤销 admission 的计数，seq 始终递增。最新 binding、RUNNING、无 Submission 的栅栏避免重复退款；存储防止计数负数。失败写 effect 或消息时整笔回滚。chain = 1 + 前一个 seq 的 attempt.continue.payload.chain（若无为 1；done / failed / retired 均计入）。可重试且 chain < 3 时 `→ READY(retry_after_interruption)`，同事务 enqueue continuation；dueAt = 有效 reset + 60 秒，否则 now + [1,5,15] 分钟的第 chain 档。第三档仅在未来提高次数上限后可达。不可重试或第三次连续中断 `→ BLOCKED(environment)`、previousStage=NEEDS_FIX，并按该 Attempt 归因路由一个 pending typed BLOCKED，含 `{reason:environment,paths:[]}`，summary 写 class 和连续次数；此时不 enqueue，不产生 retry_budget_exhausted。
 
@@ -366,7 +374,7 @@ Recovery 的 `recovery_process_exit` 仅当 headless 且 worker.runtime_epoch �
 
 基线回溯现在越过 interrupted，skippedAttempts 记录 failureClass（旧审计无 failure 时 unknown），保留原 ACTIVE / latest FAIL Candidate 与验证摘录。后继 previous-attempt 段明确说明 Attempt N 在提交前因何中断，以及未携带任何未提交工作。本 Task 不快照工作树、不恢复 harness 会话。
 
-常数集中在 interruption-policy.ts，无新 policy key。仅 e2e config enabled 时读取 `AXIOM_E2E_INTERRUPTION_BACKOFF_MS`（正整数逗号列表），替代 ladder 并将 reset slack 置 0；非法值沿用生产默认值。Codex 仍没有 reset 时间，所以账号 cooldown 只持续当前 ladder 的一档；每档结束最多 concurrencyLimit 个 Task（每个 Mission 的并发上限，多个 Mission 可各自探测）再次试探账号，每个 Task 自己连续三次 interruption 后仍 BLOCKED(environment)。等待计入 Mission wall-clock。账号 cooldown 仅随其 continuation 到期、人工调整或取消该账号所有等待 Task、或选择其它账号而解除；取消 / 切换账号仅在每个 Mission 下一轮被看见，不主动唤醒其它 Mission，已经等待的 Task 切换账号后仍保留自己的 backoff。已失效 Task / 非 pending effect 不再是冷却证据。billing、结构化 sign-in 等等待无法解决的失败不产生 continuation，故不产生 cooldown；旧的弱文本认证 fallback 仍按原规则等待，但不形成 usage-limit 账号冷却。每轮拒绝仍重复写 audit。不读内核轮询限额、不刷新 usage、不激活 provider、不加网络调用。旧构建不能解码带 account 的严格 continuation payload；不能安全依赖降级处理这种等待。
+常数集中在 interruption-policy.ts，无新 policy key。仅 e2e config enabled 时读取 `AXIOM_E2E_INTERRUPTION_BACKOFF_MS`（正整数逗号列表），替代 ladder 并将 reset slack 置 0；非法值沿用生产默认值。Codex 未获得有效 rollout reset 时，账号 cooldown 仍只持续当前 ladder 的一档；每档结束最多 concurrencyLimit 个 Task（每个 Mission 的并发上限，多个 Mission 可各自探测）再次试探账号，每个 Task 自己连续三次 interruption 后仍 BLOCKED(environment)。等待计入 Mission wall-clock。账号 cooldown 仅随其 continuation 到期、人工调整或取消该账号所有等待 Task、或选择其它账号而解除；取消 / 切换账号仅在每个 Mission 下一轮被看见，不主动唤醒其它 Mission，已经等待的 Task 切换账号后仍保留自己的 backoff。已失效 Task / 非 pending effect 不再是冷却证据。billing、结构化 sign-in 等等待无法解决的失败不产生 continuation，故不产生 cooldown；旧的弱文本认证 fallback 仍按原规则等待，但不形成 usage-limit 账号冷却。每轮拒绝仍重复写 audit。不读内核轮询限额、不刷新 usage、不激活 provider、不加网络调用。旧构建不能解码带 account 的严格 continuation payload；不能安全依赖降级处理这种等待。
 
 ### Claude channels and invocation pins（M3-08b / M3-08f / M3-08h）
 

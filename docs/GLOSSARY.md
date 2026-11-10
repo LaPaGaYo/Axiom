@@ -27,6 +27,8 @@
 
 ## 2. 分层与角色
 
+**rollout（Codex session record）**：Codex 写在该 Attempt 账号目录的 `sessions/YYYY/MM/DD/rollout-<local time>-<thread id>.jsonl` 会话记录，包含对话与 `event_msg / token_count` 限额更新。不是 Axiom Artifact，也不是权威失败分类。M3-06-2a-3 / D88 仅在 Codex 错误文本已判 `usage_limit` 后，有界、只读地取窗口字段交内核解释；只允许 `{window?, resetsAt?}` 离开 reader，缺失证据沿用原阶梯。
+
 **Provider activation（provider 激活记录）**：当前 Axiom profile 中由用户动作产生的本地设置记录 `providerActivations`，保存 provider id、首次动作时间及来源。D37 用它约束启动与空闲认证/用量请求；默认 `{}`，不能由机器全局凭据、PATH 或既有 hook 推断。不是认证成功证明，也不是 Mission Approval。来源限 `agent-launch`、`settings-hook-install`、`integrations-recheck`、`account-added`；具体持久化提案见 `.axiom-work/reports/M0-09-3.md`。
 
 | 名称                         | 类型                                                                            | 职责                                                                                                                                                                                                                         | 不得做                                                                          |

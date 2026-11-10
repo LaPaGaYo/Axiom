@@ -151,6 +151,8 @@ M2-06a 的严格载荷契约在 `src/shared/axiom-contract/message-params.ts`（
 
 M3-06-2a / D88 新只读内核 import：`src/main/axiom/execution/attempt-failure-classification.ts` → `src/main/claude/claude-usage-limits.ts` 的 `ClaudeUsageLimits`（及 evidence / row 类型）。每份 Claude events.jsonl 一个实例，observe / assistant / result 复用既有拒绝与 reset 判定；只取 row.failure.usageLimit，Axiom 不重写 rate-limit 元数据解析、不读取账号限额服务、不改内核。kernel 不反向导入 Axiom。分类与 continuation 持久规则见 control-plane.md 的 Interrupted Attempt continuation 节。
 
+M3-06-2a-3 / D88（2026-11-10 修订）新只读内核 import：`src/main/axiom/execution/codex-rollout-limit.ts` → `src/main/codex/codex-usage-limits` 的 `CodexUsageLimits`，以及 `src/shared/agent-session-usage-limit` 的类型 `AgentSessionUsageLimit`（仅类型，读取器的返回值）。只把 Worker 自己 rollout 中的白名单窗口字段从 snake_case 映射到 app-server 字段，逐条 `observe('notification:account/rateLimits/updated', {rateLimits})`，再取 `failure({error:{codexErrorInfo:'usageLimitExceeded'}}).usageLimit`。null 窗口原样传入；窗口选择、耗尽判定、重置取值全部复用内核。该合成 error 仅向内核查询已由文本判为 usage_limit 的附加证据，不决定失败类别。无内核改动、反向 import、账号轮询或网络调用；限制与退化行为见 control-plane.md 的 Interrupted Attempt continuation 节。
+
 ### 4b. 对 Mission 管理对象必须拦截/禁用的 Orca 入口
 
 判定依据：`tasks.run_id`（或 `dispatch_contexts.run_id`）命中 `missions.run_id`。M1-07 已实现统一守卫 `src/main/axiom/admission/mission-managed-run-guard.ts`，下列 handler 在对象解析后、首次写入前调用；`mission_managed` 已登记于 `src/main/runtime/rpc/errors.ts`。进程内 `caller: control_plane` 不能来自 RPC params。D73 只更换 Worker channel 的身份依据；本节 Mission admission 守卫全部保留。
