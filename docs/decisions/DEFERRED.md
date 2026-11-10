@@ -222,6 +222,14 @@ M3-06（merge `ddf038b3b5`）：`attempt.dispatch` 与 `verification.enqueue` �
 
 M3-06-2a（merge `57606ffb8e`）：无界面 Worker 的失败按类型化的原因结算。可自行恢复的打断（用量上限、provider 故障、应用重启带走 Worker、出事件之前就退出）不消耗 `maxAttempts`，Task 带着持久化的"不早于"时间回到 `READY`，到点由 `attempt.continue` effect 请求调度、起新 Attempt；等也没用的（结构化的登录 / 账单类，或连续第三次打断）进 `BLOCKED(environment)` 并留一条类型化待处理项，人用 `task.adjust` 恢复。DEF-22 ⑪ 仍 OPEN 的部分：Limited / Resume at reset 的可见形态（M3-09）。D88 其余：预防（账号级冷却、Codex 的重置时间）= M3-06-2a-2；保全 = M3-06-2b；原会话续上 = M3-06-2c（等真实 harness 探测）。DEF-48 ①：outbox 现有三种 effect，integration / delivery 的 effect 仍在 M4。
 
+## 2026-11-10 M3-06-2a-2 brief：账号级冷却留下的缺口（DEF-13、DEF-22 ⑪）
+
+- **不可重试的账号级失败不产生冷却**：登录失效、账单类直接把 Task 置为 `BLOCKED(environment)`，没有续作，也就没有冷却；同一账号上其余 READY Task 仍各启动一次、各自交人。要做就是"账号级的阻塞直到人处理"，状态挂在哪一级（Mission 还是 provider）要先定，随 M3-09 的可见性一起看。
+- **没有重置时间时先放行一个探路**：冷却结束时被挡住的 Task 一起放行；重置时间准的时候没有问题，靠阶梯猜的时候每一档最多 `concurrencyLimit` 个 Task 一起再撞一次。更省的做法是只放行一个、活过一段时间再放其余——需要按账号的探测状态，V1 不做。
+- **换选中账号没有触发**：冷却在下一轮调度才解除，已在等待的 Task 仍等到原定时间（或由人 adjust）。要做需要内核设置变更的事件入口。
+- **可见性与解除**：冷却到几点、由哪些 Task 的等待推出、一键解除，归 M3-09（DEF-22 ⑪）；V1 里人解除冷却的办法是对等待中的 Task 做 adjust 或取消、或换选中账号。
+- **拒绝审计不去重**：`task.admission_refused` 每轮每个被挡的 Task 写一行；量由调度轮数决定，M3-10 的 hygiene 里再看是否合并。
+
 ## 2026-11-10 续作探测：两家 harness 的会话恢复成立；Codex rollout 带限额记录（DEF-13 ②、DEF-48 ②）
 
 验证者按 Axiom 无界面 Worker 的启动参数、用冒烟登录跑真实 harness（证据 `.axiom-work/verifications/M3-06-2-resume-probe.md`）。DEF-13 ② 证实并补全：Codex rollout 的 `event_msg` / `token_count` 行除逐次与累计用量外带 `rate_limits`（`primary` / `secondary` 窗口的 `used_percent`、`window_minutes`、`resets_at`，以及 `rate_limit_reached_type`、`credits`、`plan_type`），SIGINT 留下一行 `turn_aborted`；它可以作为 M3-06-2a-2（Codex 的重置时间）与 M3-06-3（Codex 的中途用量——`exec --json` 流里只有回合结束时的一次）的结构化来源，零出站，但属于 harness 的私有格式：带能力探测与回退，读取只取非账号字段，不得成为状态机的必需依赖。DEF-48 ②（能否恢复是 harness 能力旗）：两家在本机的这两个版本上都有证据（Claude Code 2.1.312、Codex 0.163.0；macOS），旗的默认值与"版本漂移后重新取证"由 M3-06-2c 的 brief 定。D88 的修订行（M3-06-2c 进 V1；Codex 重置时间的来源）已向 Henry 提议，确认后落库。
