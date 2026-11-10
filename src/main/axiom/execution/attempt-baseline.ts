@@ -3,6 +3,11 @@ import type { VerificationRun } from '../../../shared/axiom-contract/verificatio
 import type { AxiomStore } from '../db/axiom-store'
 import { z } from 'zod'
 import {
+  readPreservedBaseline,
+  type SnapshotAttemptBaseline,
+  type PreservedWorkNotUsed
+} from './preserved-baseline'
+import {
   AttemptFailureSchema,
   type AttemptFailure
 } from '../../../shared/axiom-contract/attempt-failure'
@@ -18,14 +23,14 @@ const SkippedFailure = z.object({
   reportSummary: z.string().nullable().optional(),
   failure: AttemptFailureSchema.optional()
 })
-type SkippedAttempt = z.infer<typeof SkippedFailure>['settlement'] & {
+export type SkippedAttempt = z.infer<typeof SkippedFailure>['settlement'] & {
   seq: number
   attemptId: string
   reportSummary: string | null
   failureClass?: AttemptFailure['class']
 }
 
-export type AttemptBaseline =
+export type LegacyAttemptBaseline =
   | {
       kind: 'integration'
       reason: 'first_attempt' | 'previous_candidate_superseded' | 'previous_verification_not_failed'
@@ -43,6 +48,10 @@ export type AttemptBaseline =
       verificationRun: VerificationRun
       skippedAttempts: SkippedAttempt[]
     }
+
+export type AttemptBaseline = (LegacyAttemptBaseline | SnapshotAttemptBaseline) & {
+  notContinued?: PreservedWorkNotUsed[]
+}
 
 export function previousAttemptSubmission(
   store: AxiomStore,
@@ -63,14 +72,42 @@ export function resolveAttemptBaseline(
   let previousSeq = input.seq - 1
   let submission = previousAttemptSubmission(store, input)
   const skippedAttempts: SkippedAttempt[] = []
+  const notContinued: PreservedWorkNotUsed[] = []
+  const finish = (baseline: LegacyAttemptBaseline | SnapshotAttemptBaseline): AttemptBaseline =>
+    notContinued.length ? { ...baseline, notContinued } : baseline
   const binding = store.getAttemptBinding(input.taskId, previousSeq)
+  const audits = binding ? store.listAuditEvents({ missionId: binding.missionId }) : []
   const failures = new Map(
-    (binding ? store.listAuditEvents({ missionId: binding.missionId }) : [])
+    audits
       .filter((event) => event.event === 'attempt.failed' && event.objectKind === 'attempt')
+      .map((event) => [event.objectId, event.after])
+  )
+  const preserved = new Map(
+    audits
+      .filter((event) => event.event === 'attempt.preserved' && event.objectKind === 'attempt')
       .map((event) => [event.objectId, event.after])
   )
   while (!submission && previousSeq >= 1) {
     const previous = store.getAttemptBinding(input.taskId, previousSeq)
+    if (previous?.dispatchId && preserved.has(previous.dispatchId)) {
+      const evidence = readPreservedBaseline({
+        taskId: input.taskId,
+        seq: previousSeq,
+        attemptId: previous.dispatchId,
+        audit: preserved.get(previous.dispatchId),
+        failure: failures.get(previous.dispatchId),
+        allowedPaths: store.getTaskStage(input.taskId)?.spec.scope.allowedPaths ?? []
+      })
+      if ('usable' in evidence) {
+        const underlying = resolveAttemptBaseline(store, { taskId: input.taskId, seq: previousSeq })
+        return finish({
+          ...evidence.usable,
+          skippedAttempts,
+          underlying: underlying.kind === 'snapshot' ? underlying.underlying : underlying
+        })
+      }
+      notContinued.push(evidence.unused)
+    }
     const failure = SkippedFailure.safeParse(failures.get(previous?.dispatchId ?? ''))
     if (!previous?.dispatchId || !failure.success) {
       break
@@ -88,27 +125,31 @@ export function resolveAttemptBaseline(
     submission = previousAttemptSubmission(store, { taskId: input.taskId, seq: previousSeq + 1 })
   }
   if (!submission) {
-    return { kind: 'integration', reason: 'previous_attempt_not_submitted', skippedAttempts }
+    return finish({
+      kind: 'integration',
+      reason: 'previous_attempt_not_submitted',
+      skippedAttempts
+    })
   }
   const candidate = store.getCandidate(submission.candidateId)
   if (candidate?.status !== 'ACTIVE') {
-    return { kind: 'integration', reason: 'previous_candidate_superseded' }
+    return finish({ kind: 'integration', reason: 'previous_candidate_superseded' })
   }
   // The store preserves insertion order for same-second reruns; select latest before filtering FAIL.
   const verificationRun = store
     .listVerificationRuns({ missionId: candidate.missionId, candidateId: candidate.id })
     .at(-1)
   if (verificationRun?.status !== 'FAIL') {
-    return { kind: 'integration', reason: 'previous_verification_not_failed' }
+    return finish({ kind: 'integration', reason: 'previous_verification_not_failed' })
   }
   if (verificationRun.verdictDetail.reason === 'secret_detected') {
-    return { kind: 'integration', reason: 'secret_detected', verificationRun }
+    return finish({ kind: 'integration', reason: 'secret_detected', verificationRun })
   }
-  return {
+  return finish({
     kind: 'candidate',
     previousSeq,
     candidate,
     verificationRun,
     skippedAttempts
-  }
+  })
 }

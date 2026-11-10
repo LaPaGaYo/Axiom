@@ -11,6 +11,8 @@ import { readCodexRolloutLimit } from './codex-rollout-limit'
 import { INTERRUPTION_MAX_RESET_MS } from './interruption-policy'
 import { exposeUtcTimestamp } from '../../runtime/orchestration/db/utc-timestamp'
 import type { parseHeadlessWorkerEvents } from './headless-worker-events'
+import { collectAttemptPreservation } from './attempt-preservation'
+import type { PreservationInput } from './preserved-snapshot'
 
 export async function settleHeadlessExitFailure(
   runtime: OrcaRuntimeService,
@@ -23,11 +25,12 @@ export async function settleHeadlessExitFailure(
     lastMessage: string
     reportError?: string
     eventAudit: Record<string, unknown>
+    launch: PreservationInput['launch']
   }
 ) {
   const { attemptId, events, exitCode, lastMessage, reportError, eventAudit } = input
   const db = runtime.getOrchestrationDb()
-  const { store, missions, effects } = getAxiomControlPlane(runtime)
+  const { store, missions, effects, artifacts } = getAxiomControlPlane(runtime)
   const now = Date.now()
   const classified = classifyHeadlessFailure({
     eventsText: input.eventsText,
@@ -59,6 +62,18 @@ export async function settleHeadlessExitFailure(
         : {})
     }
   }
+  const captureAuthority = resolveHostAttempt(db, store, attemptId)
+  const preservation = await collectAttemptPreservation(artifacts, {
+    attemptId,
+    taskId: captureAuthority.task.taskId,
+    seq: captureAuthority.binding.seq,
+    missionId: captureAuthority.mission.id,
+    launch: input.launch,
+    allowedPaths: captureAuthority.task.spec.scope.allowedPaths,
+    verificationRules: store.getPolicy(captureAuthority.mission.id)?.verificationRules,
+    provider: input.provider,
+    eventsText: input.eventsText
+  })
   const missionId = store.transaction('headless_exit_failure', () => {
     const authority = resolveHostAttempt(db, store, attemptId)
     db.failDispatch(attemptId, 'Headless Worker exited without a valid Submission', {
@@ -92,6 +107,15 @@ export async function settleHeadlessExitFailure(
         ...(reportError ? { reportError } : {}),
         ...eventAudit
       }
+    })
+    store.appendAuditEvent({
+      missionId: authority.mission.id,
+      actor: 'AttemptSettlement',
+      event: 'attempt.preserved',
+      objectKind: 'attempt',
+      objectId: attemptId,
+      before: null,
+      after: preservation
     })
     const settlement = { ...authority.binding, dispatchId: attemptId, actor: 'AttemptSettlement' }
     if (kind === 'interrupted') {

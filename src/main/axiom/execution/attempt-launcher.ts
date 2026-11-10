@@ -14,7 +14,11 @@ import type { AdmittedAttempt, AttemptLaunch } from '../scheduler/scheduler'
 import { redactContext } from '../context-builder/redaction'
 import { missionCaller } from './mission-caller'
 import { resolveAttemptBaseline } from './attempt-baseline'
-import { attemptBaselineAudit, prepareWorkerFixLaunch } from './attempt-fix-launch'
+import {
+  attemptBaselineAudit,
+  attemptBaselineRef,
+  prepareWorkerFixLaunch
+} from './attempt-fix-launch'
 import { hasHeadlessWorkerBuilder } from './headless-worker-command'
 import { createHeadlessWorkerLaunch } from './headless-worker-launch'
 import { watchHeadlessAttempt } from './headless-attempt-watcher'
@@ -107,11 +111,7 @@ export function createAttemptLauncher(
         name: planner
           ? `planner-${attempt.missionId}-${planner.runSeq}`
           : `attempt-${attempt.taskId}-${attempt.seq}`,
-        baseBranch:
-          planner?.baseBranch ??
-          (baseline?.kind === 'candidate'
-            ? baseline.candidate.commitSha
-            : `axiom/integration/${attempt.missionId}`),
+        baseBranch: planner?.baseBranch ?? attemptBaselineRef(baseline, attempt.missionId),
         branchNameOverride: attempt.branch,
         runHooks: false,
         setupDecision: 'run',

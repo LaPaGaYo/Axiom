@@ -227,12 +227,12 @@ E2E seam：仅当 `getMainE2EConfig().enabled` 且 `AXIOM_E2E_HOLD_ATTEMPT_DISPA
 
 启动顺序：读取已绑定 AgentSpec / ContextPackage render → 校验 Run/Task 与 prompt 大小 → `resolveAttemptBaseline` → 经现有 `createManagedWorktree` 预创建 `axiom/attempt/<taskId>/<seq>`（不传 startupAgent）→ 校验修复基线 HEAD、必要时重开 Orca task → 直接调 `startLocalWorker` → CAS 回填 `attempt_bindings.dispatch_id` → audit / stage settlement。没有 `worktree_id` side-table 列；worktree id 写入启动 audit，读接口经 fleet 的 dispatch/workspace 读取。
 
-M3-04 / D64 ①：`execution/attempt-baseline.ts` 是 ContextBuilder 与 launcher 共用的纯存储判定，从 seq−1 向前检查（D85 / M3-04b）：无 Submission 时只有该 dispatch 的 `attempt.failed.after.settlement.kind` 为 `unchanged | no_change | blocked | interrupted` 才允许越过，最多走到 seq 1；缺 binding / dispatch、普通失败或其它无 Submission 情形立即回集成基线。找到 Submission 后，其 Candidate 仍为 ACTIVE、该 Candidate 最新 VerificationRun（按 createdAt 再 id 排序取最后一项，不预先过滤 FAIL）为 FAIL 且 reason 不是 `secret_detected`，才返回 candidate baseline（previousSeq、Candidate、VerificationRun、skippedAttempts）。`previousSeq` 是 Candidate 所属 Attempt 的序号；`skippedAttempts: {seq, attemptId, kind, reason?, paths?, failureClass?, reportSummary: string | null}[]` 按 seq 升序记录被越过的 Attempt，无则空数组。`previous_attempt_not_submitted` 的 integration baseline 同样保留已越过的 skippedAttempts，例如 seq 1 声明 blocked、人工调整后的首次重试。其它情况按顺序返回 integration baseline：
+M3-04 / D64 ①：`execution/attempt-baseline.ts` 是 ContextBuilder 与 launcher 共用的纯存储判定，从 seq−1 向前检查（D85 / M3-04b）。M3-06-2b 在每个无 Submission 的 Attempt 优先检查可用保全快照，见下文 Interrupted Attempt continuation 的基线表；没有可用快照时，只有该 dispatch 的 `attempt.failed.after.settlement.kind` 为 `unchanged | no_change | blocked | interrupted` 才允许越过，最多走到 seq 1；缺 binding / dispatch、普通失败或其它无 Submission 情形立即回集成基线。找到 Submission 后，其 Candidate 仍为 ACTIVE、该 Candidate 最新 VerificationRun（按 createdAt 再 id 排序取最后一项，不预先过滤 FAIL）为 FAIL 且 reason 不是 `secret_detected`，才返回 candidate baseline（previousSeq、Candidate、VerificationRun、skippedAttempts）。`previousSeq` 是 Candidate 所属 Attempt 的序号；`skippedAttempts: {seq, attemptId, kind, reason?, paths?, failureClass?, reportSummary: string | null}[]` 按 seq 升序记录被越过的 Attempt，无则空数组。`previous_attempt_not_submitted` 的 integration baseline 同样保留已越过的 skippedAttempts，例如 seq 1 声明 blocked、人工调整后的首次重试。其它情况按顺序返回 integration baseline：
 
 | reason                             | 条件                                                                                                                                              |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `first_attempt`                    | seq 1                                                                                                                                             |
-| `previous_attempt_not_submitted`   | 向前检查未找到 Submission，或遇到未经上述三种 settlement 审计的无 Submission Attempt（包括崩溃、放弃、launch 失败）；附带已跨过的 skippedAttempts |
+| `previous_attempt_not_submitted`   | 向前检查未找到 Submission / 可用保全快照，或遇到未经上述四种 settlement 审计的无 Submission Attempt（包括崩溃、放弃、launch 失败）；附带已跨过的 skippedAttempts |
 | `previous_candidate_superseded`    | Submission 的 Candidate 不再 ACTIVE（缺失也不采用）                                                                                               |
 | `previous_verification_not_failed` | 无 run，或最新 run 不是 FAIL                                                                                                                      |
 | `secret_detected`                  | 最新 FAIL 的 reason 为 secret_detected；附带该 run 供安全证据展示，历史含秘密的 Candidate 不可续接                                                |
@@ -333,7 +333,7 @@ headless `snapshotCandidate` 使用临时私有 Git index，排除 `.axiom/`，�
 
 非零退出、provider turn 失败（即使 exit 0）、缺报告、非法报告或非法 Artifact 进入 `headless_exit_failure`。普通 failed 仍调用 `settleAttemptWithoutSubmission`；环境中断见下节。M3-08e 的 2 秒 grace、E2E hold、失败 Worker release 与 60 秒恢复释放不变。audit 原字段全部保留（exitCode、脱敏 lastError / lastErrorEvent / lastMessageExcerpt、reportError、session / usage 等），仅加类型化 failure；重连 error 行本身不阻止有效成功报告。Codex 错误优先取 turn.failed.error.message，否则取最后 error.message；thread.started.thread_id 记为 providerSessionId，最后一次 turn.completed.usage 原样记录，不累加或重复计数。
 
-### Interrupted Attempt continuation（M3-06-2a；D88 items 1–5 / D68 item 1）
+### Interrupted Attempt continuation（M3-06-2a / M3-06-2b；D88 / D68 / D64）
 
 `execution/attempt-failure-classification.ts` 是纯、never-throw 分类器。Claude 每个 JSON object 进入同一个内核 `ClaudeUsageLimits`，调用 observe / assistant / result；Axiom 不解析限额元数据、不读取账号快照、不分析 assistant 散文。下表按顺序 first-match，表中 retryable 与 source 持久化在 `attempt.failed.after.failure`。结构化失败取 assistant error 或 result 的错误字段；HTTP 状态与 terminal_reason 分支只读取失败 result。
 
@@ -372,9 +372,40 @@ Scheduler 在 admission 检查最新 seq 的 continuation：只有 pending 且 d
 
 Recovery 的 `recovery_process_exit` 仅当 headless 且 worker.runtime_epoch 属于更早 runtime 时复用上述结算，failure=`{class:unknown,retryable:true,source:absent}`，attempt.failed evidence=runtime_restarted。“由更早的 runtime 启动”也包含存活跨过重启、之后消失而没有 exit marker 的 headless Worker；两种都是外因而非 Worker 自身失败，均退款，连续三次仍交人。此项只澄清既有语义，没有代码改动。已有 exit-code 仍优先走正常 submitExitedAttempt。same-epoch process exit、TUI、kernel terminal、launch orphan/rejected、runtime_budget_exceeded、unverifiable timeout、unchanged / declared 路径不变。
 
-基线回溯现在越过 interrupted，skippedAttempts 记录 failureClass（旧审计无 failure 时 unknown），保留原 ACTIVE / latest FAIL Candidate 与验证摘录。后继 previous-attempt 段明确说明 Attempt N 在提交前因何中断，以及未携带任何未提交工作。本 Task 不快照工作树、不恢复 harness 会话。
+没有 `attempt.preserved` 的旧 Attempt 仍按原基线回溯越过 interrupted，skippedAttempts 记录 failureClass（旧审计无 failure 时 unknown），保留原 ACTIVE / latest FAIL Candidate 与验证摘录。没有保全审计的后继说明仍明确说未携带任何未提交工作；M3-06-2b 的保全与接着做规则如下。两者都不恢复 harness 会话。
 
 常数集中在 interruption-policy.ts，无新 policy key。仅 e2e config enabled 时读取 `AXIOM_E2E_INTERRUPTION_BACKOFF_MS`（正整数逗号列表），替代 ladder 并将 reset slack 置 0；非法值沿用生产默认值。Codex 未获得有效 rollout reset 时，账号 cooldown 仍只持续当前 ladder 的一档；每档结束最多 concurrencyLimit 个 Task（每个 Mission 的并发上限，多个 Mission 可各自探测）再次试探账号，每个 Task 自己连续三次 interruption 后仍 BLOCKED(environment)。等待计入 Mission wall-clock。账号 cooldown 仅随其 continuation 到期、人工调整或取消该账号所有等待 Task、或选择其它账号而解除；取消 / 切换账号仅在每个 Mission 下一轮被看见，不主动唤醒其它 Mission，已经等待的 Task 切换账号后仍保留自己的 backoff。已失效 Task / 非 pending effect 不再是冷却证据。billing、结构化 sign-in 等等待无法解决的失败不产生 continuation，故不产生 cooldown；旧的弱文本认证 fallback 仍按原规则等待，但不形成 usage-limit 账号冷却。每轮拒绝仍重复写 audit。不读内核轮询限额、不刷新 usage、不激活 provider、不加网络调用。旧构建不能解码带 account 的严格 continuation payload；不能安全依赖降级处理这种等待。
+
+#### Headless worktree preservation and continuation（M3-06-2b）
+
+仅 `settleHeadlessExitFailure` 的 interrupted / failed 两条 headless 路径保全。launch 记录携带已经校验的 worktree path、Attempt branch 与 `baselineSha`。`preserved-snapshot.ts` 在结算事务之前检查分支，通过与 Candidate 共用的 `worktree-snapshot.ts` 临时私有 index 捕获全部未忽略文件（排除 `.axiom/`），不写原 index、HEAD、branch 或工作文件。树等于 **launch baseline 的树** 时返回 `empty`，没有新 commit / ref；即使 Worker 已自行提交，也不拿 HEAD 的树作 empty 判定。否则 commit 的 parent 为工作树 HEAD，保留 Worker 提交的祖先链，message 为 `axiom: preserved snapshot <attemptId>`，固定身份、禁用 hooks，并 create-only 发布 `refs/axiom/preserved/<taskId>/<seq>`。重放遇到同 Attempt message 的既有 commit 时原样采用；不同 message 是 `ref_conflict`。
+
+两份 diff 用途不同：`readCandidateDiff` / `evaluateDiffGate` 沿用独立验证的集成 merge-base 到保全 commit 的三点差异，产生 scope paths 与秘密发现 `{path,pattern}`，不存匹配文本；内核 `gitChangeListArgs` / `parseGitChangeList` 读取 `baselineSha..<preserved>`，给出该 Attempt 自己的变化和可用的增删行数。scope paths 排序；任一列表超过 200 项，或三点 diff 缺失 / 不完整，都不继续该快照。路径若需脱敏则不再是可靠路径身份，保守返回 `diff_unavailable`，避免脱敏后的名字通过另一条 scope pattern。
+
+所有捕获错误变为 `unavailable`，固定 reason 为 worktree_missing / branch_mismatch / ref_conflict / git_failure / git_timeout / diff_unavailable / diff_incomplete / too_many_paths；已有 commit 时仍记录 ref / sha。不暴露 Git 原始错误，不删除任何已写对象或 ref，不安排保全重试，不因捕获失败改变结算。Git 操作使用有界 timeout；其结果不构成 Candidate、Submission、VerificationRun 或 stage transition。
+
+`headless-handoff-records.ts` 从本 Attempt 的 eventsText 纯解析真实记录，畸形行跳过、其它工具忽略、整体不抛错。Codex 配对 command_execution started / completed，取 agent_message；Claude 配对 Bash tool_use / tool_result，取 assistant text。最后 5 条消息各保留尾部 1,000 字符；最后 20 条 shell 命令各保留命令前 300 字符和输出尾部 300 字符，记录 Codex exit code / Claude error flag，未完成命令标记 unfinished。全部先 `redactContext` 再截断；常数集中于 `preservation-policy.ts`，无 Policy key。
+
+有保全结果或任一记录时，事务前存一份 version 1 JSON `log` Artifact（application/json、createdBy=AttemptSettlement、related=[Task,Attempt]），包含消息、命令、该 Attempt 自己的变化与身份；不关联 Submission，不是 transcript，也不是会流向下游 Task 的 handoff / worker_report。Artifact 失败只省略 id。随后同一个 `headless_exit_failure` 事务重新验证 authority，原有 `attempt.failed` 旁写 `attempt.preserved`：`{taskId,result,baselineSha,artifactId?}`，result 不含 own changes。两条审计同成同败；捕获期间若其它路径已结算，既有 current / RUNNING / dispatch 栅栏拒绝本事务，不写保全审计；已生成的不可变 ref 或 Artifact 可留存。
+
+基线按 seq 逆序访问每个无 Submission 的 Attempt，使用 Task **当前** allowedPaths：
+
+| 保全证据 | 选择 / 审计 |
+|---|---|
+| preserved、无 secret、每条 scope path 命中当前 scope | `snapshot`；记录 Attempt seq / id、ref / commit / tree、scope paths、baselineSha、Artifact id 与 interrupted failure class 或 failed lastError / reportError；停止向前选择 |
+| preserved、存在 secret | `notContinued.reason=secret`，即使以后扩大 scope 也不采用 |
+| preserved、当前 scope 不包含全部路径 | `notContinued.reason=out_of_scope`，列出 offending paths；以后人工允许该路径可使旧快照可用 |
+| empty | `notContinued.reason=empty` |
+| unavailable / 非法审计 | `notContinued.reason=unavailable`，保留固定 detail |
+| 无保全审计 | 结果形状与旧实现完全一致，不添加空的 notContinued 字段 |
+
+未采用时继续原规则：interrupted / unchanged / no_change / blocked 可越过并找到更早快照；failed 阻断并回集成基线。snapshot 的 `underlying` 解析被采用 Attempt 自己的基线，递归快照折叠到底层 Candidate / integration；因此连续两次保全修复仍携带原失败 Candidate 及其最新 VerificationRun。`skippedAttempts` 与人工调整证据仍保留。
+
+launcher 复用内核从 commit 创建工作树，snapshot baseline 的 HEAD 必须等于保全 commit，否则 `fix_base_mismatch`；新的 launch.json.baselineSha 即该 commit。`attempt.started` / `attempt.headless_prepared` 的 baseline 记录 `kind=snapshot,strategy=continued,reason=preserved_snapshot,previousSeq,attemptId,commitSha`；未采用时记录 `strategy=not_continued,notContinued=[{seq,attemptId,reason,paths?,detail?}]` 及实际 candidate / integration 基线。retryOf、maxAttempts、退款、阶梯、连续三次上限与账号 cooldown 不变。
+
+必带 Previous-Attempt failure evidence 段的新内容最多 3 KiB（总段仍 8 KiB）。先保留继承 commit、launch baseline 与精确查看自身差异的命令，再说明所有集成基线上新增工作尚未验证、截断动作可能已生效或仍运行且重复前须确认、先看工作树和历史、先 review 并负责保留 / 修改 / 撤回继承工作。failed 前驱额外说明其自身错误与做法可能有问题。Artifact 的最近消息 / 命令按新到旧在剩余预算内引用为数据和线索；缺失 / 无法读取 Artifact 只省略记录，变化列表回退到审计 scope paths。底层失败 Candidate 证据随后显示，并注明继承变化可能尚未修复它。未采用的 Attempt 改写为具体原因，out-of-scope 命名路径；没有保全审计的行保持原文。最终 Candidate 仍对集成基线的全部变化独立验证。
+
+限制：Worker 子进程可能仍写文件，捕获可能是撕裂的树；继承者须 review，最终全量验证仍是边界。恢复侧 runtime-budget stop / process exit、其它 kernel endings、TUI、声明 blocked / no_change 和 unchanged-Candidate 不保全（恢复侧留给 M3-06-2b-2）。保全 ref / commit 永不删除，包括检测到秘密的 commit；除忽略规则与 `.axiom/` 外所有工作树内容都会散列进仓库，没有独立大小上限。秘密扫描与验证一样只看相对集成基线的新增行；超过 200 路径的树仍保全但不续接。记录依赖 Codex 0.163.0 / Claude Code 2.1.312 事件形状，形状变化可退化到无记录。接着做继承的是尚未 review 的工作，可能是半途的错误方向；不恢复 session，不收集额外 Worker 笔记。
 
 ### Claude channels and invocation pins（M3-08b / M3-08f / M3-08h）
 
