@@ -222,6 +222,19 @@ M3-06（merge `ddf038b3b5`）：`attempt.dispatch` 与 `verification.enqueue` �
 
 M3-06-2a（merge `57606ffb8e`）：无界面 Worker 的失败按类型化的原因结算。可自行恢复的打断（用量上限、provider 故障、应用重启带走 Worker、出事件之前就退出）不消耗 `maxAttempts`，Task 带着持久化的"不早于"时间回到 `READY`，到点由 `attempt.continue` effect 请求调度、起新 Attempt；等也没用的（结构化的登录 / 账单类，或连续第三次打断）进 `BLOCKED(environment)` 并留一条类型化待处理项，人用 `task.adjust` 恢复。DEF-22 ⑪ 仍 OPEN 的部分：Limited / Resume at reset 的可见形态（M3-09）。D88 其余：预防（账号级冷却、Codex 的重置时间）= M3-06-2a-2；保全 = M3-06-2b；原会话续上 = M3-06-2c（等真实 harness 探测）。DEF-48 ①：outbox 现有三种 effect，integration / delivery 的 effect 仍在 M4。
 
+## 2026-11-10 M3-06-2b 合入：无界面退出路径的保全与接着做（D88 第 1、2、3、7 条；DEF-13、DEF-22 ⑪、DEF-48 ③④）
+
+M3-06-2b（merge `71a6f81919`）：无界面 Worker 没有 Submission 就退出（被打断或失败）时，宿主先把工作树拍成 `refs/axiom/preserved/<taskId>/<seq>` 下的不可变提交，写 `attempt.preserved`，把最近的消息、命令与改动文件存成交接 Artifact；快照非空、无密钥、路径都在 Task 当前范围内时，后继从它起步并被告知继承了什么、先复核。留下的缺口：
+
+- **恢复侧两条路径还不保全**：运行时长到点的停止、恢复发现的进程退出（含重启带走 Worker）→ M3-06-2b-2（M3-06-3 的前置）。声明式退出（`blocked` / `no_change`）、候选未变的退出、TUI Attempt、内核终态与放弃不保全，V1 不做。
+- **保全的 ref 与提交从不清理**：包括检出密钥的提交（密钥只决定不接着做，不决定删不删）；工作树里没被忽略的东西全部散列进仓库，没有独立的大小上限；git 每条命令 30 秒，超时落成 `git_timeout`、后继照旧起步。清理与配额随 M3-10 的 hygiene 或 M4 的工作树回收一起定。
+- **快照可能是撕裂的**：Worker 的子进程在采集时可能还在写。靠后继的"先复核"和最终候选的整份验证兜底；M3-06-3 的"先保全再停"会先给 harness 收尾的机会。
+- **超过 200 个改动路径只保全、不接着做**；含密钥的不接着做；路径名本身会被脱敏改写的按不可用处理。
+- **交接记录只有消息与 shell 命令**：Codex 的 `file_change`、Claude 的非 Bash 工具不取；依赖 Codex 0.163.0 / Claude Code 2.1.312 的事件形状，变了就退化成没有记录。被打断的 Attempt 没有完整 transcript Artifact。D88 第 7 条"Worker 留了笔记就附上"没有定义笔记约定——工作树里的东西随快照传下去，别的不收。
+- **可见性**（DEF-22 ⑪）：`attempt.preserved`、"接着做 / 没接着做及原因"、交接 Artifact 都还没有界面，归 M3-09。
+- **验证记录里的两条观察**：快照基线叠在 `secret_detected` 的集成基线上且中间还有被跳过的 Attempt 时，"不要重新引入密钥"的提示不再出现（验证的密钥扫描仍然拦）；外部写入者抢先建同名 ref 时审计里可能带着没发布成的提交 id。量小，随 M3-06-2b-2 一起看。
+- **DEF-48**：③ stub 的单测把真实事件形状喂给真实的保全与解析例程，是回放式测试的又一步；④ 接缝清单新增只读 import `src/shared/git-change-list`。
+
 ## 2026-11-10 M3-06-2a-3 合入：Codex 的重置时间取自 Worker 自己的 rollout（DEF-13 ②、DEF-22 ⑪、DEF-48 ③④）
 
 - **DEF-13 ②（Codex 的用量与限额）**：重置时间落地——文本已判成用量上限时，从该 Attempt 自己的 rollout 尾部读限额窗口，交内核 `CodexUsageLimits` 解释；有重置时间就等到那时（生产里再加 60 秒），账号冷却随之延长到同一时刻。逐步用量（token 预算）不在本条，Codex 仍只能事后记账。
