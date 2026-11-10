@@ -7,9 +7,12 @@ import { settleInterruptedAttempt } from './attempt-interruption'
 import { scheduleFailedWorkerRelease } from './attempt-worker-release'
 import { classifyHeadlessFailure } from './attempt-failure-classification'
 import { readAttemptAccount } from './attempt-account'
+import { readCodexRolloutLimit } from './codex-rollout-limit'
+import { INTERRUPTION_MAX_RESET_MS } from './interruption-policy'
+import { exposeUtcTimestamp } from '../../runtime/orchestration/db/utc-timestamp'
 import type { parseHeadlessWorkerEvents } from './headless-worker-events'
 
-export function settleHeadlessExitFailure(
+export async function settleHeadlessExitFailure(
   runtime: OrcaRuntimeService,
   input: {
     attemptId: string
@@ -26,11 +29,36 @@ export function settleHeadlessExitFailure(
   const db = runtime.getOrchestrationDb()
   const { store, missions, effects } = getAxiomControlPlane(runtime)
   const now = Date.now()
-  const { kind, failure } = classifyHeadlessFailure({
+  const classified = classifyHeadlessFailure({
     eventsText: input.eventsText,
     provider: input.provider,
     now
   })
+  const { kind } = classified
+  let failure = classified.failure
+  const binding = store.getAttemptBindingByDispatch(attemptId)
+  const launchAccount =
+    failure.class === 'usage_limit' && binding
+      ? readAttemptAccount(store, binding.missionId, attemptId, input.provider)
+      : undefined
+  if (input.provider === 'codex' && failure.class === 'usage_limit') {
+    const limit = await readCodexRolloutLimit({
+      accountHome: launchAccount?.home,
+      threadId: events.providerSessionId,
+      startedAt: Date.parse(
+        exposeUtcTimestamp(db.getWorkerDispatch(attemptId)?.created_at ?? null) ?? ''
+      ),
+      now: () => now
+    })
+    const reset = limit?.resetsAt
+    failure = {
+      ...failure,
+      ...(limit?.window ? { window: limit.window } : {}),
+      ...(reset !== undefined && now < reset && reset <= now + INTERRUPTION_MAX_RESET_MS
+        ? { resetsAt: new Date(reset).toISOString() }
+        : {})
+    }
+  }
   const missionId = store.transaction('headless_exit_failure', () => {
     const authority = resolveHostAttempt(db, store, attemptId)
     db.failDispatch(attemptId, 'Headless Worker exited without a valid Submission', {
@@ -73,10 +101,7 @@ export function settleHeadlessExitFailure(
           ...settlement,
           failure,
           now,
-          account:
-            failure.class === 'usage_limit'
-              ? readAttemptAccount(store, authority.mission.id, attemptId, input.provider)
-              : undefined
+          account: launchAccount?.account
         }
       )
     } else {

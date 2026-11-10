@@ -18,7 +18,12 @@ export function readAttemptAccount(
   missionId: string,
   dispatchId: string,
   provider: string
-): z.infer<typeof AttemptContinuePayloadSchema>['account'] {
+):
+  | {
+      account: NonNullable<z.infer<typeof AttemptContinuePayloadSchema>['account']>
+      home: string
+    }
+  | undefined {
   if (provider !== 'claude' && provider !== 'codex') {
     return undefined
   }
@@ -36,7 +41,9 @@ export function readAttemptAccount(
     const home = AccountHome.safeParse(
       provider === 'claude' ? effective.claudeConfigDir : effective.codexHome
     )
-    return home.success ? { provider, key: accountKey(provider, home.data.path) } : undefined
+    return home.success
+      ? { account: { provider, key: accountKey(provider, home.data.path) }, home: home.data.path }
+      : undefined
   } catch {
     // Account evidence is optional; an unreadable legacy audit must not lose the settlement.
     return undefined
