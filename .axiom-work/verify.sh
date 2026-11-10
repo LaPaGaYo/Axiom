@@ -25,6 +25,10 @@ run vendor-egress-ratchet pnpm run check:vendor-egress-ratchet
 # (M0-10 attempt 1, 2026-10-15); it is on the known-environmental list, so keep it out of the focused step.
 HANGING_EXCLUDES=(--exclude "src/shared/startup-shell-portability.live-shell.test.ts")
 if [ ${#TEST_TARGETS[@]} -gt 0 ]; then run unit-tests pnpm test "${TEST_TARGETS[@]}" "${HANGING_EXCLUDES[@]}"; fi
+# Why: `pnpm test` runs Vitest under Bun; Axiom CI runs the Axiom-scoped files under Node, which refuses some test
+# techniques Bun tolerates (2026-11-10, CI #98: 20 tests that spied on a built-in module namespace passed the attempt
+# launcher and verify-main and failed on CI after the push). This runs CI's own step, read from the workflow; ~1 min.
+run node-ci-unit bash .axiom-work/scripts/ci-axiom-unit.sh
 # Why: the three tsconfigs are composite/incremental and a stale config/*.tsbuildinfo can hide a
 # cross-file type error (2026-10-17: the first hosted Axiom CI run failed tc:node on a parity check
 # that the launcher's 1 s incremental run had passed for nine attempts). A clean run costs seconds.
