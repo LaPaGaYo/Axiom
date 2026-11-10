@@ -399,11 +399,11 @@ Recovery 的 `recovery_process_exit` 仅当 headless 且 worker.runtime_epoch �
 | unavailable / 非法审计 | `notContinued.reason=unavailable`，保留固定 detail |
 | 无保全审计 | 结果形状与旧实现完全一致，不添加空的 notContinued 字段 |
 
-未采用时继续原规则：interrupted / unchanged / no_change / blocked 可越过并找到更早快照；failed 阻断并回集成基线。snapshot 的 `underlying` 解析被采用 Attempt 自己的基线，递归快照折叠到底层 Candidate / integration；因此连续两次保全修复仍携带原失败 Candidate 及其最新 VerificationRun。`skippedAttempts` 与人工调整证据仍保留。
+未采用时继续原规则：interrupted / unchanged / no_change / blocked 可越过并找到更早快照；failed 阻断并回集成基线。snapshot 的 `underlying` 解析被采用 Attempt 自己的基线，递归快照折叠到底层 Candidate / integration；因此连续两次保全修复仍携带原失败 Candidate 及其最新 VerificationRun。`underlying` 不携带它自己那次回溯的 `notContinued`——被采用的 Attempt 当初没有继承什么是它的历史，不是后继的基线；后继上下文对这些更早的 Attempt 只保留原有的跳过说明，不再出现"从集成基线起步"的句子。`skippedAttempts` 与人工调整证据仍保留。
 
 launcher 复用内核从 commit 创建工作树，snapshot baseline 的 HEAD 必须等于保全 commit，否则 `fix_base_mismatch`；新的 launch.json.baselineSha 即该 commit。`attempt.started` / `attempt.headless_prepared` 的 baseline 记录 `kind=snapshot,strategy=continued,reason=preserved_snapshot,previousSeq,attemptId,commitSha`；未采用时记录 `strategy=not_continued,notContinued=[{seq,attemptId,reason,paths?,detail?}]` 及实际 candidate / integration 基线。retryOf、maxAttempts、退款、阶梯、连续三次上限与账号 cooldown 不变。
 
-必带 Previous-Attempt failure evidence 段的新内容最多 3 KiB（总段仍 8 KiB）。先保留继承 commit、launch baseline 与精确查看自身差异的命令，再说明所有集成基线上新增工作尚未验证、截断动作可能已生效或仍运行且重复前须确认、先看工作树和历史、先 review 并负责保留 / 修改 / 撤回继承工作。failed 前驱额外说明其自身错误与做法可能有问题。Artifact 的最近消息 / 命令按新到旧在剩余预算内引用为数据和线索；缺失 / 无法读取 Artifact 只省略记录，变化列表回退到审计 scope paths。底层失败 Candidate 证据随后显示，并注明继承变化可能尚未修复它。未采用的 Attempt 改写为具体原因，out-of-scope 命名路径；没有保全审计的行保持原文。最终 Candidate 仍对集成基线的全部变化独立验证。
+必带 Previous-Attempt failure evidence 段的新内容最多 3 KiB（总段仍 8 KiB）。先保留继承 commit、launch baseline 与精确查看自身差异的命令，再说明所有集成基线上新增工作尚未验证、截断动作可能已生效或仍运行且重复前须确认、先看工作树和历史、先 review 并负责保留 / 修改 / 撤回继承工作。failed 前驱额外说明其自身错误与做法可能有问题。Artifact 的最近消息 / 命令按新到旧在剩余预算内引用为数据和线索（消息引用其结尾 500 个字符，因为结尾说明上一次做到了哪里）；缺失 / 无法读取 Artifact 只省略记录，变化列表回退到审计 scope paths。底层失败 Candidate 证据随后显示，并注明继承变化可能尚未修复它。未采用的 Attempt 改写为具体原因，out-of-scope 命名路径；没有保全审计的行保持原文。最终 Candidate 仍对集成基线的全部变化独立验证。
 
 限制：Worker 子进程可能仍写文件，捕获可能是撕裂的树；继承者须 review，最终全量验证仍是边界。恢复侧 runtime-budget stop / process exit、其它 kernel endings、TUI、声明 blocked / no_change 和 unchanged-Candidate 不保全（恢复侧留给 M3-06-2b-2）。保全 ref / commit 永不删除，包括检测到秘密的 commit；除忽略规则与 `.axiom/` 外所有工作树内容都会散列进仓库，没有独立大小上限。秘密扫描与验证一样只看相对集成基线的新增行；超过 200 路径的树仍保全但不续接。记录依赖 Codex 0.163.0 / Claude Code 2.1.312 事件形状，形状变化可退化到无记录。接着做继承的是尚未 review 的工作，可能是半途的错误方向；不恢复 session，不收集额外 Worker 笔记。
 
