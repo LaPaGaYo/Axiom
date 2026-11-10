@@ -4,6 +4,7 @@ import type { ArtifactStore } from '../artifacts/artifact-store'
 import type { AttemptBaseline } from '../execution/attempt-baseline'
 import { findSubmissionTranscriptArtifactId } from '../execution/attempt-projection'
 import { redactContext } from './redaction'
+import { preservedAttemptSection } from './previous-preserved-attempt'
 import {
   acceptanceLines,
   humanDispositionLines,
@@ -195,6 +196,9 @@ export async function previousAttemptSection(
   baseline: AttemptBaseline,
   channel: 'tui' | 'headless' = 'tui'
 ): Promise<{ source: string; content: string }> {
+  if (baseline.kind === 'snapshot' || baseline.notContinued?.length) {
+    return preservedAttemptSection(store, artifacts, baseline, channel, previousAttemptSection)
+  }
   if (baseline.kind === 'integration') {
     if (baseline.reason === 'first_attempt') {
       return { source: 'previous-attempt:m2', content: 'none (first attempt)' }

@@ -1,5 +1,5 @@
 import { FAKE_AGENT_PASTE_END_SCANNER_SOURCE } from './fake-agent-paste-end-scanner'
-import { AXIOM_CODEX_ROLLOUT_SOURCE } from './axiom-codex-rollout'
+import { AXIOM_INTERRUPTION_EVIDENCE_SOURCE } from './axiom-partial-work'
 
 /** D49: capture the preamble; the submit spec supplies a compiled CLI to run the frozen stub. */
 export const AXIOM_TEST_PROVIDER_SOURCE = `
@@ -17,7 +17,7 @@ if (process.argv.slice(2).includes('app-server')) {
   process.exit(2)
 }
 ${FAKE_AGENT_PASTE_END_SCANNER_SOURCE}
-${AXIOM_CODEX_ROLLOUT_SOURCE}
+${AXIOM_INTERRUPTION_EVIDENCE_SOURCE}
 function cli(args) {
   const result = spawnSync(process.execPath, [process.env.ORCA_E2E_CLI_ENTRY, ...args, '--json'], {
     cwd: process.cwd(), env: process.env, encoding: 'utf8', timeout: 30000
@@ -58,7 +58,7 @@ async function submitFixture(attemptId, missionId, taskId, outputPath) {
   const interruptions = existsSync(interruptionMarker) ? Number(readFileSync(interruptionMarker, 'utf8')) : 0
   if (headless && interruptions > 0) {
     writeFileSync(interruptionMarker, String(interruptions - 1))
-    writeInterruptionRollout(attemptId, taskId)
+    writeInterruptionEvidence(attemptId, taskId)
     process.stdout.write(JSON.stringify({ type: 'turn.failed', error: { message: 'Fixture usage limit reached' } }) + '\\n')
     process.exit(75)
   }

@@ -153,6 +153,10 @@ M3-06-2a / D88 新只读内核 import：`src/main/axiom/execution/attempt-failur
 
 M3-06-2a-3 / D88（2026-11-10 修订）新只读内核 import：`src/main/axiom/execution/codex-rollout-limit.ts` → `src/main/codex/codex-usage-limits` 的 `CodexUsageLimits`，以及 `src/shared/agent-session-usage-limit` 的类型 `AgentSessionUsageLimit`（仅类型，读取器的返回值）。只把 Worker 自己 rollout 中的白名单窗口字段从 snake_case 映射到 app-server 字段，逐条 `observe('notification:account/rateLimits/updated', {rateLimits})`，再取 `failure({error:{codexErrorInfo:'usageLimitExceeded'}}).usageLimit`。null 窗口原样传入；窗口选择、耗尽判定、重置取值全部复用内核。该合成 error 仅向内核查询已由文本判为 usage_limit 的附加证据，不决定失败类别。无内核改动、反向 import、账号轮询或网络调用；限制与退化行为见 control-plane.md 的 Interrupted Attempt continuation 节。
 
+M3-06-2b / D88、D64 新只读内核 import：`src/main/axiom/execution/preserved-snapshot.ts` → `src/shared/git-change-list` 的 `gitChangeListArgs` / `parseGitChangeList`，复用 source-control 的双 commit 变化列表及行数，读取 launch baseline 到保全 commit 的本 Attempt 变化。Git runner、worktree options、从 commit 创建工作树与 dispatch `retryOf` 沿用既有边界；内核不改动、不反向 import Axiom。私有 index 的树捕获从 Axiom 的 `candidate-snapshot.ts` 抽到 `worktree-snapshot.ts` 共用，保全用独立 `refs/axiom/preserved/` 命名空间、create-only ref，不移动 Attempt branch。
+
+已考察 `src/main/codex/codex-structured-item-translation.ts` 和 Claude frame decoders：它们构造 structured channel 的有状态 journal，消费的 item 名称也不同，不能作为窄只读解析 seam；`runtime/orchestration/worker-output-archive.ts` 依赖 live terminal，也不适合已退出的 headless Attempt。因此 Axiom 的 `headless-handoff-records.ts` 只解析自身 events.jsonl 的 Codex 0.163.0 / Claude Code 2.1.312 消息与 shell 事件，按命名常数裁剪、脱敏；不导入上述 decoder / archive，也不新增 transcript Artifact。详情与退化限制见 control-plane.md 的 Interrupted Attempt continuation 节。
+
 ### 4b. 对 Mission 管理对象必须拦截/禁用的 Orca 入口
 
 判定依据：`tasks.run_id`（或 `dispatch_contexts.run_id`）命中 `missions.run_id`。M1-07 已实现统一守卫 `src/main/axiom/admission/mission-managed-run-guard.ts`，下列 handler 在对象解析后、首次写入前调用；`mission_managed` 已登记于 `src/main/runtime/rpc/errors.ts`。进程内 `caller: control_plane` 不能来自 RPC params。D73 只更换 Worker channel 的身份依据；本节 Mission admission 守卫全部保留。

@@ -137,7 +137,8 @@ async function submitExit(runtime: OrcaRuntimeService, attemptId: string) {
       exitCode,
       lastMessage,
       reportError,
-      eventAudit
+      eventAudit,
+      launch: { worktreePath: worktree, branch: launch.branch, baselineSha: launch.baselineSha }
     })
   }
   const reportArtifact = await artifacts.put({
