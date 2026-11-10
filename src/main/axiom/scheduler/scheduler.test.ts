@@ -84,6 +84,77 @@ function task(id: string) {
 function policy(patch: Partial<Policy>) {
   f.store.upsertPolicy(f.missionId, { ...f.store.getPolicy(f.missionId)!, ...patch })
 }
+it('waits until the reported reset before admitting the next Attempt', async () => {
+  const interrupted = task('T01')
+  const due = Date.now() + 60000
+  let now = due - 1
+  f.store.insertAttemptBinding({
+    missionId: f.missionId,
+    taskId: interrupted.taskId,
+    seq: 1,
+    branch: 'attempt/1',
+    dispatchId: null,
+    agentSpecId: 'spec',
+    contextPackageId: 'context'
+  })
+  f.store.transaction('test_backoff', () =>
+    effects.enqueue({
+      missionId: f.missionId,
+      kind: 'attempt.continue',
+      key: `${interrupted.taskId}/1`,
+      dueAt: new Date(due).toISOString(),
+      payload: { taskId: interrupted.taskId, seq: 1, chain: 1, failureClass: 'usage_limit' }
+    })
+  )
+  const s = makeScheduler(launch, () => new Date(now).toISOString())
+  expect((await s.scheduleRound(f.missionId, 'manual')).skipped).toContainEqual({
+    taskId: interrupted.taskId,
+    reason: 'backoff'
+  })
+  expect(f.store.getTaskStage(interrupted.taskId)?.attemptCount).toBe(0)
+  now = due
+  expect((await s.scheduleRound(f.missionId, 'manual')).admitted).toContainEqual(
+    expect.objectContaining({ taskId: interrupted.taskId, seq: 2 })
+  )
+  expect(f.store.getTaskStage(interrupted.taskId)?.attemptCount).toBe(1)
+})
+it.each(['failed', 'retired'] as const)(
+  'does not block admission on a %s continuation',
+  async (status) => {
+    const interrupted = task('T01')
+    f.store.insertAttemptBinding({
+      missionId: f.missionId,
+      taskId: interrupted.taskId,
+      seq: 1,
+      branch: 'attempt/1',
+      dispatchId: null,
+      agentSpecId: 'spec',
+      contextPackageId: 'context'
+    })
+    const effect = f.store.transaction('test_backoff', () =>
+      effects.enqueue({
+        missionId: f.missionId,
+        kind: 'attempt.continue',
+        key: `${interrupted.taskId}/1`,
+        dueAt: new Date(Date.now() + 60000).toISOString(),
+        payload: { taskId: interrupted.taskId, seq: 1, chain: 1, failureClass: 'usage_limit' }
+      })
+    )
+    const fence = {
+      id: effect.id,
+      expectedStatus: effect.status,
+      expectedLeaseEpoch: effect.leaseEpoch
+    }
+    if (status === 'retired') {
+      f.store.retireEffect({ ...fence, reason: 'superseded_by_task_adjust' })
+    } else {
+      f.store.failEffectAttempt({ ...fence, lastError: 'round failed', nextDueAt: null })
+    }
+    expect((await scheduler.scheduleRound(f.missionId, 'manual')).admitted).toContainEqual(
+      expect.objectContaining({ taskId: interrupted.taskId, seq: 2 })
+    )
+  }
+)
 async function round(s = scheduler) {
   const result = await s.scheduleRound(f.missionId, 'manual')
   effects.start()

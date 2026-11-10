@@ -149,6 +149,8 @@ M2-06a 的严格载荷契约在 `src/shared/axiom-contract/message-params.ts`（
 | Run mailbox 消费：`getUnreadRunMailbox` / `getOrCreateRunDelivery` / `acknowledgeRunDelivery` / `requireCurrentConsumer`（`db/runs/run-delivery.ts`） | MissionController 的确定性消费者：`src/main/axiom/mission-controller/run-mailbox-consumer.ts`；启动/恢复接入 `src/main/axiom/control-plane-boot.ts` | 以 `runs.consumer_generation` 栅栏；先注册 exclusive waiter 再 drain，整批处理后 ack，审计按 message id 幂等，重启后可续；`src/main/axiom/recovery/recovery-service.ts` 校验持久 Run/session 绑定，正常恢复不写 recovery 成功事件，失败记 `recovery.run_binding_lost` | 已实现（M1-08、M2-06/08 扩展） |
 
 
+M3-06-2a / D88 新只读内核 import：`src/main/axiom/execution/attempt-failure-classification.ts` → `src/main/claude/claude-usage-limits.ts` 的 `ClaudeUsageLimits`（及 evidence / row 类型）。每份 Claude events.jsonl 一个实例，observe / assistant / result 复用既有拒绝与 reset 判定；只取 row.failure.usageLimit，Axiom 不重写 rate-limit 元数据解析、不读取账号限额服务、不改内核。kernel 不反向导入 Axiom。分类与 continuation 持久规则见 control-plane.md 的 Interrupted Attempt continuation 节。
+
 ### 4b. 对 Mission 管理对象必须拦截/禁用的 Orca 入口
 
 判定依据：`tasks.run_id`（或 `dispatch_contexts.run_id`）命中 `missions.run_id`。M1-07 已实现统一守卫 `src/main/axiom/admission/mission-managed-run-guard.ts`，下列 handler 在对象解析后、首次写入前调用；`mission_managed` 已登记于 `src/main/runtime/rpc/errors.ts`。进程内 `caller: control_plane` 不能来自 RPC params。D73 只更换 Worker channel 的身份依据；本节 Mission admission 守卫全部保留。

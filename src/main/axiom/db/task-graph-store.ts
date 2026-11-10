@@ -26,7 +26,7 @@ const UpdateSchema = z.object({
   from: TaskStageSchema,
   to: TaskStageSchema,
   previousStage: TaskStageSchema.nullable().optional(),
-  attemptCountDelta: z.number().int().nonnegative().optional()
+  attemptCountDelta: z.number().int().min(-1).optional()
 })
 const UpdateSpecSchema = z.strictObject({
   taskId: AxiomIdSchema,
@@ -88,14 +88,16 @@ export function taskGraphStore(db: OrchestrationDb) {
         db.db
           .prepare(`UPDATE task_stages SET stage = ?,
         previous_stage = CASE WHEN ? THEN ? ELSE previous_stage END,
-        attempt_count = attempt_count + ?, updated_at = datetime('now') WHERE task_id = ? AND stage = ?`)
+        attempt_count = attempt_count + ?, updated_at = datetime('now') WHERE task_id = ? AND stage = ?
+        AND attempt_count + ? >= 0`)
           .run(
             p.to,
             Number(p.previousStage !== undefined),
             p.previousStage ?? null,
             p.attemptCountDelta ?? 0,
             p.taskId,
-            p.from
+            p.from,
+            p.attemptCountDelta ?? 0
           ).changes === 1
       )
     },

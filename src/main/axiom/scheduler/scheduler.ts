@@ -11,7 +11,7 @@ import { canBecomeReady } from '../mission-controller/task-readiness'
 import type { ContextBuilder } from '../context-builder/context-builder'
 import { buildWorkerContracts, type AgentFactory } from '../agent-factory/agent-factory'
 import { AgentFactoryError } from '../agent-factory/provider-selection'
-import { blockingQuestionOrApproval } from './admission-blockers'
+import { blockingQuestionOrApproval, interruptionBackoff } from './admission-blockers'
 import { orderByCriticalPath } from './critical-path'
 import type { EffectOutbox } from '../outbox/effect-outbox'
 
@@ -35,6 +35,7 @@ export type ScheduleRoundResult = {
       | 'task_attempts'
       | 'question'
       | 'approval'
+      | 'backoff'
       | 'no_eligible_provider'
       | 'stale'
   }[]
@@ -115,7 +116,9 @@ export class Scheduler {
     if (task.attemptCount >= task.retryPolicy.maxAttempts) {
       return { reason: 'task_attempts' }
     }
-    const blocker = blockingQuestionOrApproval({ db: this.db, store: this.store }, task)
+    const blocker = interruptionBackoff(this.store, taskId, this.now())
+      ? 'backoff'
+      : blockingQuestionOrApproval({ db: this.db, store: this.store }, task)
     if (blocker !== 'none') {
       return { reason: blocker }
     }

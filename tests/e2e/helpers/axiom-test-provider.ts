@@ -52,6 +52,13 @@ async function submitFixture(attemptId, missionId, taskId, outputPath) {
   }
   const scenarioMarker = process.env.AXIOM_E2E_LEDGER + '.scenario-' + taskId
   const scenario = existsSync(scenarioMarker) ? readFileSync(scenarioMarker, 'utf8').trim() : 'retry'
+  const interruptionMarker = process.env.AXIOM_E2E_LEDGER + '.interrupt-' + taskId
+  const interruptions = existsSync(interruptionMarker) ? Number(readFileSync(interruptionMarker, 'utf8')) : 0
+  if (headless && interruptions > 0) {
+    writeFileSync(interruptionMarker, String(interruptions - 1))
+    process.stdout.write(JSON.stringify({ type: 'turn.failed', error: { message: 'Fixture usage limit reached' } }) + '\\n')
+    process.exit(75)
+  }
   if (headless && scenario === 'exit-nonzero') {
     rmSync(scenarioMarker)
     process.stdout.write(JSON.stringify({ type: 'turn.failed', error: { message: 'fixture work failed' } }) + '\\n')

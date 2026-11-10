@@ -123,6 +123,17 @@ if (process.argv.slice(2).includes('-p')) {
     plugins: [{ name: 'cc-plugin-agents-md', path: 'builtin', source: 'cc-plugin-agents-md@builtin' }], apiKeySource: 'none' })
   async function completeFixture() {
     while (existsSync(process.env.AXIOM_E2E_LEDGER + '.hold')) await new Promise(resolve => setTimeout(resolve, 50))
+    const interruptionMarker = process.env.AXIOM_E2E_LEDGER + '.interrupt-' + taskId
+    const interruptions = existsSync(interruptionMarker) ? Number(readFileSync(interruptionMarker, 'utf8')) : 0
+    if (interruptions > 0) {
+      writeFileSync(interruptionMarker, String(interruptions - 1))
+      emit({ type: 'rate_limit_event', session_id: sessionId, rate_limit_info: { status: 'rejected', rateLimitType: 'five_hour', resetsAt: Math.floor(Date.now() / 1000) + 8 } })
+      emit({ type: 'assistant', session_id: sessionId, error: 'rate_limit', api_error: 'usage_limit_reached', is_api_error_message: true,
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Fixture usage limit reached' }] } })
+      emit({ type: 'result', subtype: 'error_during_execution', is_error: true, session_id: sessionId,
+        api_error_status: 429, terminal_reason: 'api_error', errors: ['Fixture usage limit reached'] })
+      process.exit(75)
+    }
     const files = ${JSON.stringify(AXIOM_T01_FIXTURE_FILES)}
     for (const [file, text] of Object.entries(files)) writeFileSync(path.join(process.cwd(), file), text, { flag: 'wx' })
     const artifacts = path.join(process.cwd(), '.axiom', 'artifacts')

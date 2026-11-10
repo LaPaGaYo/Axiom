@@ -13,11 +13,8 @@ import { resolveHostAttempt } from './attempt-authority'
 import { serializeAttemptSubmission, settleSubmission } from './attempt-submission'
 import { settleAttemptWithoutSubmission } from './attempt-settlement'
 import { settleDeclaredExit } from './attempt-exit-declared'
-import {
-  parseHeadlessWorkerEvents,
-  parseHeadlessReport,
-  headlessFailureKind
-} from './headless-worker-events'
+import { settleHeadlessExitFailure } from './attempt-exit-failure'
+import { parseHeadlessWorkerEvents, parseHeadlessReport } from './headless-worker-events'
 import {
   headlessAttemptDirectory,
   HeadlessLaunchSchema,
@@ -87,9 +84,8 @@ async function submitExit(runtime: OrcaRuntimeService, attemptId: string) {
     return 'pending'
   }
   const exitCode = Number(exit.trim())
-  const events =
-    claudeEvents ??
-    parseHeadlessWorkerEvents((await readHeadlessFile(directory, 'events.jsonl')) ?? '')
+  const eventsText = (await readHeadlessFile(directory, 'events.jsonl')) ?? ''
+  const events = parseHeadlessWorkerEvents(eventsText, provider)
   await persistClaudeLastMessage(directory, provider, events)
   // A Claude report must originate in its terminal result, never a Worker-written file.
   const lastMessage =
@@ -133,52 +129,16 @@ async function submitExit(runtime: OrcaRuntimeService, attemptId: string) {
     }
   }
   if (exitCode !== 0 || failedResult || !report || reportError) {
-    const kind = headlessFailureKind(events)
-    store.transaction('headless_exit_failure', () => {
-      resolveHostAttempt(db, store, attemptId)
-      db.failDispatch(attemptId, 'Headless Worker exited without a valid Submission', {
-        workerProcessExited: true,
-        terminationReason: 'process_exited'
-      })
-      store.appendAuditEvent({
-        missionId: authority.mission.id,
-        actor: 'AttemptSettlement',
-        event: 'attempt.failed',
-        objectKind: 'attempt',
-        objectId: attemptId,
-        before: null,
-        after: {
-          taskId: authority.task.taskId,
-          reason: 'process_exited',
-          evidence: 'exit_code',
-          exitCode,
-          settlement: { kind },
-          lastError: redactContext(events.lastError ?? '').content.slice(-2000),
-          ...(events.lastErrorEvent
-            ? {
-                lastErrorEvent: {
-                  type: events.lastErrorEvent.type,
-                  message: redactContext(events.lastErrorEvent.message).content.slice(-2000)
-                }
-              }
-            : {}),
-          lastMessageExcerpt: redactContext(lastMessage).content.slice(-2000),
-          ...(reportError ? { reportError } : {}),
-          ...eventAudit
-        }
-      })
-      settleAttemptWithoutSubmission(
-        { store, missions },
-        {
-          ...authority.binding,
-          dispatchId: attemptId,
-          reason: kind === 'interrupted' ? 'interrupted' : 'attempt_failed',
-          actor: 'AttemptSettlement'
-        }
-      )
+    return settleHeadlessExitFailure(runtime, {
+      attemptId,
+      provider,
+      eventsText,
+      events,
+      exitCode,
+      lastMessage,
+      reportError,
+      eventAudit
     })
-    scheduleFailedWorkerRelease(runtime, { missionId: authority.mission.id, attemptId })
-    return kind
   }
   const reportArtifact = await artifacts.put({
     missionId: authority.mission.id,

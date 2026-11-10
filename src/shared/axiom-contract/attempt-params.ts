@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { AxiomIdSchema } from './mission-objects'
 import { AttemptStateSchema, type AttemptState } from './lifecycle'
 import {
-  BlockedMessageSchema,
+  WorkerBlockedMessageSchema,
   MessageRelatedSchema,
   MessageSummarySchema,
   SubtaskRequestSchema
@@ -35,7 +35,7 @@ export const AttemptMessageParams = z
 export const AttemptInformParams = AttemptMessageParams
 export const AttemptRequestParams = AttemptMessageParams
 export const AttemptBlockedParams = AttemptMessageParams.extend({
-  blocked: BlockedMessageSchema.optional()
+  blocked: WorkerBlockedMessageSchema.optional()
 })
 export const AttemptHandoffParams = AttemptMessageParams
 export const AttemptRequestSubtaskParams = AttemptMessageParams.extend({

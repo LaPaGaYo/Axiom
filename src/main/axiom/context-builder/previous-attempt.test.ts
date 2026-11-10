@@ -65,6 +65,48 @@ it('preserves the first-Attempt bytes and source', async () => {
     content: 'none (first attempt)'
   })
 })
+it.each(['candidate', 'integration'] as const)(
+  'explains interrupted work loss on the %s baseline',
+  async (kind) => {
+    if (kind === 'candidate') {
+      seed()
+      const evidence = await verdict(
+        JSON.stringify({ checks: [{ ...check(0), output: 'assertion still failing' }] })
+      )
+      detail({ checks: [check(0)], verdictArtifactId: evidence.id })
+    }
+    const seq = kind === 'candidate' ? 2 : 1
+    f.store.insertAttemptBinding({
+      missionId: f.missionId,
+      taskId,
+      seq,
+      dispatchId: 'interrupted',
+      branch: 'interrupted',
+      agentSpecId: 'agent',
+      contextPackageId: 'context'
+    })
+    f.store.appendAuditEvent({
+      missionId: f.missionId,
+      actor: 'AttemptSettlement',
+      event: 'attempt.failed',
+      objectKind: 'attempt',
+      objectId: 'interrupted',
+      before: null,
+      after: {
+        settlement: { kind: 'interrupted' },
+        failure: { class: 'provider_error', retryable: true, source: 'structured' }
+      }
+    })
+    const { content } = await section()
+    expect(content).toContain(
+      `Attempt ${seq} was interrupted before it could submit (provider_error)`
+    )
+    expect(content).toContain('none of its uncommitted work was carried over')
+    if (kind === 'candidate') {
+      expect(content).toContain('failure-0')
+    }
+  }
+)
 
 it('renders unchanged reports as bounded, redacted quoted data before the failures', async () => {
   seed()

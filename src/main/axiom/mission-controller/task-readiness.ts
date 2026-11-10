@@ -65,6 +65,21 @@ export function transitionTaskStage(ctx: ControllerContext, input: TransitionTas
   const task = requireTask(ctx, input.taskId)
   const from = task.stage
   const to = input.to
+  if (
+    (input.attemptCountDelta ?? 0) < 0 &&
+    !(
+      input.attemptCountDelta === -1 &&
+      from === 'RUNNING' &&
+      to === 'NEEDS_FIX' &&
+      input.reason === 'interrupted' &&
+      ['AttemptSettlement', 'RecoveryService'].includes(input.actor)
+    )
+  ) {
+    throw new MissionControllerError('illegal_transition', {
+      taskId: task.taskId,
+      reason: 'interruption_refund_required'
+    })
+  }
   if (from === 'RUNNING' && to === 'SUBMITTED' && input.actor !== 'AttemptSettlement') {
     throw new MissionControllerError('illegal_transition', {
       taskId: task.taskId,

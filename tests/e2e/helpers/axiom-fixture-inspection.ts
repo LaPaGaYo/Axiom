@@ -159,13 +159,14 @@ export function inspectFixtureMission(userData: string, missionId: string) {
             sequence: z.number(),
             event: z.string(),
             object_id: z.string(),
+            created_at: z.string(),
             after: z.string().nullable()
           })
         )
         .parse(
           db
             .prepare(
-              'SELECT sequence, event, object_id, after FROM audit_events WHERE mission_id = ? ORDER BY sequence'
+              'SELECT sequence, event, object_id, created_at, after FROM audit_events WHERE mission_id = ? ORDER BY sequence'
             )
             .all(missionId)
         )

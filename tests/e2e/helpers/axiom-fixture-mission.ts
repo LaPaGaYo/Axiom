@@ -105,6 +105,7 @@ export async function withFixtureMission(
     noCodexAccount?: boolean
     holdExitSubmission?: boolean
     holdAttemptDispatch?: boolean
+    interruptionBackoffMs?: number[]
     provider?: AxiomFixtureProvider
     taskIds?: string[]
     acceptanceCriteria?: AcceptanceCriterion[]
@@ -138,6 +139,7 @@ process.exit(result.status ?? 1)
     ORCA_BACKGROUND_LAUNCH: '1',
     PATH: `${temp}${path.delimiter}${process.env.PATH ?? ''}`,
     AXIOM_E2E_LEDGER: ledgerPath,
+    AXIOM_E2E_INTERRUPTION_BACKOFF_MS: options.interruptionBackoffMs?.join(',') ?? '',
     ...(options.holdExitSubmission ? { AXIOM_E2E_HOLD_EXIT_SUBMISSION: '1' } : {}),
     ...(options.holdAttemptDispatch ? { AXIOM_E2E_HOLD_ATTEMPT_DISPATCH: '1' } : {}),
     ...(options.runVerification ? {} : { AXIOM_E2E_HOLD_VERIFICATION: '1' }),
