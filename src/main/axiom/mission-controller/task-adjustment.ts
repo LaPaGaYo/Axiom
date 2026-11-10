@@ -141,7 +141,7 @@ export function adjustTask(
     rationale: p.rationale,
     decision: 'adjusted'
   })
-  retireTaskContinuation(ctx.store, task.taskId)
+  const retiredUsageLimit = retireTaskContinuation(ctx.store, task.taskId)
   audit(ctx, {
     missionId: mission.id,
     actor,
@@ -193,7 +193,7 @@ export function adjustTask(
     !p.addAllowedPaths.length &&
     p.maxAttempts === undefined
   ) {
-    return projectTask(ctx, adjusted)
+    return { task: projectTask(ctx, adjusted), retiredUsageLimit }
   }
   if (adjusted.stage === 'BLOCKED') {
     if (!adjusted.previousStage) {
@@ -225,5 +225,5 @@ export function adjustTask(
       actor
     })
   }
-  return projectTask(ctx, adjusted)
+  return { task: projectTask(ctx, adjusted), retiredUsageLimit }
 }

@@ -83,15 +83,6 @@ export function parseHeadlessWorkerEvents(text: string, provider = 'codex'): Hea
   }
 }
 
-export function headlessFailureKind(events: ReturnType<typeof parseHeadlessWorkerEvents>) {
-  return !events.hasEvents ||
-    /auth(?:entication|orization)?|unauthori[sz]ed|login|log(?:ged)? in|invalid.token|quota|rate.?limit|usage limit|insufficient.credit|429|401/i.test(
-      events.lastError ?? ''
-    )
-    ? ('interrupted' as const)
-    : ('failed' as const)
-}
-
 export function parseHeadlessReport(message: string) {
   const match = /(?:^|\n)```json\s*\n([^]*?)\n```\s*$/.exec(message)
   if (!match) {

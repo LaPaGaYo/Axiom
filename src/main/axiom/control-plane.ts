@@ -15,6 +15,7 @@ import { createPlannerLauncher } from './execution/planner-launcher'
 import { Scheduler } from './scheduler/scheduler'
 import { detectInstalledAgentsWithShellPathHydration } from '../preflight/agent-detection'
 import { AgentFactory } from './agent-factory/agent-factory'
+import { readAccountCooldown } from './agent-factory/account-cooldown'
 import { PROVIDER_SELECTION_RULES } from './agent-factory/provider-selection'
 import { RulesEngine } from './decision-engine/rules-engine'
 import { getAppEnvironment } from '../../shared/app-environment'
@@ -70,7 +71,18 @@ function createControlPlane(runtime: OrcaRuntimeService, db: OrchestrationDb) {
       } catch {
         return false
       }
-    }
+    },
+    () =>
+      process.platform === 'win32'
+        ? Promise.resolve(new Map())
+        : readAccountCooldown(
+            store,
+            {
+              claude: () => runtime.resolveClaudeHomeForWorkerLaunch(),
+              codex: () => runtime.resolveCodexHomeForWorkerLaunch()
+            },
+            Date.now
+          )
   )
   const missions = new MissionController(db, store, {
     onScheduleTrigger: (missionId, trigger) => {

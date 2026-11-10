@@ -6,6 +6,7 @@ import { settleAttemptWithoutSubmission } from './attempt-settlement'
 import { settleInterruptedAttempt } from './attempt-interruption'
 import { scheduleFailedWorkerRelease } from './attempt-worker-release'
 import { classifyHeadlessFailure } from './attempt-failure-classification'
+import { readAttemptAccount } from './attempt-account'
 import type { parseHeadlessWorkerEvents } from './headless-worker-events'
 
 export function settleHeadlessExitFailure(
@@ -68,7 +69,15 @@ export function settleHeadlessExitFailure(
     if (kind === 'interrupted') {
       settleInterruptedAttempt(
         { store, missions, db, runtime, effects },
-        { ...settlement, failure, now }
+        {
+          ...settlement,
+          failure,
+          now,
+          account:
+            failure.class === 'usage_limit'
+              ? readAttemptAccount(store, authority.mission.id, attemptId, input.provider)
+              : undefined
+        }
       )
     } else {
       settleAttemptWithoutSubmission(

@@ -1,3 +1,4 @@
+import { MissionController } from '../mission-controller/mission-controller'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { fixture, planned } from '../mission-controller/controller-fixture.test-support'
 import { EffectOutbox } from './effect-outbox'
@@ -6,7 +7,10 @@ import { registerAttemptContinuation } from './attempt-continuation'
 let f: ReturnType<typeof planned>
 let effects: EffectOutbox
 let taskId: string
-const scheduleRound = vi.fn(async () => ({ admitted: [], skipped: [] }))
+const scheduleRound = vi.fn(async (_missionId: string, _trigger: 'stage_change') => ({
+  admitted: [],
+  skipped: []
+}))
 function open(epoch: string) {
   const outbox = new EffectOutbox({ db: f.db, store: f.store, epoch })
   registerAttemptContinuation({ store: f.store, effects: outbox, scheduler: { scheduleRound } })
@@ -35,14 +39,14 @@ afterEach(async () => {
   f.db.close()
   vi.useRealTimers()
 })
-function enqueue(delay = 0) {
+function enqueue(delay = 0, failureClass: 'usage_limit' | 'provider_error' = 'usage_limit') {
   return f.store.transaction('test_continuation', () =>
     effects.enqueue({
       missionId: f.missionId,
       kind: 'attempt.continue',
       key: `${taskId}/1`,
       dueAt: new Date(Date.now() + delay).toISOString(),
-      payload: { taskId, seq: 1, chain: 1, failureClass: 'usage_limit' }
+      payload: { taskId, seq: 1, chain: 1, failureClass }
     })
   )
 }
@@ -126,6 +130,75 @@ it('exhausts throwing rounds after 1s and 5s and leaves the Task READY', async (
   await vi.advanceTimersByTimeAsync(5000)
   await effects.kick()
   expect(scheduleRound).toHaveBeenCalledTimes(3)
+  expect(row()).toMatchObject({ status: 'failed', attempts: 3 })
+  expect(f.store.getTaskStage(taskId)?.stage).toBe('READY')
+})
+
+function otherMission() {
+  const other = planned({ ...f, controller: new MissionController(f.db, f.store) })
+  other.controller.startExecution(other.missionId)
+  return other
+}
+it('wakes every executing Mission when a usage-limit continuation comes due', async () => {
+  const other = otherMission()
+  const another = otherMission()
+  const paused = otherMission()
+  paused.controller.pauseMission(paused.missionId)
+  enqueue()
+  effects.start()
+  await effects.kick()
+  expect(scheduleRound.mock.calls).toEqual([
+    [f.missionId, 'stage_change'],
+    ...f.store
+      .listMissions({ status: 'EXECUTING' })
+      .filter((mission) => mission.id !== f.missionId)
+      .map((mission) => [mission.id, 'stage_change'])
+  ])
+  expect(scheduleRound).toHaveBeenCalledWith(other.missionId, 'stage_change')
+  expect(scheduleRound).toHaveBeenCalledWith(another.missionId, 'stage_change')
+  expect(row()?.status).toBe('done')
+})
+it.each(['paused', 'canceled', 'moved_on'])(
+  'wakes other Missions even when its own Mission is %s',
+  async (state) => {
+    const other = otherMission()
+    enqueue()
+    if (state === 'paused') {
+      f.controller.pauseMission(f.missionId)
+    }
+    if (state === 'canceled') {
+      f.controller.cancelMission(f.missionId, 'test')
+    }
+    if (state === 'moved_on') {
+      f.store.updateTaskStage({ taskId, from: 'READY', to: 'RUNNING', attemptCountDelta: 1 })
+    }
+    effects.start()
+    await effects.kick()
+    expect(scheduleRound).toHaveBeenCalledExactlyOnceWith(other.missionId, 'stage_change')
+  }
+)
+it('does not wake other Missions for a continuation of another failure class', async () => {
+  otherMission()
+  enqueue(0, 'provider_error')
+  effects.start()
+  await effects.kick()
+  expect(scheduleRound).toHaveBeenCalledExactlyOnceWith(f.missionId, 'stage_change')
+})
+it('retries and exhausts a rejected other-Mission round through the existing outbox policy', async () => {
+  const other = otherMission()
+  scheduleRound.mockImplementation(async (missionId: string) => {
+    if (missionId === other.missionId) {
+      throw new Error('other round failed')
+    }
+    return { admitted: [], skipped: [] }
+  })
+  enqueue()
+  effects.start()
+  await effects.kick()
+  await vi.advanceTimersByTimeAsync(1000)
+  await vi.advanceTimersByTimeAsync(5000)
+  await effects.kick()
+  expect(scheduleRound.mock.calls.filter(([id]) => id === other.missionId)).toHaveLength(3)
   expect(row()).toMatchObject({ status: 'failed', attempts: 3 })
   expect(f.store.getTaskStage(taskId)?.stage).toBe('READY')
 })

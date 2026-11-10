@@ -6,7 +6,8 @@ export const ProviderFilterReasonSchema = z.enum([
   'no_account',
   'not_certified',
   'disallowed',
-  'tier_too_low'
+  'tier_too_low',
+  'account_cooldown'
 ])
 const permissions = {
   write: z.array(z.string().min(1)),

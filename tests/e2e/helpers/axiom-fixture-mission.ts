@@ -101,6 +101,7 @@ export async function withFixtureMission(
     runVerification?: boolean
     releaseTerminals?: boolean
     maxAttempts?: number
+    concurrencyLimit?: number
     extraAllowedPaths?: string[]
     noCodexAccount?: boolean
     holdExitSubmission?: boolean
@@ -129,8 +130,7 @@ if (process.argv[2] === 'attempt' && process.argv[3] === 'show' && existsSync(${
   process.stdout.write(JSON.stringify({ ok: false }))
   process.exit(1)
 }
-const result = require('node:child_process').spawnSync(process.execPath, [${JSON.stringify(cliEntry)}, ...process.argv.slice(2)], { stdio: 'inherit', env: process.env })
-process.exit(result.status ?? 1)
+process.exit(require('node:child_process').spawnSync(process.execPath, [${JSON.stringify(cliEntry)}, ...process.argv.slice(2)], { stdio: 'inherit', env: process.env }).status ?? 1)
 `
     )
     cliEntry = proxy
@@ -173,6 +173,7 @@ process.exit(result.status ?? 1)
         goal: await readGoalFile(clone, 'GOAL.md'),
         policy: {
           ...DEFAULT_MISSION_POLICY,
+          concurrencyLimit: options.concurrencyLimit ?? DEFAULT_MISSION_POLICY.concurrencyLimit,
           routing: axiomFixtureRouting(provider)
         }
       })

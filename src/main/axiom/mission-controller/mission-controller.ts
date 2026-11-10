@@ -65,12 +65,26 @@ export class MissionController {
     return runLifecycleWriteTransaction(this.ctx.db.db, `axiom_${operation}`, action)
   }
 
-  private scheduleAfterWrite(missionId: string, trigger: ScheduleTrigger): void {
+  private scheduleAfterWrite(
+    missionId: string,
+    trigger: ScheduleTrigger,
+    wakeOthers = false
+  ): void {
     if (!this.onScheduleTrigger) {
       return
     }
+    const schedule = () => {
+      this.onScheduleTrigger?.(missionId, trigger)
+      if (wakeOthers) {
+        for (const mission of this.ctx.store.listMissions({ status: 'EXECUTING' })) {
+          if (mission.id !== missionId) {
+            this.onScheduleTrigger?.(mission.id, trigger)
+          }
+        }
+      }
+    }
     if (!this.ctx.db.db.isTransaction) {
-      this.onScheduleTrigger(missionId, trigger)
+      schedule()
       return
     }
     // Mailbox/RPC/admission callers may own an outer synchronous transaction.
@@ -86,7 +100,7 @@ export class MissionController {
         limit: 1
       })[0]
       if (JSON.stringify(persisted) === JSON.stringify(event)) {
-        this.onScheduleTrigger?.(missionId, trigger)
+        schedule()
       }
     })
   }
@@ -136,9 +150,9 @@ export class MissionController {
     return result
   }
   adjustTask(input: Parameters<typeof adjustTask>[1]) {
-    const result = this.write('adjust_task', () => adjustTask(this.ctx, input))
-    this.scheduleAfterWrite(result.missionId, 'stage_change')
-    return result
+    const { task, retiredUsageLimit } = this.write('adjust_task', () => adjustTask(this.ctx, input))
+    this.scheduleAfterWrite(task.missionId, 'stage_change', retiredUsageLimit)
+    return task
   }
   startExecution(missionId: string) {
     const result = this.write('start_execution', () => {

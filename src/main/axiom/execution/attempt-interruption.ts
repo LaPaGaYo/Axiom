@@ -1,4 +1,6 @@
 import type { AttemptFailure } from '../../../shared/axiom-contract/attempt-failure'
+import type { AttemptContinuePayloadSchema } from '../../../shared/axiom-contract/effects'
+import type { z } from 'zod'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { OrchestrationDb } from '../../runtime/orchestration/db'
 import type { AxiomStore } from '../db/axiom-store'
@@ -22,6 +24,7 @@ export function settleInterruptedAttempt(
     dispatchId: string
     actor: string
     failure: AttemptFailure
+    account?: z.infer<typeof AttemptContinuePayloadSchema>['account']
     now: number
   }
 ): { settled: boolean } {
@@ -63,6 +66,7 @@ export function settleInterruptedAttempt(
           seq: input.seq,
           chain,
           failureClass: input.failure.class,
+          ...(input.account ? { account: input.account } : {}),
           ...(input.failure.resetsAt ? { resetsAt: input.failure.resetsAt } : {})
         }
       })
