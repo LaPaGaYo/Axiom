@@ -217,3 +217,7 @@ M3-06 brief 定稿时核对代码：Axiom 的 MCP 服务器只暴露 `plan_propo
 ## 2026-11-09 M3-06 合入 + D88：outbox v0 落地（DEF-48 ①）；被打断的 Attempt 的续作与规则监工的上线方式定案（DEF-13 / DEF-22 ⑪ / DEF-35）
 
 M3-06（merge `ddf038b3b5`）：`attempt.dispatch` 与 `verification.enqueue` 在命令事务里入队、提交后由执行器执行；准入后、派发前重启不再消耗 Attempt；启动时的 effect 恢复逐条隔离、失败只告警并在 60 s 的对账周期里重试，不挡 Control Plane 启动。D88（Henry 2026-11-09："同意"、"3的三处修改也批准"）：被打断的 Attempt 分四层处理（预防、保全、接着做、原会话续上），建在不改的 Orca 底座上，T3 Code 只借规则；规则监工的默认档按阈值的出处定，观察期自动对账、系统提议升档，先保全再停。M3-06-2 拆成 2a / 2b，原会话续上（2c）等真实 harness 探测的证据；依据 `claude/interrupted-continuation-discussion-v1.md`。
+
+## 2026-11-09 M3-06-2a 合入：被打断的 Attempt 的分类与等待（D88 第 1–5 条；DEF-22 ⑪ 的机制部分；DEF-48 ① 的第三种 effect）
+
+M3-06-2a（merge `57606ffb8e`）：无界面 Worker 的失败按类型化的原因结算。可自行恢复的打断（用量上限、provider 故障、应用重启带走 Worker、出事件之前就退出）不消耗 `maxAttempts`，Task 带着持久化的"不早于"时间回到 `READY`，到点由 `attempt.continue` effect 请求调度、起新 Attempt；等也没用的（结构化的登录 / 账单类，或连续第三次打断）进 `BLOCKED(environment)` 并留一条类型化待处理项，人用 `task.adjust` 恢复。DEF-22 ⑪ 仍 OPEN 的部分：Limited / Resume at reset 的可见形态（M3-09）。D88 其余：预防（账号级冷却、Codex 的重置时间）= M3-06-2a-2；保全 = M3-06-2b；原会话续上 = M3-06-2c（等真实 harness 探测）。DEF-48 ①：outbox 现有三种 effect，integration / delivery 的 effect 仍在 M4。
