@@ -15,6 +15,7 @@ import { validateTaskAcceptance } from '../../../shared/axiom-contract/plan-prop
 import { VerificationRulesSchema } from '../../../shared/axiom-contract/verification-rules'
 import { validateTaskCommands } from './plan-validation'
 import { redactContext } from '../context-builder/redaction'
+import { retireTaskContinuation } from '../outbox/attempt-continuation'
 
 function acceptanceForAudit(criteria: TaskSpec['acceptanceCriteria']) {
   return criteria.map((criterion) =>
@@ -140,6 +141,7 @@ export function adjustTask(
     rationale: p.rationale,
     decision: 'adjusted'
   })
+  retireTaskContinuation(ctx.store, task.taskId)
   audit(ctx, {
     missionId: mission.id,
     actor,

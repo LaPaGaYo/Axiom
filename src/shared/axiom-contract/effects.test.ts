@@ -29,14 +29,25 @@ const dispatch = {
 }
 
 describe('effect contract', () => {
-  it('pins the two kinds and five lifecycle states', () => {
-    expect(EFFECT_KINDS).toEqual(['attempt.dispatch', 'verification.enqueue'])
+  it('pins the three kinds and five lifecycle states', () => {
+    expect(EFFECT_KINDS).toEqual(['attempt.dispatch', 'verification.enqueue', 'attempt.continue'])
     expect(EffectStatusSchema.options).toEqual(['pending', 'running', 'done', 'failed', 'retired'])
   })
   it('validates each strict payload according to kind', () => {
     for (const effect of [
       { ...base, kind: 'attempt.dispatch', payload: dispatch },
-      { ...base, kind: 'verification.enqueue', payload: { runId: 'run' } }
+      { ...base, kind: 'verification.enqueue', payload: { runId: 'run' } },
+      {
+        ...base,
+        kind: 'attempt.continue',
+        payload: {
+          taskId: 'task',
+          seq: 1,
+          chain: 1,
+          failureClass: 'usage_limit',
+          resetsAt: base.dueAt
+        }
+      }
     ]) {
       expect(EffectSchema.parse(effect)).toEqual(effect)
       expect(
@@ -65,6 +76,32 @@ describe('effect contract', () => {
         attempts: -1
       }).success
     ).toBe(false)
+  })
+  it('rejects invalid continuation sequence, chain, failure class and reset', () => {
+    const payload = { taskId: 'task', seq: 1, chain: 1, failureClass: 'usage_limit' }
+    for (const patch of [
+      { seq: 0 },
+      { chain: 0 },
+      { failureClass: 'timeout' },
+      { resetsAt: 'tomorrow' }
+    ]) {
+      expect(
+        EnqueueEffectSchema.safeParse({
+          missionId: 'mission',
+          kind: 'attempt.continue',
+          key: 'task/1',
+          payload: { ...payload, ...patch }
+        }).success
+      ).toBe(false)
+    }
+    expect(
+      EnqueueEffectSchema.safeParse({
+        missionId: 'mission',
+        kind: 'attempt.continue',
+        key: 'task/1',
+        payload
+      }).success
+    ).toBe(true)
   })
   it('keeps enqueue and list requests strict and validates response rows', () => {
     const input = {

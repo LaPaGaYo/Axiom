@@ -13,6 +13,7 @@ import {
 } from './axiom-test-claude-provider'
 import { AXIOM_T01_FIXTURE_FILES } from './axiom-t01-fixture'
 import { parseHeadlessReport } from '../../../src/main/axiom/execution/headless-worker-events'
+import { classifyHeadlessFailure } from '../../../src/main/axiom/execution/attempt-failure-classification'
 
 const source = process.env.AXIOM_FIXTURE_REPO
 const scratch: string[] = []
@@ -34,6 +35,84 @@ function providerFixture() {
       ...options
     })
   return { directory, run }
+}
+
+function workerLaunch(directory: string, worktree: string) {
+  const attemptDir = path.join(directory, 'attempt')
+  mkdirSync(attemptDir)
+  const settingsPath = path.join(attemptDir, 'claude-settings.json')
+  const mcpPath = path.join(attemptDir, 'claude-mcp.json')
+  writeFileSync(
+    settingsPath,
+    JSON.stringify({
+      permissions: {
+        allow: [
+          'Read',
+          'Grep',
+          'Glob',
+          'LS',
+          `Edit(/${worktree}/**)`,
+          `Edit(/${attemptDir}/**)`,
+          `Write(/${worktree}/**)`,
+          `Write(/${attemptDir}/**)`,
+          `MultiEdit(/${worktree}/**)`,
+          `MultiEdit(/${attemptDir}/**)`,
+          `NotebookEdit(/${worktree}/**)`,
+          `NotebookEdit(/${attemptDir}/**)`,
+          'Bash'
+        ],
+        deny: AXIOM_TEST_CLAUDE_DENIED_TOOLS
+      },
+      sandbox: {
+        enabled: true,
+        failIfUnavailable: true,
+        autoAllowBashIfSandboxed: true,
+        allowUnsandboxedCommands: false,
+        network: { allowedDomains: [], allowLocalBinding: false, strictAllowlist: true },
+        filesystem: { allowWrite: [worktree, attemptDir] }
+      },
+      syncClaudeAiSkills: false,
+      syncClaudeAiPlugins: false,
+      enabledPlugins: {}
+    }),
+    { mode: 0o600 }
+  )
+  writeFileSync(mcpPath, JSON.stringify({ mcpServers: {} }))
+  const argv = [
+    '-p',
+    '--output-format',
+    'stream-json',
+    '--verbose',
+    '--permission-mode',
+    'acceptEdits',
+    '--permission-prompts',
+    'none',
+    '--setting-sources=',
+    '--settings',
+    settingsPath,
+    '--managed-settings',
+    JSON.stringify(AXIOM_TEST_CLAUDE_WORKER_POLICY),
+    '--strict-mcp-config',
+    '--mcp-config',
+    mcpPath,
+    '--disallowedTools',
+    AXIOM_TEST_CLAUDE_DENIED_TOOLS.join(','),
+    '--model',
+    AXIOM_TEST_CLAUDE_MODEL,
+    '--effort',
+    'medium'
+  ]
+  const options = {
+    cwd: worktree,
+    input: 'Mission: mission-1\nTask: task-1\nAttempt: attempt-1\n',
+    env: {
+      ...process.env,
+      ...AXIOM_TEST_CLAUDE_ENV,
+      AXIOM_E2E_LEDGER: path.join(directory, 'ledger.jsonl'),
+      CLAUDE_CONFIG_DIR: path.join(directory, 'claude-profiles', 'e2e-claude', 'home')
+    }
+  }
+  return { argv, options, settingsPath }
 }
 
 it('emits syntactically valid Claude provider JavaScript', () => {
@@ -65,80 +144,7 @@ it.skipIf(!source)(
       { encoding: 'utf8' }
     )
     expect(checkedOut.status, checkedOut.stderr).toBe(0)
-    const attemptDir = path.join(directory, 'attempt')
-    mkdirSync(attemptDir)
-    const settingsPath = path.join(attemptDir, 'claude-settings.json')
-    const mcpPath = path.join(attemptDir, 'claude-mcp.json')
-    writeFileSync(
-      settingsPath,
-      JSON.stringify({
-        permissions: {
-          allow: [
-            'Read',
-            'Grep',
-            'Glob',
-            'LS',
-            `Edit(/${worktree}/**)`,
-            `Edit(/${attemptDir}/**)`,
-            `Write(/${worktree}/**)`,
-            `Write(/${attemptDir}/**)`,
-            `MultiEdit(/${worktree}/**)`,
-            `MultiEdit(/${attemptDir}/**)`,
-            `NotebookEdit(/${worktree}/**)`,
-            `NotebookEdit(/${attemptDir}/**)`,
-            'Bash'
-          ],
-          deny: AXIOM_TEST_CLAUDE_DENIED_TOOLS
-        },
-        sandbox: {
-          enabled: true,
-          failIfUnavailable: true,
-          autoAllowBashIfSandboxed: true,
-          allowUnsandboxedCommands: false,
-          network: { allowedDomains: [], allowLocalBinding: false, strictAllowlist: true },
-          filesystem: { allowWrite: [worktree, attemptDir] }
-        },
-        syncClaudeAiSkills: false,
-        syncClaudeAiPlugins: false,
-        enabledPlugins: {}
-      }),
-      { mode: 0o600 }
-    )
-    writeFileSync(mcpPath, JSON.stringify({ mcpServers: {} }))
-    const argv = [
-      '-p',
-      '--output-format',
-      'stream-json',
-      '--verbose',
-      '--permission-mode',
-      'acceptEdits',
-      '--permission-prompts',
-      'none',
-      '--setting-sources=',
-      '--settings',
-      settingsPath,
-      '--managed-settings',
-      JSON.stringify(AXIOM_TEST_CLAUDE_WORKER_POLICY),
-      '--strict-mcp-config',
-      '--mcp-config',
-      mcpPath,
-      '--disallowedTools',
-      AXIOM_TEST_CLAUDE_DENIED_TOOLS.join(','),
-      '--model',
-      AXIOM_TEST_CLAUDE_MODEL,
-      '--effort',
-      'medium'
-    ]
-    const options = {
-      cwd: worktree,
-      input: 'Mission: mission-1\nTask: task-1\nAttempt: attempt-1\n',
-      env: {
-        ...process.env,
-        ...AXIOM_TEST_CLAUDE_ENV,
-        AXIOM_E2E_LEDGER: path.join(directory, 'ledger.jsonl'),
-        CLAUDE_CONFIG_DIR: path.join(directory, 'claude-profiles', 'e2e-claude', 'home')
-      }
-    }
+    const { argv, options, settingsPath } = workerLaunch(directory, worktree)
     const missingPin = run(
       argv.filter((arg) => arg !== '--strict-mcp-config'),
       options
@@ -195,3 +201,67 @@ it.skipIf(!source)(
   },
   60_000
 )
+
+it('emits one structured usage refusal then succeeds on the next process launch', () => {
+  const { directory, run } = providerFixture()
+  const worktree = path.join(directory, 'fixture')
+  mkdirSync(path.join(worktree, 'src', 'domain'), { recursive: true })
+  const { argv, options } = workerLaunch(directory, worktree)
+  const marker = `${options.env.AXIOM_E2E_LEDGER}.interrupt-task-1`
+  writeFileSync(marker, '1')
+  const before = Date.now()
+  const refused = run(argv, options)
+  expect(refused.status, String(refused.stderr)).toBe(75)
+  const events = String(refused.stdout)
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line))
+  expect(events.map((event) => event.type)).toEqual([
+    'system',
+    'rate_limit_event',
+    'assistant',
+    'result'
+  ])
+  expect(events[1].rate_limit_info).toMatchObject({
+    status: 'rejected',
+    rateLimitType: 'five_hour'
+  })
+  const reset = events[1].rate_limit_info.resetsAt * 1000
+  expect(reset).toBeGreaterThan(before)
+  expect(reset).toBeLessThanOrEqual(Date.now() + 8_000)
+  expect(events[2]).toMatchObject({ error: 'rate_limit', api_error: 'usage_limit_reached' })
+  expect(events[3]).toMatchObject({
+    is_error: true,
+    api_error_status: 429,
+    terminal_reason: 'api_error'
+  })
+  expect(
+    classifyHeadlessFailure({ provider: 'claude', eventsText: String(refused.stdout), now: before })
+  ).toEqual({
+    kind: 'interrupted',
+    failure: {
+      class: 'usage_limit',
+      retryable: true,
+      source: 'structured',
+      window: 'session',
+      resetsAt: new Date(reset).toISOString()
+    }
+  })
+  expect(readFileSync(marker, 'utf8')).toBe('0')
+  const continued = run(argv, {
+    ...options,
+    input: 'Mission: mission-1\nTask: task-1\nAttempt: attempt-2\n'
+  })
+  expect(continued.status, String(continued.stderr)).toBe(0)
+  const result = String(continued.stdout)
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line))
+    .at(-1)
+  expect(parseHeadlessReport(result.result).summary).toBe(
+    'Frozen fixture T01: Sprint entity and validation'
+  )
+  for (const [file, contents] of Object.entries(AXIOM_T01_FIXTURE_FILES)) {
+    expect(readFileSync(path.join(worktree, file), 'utf8')).toBe(contents)
+  }
+})

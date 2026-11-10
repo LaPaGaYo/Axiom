@@ -191,18 +191,19 @@ M3-06：admission 同事务写 `attempt.dispatch` effect；Scheduler 不再持�
 
 Mission 总 Attempts/wall-clock 耗尽通过既有 `blockMission(missionId, budget_exhausted)` 保留 `previous_status = EXECUTING`，同事务追加 `budget.exhausted {dimension, limit, used}`；Approval 请求对象留给 M4。并发满额、无可选 provider 与 Question/Approval 不视为预算耗尽。
 
-每轮返回 admitted（有序身份）与 skipped（taskId/reason）；skip reason 为 concurrency、provider_concurrency、task_attempts、question、approval、no_eligible_provider 或 stale。只有本轮 admitted 非空或 Mission 被预算阻塞才写一条 `scheduler.round {trigger, admitted, skipped}`；空轮和全部跳过的轮不写此事件。构建合同可留下可复用的内容寻址行，这不等于 admission。M2-12 / D59 在 boot recover 与消费者同步后，对每个 EXECUTING 且未因 Run 绑定丢失而 blocked 的 Mission 显式请求一轮 resume，覆盖已持久化 READY、readiness 没有变化的情形；没有 READY 时仍不写 scheduler.round。M3-06 的 pending dispatch effect 在重启后继续启动同一 seq；无 effect 的旧 binding 和已退役 effect 仍由 M2-08 orphan 规则结算。
+每轮返回 admitted（有序身份）与 skipped（taskId/reason）；skip reason 为 concurrency、provider_concurrency、task_attempts、question、approval、backoff、no_eligible_provider 或 stale。只有本轮 admitted 非空或 Mission 被预算阻塞才写一条 `scheduler.round {trigger, admitted, skipped}`；空轮和全部跳过的轮不写此事件。构建合同可留下可复用的内容寻址行，这不等于 admission。M2-12 / D59 在 boot recover 与消费者同步后，对每个 EXECUTING 且未因 Run 绑定丢失而 blocked 的 Mission 显式请求一轮 resume，覆盖已持久化 READY、readiness 没有变化的情形；没有 READY 时仍不写 scheduler.round。M3-06 的 pending dispatch effect 在重启后继续启动同一 seq；无 effect 的旧 binding 和已退役 effect 仍由 M2-08 orphan 规则结算。
 
 M2 之后：M3 的验证结算接入既有调度触发；M4 接预算 Approval，token/成本总预算仍未 enforce。
 
 ### Effect outbox (M3-06)
 
-D87 / DEF-48 ① 的 v0 只迁移两个副作用，`plane.effects` 持有 `EffectOutbox`。`axiom_effects` 是第 18 张 side table，列为 `id`、`mission_id`、`kind`、`effect_key`、严格 kind-specific JSON `payload`、`status`、`due_at`、`attempts`、`lease_epoch`、`last_error`、`created_at`、`updated_at`；`UNIQUE(kind,effect_key)` 防止同一请求重复入队，`(status,due_at)` 索引用于领取。due_at 始终由 `Date.toISOString()` 写入并按文本比较。新增表、索引和 Mission 删除触发器都是 `IF NOT EXISTS`，旧 v46 数据库每次打开时获得它们；不 bump `SCHEMA_VERSION`，不改原 Run 删除触发器，Run 删除仍清理其 Mission 的 effects。
+D87 / DEF-48 ① 的 v0 迁移两个副作用；M3-06-2a 增加 attempt.continue，`plane.effects` 持有 `EffectOutbox`。`axiom_effects` 是第 18 张 side table，列为 `id`、`mission_id`、`kind`、`effect_key`、严格 kind-specific JSON `payload`、`status`、`due_at`、`attempts`、`lease_epoch`、`last_error`、`created_at`、`updated_at`；`UNIQUE(kind,effect_key)` 防止同一请求重复入队，`(status,due_at)` 索引用于领取。due_at 始终由 `Date.toISOString()` 写入并按文本比较。新增表、索引和 Mission 删除触发器都是 `IF NOT EXISTS`，旧 v46 数据库每次打开时获得它们；不 bump `SCHEMA_VERSION`，不改原 Run 删除触发器，Run 删除仍清理其 Mission 的 effects。
 
 | kind | key / payload | 执行器 |
 |---|---|---|
 | `attempt.dispatch` | `<taskId>/<seq>` / `{taskId,seq,branch,agentSpecId,contextPackageId}` | 先跳过已被更新 seq 取代的 effect，再调用既有 launcher；一个 Attempt 恰有一个 dispatch，已绑定或不再 RUNNING 时沿用其 no-op 守卫；`maxAttempts=1` |
 | `verification.enqueue` | VerificationRun id / `{runId}` | `void verification.kick().catch(warn)`，不等待验证 drain；`maxAttempts=3`，失败退避 1 s、5 s |
+| `attempt.continue` | 被中断的 `<taskId>/<seq>` / `{taskId,seq,chain,failureClass,resetsAt?}` | 到期只请求该 Mission 的 Scheduler round，重读 EXECUTING、READY、无更新 seq；`maxAttempts=3`，抛错退避 1 s、5 s，onOrphan=retry |
 
 `enqueue` 只能在调用方事务内执行，否则抛错。Scheduler 在 `scheduler_admission` 与 binding、RUNNING、attempt.admitted 一起写；Submission 在 `axiom_submit` 与 QUEUED run 一起写；rerun 在 `verification_rerun` 与新 run、审计、收据一起写。微任务仅唤醒；回滚没有 effect 行，执行器不会执行。相同 key 的 pending / failed / retired / done 条目被重新置为 pending、payload 替换、attempts 归零、dueAt 更新；running 条目不改。
 
@@ -212,7 +213,7 @@ D87 / DEF-48 ① 的 v0 只迁移两个副作用，`plane.effects` 持有 `Effec
 
 恢复按 effect 隔离：某条缺少执行器、onOrphan 抛错 / 拒绝或存储写入失败时，保留该行原有的 running、旧 lease epoch 和全部字段，继续恢复后续条目；遍历结束后才以第一个错误拒绝。未恢复的租约只关闭自己的 `(kind,missionId)` lane，其它 lane 仍可执行。启动捕获失败，只警告 `[axiom] Effect recovery incomplete; continuing Control Plane startup`（不输出错误文本），继续启动 outbox、对账定时器、消费者与 resume rounds。既有 60 s reconcile tick 每次先重试旧 epoch 的恢复，再 kick effects 并启动 Attempt 对账（不等待 effect drain），防止刚可重试的旧租约先被 orphan 规则消耗；失败只警告，不停止本轮或后续对账。恢复成功后按同一 retry / done / retired 规则处理；持续失败的条目在 `axiom mission effect list` 中保持 running，直到问题修复。
 
-未绑定 Worker 的 reconcile：pending effect → unchanged，无论 binding 多旧；running effect 的 `2 × readiness timeout` 从 lease 的 updated_at 起算；retired / failed / done / 无行使用原 binding.created_at。Planner 不经过这个 effect，保留原直接启动及恢复。每次 drain 后仅一个 unref setTimeout 对准最早未来 dueAt；既有 60 s reconcile tick 也 kick。stop 清 timer、停止新领取并让正在执行的操作完成，下一次 start 前 kick 无效。done 行不自动清理；旧版本打开数据库会忽略 pending effects。
+未绑定 Worker 的 reconcile：pending effect → unchanged，无论 binding 多旧；running effect 的 `2 × readiness timeout` 从 lease 的 updated_at 起算；retired / failed / done / 无行使用原 binding.created_at。Planner 不经过这个 effect，保留原直接启动及恢复。每次 drain 后仅一个 unref setTimeout 对准最早未来 dueAt；既有 60 s reconcile tick 也 kick。stop 清 timer、停止新领取并让正在执行的操作完成，下一次 start 前 kick 无效。done 行不自动清理；不认识 attempt.continue 的旧版本不能解码含该 kind 的 effect 行，不能把这样的降级当作可用恢复。
 
 只读 `axiom.effect.list {missionId,status?}` 返回 `{effects}`，按 `created_at,rowid` 排序；caller class 为 read，不是 mutation。CLI：`axiom mission effect list --mission <id> [--status <s>] [--json]`；文本列 `KIND KEY STATUS ATTEMPTS DUE LAST_ERROR`。
 
@@ -224,7 +225,7 @@ E2E seam：仅当 `getMainE2EConfig().enabled` 且 `AXIOM_E2E_HOLD_ATTEMPT_DISPA
 
 启动顺序：读取已绑定 AgentSpec / ContextPackage render → 校验 Run/Task 与 prompt 大小 → `resolveAttemptBaseline` → 经现有 `createManagedWorktree` 预创建 `axiom/attempt/<taskId>/<seq>`（不传 startupAgent）→ 校验修复基线 HEAD、必要时重开 Orca task → 直接调 `startLocalWorker` → CAS 回填 `attempt_bindings.dispatch_id` → audit / stage settlement。没有 `worktree_id` side-table 列；worktree id 写入启动 audit，读接口经 fleet 的 dispatch/workspace 读取。
 
-M3-04 / D64 ①：`execution/attempt-baseline.ts` 是 ContextBuilder 与 launcher 共用的纯存储判定，从 seq−1 向前检查（D85 / M3-04b）：无 Submission 时只有该 dispatch 的 `attempt.failed.after.settlement.kind` 为 `unchanged | no_change | blocked` 才允许越过，最多走到 seq 1；缺 binding / dispatch、普通失败或其它无 Submission 情形立即回集成基线。找到 Submission 后，其 Candidate 仍为 ACTIVE、该 Candidate 最新 VerificationRun（按 createdAt 再 id 排序取最后一项，不预先过滤 FAIL）为 FAIL 且 reason 不是 `secret_detected`，才返回 candidate baseline（previousSeq、Candidate、VerificationRun、skippedAttempts）。`previousSeq` 是 Candidate 所属 Attempt 的序号；`skippedAttempts: {seq, attemptId, kind, reason?, paths?, reportSummary: string | null}[]` 按 seq 升序记录被越过的 Attempt，无则空数组。`previous_attempt_not_submitted` 的 integration baseline 同样保留已越过的 skippedAttempts，例如 seq 1 声明 blocked、人工调整后的首次重试。其它情况按顺序返回 integration baseline：
+M3-04 / D64 ①：`execution/attempt-baseline.ts` 是 ContextBuilder 与 launcher 共用的纯存储判定，从 seq−1 向前检查（D85 / M3-04b）：无 Submission 时只有该 dispatch 的 `attempt.failed.after.settlement.kind` 为 `unchanged | no_change | blocked | interrupted` 才允许越过，最多走到 seq 1；缺 binding / dispatch、普通失败或其它无 Submission 情形立即回集成基线。找到 Submission 后，其 Candidate 仍为 ACTIVE、该 Candidate 最新 VerificationRun（按 createdAt 再 id 排序取最后一项，不预先过滤 FAIL）为 FAIL 且 reason 不是 `secret_detected`，才返回 candidate baseline（previousSeq、Candidate、VerificationRun、skippedAttempts）。`previousSeq` 是 Candidate 所属 Attempt 的序号；`skippedAttempts: {seq, attemptId, kind, reason?, paths?, failureClass?, reportSummary: string | null}[]` 按 seq 升序记录被越过的 Attempt，无则空数组。`previous_attempt_not_submitted` 的 integration baseline 同样保留已越过的 skippedAttempts，例如 seq 1 声明 blocked、人工调整后的首次重试。其它情况按顺序返回 integration baseline：
 
 | reason                             | 条件                                                                                                                                              |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -328,7 +329,38 @@ D85 / M3-08i：exit 0 且 outcome=submitted（或省略）的有效报告若收�
 
 headless `snapshotCandidate` 使用临时私有 Git index，排除 `.axiom/`，不会删除已有 index.lock；commit-tree + 带旧值检查的 update-ref 只写 Attempt branch，并以空 hooksPath 禁用 hooks。filesChanged 从 launch baseline 到 Candidate commit 的 Git diff 计算。后续 Candidate / Submission / VerificationRun transaction、transcript archive 与 release 沿用现有实现，Worker 报告仍不等于独立验证。
 
-非零退出、provider turn 失败（即使 exit 0）、缺报告、非法报告或非法 Artifact 通过 `settleAttemptWithoutSubmission` 处理。M3-08e 在失败结算后沿用 2 秒 grace 与 E2E hold，经 `releaseLocalWorker` 释放包装壳；恢复对账为满 60 秒且仍保留终端资源的失败 headless Attempt 补释放，即使其 Task 已完成。audit 保存 exitCode、脱敏 lastError / lastMessageExcerpt、reportError（适用时）及 D68 `settlement.kind`：无可识别 JSON event 或配额/认证错误为 interrupted，其他为 failed；重连 error 行本身不阻止有效成功报告。events 跳过未知类型和非 JSON 行，错误优先取 turn.failed.error.message，否则取最后 error.message；thread.started.thread_id 记为 providerSessionId，最后一次 turn.completed.usage 的数值原样记录，不累加事件、不把 cached/reasoning 重复加到 input/output。本任务增加 D68 退出分类与证据，复用现有 settlement 的 retry / attemptCount 规则；没有在此实现独立中断预算、退避或 provider fallback。
+非零退出、provider turn 失败（即使 exit 0）、缺报告、非法报告或非法 Artifact 进入 `headless_exit_failure`。普通 failed 仍调用 `settleAttemptWithoutSubmission`；环境中断见下节。M3-08e 的 2 秒 grace、E2E hold、失败 Worker release 与 60 秒恢复释放不变。audit 原字段全部保留（exitCode、脱敏 lastError / lastErrorEvent / lastMessageExcerpt、reportError、session / usage 等），仅加类型化 failure；重连 error 行本身不阻止有效成功报告。Codex 错误优先取 turn.failed.error.message，否则取最后 error.message；thread.started.thread_id 记为 providerSessionId，最后一次 turn.completed.usage 原样记录，不累加或重复计数。
+
+### Interrupted Attempt continuation（M3-06-2a；D88 items 1–5 / D68 item 1）
+
+`execution/attempt-failure-classification.ts` 是纯、never-throw 分类器。Claude 每个 JSON object 进入同一个内核 `ClaudeUsageLimits`，调用 observe / assistant / result；Axiom 不解析限额元数据、不读取账号快照、不分析 assistant 散文。下表按顺序 first-match，表中 retryable 与 source 持久化在 `attempt.failed.after.failure`。结构化失败取 assistant error 或 result 的错误字段；HTTP 状态与 terminal_reason 分支只读取失败 result。
+
+| 规则 / 信号 | class | retryable | source | settlement.kind |
+|---|---|---|---|---|
+| a. 内核识别到 Claude usage refusal | usage_limit | true | structured | interrupted |
+| b. assistant authentication_failed / oauth_org_not_allowed / account_on_hold / verification_required / cloud_credential_error | permission_error | false | structured | interrupted |
+| c. assistant billing_error | usage_limit | false | structured | interrupted |
+| d. assistant overloaded / server_error，或失败 result HTTP 408 / 409 / ≥500 | provider_error | true | structured | interrupted |
+| e. assistant invalid_request / model_not_found / max_output_tokens，或 result HTTP 400 / 404 / 413 / 422、terminal_reason=prompt_too_long | validation_error | false | structured | failed |
+| f. result HTTP 401 / 403 | permission_error | false | structured | interrupted |
+| Codex 错误文本（Claude 未命中 a–f 的 fallback）：quota / rate.?limit / usage limit / insufficient.credit / 429 | usage_limit | true | text | interrupted |
+| 同一 fallback：auth(?:entication\|orization)? / unauthori[sz]ed / login / log(?:ged)? in / invalid.token / 401 | permission_error | true | text | interrupted |
+| g. 无可识别 event，或分类器内部异常 | unknown | true | absent | interrupted |
+| g. 其余有 event 的失败（包括 fixture work failed / Fixture Worker crashed） | unknown | false | absent | failed |
+
+两组正则保持原词汇、大小写不敏感；文本认证证据弱，只走等待与三次上限。`transport_error` 只在词汇中，本 Task 没有可靠信号，因此从不产生。裸 HTTP 429 没有 assistant quota evidence 时由内核拒绝推断限额，仍可走原文本 fallback。failure 的 `resetsAt` 只用于 usage_limit（ISO datetime），window 为 session / weekly / weeklyModel / credits；两者均来自内核 failure.usageLimit。只保留 `now < resetsAt ≤ now + 8 days`，过期或越界 reset 丢弃。
+
+同一 `headless_exit_failure` 事务做 failDispatch、attempt.failed、`RUNNING → NEEDS_FIX(interrupted)` 并 `attemptCountDelta=-1`，撤销 admission 的计数，seq 始终递增。最新 binding、RUNNING、无 Submission 的栅栏避免重复退款；存储防止计数负数。失败写 effect 或消息时整笔回滚。chain = 1 + 前一个 seq 的 attempt.continue.payload.chain（若无为 1；done / failed / retired 均计入）。可重试且 chain < 3 时 `→ READY(retry_after_interruption)`，同事务 enqueue continuation；dueAt = 有效 reset + 60 秒，否则 now + [1,5,15] 分钟的第 chain 档。第三档仅在未来提高次数上限后可达。不可重试或第三次连续中断 `→ BLOCKED(environment)`、previousStage=NEEDS_FIX，并按该 Attempt 归因路由一个 pending typed BLOCKED，含 `{reason:environment,paths:[]}`，summary 写 class 和连续次数；此时不 enqueue，不产生 retry_budget_exhausted。
+
+Scheduler 在 admission 检查最新 seq 的 continuation：只有 pending 且 dueAt 在未来才返回 `backoff`，因此 unrelated stage_change / boot resume 不会提前开始。到期执行器重读 Mission EXECUTING、Task READY 且无更新 Attempt，再 await 该 Mission 的 scheduleRound(stage_change)，不自行启动 Worker；其余状态返回 done。Question、Approval、预算、并发、暂停、取消仍由 Scheduler 保证。执行器抛错最多试 3 次、间隔 1s / 5s，onOrphan=retry；最终 failed 或 retired 均不挡 admission，任何后续 round 都可放行 READY Task。重启恢复 pending 行和 outbox 的单一到期 timer，不丢等待。
+
+桌面 `axiom.task.adjust` 同事务 retire 该 Task 的 pending continuation，写 `effect.retired {kind,key,reason:superseded_by_task_adjust}`，随后原有 round 可立即放行。BLOCKED(environment) 走原 previousStage → NEEDS_FIX → READY，原 blocked.resolved 消除 pending item。Worker-facing params / CLI 仍只接受 blocked_by_scope、candidate_already_correct、cannot_reproduce；environment 仅宿主能写。
+
+Recovery 的 `recovery_process_exit` 仅当 headless 且 worker.runtime_epoch 属于更早 runtime 时复用上述结算，failure=`{class:unknown,retryable:true,source:absent}`，attempt.failed evidence=runtime_restarted。已有 exit-code 仍优先走正常 submitExitedAttempt。same-epoch process exit、TUI、kernel terminal、launch orphan/rejected、runtime_budget_exceeded、unverifiable timeout、unchanged / declared 路径不变。
+
+基线回溯现在越过 interrupted，skippedAttempts 记录 failureClass（旧审计无 failure 时 unknown），保留原 ACTIVE / latest FAIL Candidate 与验证摘录。后继 previous-attempt 段明确说明 Attempt N 在提交前因何中断，以及未携带任何未提交工作。本 Task 不快照工作树、不恢复 harness 会话。
+
+常数集中在 interruption-policy.ts，无新 policy key。仅 e2e config enabled 时读取 `AXIOM_E2E_INTERRUPTION_BACKOFF_MS`（正整数逗号列表），替代 ladder 并将 reset slack 置 0；非法值沿用生产默认值。Codex 没有 reset 时间，连续用量限制约六分钟后 BLOCKED(environment)；此 Task 没有账号冷却，同一耗尽账号上的每个 READY Task 仍会先启动一次。等待计入 Mission wall-clock。旧构建不能解码 attempt.continue 行；不能安全地依赖降级处理这种等待。
 
 ### Claude channels and invocation pins（M3-08b / M3-08f / M3-08h）
 

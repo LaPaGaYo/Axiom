@@ -7,6 +7,7 @@ import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { EffectOutbox } from './outbox/effect-outbox'
 import { registerMissionEffectExecutors } from './outbox/mission-effect-executors'
+import { registerAttemptContinuation } from './outbox/attempt-continuation'
 import { VerificationService } from './verification/verification-service'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { createAttemptLauncher } from './execution/attempt-launcher'
@@ -102,6 +103,7 @@ function createControlPlane(runtime: OrcaRuntimeService, db: OrchestrationDb) {
     runtimeEpoch
   })
   registerMissionEffectExecutors({ db, store, missions, effects, launch, verification })
+  registerAttemptContinuation({ store, effects, scheduler })
   const planner = createPlannerLauncher({
     runtime,
     db,

@@ -134,11 +134,13 @@ function declarationLines(store: AxiomStore, baseline: AttemptBaseline, reserved
   const lines: AttemptEvidenceLine[] = skippedAttempts.map((attempt) => {
     const summary = attempt.reportSummary === null ? '(no summary)' : quote(attempt.reportSummary)
     const declaration =
-      attempt.kind === 'unchanged'
-        ? 'exited without changing this Candidate'
-        : attempt.kind === 'no_change'
-          ? `declared no_change (${attempt.reason})`
-          : `declared blocked_by_scope naming ${quotedPaths(attempt.paths ?? [])}`
+      attempt.kind === 'interrupted'
+        ? `was interrupted before it could submit (${attempt.failureClass ?? 'unknown'}); none of its uncommitted work was carried over`
+        : attempt.kind === 'unchanged'
+          ? 'exited without changing this Candidate'
+          : attempt.kind === 'no_change'
+            ? `declared no_change (${attempt.reason})`
+            : `declared blocked_by_scope naming ${quotedPaths(attempt.paths ?? [])}`
     return {
       seq: attempt.seq,
       kind: 'declaration',

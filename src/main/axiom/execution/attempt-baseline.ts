@@ -2,21 +2,27 @@ import type { Candidate } from '../../../shared/axiom-contract/submission-params
 import type { VerificationRun } from '../../../shared/axiom-contract/verification-params'
 import type { AxiomStore } from '../db/axiom-store'
 import { z } from 'zod'
+import {
+  AttemptFailureSchema,
+  type AttemptFailure
+} from '../../../shared/axiom-contract/attempt-failure'
 
 const SkippedFailure = z.object({
   settlement: z.object({
-    kind: z.enum(['unchanged', 'no_change', 'blocked']),
+    kind: z.enum(['unchanged', 'no_change', 'blocked', 'interrupted']),
     reason: z
       .enum(['blocked_by_scope', 'candidate_already_correct', 'cannot_reproduce'])
       .optional(),
     paths: z.array(z.string()).max(50).optional()
   }),
-  reportSummary: z.string().nullable().optional()
+  reportSummary: z.string().nullable().optional(),
+  failure: AttemptFailureSchema.optional()
 })
 type SkippedAttempt = z.infer<typeof SkippedFailure>['settlement'] & {
   seq: number
   attemptId: string
   reportSummary: string | null
+  failureClass?: AttemptFailure['class']
 }
 
 export type AttemptBaseline =
@@ -46,7 +52,7 @@ export function previousAttemptSubmission(
   return previous?.dispatchId ? store.getSubmissionByDispatch(previous.dispatchId) : undefined
 }
 
-/** D64 / D85: walk only across audited unchanged or declared exits, never arbitrary failures. */
+/** D64 / D85 / D88: walk across audited unchanged, declared or interrupted exits. */
 export function resolveAttemptBaseline(
   store: AxiomStore,
   input: { taskId: string; seq: number }
@@ -73,6 +79,9 @@ export function resolveAttemptBaseline(
       ...failure.data.settlement,
       seq: previousSeq,
       attemptId: previous.dispatchId,
+      ...(failure.data.settlement.kind === 'interrupted'
+        ? { failureClass: failure.data.failure?.class ?? 'unknown' }
+        : {}),
       reportSummary: failure.data.reportSummary ?? null
     })
     previousSeq--

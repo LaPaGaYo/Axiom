@@ -161,6 +161,44 @@ it('does not walk behind an ordinary failed Attempt', () => {
     skippedAttempts: []
   })
 })
+it('walks the baseline across an interrupted Attempt', () => {
+  const { candidate, verificationRun } = previousSubmission(f.store)
+  unchanged(2, 'interrupted')
+  f.store.appendAuditEvent({
+    missionId: 'm',
+    actor: 'AttemptSettlement',
+    event: 'attempt.failed',
+    objectKind: 'attempt',
+    objectId: 'd2',
+    before: null,
+    after: {
+      settlement: { kind: 'interrupted' },
+      failure: { class: 'usage_limit', retryable: true, source: 'structured' }
+    }
+  })
+  expect(resolve(3)).toEqual({
+    kind: 'candidate',
+    previousSeq: 1,
+    candidate,
+    verificationRun,
+    skippedAttempts: [
+      {
+        seq: 2,
+        attemptId: 'd2',
+        kind: 'interrupted',
+        failureClass: 'usage_limit',
+        reportSummary: null
+      }
+    ]
+  })
+})
+it('reads older interrupted audits without a failure shape', () => {
+  unchanged(1, 'interrupted')
+  expect(resolve(2)).toMatchObject({
+    kind: 'integration',
+    skippedAttempts: [{ seq: 1, kind: 'interrupted', failureClass: 'unknown' }]
+  })
+})
 it('falls back when the walk reaches seq 1 without a Submission', () => {
   unchanged(1)
   unchanged(2)

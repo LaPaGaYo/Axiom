@@ -16,7 +16,7 @@ import { callOrchestrationMutation } from '../orchestration/mutation-request'
 import { resolveOrchestrationTerminalHandle } from '../orchestration/terminal-identity'
 import {
   AttemptMessageResponseSchema,
-  BlockedMessageSchema
+  WorkerBlockedMessageSchema
 } from '../../../shared/axiom-contract/message-params'
 import { ORCHESTRATION_MESSAGE_WAIT_DEFAULT_TIMEOUT_MS } from '../../../shared/orchestration-message-wait-timeout'
 import { MAX_TIMER_DELAY_MS } from '../../../shared/timer-delay'
@@ -42,7 +42,7 @@ async function sendWorkerMessage(ctx: HandlerContext, verb: string) {
   const dependsOn = repeated(flags, 'depends-on')
   const blocked =
     verb === 'blocked' && (flags.has('reason') || flags.has('path'))
-      ? BlockedMessageSchema.safeParse({
+      ? WorkerBlockedMessageSchema.safeParse({
           reason: optional(flags, 'reason'),
           paths: repeated(flags, 'path')
         })

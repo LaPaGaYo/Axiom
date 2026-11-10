@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { AxiomIdSchema } from '../../../shared/axiom-contract/mission-objects'
 import {
   AttemptDispatchPayloadSchema,
+  AttemptContinuePayloadSchema,
   EffectKindSchema,
   EffectSchema,
   EffectStatusSchema,
@@ -33,13 +34,15 @@ export const EffectRowCodec = EffectRowSchema.transform((row) =>
     payload:
       row.kind === 'attempt.dispatch'
         ? readJson(AttemptDispatchPayloadSchema, row.payload, 'axiom_effects', row.id, 'payload')
-        : readJson(
-            VerificationEnqueuePayloadSchema,
-            row.payload,
-            'axiom_effects',
-            row.id,
-            'payload'
-          ),
+        : row.kind === 'attempt.continue'
+          ? readJson(AttemptContinuePayloadSchema, row.payload, 'axiom_effects', row.id, 'payload')
+          : readJson(
+              VerificationEnqueuePayloadSchema,
+              row.payload,
+              'axiom_effects',
+              row.id,
+              'payload'
+            ),
     status: row.status,
     dueAt: row.due_at,
     attempts: row.attempts,

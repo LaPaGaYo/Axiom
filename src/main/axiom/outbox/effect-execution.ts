@@ -67,7 +67,7 @@ function fence(effect: Effect) {
   }
 }
 
-function appendEffectAudit(
+export function appendEffectAudit(
   store: AxiomStore,
   effect: Effect,
   event: string,

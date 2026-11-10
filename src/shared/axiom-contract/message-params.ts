@@ -35,9 +35,12 @@ const QuestionMessageSchema = z.strictObject({
   options: z.array(Text.max(200)).max(8).default([])
 })
 const FollowUpMessageSchema = z.strictObject({ text: Text.max(2000) })
-export const BlockedMessageSchema = z.strictObject({
+export const WorkerBlockedMessageSchema = z.strictObject({
   reason: z.enum(['blocked_by_scope', 'candidate_already_correct', 'cannot_reproduce']),
   paths: z.array(z.string().trim().min(1)).max(50).default([])
+})
+export const BlockedMessageSchema = WorkerBlockedMessageSchema.extend({
+  reason: WorkerBlockedMessageSchema.shape.reason.or(z.literal('environment'))
 })
 export const MessageRelatedSchema = z
   .object({

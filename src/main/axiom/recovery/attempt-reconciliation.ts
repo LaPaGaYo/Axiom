@@ -11,6 +11,8 @@ import { reconcilePlanner } from './planner-reconciliation'
 import { observeAgentExit } from './agent-exit-observation'
 import { isHeadlessAttempt, submitExitedAttempt } from '../execution/attempt-exit-submission'
 import { watchHeadlessAttempt } from '../execution/headless-attempt-watcher'
+import { getAxiomControlPlane } from '../control-plane'
+import { settleInterruptedAttempt } from '../execution/attempt-interruption'
 import {
   abandonmentEvidence,
   activeWorkerStates as activeStates,
@@ -186,6 +188,10 @@ export async function reconcileAttempt(
   // The kernel refuses a second stop; a stop_unknown receipt must use the tolerance clock.
   const stopUnknown = worker?.state === 'stop_unknown'
   if (!stopUnknown && entry.liveness === 'exited' && worker && activeStates.has(worker.state)) {
+    const failure =
+      headless && worker.runtime_epoch !== runtime.getRuntimeId()
+        ? ({ class: 'unknown', retryable: true, source: 'absent' } as const)
+        : undefined
     store.transaction('recovery_process_exit', () => {
       // failDispatch owns a savepoint and is explicitly safe inside the Axiom transaction.
       db.failDispatch(
@@ -197,11 +203,27 @@ export async function reconcileAttempt(
       )
       auditAttempt(ctx, binding, 'attempt.failed', {
         reason: 'process_exited',
-        ...(agentExit.exited ? { evidence: agentExit.evidence } : {})
+        ...(agentExit.exited ? { evidence: agentExit.evidence } : {}),
+        ...(failure
+          ? { failure, evidence: 'runtime_restarted', settlement: { kind: 'interrupted' } }
+          : {})
       })
-      settle(ctx, binding, 'attempt_failed')
+      if (failure) {
+        settleInterruptedAttempt(
+          { ...ctx, effects: getAxiomControlPlane(runtime).effects },
+          {
+            ...binding,
+            dispatchId,
+            failure,
+            actor: 'RecoveryService',
+            now: ctx.now()
+          }
+        )
+      } else {
+        settle(ctx, binding, 'attempt_failed')
+      }
     })
-    entry.action = 'failed'
+    entry.action = failure ? 'interrupted' : 'failed'
     return entry
   }
   const policy = store.getPolicy(binding.missionId)!

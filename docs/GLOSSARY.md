@@ -229,7 +229,7 @@ M3-04b-3：报告中的 **typed QUESTION item** 是绑定 Task 的 `messages.pay
 | headless report `outcome`                 | 可选的判别联合：`{outcome: submitted}`（省略等同 submitted）、`{outcome: no_change, reason: candidate_already_correct \| cannot_reproduce}`、`{outcome: blocked, reason: blocked_by_scope, paths}`（1–50 条非空路径，每条 ≤500 字符）；是 Worker 声明，不能改变确定性 FAIL。终端 SubmissionReport 不变。                    |
 | `task.adjusted`                           | 人经 `axiom.task.adjust` 改 Task spec / retryPolicy 的审计；记录前后 allowedPaths / maxAttempts、addedPaths、rationale、afterAttemptSeq、origin=user、resolvedMessageIds，并写 `plan.minor_adjustment`。调整与待处理项解决、stage 转换在同一事务。                                                                          |
 | `blocked.resolved`                        | 对带 `blocked {reason, paths}` 的 BLOCKED 消息的解决审计，objectKind=message / objectId=messageId，decision 为 adjusted 或 canceled；消息 pending 从是否存在该审计派生，无第二状态存储。                                                                                                                                    |
-| `skippedAttempts`                         | 基线回溯跨过的 `unchanged \| no_change \| blocked` Attempt（seq 升序）；下一 ContextPackage 引用声明与其后的人工作业调整，仍续 ACTIVE 且最新 FAIL 的 Candidate。首个 Attempt 声明后无 Submission 时从 integration 开始并保留这些行。                                                                                        |
+| `skippedAttempts`                         | 基线回溯跨过的 `unchanged \| no_change \| blocked \| interrupted` Attempt（seq 升序）；下一 ContextPackage 引用声明与其后的人工作业调整，仍续 ACTIVE 且最新 FAIL 的 Candidate。首个 Attempt 声明后无 Submission 时从 integration 开始并保留这些行。                                                                                        |
 | `evidence_command_invalid`                | D85：模型提案的 `acceptanceCriteria[].check.command` 不满足单行、无 shell 操作符、程序允许名单规则；`plan_invalid` 错误附精确字段 path，同回合退回 Planner；REQUEST_SUBTASK 对应 `evidence` 检查失败。                                                                                                                      |
 | `requiredEvidence (retired)`              | D85 rule 2：新提案非空字段返回 `required_evidence_retired`，裸字符串标准返回 `criterion_shape`，均带精确 path。兼容读取只经 `resolveAcceptance`：旧字符串变 human，旧命令按顺序去重并追加为 `Command passes: …` command 标准；不迁移存储。                                                                                  |
 | `check.kind`                              | `command` 携带一条 D85 边界内命令（仓库根执行，exit 0）；`artifact` 可选 artifactKind，引用必须可读非空且格式有效；`human` 仅用于命令和 Artifact 都无法证明的标准。                                                                                                                                                         |
@@ -267,12 +267,21 @@ M3-04b-3：报告中的 **typed QUESTION item** 是绑定 Task 的 `messages.pay
 | `approval_denied` / `delivery_denied`     | 批次 Approval 被拒时 Task 的 BLOCKED 原因（D79）/ 交付 Approval 被拒时 Mission 的 BLOCKED 原因（D70）。                                                                                                                                                                                                                     |
 | `pauseMode`                               | `drain`（默认）\| `stop`：Mission PAUSED 时运行中 Attempt 的处理（D70）。                                                                                                                                                                                                                                                   |
 
+### Interrupted Attempt（M3-06-2a，D88 / D68）
+
+- **Failure**：`{class, retryable, source, resetsAt?, window?}`；class 为 `usage_limit | provider_error | transport_error | permission_error | validation_error | unknown`，source 为 `structured | text | absent`。`resetsAt` 仅适用于 usage_limit，ISO datetime；window 为 `session | weekly | weeklyModel | credits`。当前无可靠 transport_error 信号，不产生此类。
+- **`settlement.kind: interrupted`**：环境中断，非新的 Attempt 生命周期；计数撤销 admission 的一次 increment，seq 不回退。`failed` 保持工作性失败路径。`RUNNING → NEEDS_FIX(interrupted) → READY(retry_after_interruption)` 在同一事务完成，不因环境中断耗尽重试预算。
+- **`BLOCKED(environment)`**：不可重试的中断或第三次连续中断，前态 NEEDS_FIX；宿主归因到该 Attempt 的 typed BLOCKED 消息含 `{reason: environment, paths: []}`。Worker 参数仍只许 blocked_by_scope / candidate_already_correct / cannot_reproduce。桌面 `axiom.task.adjust` 恢复并记录 blocked.resolved。
+- **`backoff`**：Scheduler skip reason；最新 seq 的 attempt.continue 为 pending 且 dueAt 在未来时跳过。due / absent / running / done / failed / retired 均不阻塞。
+- **Interrupted `skippedAttempts`**：基线回溯跨过 interrupted 并保留 failure class；后继上下文说明没有携带其中未提交的工作。仍使用原先失败 Candidate 的验证证据。
+
 ### Effect outbox（M3-06，D87 / DEF-48 ①）
 
 - **Effect / 副作用**：与命令的权威状态在同一事务写入 `axiom_effects` 的持久化执行请求；执行器仅在提交后、事务外执行。不是新的 Task / Attempt 生命周期。
 - **Effect outbox / 副作用发件箱**：Control Plane 的持久化副作用出口；v0 每个 `(kind, missionId)` 同时最多执行一个条目，不同 lane 独立。单进程持有数据库，租约按进程 epoch 识别，无时间过期。
-- **Effect kinds**：`attempt.dispatch`（key = `<taskId>/<seq>`，一个 Attempt 恰有一个 dispatch）；`verification.enqueue`（key = VerificationRun id，只唤醒既有验证队列）。
-- **Effect status**：`pending`（等待 dueAt）→ `running`（已租用）→ `done`（执行器完成）、`pending`（延后 / 有界重试）、`failed`（失败次数耗尽）或 `retired`（重启后无法安全重放）。`attempts` 只计抛出的执行失败，`later` 和 boot retry 不增加它。
+- **Effect kinds**：`attempt.dispatch`（key = `<taskId>/<seq>`，一个 Attempt 恰有一个 dispatch）；`verification.enqueue`（key = VerificationRun id，只唤醒既有验证队列）；`attempt.continue`（key = 被中断的 `<taskId>/<seq>`，严格 payload `{taskId,seq,chain,failureClass,resetsAt?}`，只请求该 Mission 的 Scheduler round）。
+- **Continuation**：chain 从 1 起，前一个 seq 的 effect 无论状态均计入；第三次直接 BLOCKED，无 effect。有效 reset 为 `now < resetsAt ≤ now + 8 days`，dueAt = reset + 60 s；否则用 1 / 5 / 15 min ladder（第三档仅留给未来提高连续次数上限）。重启保留等待；执行器检查 EXECUTING / READY / 无更新 Attempt，失败重试 1 s / 5 s、最多三次，旧租约 retry。task.adjust 同事务 retire pending continuation，审计 `effect.retired {reason: superseded_by_task_adjust}`；retired 前驱仍计入 chain。
+- **Effect status**：`pending`（等待 dueAt）→ `running`（已租用）→ `done`（执行器完成）、`pending`（延后 / 有界重试）、`failed`（失败次数耗尽）或 `retired`（重启后无法安全重放，或人工调整取代 continuation）。`attempts` 只计抛出的执行失败，`later` 和 boot retry 不增加它。
 - **`effect.failed`**：`EffectOutbox` 对 `effect` 记录 `{ kind, key, attempts, lastError }`；错误通过 `redactContext` 脱敏且最多 2,000 字符。
 - **`effect.retired`**：`EffectOutbox` 对 `effect` 记录 `{ kind, key, reason }`；在途启动无绑定而内核已有未绑定 dispatch 时 reason 为 `dispatch_outcome_unknown`，交回既有 orphan 规则结算。
 - **Effect read surface**：`axiom.effect.list { missionId, status? }`（`read`）；CLI `axiom mission effect list --mission <id> [--status <s>] [--json]`。
