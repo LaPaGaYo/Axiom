@@ -145,7 +145,6 @@ test('M3-06-2a-3: Codex waits for its recorded reset and wakes both Tasks automa
       expect(started.tasks).toHaveLength(2)
       const x = z.string().parse(started.bindings[0]?.task_id)
       const y = z.string().parse(started.tasks.find((task) => task.task_id !== x)?.task_id)
-      const dispatchId = z.string().parse(started.bindings[0]?.dispatch_id)
       writeFileSync(`${ledgerPath}.interrupt-${x}`, '1')
       writeFileSync(`${ledgerPath}.rollout-${x}`, '1')
       for (const id of [x, y]) {
@@ -184,6 +183,9 @@ test('M3-06-2a-3: Codex waits for its recorded reset and wakes both Tasks automa
       if (!continuation || continuation.kind !== 'attempt.continue') {
         throw new Error('Missing continuation')
       }
+      // The binding exists from admission on; its dispatch id only once the Worker was started.
+      const interrupted = waiting.bindings.find((binding) => binding.task_id === x)
+      const dispatchId = z.string().parse(interrupted?.dispatch_id)
       const audit = waiting.audits.find(
         (entry) => entry.event === 'attempt.failed' && entry.object_id === dispatchId
       )
