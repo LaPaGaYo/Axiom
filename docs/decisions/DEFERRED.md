@@ -222,6 +222,13 @@ M3-06（merge `ddf038b3b5`）：`attempt.dispatch` 与 `verification.enqueue` �
 
 M3-06-2a（merge `57606ffb8e`）：无界面 Worker 的失败按类型化的原因结算。可自行恢复的打断（用量上限、provider 故障、应用重启带走 Worker、出事件之前就退出）不消耗 `maxAttempts`，Task 带着持久化的"不早于"时间回到 `READY`，到点由 `attempt.continue` effect 请求调度、起新 Attempt；等也没用的（结构化的登录 / 账单类，或连续第三次打断）进 `BLOCKED(environment)` 并留一条类型化待处理项，人用 `task.adjust` 恢复。DEF-22 ⑪ 仍 OPEN 的部分：Limited / Resume at reset 的可见形态（M3-09）。D88 其余：预防（账号级冷却、Codex 的重置时间）= M3-06-2a-2；保全 = M3-06-2b；原会话续上 = M3-06-2c（等真实 harness 探测）。DEF-48 ①：outbox 现有三种 effect，integration / delivery 的 effect 仍在 M4。
 
+## 2026-11-10 M3-06-2a-3 合入：Codex 的重置时间取自 Worker 自己的 rollout（DEF-13 ②、DEF-22 ⑪、DEF-48 ③④）
+
+- **DEF-13 ②（Codex 的用量与限额）**：重置时间落地——文本已判成用量上限时，从该 Attempt 自己的 rollout 尾部读限额窗口，交内核 `CodexUsageLimits` 解释；有重置时间就等到那时（生产里再加 60 秒），账号冷却随之延长到同一时刻。逐步用量（token 预算）不在本条，Codex 仍只能事后记账。
+- **DEF-22 ⑪（限流恢复）**：Codex 与 Claude 的行为对齐——都等到 provider 自己记录的重置时间再续。可见形态仍归 M3-09。
+- **DEF-48 ③（回放式 harness 测试）**：现在 stub 写的 rollout 是按探测看到的常态形状造的；拿到一份真实撞限额时的 rollout 之后，应当把其中的限额记录（脱敏，只留窗口字段）钉成 fixture，替换 stub 手写的那一行。**④（import 白名单）**：新增两处只读内核 import——`src/main/codex/codex-usage-limits` 的 `CodexUsageLimits` 与 `src/shared/agent-session-usage-limit` 的类型 `AgentSessionUsageLimit`（已列入 `docs/reference/orca-mapping.md`，M3-10 做白名单时收进去）。
+- 留下的缺口：① 真实账号撞限额时 rollout 里的取值从未观察过（`used_percent` 是否正好到 100、失败的那次调用是否还写 `token_count`）——下次真实账号撞到限额时，由验证者核对那次 `attempt.failed` 审计里有没有 `window` / `resetsAt`；② 另一个 `limit_id` 下的快照（上游 openai/codex #58413）不给重置时间；③ 靠额度继续工作的账号遇到一次像配额的瞬时错误，会等到已用尽窗口的重置（人可以用 `task.adjust` 解除）；④ 256 KiB 的尾部可能漏掉特别大的最后一轮；⑤ 读取器依赖 Codex 0.163.0 的目录结构与字段名和内核判定器的行为，升级任何一方都要复核；⑥ 恢复的会话（M3-06-2c）要从首个 Attempt 的那天找 rollout。
+
 ## 2026-11-10 M3-06-2a-2 合入：账号级冷却落地；D88 修订行落库（DEF-13 ②、DEF-22 ⑪、DEF-48 ①）
 
 - **DEF-22 ⑪（限流恢复）**：机制又落一段——撞到用量上限的账号在它的续作到点之前不再接新的 Worker Attempt（跨 Mission），到点或被人 adjust 取消时所有 EXECUTING Mission 自动重新调度。可见形态（冷却到几点、由哪些等待推出、一键解除）仍归 M3-09。
