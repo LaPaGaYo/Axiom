@@ -1,5 +1,6 @@
+import { classifyHeadlessFailure } from './attempt-failure-classification'
 import { expect, it } from 'vitest'
-import { headlessFailureKind, parseHeadlessWorkerEvents } from './headless-worker-events'
+import { parseHeadlessWorkerEvents } from './headless-worker-events'
 
 const jsonl = (...events: unknown[]) => events.map((event) => JSON.stringify(event)).join('\n')
 it('reads Claude init and final result, preserving usage, cost and safe permission denials', () => {
@@ -71,12 +72,10 @@ it.each([
   ['error_max_budget_usd', ['Budget exceeded'], 'failed'],
   ['error_max_structured_output_retries', [], 'failed']
 ])('classifies Claude %s (%s)', (subtype, errors, kind) => {
-  const events = parseHeadlessWorkerEvents(
-    jsonl({ type: 'result', subtype, is_error: true, errors }),
-    'claude'
-  )
+  const eventsText = jsonl({ type: 'result', subtype, is_error: true, errors })
+  const events = parseHeadlessWorkerEvents(eventsText, 'claude')
   expect(events.turnFailed).toBe(true)
-  expect(headlessFailureKind(events)).toBe(kind)
+  expect(classifyHeadlessFailure({ eventsText, provider: 'claude' }).kind).toBe(kind)
 })
 it('does not substitute intermediate assistant output for a missing result', () => {
   const events = parseHeadlessWorkerEvents(

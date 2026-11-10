@@ -32,29 +32,20 @@ function usageFailure(row: ClaudeUsageLimitRow, now: number): AttemptFailure {
   }
 }
 
-function claudeFailure(eventsText: string, now: number) {
+function claudeFailure(
+  messages: Record<string, unknown>[],
+  now: number
+): AttemptFailure | undefined {
   const limits = new ClaudeUsageLimits(() => now)
   const errors = new Set<string>()
   const statuses = new Set<number>()
   let evidence: ClaudeUsageLimitEvidence | null = null
   let usage: AttemptFailure | undefined
   let promptTooLong = false
-  let hasEvents = false
-  for (const line of eventsText.split(/\r?\n/)) {
-    let value: unknown
-    try {
-      value = JSON.parse(line)
-    } catch {
-      continue
-    }
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-      continue
-    }
-    const message: Record<string, unknown> = { ...value }
+  for (const message of messages) {
     limits.observe(message)
     const root = message.parent_tool_use_id == null
     if (message.type === 'assistant') {
-      hasEvents = true
       if (typeof message.error === 'string') {
         errors.add(message.error)
       }
@@ -69,9 +60,6 @@ function claudeFailure(eventsText: string, now: number) {
       } else if (root && message.error === 'rate_limit' && evidence?.cause !== 'other') {
         evidence = row ? { cause: 'quota' } : (evidence ?? { cause: 'untyped' })
       }
-    }
-    if (message.type === 'rate_limit_event') {
-      hasEvents = true
     }
     if (message.type === 'result') {
       const failed =
@@ -117,7 +105,30 @@ function claudeFailure(eventsText: string, now: number) {
   } else if (statuses.has(401) || statuses.has(403)) {
     failure = { class: 'permission_error', retryable: false, source: 'structured' }
   }
-  return { failure, hasEvents }
+  return failure
+}
+
+function claudeVerdict(eventsText: string, now: number) {
+  const messages = eventsText.split(/\r?\n/).flatMap((line) => {
+    try {
+      const value: unknown = JSON.parse(line)
+      return typeof value === 'object' && value !== null && !Array.isArray(value)
+        ? [{ ...value }]
+        : []
+    } catch {
+      return []
+    }
+  })
+  const hasEvents = messages.some(
+    (message) =>
+      'type' in message && (message.type === 'assistant' || message.type === 'rate_limit_event')
+  )
+  try {
+    return { failure: claudeFailure(messages, now), hasEvents }
+  } catch {
+    // A malformed structured signal cannot suppress the text fallback or event evidence.
+    return { failure: undefined, hasEvents }
+  }
 }
 
 function absentInterruption(): { kind: 'interrupted'; failure: AttemptFailure } {
@@ -132,7 +143,7 @@ export function classifyHeadlessFailure(input: {
   try {
     const now = input.now ?? Date.now()
     const events = parseHeadlessWorkerEvents(input.eventsText, input.provider)
-    const claude = input.provider === 'claude' ? claudeFailure(input.eventsText, now) : undefined
+    const claude = input.provider === 'claude' ? claudeVerdict(input.eventsText, now) : undefined
     let failure = claude?.failure
     if (!failure && QUOTA_TEXT.test(events.lastError ?? '')) {
       failure = { class: 'usage_limit', retryable: true, source: 'text' }

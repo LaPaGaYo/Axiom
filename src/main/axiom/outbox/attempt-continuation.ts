@@ -21,6 +21,13 @@ export function registerAttemptContinuation(deps: {
       ) {
         await scheduler.scheduleRound(effect.missionId, 'stage_change')
       }
+      if (effect.payload.failureClass === 'usage_limit') {
+        for (const mission of store.listMissions({ status: 'EXECUTING' })) {
+          if (mission.id !== effect.missionId) {
+            await scheduler.scheduleRound(mission.id, 'stage_change')
+          }
+        }
+      }
       return 'done'
     },
     maxAttempts: 3,
@@ -30,7 +37,8 @@ export function registerAttemptContinuation(deps: {
 }
 
 /** The caller's task-adjust transaction owns both retirement and its audit. */
-export function retireTaskContinuation(store: AxiomStore, taskId: string): void {
+export function retireTaskContinuation(store: AxiomStore, taskId: string): boolean {
+  let retiredUsageLimit = false
   for (const effect of store.listEffects({ status: 'pending' })) {
     if (effect.kind !== 'attempt.continue' || effect.payload.taskId !== taskId) {
       continue
@@ -43,6 +51,7 @@ export function retireTaskContinuation(store: AxiomStore, taskId: string): void 
       reason
     })
     if (retired) {
+      retiredUsageLimit ||= effect.payload.failureClass === 'usage_limit'
       appendEffectAudit(store, retired, 'effect.retired', {
         kind: retired.kind,
         key: retired.key,
@@ -50,4 +59,5 @@ export function retireTaskContinuation(store: AxiomStore, taskId: string): void 
       })
     }
   }
+  return retiredUsageLimit
 }

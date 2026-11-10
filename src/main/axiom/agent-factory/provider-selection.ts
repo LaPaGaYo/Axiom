@@ -92,7 +92,8 @@ export function selectProvider(
   risk: RiskLevel,
   engine: DecisionEngine,
   hasAccount: (provider: string) => boolean = () => true,
-  plannerProvider: AgentSpec['provider'] | null = null
+  plannerProvider: AgentSpec['provider'] | null = null,
+  accountCooldown: ReadonlyMap<string, string> = new Map()
 ): AgentSpec['selection'] {
   const installed = DEFAULT_ORDER.filter(
     (id) => id !== EXCLUDED_LAUNCH_MODE && available.includes(id)
@@ -116,7 +117,9 @@ export function selectProvider(
                 RISK_LEVELS.indexOf(risk) > RISK_LEVELS.indexOf(combo.maxRisk) ||
                 (risk === 'high' && routing.highRiskTier === 'A' && !isTierA(provider))
               ? 'tier_too_low'
-              : undefined
+              : role === 'worker' && accountCooldown.has(provider)
+                ? 'account_cooldown'
+                : undefined
     if (reason) {
       filtered.push({ provider, reason })
     }
@@ -132,6 +135,13 @@ export function selectProvider(
   const roleEvidence = roleProviderUnavailable ? { roleProviderUnavailable } : {}
   if (!candidates.length) {
     const data: Record<string, AuditEvent['after']> = { installed, filtered }
+    const cooling = filtered.flatMap(({ provider, reason }) => {
+      const until = accountCooldown.get(provider)
+      return reason === 'account_cooldown' && until ? [{ provider, until }] : []
+    })
+    if (cooling.length) {
+      data.accountCooldown = cooling
+    }
     if (roleProviderUnavailable) {
       data.roleProviderUnavailable = roleProviderUnavailable
     }

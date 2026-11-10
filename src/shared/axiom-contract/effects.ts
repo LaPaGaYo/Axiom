@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { AxiomIdSchema } from './mission-objects'
+import { AxiomIdSchema, TuiAgentIdSchema } from './mission-objects'
 import { FailureClassSchema } from './attempt-failure'
 
 export const EFFECT_KINDS = [
@@ -23,7 +23,8 @@ export const AttemptContinuePayloadSchema = z.strictObject({
   seq: z.number().int().positive(),
   chain: z.number().int().positive(),
   failureClass: FailureClassSchema,
-  resetsAt: EffectTimestampSchema.optional()
+  resetsAt: EffectTimestampSchema.optional(),
+  account: z.strictObject({ provider: TuiAgentIdSchema, key: z.string().min(1) }).optional()
 })
 
 const identity = { missionId: AxiomIdSchema, key: z.string().min(1) }

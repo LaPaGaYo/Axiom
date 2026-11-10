@@ -258,17 +258,32 @@ describe('headless text and absent failure evidence', () => {
     }
   )
 
-  it('fails open to an absent interruption if kernel classification throws', () => {
+  it('falls back to the text patterns when the structured pass throws', () => {
     const observe = vi.spyOn(ClaudeUsageLimits.prototype, 'observe').mockImplementationOnce(() => {
       throw new Error('classifier failed')
     })
     try {
-      expect(classifyClaude(rate())).toEqual({
+      expect(classifyClaude(rate(), result({ errors: ['Usage limit reached'] }))).toEqual({
         kind: 'interrupted',
-        failure: { class: 'unknown', retryable: true, source: 'absent' }
+        failure: { class: 'usage_limit', retryable: true, source: 'text' }
       })
     } finally {
       observe.mockRestore()
     }
   })
+})
+
+it.each([
+  [{ type: 'rate_limit_event' }],
+  [{ type: 'assistant', error: 'unknown' }],
+  [result({ errors: ['Task failed'] })]
+])('retains event evidence when the structured pass throws (%j)', (event) => {
+  const observe = vi.spyOn(ClaudeUsageLimits.prototype, 'observe').mockImplementation(() => {
+    throw new Error('malformed structured input')
+  })
+  try {
+    expect(classifyClaude(event)).toEqual({ kind: 'failed', failure: unknown })
+  } finally {
+    observe.mockRestore()
+  }
 })

@@ -60,14 +60,19 @@ export class AgentFactory {
     private readonly store: AxiomStore,
     private readonly engine: DecisionEngine,
     private readonly listInstalledProviders: () => Promise<string[]>,
-    private readonly hasAccount: (provider: string) => boolean = () => true
+    private readonly hasAccount: (provider: string) => boolean = () => true,
+    readonly accountCooldown: () => Promise<ReadonlyMap<string, string>> = async () => new Map()
   ) {}
 
-  async selectWorkerProvider(input: { missionId: string; taskId: string }): Promise<string> {
+  async selectWorkerProvider(
+    input: { missionId: string; taskId: string },
+    cooldown?: ReadonlyMap<string, string>
+  ): Promise<string> {
     const { missionId, taskId } = z
       .object({ missionId: AxiomIdSchema, taskId: AxiomIdSchema })
       .parse(input)
     const installed = await this.listInstalledProviders()
+    const view = cooldown ?? (await this.accountCooldown())
     const policy = this.store.getPolicy(missionId)
     if (!this.store.getMission(missionId) || !policy) {
       throw new AgentFactoryError('mission_not_found', { missionId })
@@ -83,13 +88,15 @@ export class AgentFactory {
       task.spec.risk,
       this.engine,
       this.hasAccount,
-      plannerProvider(this.store, missionId)
+      plannerProvider(this.store, missionId),
+      view
     ).chosen
   }
 
-  async build(input: z.input<typeof BuildParams>) {
+  async build(input: z.input<typeof BuildParams>, cooldown?: ReadonlyMap<string, string>) {
     const p = BuildParams.parse(input)
     const installed = await this.listInstalledProviders()
+    const view = p.role === 'worker' ? (cooldown ?? (await this.accountCooldown())) : new Map()
     // Read policy and Task after host discovery, without an await inside the atomic write.
     return this.store.transaction('agent_spec', () => {
       const policy = this.store.getPolicy(p.missionId)
@@ -121,7 +128,8 @@ export class AgentFactory {
         task?.spec.risk ?? 'high',
         this.engine,
         this.hasAccount,
-        p.role === 'worker' ? plannerProvider(this.store, p.missionId) : null
+        p.role === 'worker' ? plannerProvider(this.store, p.missionId) : null,
+        view
       )
       const roleRouting = policy.routing.roles[p.role]
       const maxTokens = task?.spec.budget?.maxTokens ?? policy.budget.maxTokens
@@ -191,19 +199,23 @@ export async function buildWorkerContracts(
   missionId: string,
   taskId: string
 ) {
-  const provider = await agentFactory.selectWorkerProvider({ missionId, taskId })
+  const cooldown = await agentFactory.accountCooldown()
+  const provider = await agentFactory.selectWorkerProvider({ missionId, taskId }, cooldown)
   const context = await contextBuilder.build({
     missionId,
     taskId,
     provider,
     channel: hasHeadlessWorkerBuilder(provider) ? 'headless' : 'tui'
   })
-  const agent = await agentFactory.build({
-    missionId,
-    taskId,
-    role: 'worker',
-    contextPackageId: context.packageId
-  })
+  const agent = await agentFactory.build(
+    {
+      missionId,
+      taskId,
+      role: 'worker',
+      contextPackageId: context.packageId
+    },
+    cooldown
+  )
   if (agent.spec.provider !== provider) {
     throw new Error('Worker provider changed during admission')
   }

@@ -1,9 +1,6 @@
+import { classifyHeadlessFailure } from './attempt-failure-classification'
 import { expect, it } from 'vitest'
-import {
-  parseHeadlessWorkerEvents,
-  headlessFailureKind,
-  parseHeadlessReport
-} from './headless-worker-events'
+import { parseHeadlessWorkerEvents, parseHeadlessReport } from './headless-worker-events'
 
 const jsonl = (...events: unknown[]) => events.map((event) => JSON.stringify(event)).join('\n')
 it('keeps the last turn usage as reported, the thread id, and ignores unknown/non-JSON lines', () => {
@@ -38,7 +35,7 @@ it.each([
     'failed'
   ]
 ])('classifies exit evidence: %s', (events, kind) => {
-  expect(headlessFailureKind(parseHeadlessWorkerEvents(events))).toBe(kind)
+  expect(classifyHeadlessFailure({ eventsText: events, provider: 'codex' }).kind).toBe(kind)
 })
 it('prefers turn.failed evidence to later error notices', () => {
   expect(
@@ -51,14 +48,13 @@ it('prefers turn.failed evidence to later error notices', () => {
   ).toBe('Task failed')
 })
 it('does not treat a reconnect notice as a failed turn', () => {
-  const result = parseHeadlessWorkerEvents(
-    jsonl(
-      { type: 'error', message: 'Reconnecting 1/5' },
-      { type: 'turn.completed', usage: { input_tokens: 10, output_tokens: 3 } }
-    )
+  const eventsText = jsonl(
+    { type: 'error', message: 'Reconnecting 1/5' },
+    { type: 'turn.completed', usage: { input_tokens: 10, output_tokens: 3 } }
   )
+  const result = parseHeadlessWorkerEvents(eventsText)
   expect(result.turnFailed).toBe(false)
-  expect(headlessFailureKind(result)).toBe('failed')
+  expect(classifyHeadlessFailure({ eventsText, provider: 'codex' }).kind).toBe('failed')
 })
 it('validates the final fenced report, refusing supplied filesChanged and trailing text', () => {
   const report = {
