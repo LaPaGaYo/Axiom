@@ -117,7 +117,8 @@ test('M3-06-2b-2: a budget-stopped Attempt continues automatically from its pres
         snapshot.commitSha,
         partial,
         'I left partial work for the next Attempt to review.',
-        `git status --short -- "${partial}"`,
+        // The section quotes a command as one JSON string, so its inner quotes arrive escaped.
+        JSON.stringify(`git status --short -- "${partial}"`),
         'runtime_budget_exceeded'
       ]) {
         expect(prompt).toContain(text)
