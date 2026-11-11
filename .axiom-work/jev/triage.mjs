@@ -4,6 +4,8 @@
 // Reads the attempt summary, verification log, Worker report and brief; asks Jev typed questions
 // (failure triage, report completeness, scope creep, replan class of each suggested follow-up);
 // writes .axiom-work/logs/jev-<ID>-<seq>-<ts>.json with a `human_verdict` slot for the verifier's own call.
+// Failures come from the Attempt's verification log and, once the verifier's host check has run, from its e2e logs.
+// Labels: .axiom-work/jev/label.py (evidence, not opinion); calibration: .axiom-work/jev/calibration.py.
 // The API key is read from ~/.config/axiom/typesafe.env (TYPESAFE_API_KEY=...) and never printed.
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { execSync } from 'node:child_process'
@@ -65,6 +67,39 @@ for (let i = 0; i < lines.length; i++) {
   }
   const error = (lines.slice(i + 1, i + 6).find((l) => /Error|expected|Timed out|EPERM|ENOENT/.test(l)) ?? '').trim()
   failures.push({ file, name, error: error.slice(0, 400) })
+}
+
+// Host e2e failures (Playwright output of the verifier's host check of this Task), so Jev also sees what only
+// fails on the host (DEF-38, 2026-11-11). Only host checks that started after this Attempt's verification count;
+// a host check's red-check and Node runs are vitest logs with expected failures and stay out.
+// Run this script again at the end of a host check that had failures.
+const verifyTs = verifyFile?.match(/-(\d{8}-\d{6})\.log$/)?.[1] ?? ''
+const escapedId = ID.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const hostTs = readdirSync(LOGS)
+  .map((f) => f.match(new RegExp(`^host-check-${escapedId}-(\\d{8}-\\d{6})\\.log$`))?.[1])
+  .filter((ts) => ts && ts >= verifyTs)
+  .sort()
+  .at(-1)
+if (hostTs) {
+  const specLogs = readdirSync(LOGS).filter((f) => {
+    const m = f.match(new RegExp(`^host-check-${escapedId}-(.+)-${hostTs}\\.log$`))
+    return m !== null && !/^(red-bun|red-node|node)$/.test(m[1])
+  })
+  for (const f of specLogs) {
+    const hostLines = strip(readFileSync(join(LOGS, f), 'utf8')).split('\n')
+    for (let i = 0; i < hostLines.length; i++) {
+      const m = hostLines[i].match(/^\s*(?:✘|×|x)\s+\d+\s+\[[^\]]+\]\s+›\s+(\S+?):\d+:\d+\s+›\s+(.*?)(?:\s+\(retry #\d+\))?(?:\s+\([\d.]+(?:ms|s|m)\))?\s*$/)
+      if (!m) {
+        continue
+      }
+      const [, file, name] = m
+      if (failures.some((x) => x.file === file && x.name === name)) {
+        continue
+      }
+      const error = (hostLines.slice(i + 1).find((l) => /Error|expected|Timed out|Timeout|EPERM|ENOENT/.test(l)) ?? '').trim()
+      failures.push({ file, name, error: error.slice(0, 400), source: 'host-e2e' })
+    }
+  }
 }
 
 const report = readIf(`.axiom-work/reports/${ID}-${SEQ}.md`)
