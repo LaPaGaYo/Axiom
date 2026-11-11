@@ -9,6 +9,7 @@
 | 2026-09-26 | `3eb1adec2` | fork 点（Axiom main 与 upstream/main 的 merge-base） |
 | 2026-10-19 | `ce2d60834c` | 初筛点（已逐条分诊到此；按 D56 只摘取，不整体合并，merge-base 仍为 fork 点） |
 | 2026-10-23 | `41661e3312` | UPSTREAM-3 全量合并（D72；合并提交 `ccfc02a65c`，tag `axiom-base-2`），新的 merge-base；之后回到 D56 只摘取 |
+| 2026-11-11 | `f6b86ecf62` | 初筛点（D56 的每周初筛恢复；分诊见下方 2026-11-11 节；merge-base 仍为 `41661e3312`） |
 
 ## 2026-10-17 · 首次初筛（只读，未应用）
 
@@ -98,3 +99,23 @@
 - **内核接缝**：上游 v43 逐字节保留，Axiom 的 v43–v45 改为 v44–v46（`SCHEMA_VERSION = 46`，存量 43–45 的库补跑一次幂等的地址改写）；`mission-caller` 用 `formatOrcaSessionAddress`；17 处 §4b 拦截点、M2-01 seam、Control Plane 接线保留；Attempt 身份按 D73；vendor-egress 按 D74（发版代码 0 对；合入后 468 → 459）；D75（V1 只做桌面，手机端休眠）；D37 冷启动零外联（agent-state-rules 实时更新改为显式开启、去掉 Google favicon；顺带修了上游新 Codex hook 启动对账绕过 provider 激活门的问题）。
 - **证据**：完整全量（`ORCA_BALANCE_UNIT_SHARDS=1`，约 13.5k 个文件；本地不带它时 cross-version 测试会让 vitest 提前结束）与同一台机器上的纯上游检出逐测试做差——剩下的失败要么在纯上游上同样失败（真实 zsh / bash PTY、macOS bash 3.2、`/var` vs `/private/var`、process-host dev rebuild、orcad forked child paths），要么是 D75 的 3 个 `MobilePage` Relay 用例；mobile-web-app 渲染套件缺新版 Playwright 浏览器；cross-version-wire 需要上游 release tag（本仓库按 `--no-tags` 抓取）。M1 / M2 出口 e2e、五个 fixture e2e、三种栈的冷启动出口 `{}`、真实 Codex Planner、打包（asar 契约 OK）、打包产物前台 75 s 出口 `{}`、verify-main（所有 sidecar 的并集；changed-code 门以 `41661e3312` 为基线）。
 - **之后**：同步点推进到 `41661e3312`；回到 D56 的只摘取（安全 / 平台 / provider 修复），下一次初筛从 `41661e3312..upstream/main` 开始。未签名本地包的终端宿主 helper 读不到代码签名、daemon 走 fork 回退——上游新代码，Axiom 签名之后再看。
+
+## 2026-11-11 · 初筛与 UPSTREAM-4 分诊（只读）
+
+- **范围**：`41661e3312..f6b86ecf62`（upstream 头，2026-11-11），4,908 个非合并提交。10-23 之后的每周初筛停了三周（验证者的疏漏），本次补上。第一轮按 D56 的路径（`package.json` 的 Electron / Node 行、`src/shared/tui-agent-config.ts`、`agent-trust*`、`src/main/agent-hooks/`）与标题关键词（安全、凭据、泄漏、依赖）过滤；另按 Axiom 在 V1 路径上依赖的子系统（`native-chat`、`daemon`、`runtime/orchestration`、`codex`、`claude`、`rate-limits` 等，1,036 个提交，其中 fix / feat / perf 467 个）读标题与 PR 说明，逐条对照 main。学习笔记（含 T3 Code）在项目文档 `claude/upstream-learning-v1.md`。
+- **分诊**：
+
+| upstream | 实质 | 对 Axiom 的影响 | 类别 | 处置 |
+|---|---|---|---|---|
+| `f0e7eaa070`（#38358） | 编排库 `temp_store = MEMORY`；SQLite 已自己结束事务时，回滚不再掩盖真错误 | Axiom 的写事务都走 `runLifecycleWriteTransaction` 的 savepoint；临时目录满或不可写时所有结算失败，报错还误导人 | 内核可靠性（D56 三类之外，Henry 2026-11-11 同意，见 D56 修订行） | **UPSTREAM-4** 语义移植 |
+| `220347cae0`（#39825） | 空的守护进程 pid 记录不再读成 pid 0；读不懂的记录只在端点确证已死后回收 | 发布 pid 文件时崩溃留下空文件 → 之后每次启动 `EEXIST`，起不了 Worker | 内核可靠性（同上） | **UPSTREAM-4** 语义移植（上游路径已重组） |
+| `71404c99be`（#40992） | Codex 被拒时，最后一份报告 ≥ 90% 的窗口算用光，已重置的窗口不算 | Axiom 从 Worker 自己的 rollout 读重置时间（`codex-rollout-limit.ts`），报告落后一步时丢重置时间、退到阶梯 | provider 适配 | **UPSTREAM-4** 语义移植（上游路径已重组） |
+| `0ded87821d`（#36205），`src/shared` 一半 | Git 远端错误先去掉 ANSI 转义再脱敏；凭据剥离改为线性时间 | 转义序列插在 URL 的 userinfo 里时，凭据留在错误文本里；V1 的 PR 交付要推分支 | 安全 | **UPSTREAM-4** 语义移植；renderer 一半不取（Worker 不改 `src/renderer/**`，只是显示侧），下次初筛复议；中间的 `6c38b40984`、`bbb563e83a`、`e182f1daa2`、`a4e600a663`（推送错误细节、i18n）不取 |
+| `f586149b3d`（#36323）、`f3c65cd556`（#37916） | Electron 43.7.8 → 43.8.4 → 43.8.6（Chromium / V8 / ANGLE / PDFium / Skia / WebRTC 安全补丁）；`@hono/node-server` 2.1.5（只改锁文件） | Axiom 当前是 43.7.8 | 平台 / 安全 | **UPSTREAM-4b**：验证者经宿主 launcher 安装并提交锁文件；完整门禁、全量 suite、打包产物 egress 金丝雀、宿主 e2e；`minimumReleaseAge` 与 `config/dependency-security-exceptions.json` 的对应改动届时逐条核对；mobile 部分不取 |
+| `9c7fe9793e`（#37981） | minimatch / glob / deepmerge 的安全补丁（`config/patches/`） | 依赖层 | 安全 | **UPSTREAM-4b** 候选：补丁版本与本树逐个核对 |
+| `18d25591f9`（#32983）、`914b260fa6`（#32326） | body-parser、happy-dom 等依赖的安全通告 | 依赖层；含 mobile 与文档站点 | 安全 | **UPSTREAM-4b** 候选：只取桌面端 |
+| `eb3379ff99`（#16870） | macOS 守护进程 PTY 的 kqueue 描述符泄漏（`node-pty` 补丁） | V1 跑在 macOS 上，守护进程长期运行 | 平台 | **UPSTREAM-4b** 候选：补丁文件与本树的 `node-pty` 版本核对 |
+| 其余 | 新功能、UI、其他 provider、mobile、重构、测试清理 | — | — | 不取（D56） |
+
+- **另记**（不是 D56 的摘取，作为后续 brief 的输入）：#40967 / #40963（判定 worker 已退出后清掉派生的占用记录；启动时每种租约都对账到确定结论）与 #32341（同一个 id 换成新实例后清掉旧实例的退出证据）→ M3-06-2b-3；#33527 / #35003 / #39322 / #39349 / #40593（在原目录续、目录没了明确失败、续话写明"接着做原来的任务"、闲置 7 天以上的 rollout 会被压成 `.jsonl.zst`）→ M3-06-2c。
+- **初筛点**推进到 `f6b86ecf62`；下次从 `f6b86ecf62..upstream/main` 接着筛（每周一次，D56）。
