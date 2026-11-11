@@ -94,6 +94,14 @@ it('lets nothing but the limit windows out of a rollout', async () => {
   })
   expect(JSON.stringify([result, observe.mock.calls])).not.toMatch(/DECOY|free/)
 })
+it('takes the reset of a nearly spent window from the last rollout report', async () => {
+  await write(record({ primary: { ...primary, used_percent: 97 } }))
+  expect(await read()).toEqual({ window: 'session', resetsAt: reset })
+})
+it('gives no reset when the last rollout report is below the nearly spent mark', async () => {
+  await write(record({ primary: { ...primary, used_percent: 50 } }))
+  expect(await read()).toBeUndefined()
+})
 it('ignores a record under another limit id', async () => {
   await write(record({ limit_id: 'another-model', primary }))
   expect(await read()).toBeUndefined()

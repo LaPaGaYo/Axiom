@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { salvagePidFromCorruptDaemonRecord } from './daemon-pid-file-parse'
+import { parseDaemonPidFile, salvagePidFromCorruptDaemonRecord } from './daemon-pid-file-parse'
+
+it('parses a legacy record only as a positive integer', () => {
+  for (const record of ['', ' \n\t', '0', '-3', '1.5', '9007199254740992', 'Infinity']) {
+    expect(parseDaemonPidFile(record), JSON.stringify(record)).toBeNull()
+  }
+  for (const record of ['1', ' 12345\n', String(Number.MAX_SAFE_INTEGER)]) {
+    expect(parseDaemonPidFile(record)).toMatchObject({ pid: Number(record), launchNonce: null })
+  }
+  // Legacy validation must not change the JSON record contract.
+  for (const pid of [0, -3, 1.5]) {
+    expect(parseDaemonPidFile(JSON.stringify({ pid }))).toMatchObject({ pid })
+  }
+})
 
 describe('salvagePidFromCorruptDaemonRecord', () => {
   it('salvages a pid whose digit run is terminated by a following byte', () => {

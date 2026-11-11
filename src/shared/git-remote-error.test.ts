@@ -6,14 +6,72 @@ import {
   MERGE_RECONCILIATION_PULL_ARGS,
   normalizeGitErrorMessage,
   pullArgsSpecifyReconciliation,
-  runPullWithDivergenceFallback
+  runPullWithDivergenceFallback,
+  stripCredentialsFromMessage
 } from './git-remote-error'
 
 afterEach(() => {
   vi.restoreAllMocks()
 })
 
+describe('stripCredentialsFromMessage', () => {
+  it.each([
+    ['https://user:pa@ss:word@host:8443/repo', 'https://host:8443/repo'],
+    ['custom+git.1://user:sec:ret@host/repo', 'custom+git.1://host/repo'],
+    ['SSH://user:pa@ss:word@host/repo', 'SSH://host/repo'],
+    ['HTTPS://token@host/repo', 'HTTPS://host/repo'],
+    ['http://token@host/repo', 'http://host/repo'],
+    ['ssh://git@host/repo', 'ssh://git@host/repo'],
+    ['git@host:repo', 'git@host:repo'],
+    ['123://user:secret@host', '123://user:secret@host'],
+    ['123git+1://user:secret@host', '123git+1://host'],
+    ['https://user:secret/path@host', 'https://user:secret/path@host'],
+    ['https://user:secret\u00a0tail@host', 'https://user:secret\u00a0tail@host'],
+    ['https://user:secret@token@host', 'https://host'],
+    ['https://user:pa@ss:word@host?query=@other', 'https://host?query=@other'],
+    ['https://user:pa@ss:word@host#fragment=@other', 'https://host#fragment=@other'],
+    ['https://user:pa@ss:word@host/path@other', 'https://host/path@other'],
+    ['https://user:secret?query=@host', 'https://user:secret?query=@host'],
+    ['https://user:secret#fragment=@host', 'https://user:secret#fragment=@host'],
+    [
+      '界 https://user:pa@ss:word@host/😀 ssh://git@host https://token@other',
+      '界 https://host/😀 ssh://git@host https://other'
+    ]
+  ])('preserves URL structure when redacting %s', (input, expected) => {
+    expect(stripCredentialsFromMessage(input)).toBe(expected)
+  })
+})
+
 describe('normalizeGitErrorMessage', () => {
+  it('redacts credentials that an ANSI escape sequence splits', () => {
+    for (const url of [
+      'https://user:sec\x1b[1 qret@example.com/repo.git',
+      'https://sec\x1b]8;;https://example.org\x07ret\x1b]8;;\x07@example.com/repo.git'
+    ]) {
+      expect(normalizeGitErrorMessage(new Error(`fatal: denied ${url}`), 'push')).toBe(
+        'fatal: denied https://example.com/repo.git'
+      )
+      const expected =
+        "Submodule 'https://example.com/repo.git' has remote changes. Pull inside the submodule, then try again."
+      expect(
+        formatSubmodulePushFailureDetail(`Unable to push sub\x1b[1 qmodule '${url}'\n(fetch first)`)
+      ).toBe(expected)
+      expect(
+        formatSubmodulePushFailureDetail(expected.replace('https://example.com/repo.git', url))
+      ).toBe(expected)
+    }
+  })
+
+  it('bounds redaction time when ANSI stripping joins a long scheme-like word', () => {
+    const error = new Error(
+      `remote: ${'\x1b[31ma\x1b[0m'.repeat(65_536)}\nfatal: denied https://user:sec\x1b[1 qret@host/repo`
+    )
+    const start = performance.now()
+
+    expect(normalizeGitErrorMessage(error, 'push')).toBe('fatal: denied https://host/repo')
+    expect(performance.now() - start).toBeLessThan(2_000)
+  })
+
   it('keeps the submodule name when a recursive push is rejected', () => {
     const error = new Error(
       "Command failed: git push\nPushing submodule 'find-cmux-followers'\n" +

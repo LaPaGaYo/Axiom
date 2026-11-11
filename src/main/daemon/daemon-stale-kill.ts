@@ -69,9 +69,11 @@ export async function killStaleDaemon(
   // cleanup can be fenced to this exact incarnation rather than to whatever occupies the path
   // by the time we get there.
   let recordedOwner: ParsedDaemonPid | null = null
+  let malformedRecord = false
   try {
     const parsedPid = parseDaemonPidFile(readFileSync(pidPath, 'utf8'))
     recordedOwner = parsedPid
+    malformedRecord = parsedPid === null
     const identity = parsedPid
       ? await inspectDaemonProcessIdentity(
           parsedPid.pid,
@@ -178,23 +180,18 @@ export async function killStaleDaemon(
   // replacement's freshly published ownership.
   if (recordedOwner) {
     unlinkOwnedDaemonPidFile(pidPath, recordedOwner.pid, recordedOwner.launchNonce)
-  } else {
-    // Why: a record we cannot parse names no owner to fence against, but leaving it in place
-    // fails the next daemon's exclusive publish with EEXIST — no daemon at all. Reclaim it
-    // under the same rename claim, and only while it is still unparseable, so a valid record
-    // published in the meantime is left alone.
-    unlinkDaemonPidFileWhen(pidPath, (content) => parseDaemonPidFile(content) === null)
   }
 
-  // Why this only reads: removing an endpoint on another daemon's behalf is the whole defect
-  // class this design retires. A replacement takes the name itself, by replacing an entry it
-  // has proven dead in one rename. So the only question left here is whether something is
-  // still answering — and only a positive answer withholds the fork.
-  // An unclassifiable entry is no longer a reason to refuse: the publisher probes again and
-  // will not overwrite anything it cannot prove dead, which makes this judgement a hint
-  // rather than a correctness dependency.
-  if ((await probeEndpoint(socketPath)) === 'connected') {
+  // Only publishers replace dead endpoints; this probe never removes another daemon's name.
+  const endpointOutcome = await probeEndpoint(socketPath)
+  // A replacement cannot publish over a retained malformed record, so an unknown probe withholds it.
+  if (endpointOutcome === 'connected' || (malformedRecord && endpointOutcome === 'unknown')) {
     return { killed: killedDaemon, liveOwnerSurvived: true }
+  }
+  if (malformedRecord && endpointIsProvenDead(endpointOutcome)) {
+    // Publication creates an empty record before writing it; reclaim only after proof of death,
+    // and only while it is still malformed so a concurrent valid replacement keeps its claim.
+    unlinkDaemonPidFileWhen(pidPath, (content) => parseDaemonPidFile(content) === null)
   }
   return { killed: killedDaemon, liveOwnerSurvived }
 }
