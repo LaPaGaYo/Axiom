@@ -278,7 +278,9 @@ M3-04b-3：报告中的 **typed QUESTION item** 是绑定 Task 的 `messages.pay
 - **Account cooldown / 账号冷却**（M3-06-2a-2，D88）：当前选中账号仍有 Task 正在等待的 usage_limit continuation（pending、未来 dueAt、Task READY、无更新 Attempt）时，该 provider 不接新 Worker Attempt，跨 Mission 生效，取最晚 dueAt。账号 key 为 provider 与启动账号 home 路径的单向摘要；不持久化新的账号状态。
 - **`account_cooldown`**：ProviderFilterReason 的最后一项，仅 Worker 且其它过滤全部通过时生效；无替代 provider 时 Task 保持 READY，拒绝证据附 `accountCooldown: [{provider,until}]`；Planner 不受影响。
 - **Interrupted `skippedAttempts`**：没有可用保全快照时，基线回溯跨过 interrupted 并保留 failure class；有保全审计则说明未采用的原因，无审计则保持原先未携带工作说明。仍保留底层失败 Candidate 的验证证据。
-- **Preserved snapshot / 保全快照**（M3-06-2b，D88 / D64）：headless Attempt 未提交而以 interrupted / failed 结束时，宿主用私有 index 捕获的不可变 commit，保存在 `refs/axiom/preserved/<taskId>/<seq>`。不移动 Attempt branch，不是 Candidate、Submission 或验证通过；`attempt.preserved` 记录 preserved / empty / unavailable 及原因。
+- **Preserved snapshot / 保全快照**（M3-06-2b，D88 / D64）：headless Attempt 未提交而以 interrupted / failed 退出，或恢复观察到进程退出 / 内核 stopped / runtime-budget stop 确认 stopped 后，宿主用私有 index 捕获的不可变 commit，保存在 `refs/axiom/preserved/<taskId>/<seq>`。不移动 Attempt branch，不是 Candidate、Submission 或验证通过；`attempt.preserved` 记录 preserved / empty / unavailable 及原因。
+- **停止后的保全顺序**（M3-06-2b-2，D88 2026-11-11 修订）：stop → 宿主证明进程已退出 → preserve → settle。`stop_unknown` 既不保全也不结算；其后的 abandonment 不证明退出，仍不保全。内核 failed / abandoned、取消、TUI 与 Planner 没有新增保全。
+- **`kernel_stopped`**：`attempt.stopped.reason`；恢复发现内核已回报 stopped，但 Axiom 尚未记录其停止结算（含停止后崩溃的重放），与结算同事务补写；headless / TUI 均适用。它不改变 `attempt_stopped` 的结算原因或计数。保全基线新增 `{kind: stopped, reason}`，后继被告知停止前的方向可能错误或卡住，必须先复核。
 - **接着做**：后继 Attempt 从最近可用保全 commit 创建新工作树，先检查继承工作再继续；当前 Task scope 与秘密扫描决定可用性。不是恢复 harness session，也不表示接受前驱的做法；最终 Candidate 对集成基线的全部变化仍须独立验证。
 - **Handoff records / 交接记录**：宿主从该 Attempt 自己的 headless event stream 选取、脱敏和限长的最近消息、shell 命令及结果，加上该 Attempt 自己的 Git 变化。存为 `AttemptSettlement` 创建、关联 Task / Attempt 的 JSON `log` Artifact；作为线索引用，不是模型总结或指令，不以 `handoff` / `worker_report` Artifact 传播给下游 Task。
 

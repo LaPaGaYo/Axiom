@@ -50,13 +50,25 @@ async function readRecords(artifacts: ArtifactStore, baseline: SnapshotAttemptBa
   }
 }
 
+function endingLine({ previousSeq, ending }: SnapshotAttemptBaseline) {
+  if (ending.kind === 'stopped') {
+    return `Attempt ${previousSeq} was stopped before it could submit; recorded reason: ${quote(ending.reason.slice(-200))}. A stopped run is suspect: its direction may have been wrong or stuck. Review what it left before building on it.`
+  }
+  if (ending.kind === 'interrupted') {
+    return ending.evidence === 'runtime_restarted'
+      ? `The runtime that started Attempt ${previousSeq} restarted, and the Attempt process was gone afterwards.`
+      : `Attempt ${previousSeq} was interrupted by ${ending.failureClass}.`
+  }
+  return ending.evidence === 'process_exited'
+    ? `The process for Attempt ${previousSeq} ended without an exit marker; the cause is unknown.`
+    : `Attempt ${previousSeq} failed; last error: ${quote(ending.lastError.slice(-200))}. It ended on its own error, so its approach may be part of the problem.`
+}
+
 /** Put inheritance and cautions first, before any variable-sized evidence. */
 async function snapshotLines(artifacts: ArtifactStore, baseline: SnapshotAttemptBaseline) {
-  const { previousSeq, snapshot, baselineSha, ending } = baseline
+  const { snapshot, baselineSha, ending } = baseline
   const lines = [
-    ending.kind === 'interrupted'
-      ? `Attempt ${previousSeq} was interrupted by ${ending.failureClass}.`
-      : `Attempt ${previousSeq} failed; last error: ${quote(ending.lastError.slice(-200))}. It ended on its own error, so its approach may be part of the problem.`,
+    endingLine(baseline),
     `This worktree starts from its preserved commit ${snapshot.commitSha}, which that Attempt left on top of ${baselineSha}. Run git diff ${baselineSha} HEAD to see exactly what it left.`,
     'Everything this worktree has on top of the integration branch is unverified and will be verified as a whole in the final Candidate.',
     'An action that was cut off may have taken effect or may still be running. Check before repeating anything with side effects, and say when it cannot be confirmed.',

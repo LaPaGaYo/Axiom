@@ -10,9 +10,14 @@ import { settleAttemptWithoutSubmission } from '../execution/attempt-settlement'
 import { reconcilePlanner } from './planner-reconciliation'
 import { observeAgentExit } from './agent-exit-observation'
 import { isHeadlessAttempt, submitExitedAttempt } from '../execution/attempt-exit-submission'
+import { isUnusableHeadlessLaunch } from '../execution/headless-launch-record'
 import { watchHeadlessAttempt } from '../execution/headless-attempt-watcher'
-import { getAxiomControlPlane } from '../control-plane'
-import { settleInterruptedAttempt } from '../execution/attempt-interruption'
+import { captureRecoveryAttempt, recoveryEndingStillCurrent } from './attempt-recovery-preservation'
+import {
+  settleRecoveryTerminal,
+  settleRecoveryProcessExit,
+  settleRecoveryBudget
+} from './attempt-recovery-endings'
 import {
   abandonmentEvidence,
   activeWorkerStates as activeStates,
@@ -108,7 +113,13 @@ export async function reconcileAttempt(
     }
   }
   if (headless && currentRunning(ctx, binding)) {
-    const result = await submitExitedAttempt(runtime, dispatchId)
+    // An unusable launch must not prevent host-proven recovery endings.
+    const result = await submitExitedAttempt(runtime, dispatchId).catch((error) => {
+      if (isUnusableHeadlessLaunch(error)) {
+        return 'unchanged'
+      }
+      throw error
+    })
     if (result === 'unchanged_candidate' || result === 'declared') {
       return { ...entry, action: 'failed', liveness: 'exited' }
     }
@@ -153,77 +164,39 @@ export async function reconcileAttempt(
   if (!currentRunning(ctx, binding)) {
     return entry
   }
+  if (headless && db.getDispatchContext(taskId)?.id !== dispatchId) {
+    entry.action = 'stale'
+    return entry
+  }
   const terminalReason = worker && terminalReasons.get(worker.state)
-  if (terminalReason) {
-    store.transaction('recovery_terminal', () => {
-      if (worker?.state === 'failed' && !lastAttemptAudit(ctx, binding, 'attempt.failed')) {
-        auditAttempt(ctx, binding, 'attempt.failed', {
-          reason: 'kernel_failed',
-          lastError: worker.last_error ?? null
-        })
-      }
-      // Reattach evidence if the process died after kernel abandonment but before Axiom settlement.
-      const evidence =
-        worker?.state === 'abandoned'
-          ? store
-              .listArtifacts({
-                missionId: binding.missionId,
-                relatedTo: dispatchId,
-                kind: 'evidence'
-              })
-              .findLast((artifact) => artifact.createdBy === 'RecoveryService')
-          : undefined
-      if (evidence) {
-        auditAttempt(ctx, binding, 'attempt.abandoned', {
-          reason: 'unverifiable_tolerance_exceeded',
-          evidenceArtifactId: evidence.id,
-          disposition: 'abandoned'
-        })
-      }
-      settle(ctx, binding, evidence ? 'unverifiable_tolerance_exceeded' : terminalReason)
-    })
+  if (terminalReason && worker) {
+    // kernel_stopped records a kernel receipt that has no Axiom stop settlement yet.
+    const preserved =
+      headless && worker.state === 'stopped'
+        ? await captureRecoveryAttempt(ctx, binding, 'stopped')
+        : undefined
+    if (headless && !recoveryEndingStillCurrent(ctx, binding, worker)) {
+      return reconcileAttempt(ctx, binding)
+    }
+    settleRecoveryTerminal(ctx, binding, worker, terminalReason, 'kernel_failed', preserved)
     entry.action = terminalReason
     return entry
   }
   // The kernel refuses a second stop; a stop_unknown receipt must use the tolerance clock.
   const stopUnknown = worker?.state === 'stop_unknown'
   if (!stopUnknown && entry.liveness === 'exited' && worker && activeStates.has(worker.state)) {
-    const failure =
-      headless && worker.runtime_epoch !== runtime.getRuntimeId()
-        ? ({ class: 'unknown', retryable: true, source: 'absent' } as const)
-        : undefined
-    store.transaction('recovery_process_exit', () => {
-      // failDispatch owns a savepoint and is explicitly safe inside the Axiom transaction.
-      db.failDispatch(
-        dispatchId,
-        agentExit.exited
-          ? 'Worker agent exited without a Submission'
-          : 'Worker process exited without a Submission',
-        { workerProcessExited: true, terminationReason: 'process_exited' }
-      )
-      auditAttempt(ctx, binding, 'attempt.failed', {
-        reason: 'process_exited',
-        ...(agentExit.exited ? { evidence: agentExit.evidence } : {}),
-        ...(failure
-          ? { failure, evidence: 'runtime_restarted', settlement: { kind: 'interrupted' } }
-          : {})
-      })
-      if (failure) {
-        settleInterruptedAttempt(
-          { ...ctx, effects: getAxiomControlPlane(runtime).effects },
-          {
-            ...binding,
-            dispatchId,
-            failure,
-            actor: 'RecoveryService',
-            now: ctx.now()
-          }
-        )
-      } else {
-        settle(ctx, binding, 'attempt_failed')
-      }
-    })
-    entry.action = failure ? 'interrupted' : 'failed'
+    const preserved = headless ? await captureRecoveryAttempt(ctx, binding, 'exited') : undefined
+    if (headless && !recoveryEndingStillCurrent(ctx, binding, worker)) {
+      return reconcileAttempt(ctx, binding)
+    }
+    entry.action = settleRecoveryProcessExit(
+      ctx,
+      { ...binding, dispatchId },
+      worker,
+      headless,
+      agentExit.exited ? agentExit.evidence : undefined,
+      preserved
+    )
     return entry
   }
   const policy = store.getPolicy(binding.missionId)!
@@ -235,14 +208,19 @@ export async function reconcileAttempt(
       ctx.now() - Date.parse(exposeUtcTimestamp(binding.createdAt)!) > minutes * 60_000
     ) {
       const stopped = StopReceipt.parse(await stopLocalWorker(runtime, dispatchId))
-      store.transaction('recovery_runtime_budget', () => {
-        if (stopped.state === 'stopped') {
-          auditAttempt(ctx, binding, 'attempt.stopped', { reason: 'runtime_budget_exceeded' })
-          settle(ctx, binding, 'runtime_budget_exceeded')
-        } else if (stopped.state === 'stop_unknown') {
-          auditAttempt(ctx, binding, 'attempt.stop_unknown', { reason: 'runtime_budget_exceeded' })
-        }
-      })
+      const stoppedWorker = db.getWorkerDispatch(dispatchId)
+      const preserved =
+        headless && stopped.state === 'stopped'
+          ? await captureRecoveryAttempt(ctx, binding, 'stopped')
+          : undefined
+      if (
+        headless &&
+        (stoppedWorker?.state !== stopped.state ||
+          !recoveryEndingStillCurrent(ctx, binding, stoppedWorker))
+      ) {
+        return reconcileAttempt(ctx, binding)
+      }
+      settleRecoveryBudget(ctx, binding, stopped.state, 'runtime_budget_exceeded', preserved)
       entry.action = stopped.state
     }
     return entry

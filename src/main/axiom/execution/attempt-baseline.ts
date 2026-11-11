@@ -87,6 +87,11 @@ export function resolveAttemptBaseline(
       .filter((event) => event.event === 'attempt.preserved' && event.objectKind === 'attempt')
       .map((event) => [event.objectId, event.after])
   )
+  const stopped = new Map(
+    audits
+      .filter((event) => event.event === 'attempt.stopped' && event.objectKind === 'attempt')
+      .map((event) => [event.objectId, event.after])
+  )
   while (!submission && previousSeq >= 1) {
     const previous = store.getAttemptBinding(input.taskId, previousSeq)
     if (previous?.dispatchId && preserved.has(previous.dispatchId)) {
@@ -96,6 +101,7 @@ export function resolveAttemptBaseline(
         attemptId: previous.dispatchId,
         audit: preserved.get(previous.dispatchId),
         failure: failures.get(previous.dispatchId),
+        stopped: stopped.get(previous.dispatchId),
         allowedPaths: store.getTaskStage(input.taskId)?.spec.scope.allowedPaths ?? []
       })
       if ('usable' in evidence) {
@@ -111,6 +117,9 @@ export function resolveAttemptBaseline(
         })
       }
       notContinued.push(evidence.unused)
+      if (evidence.stopWalk) {
+        break
+      }
     }
     const failure = SkippedFailure.safeParse(failures.get(previous?.dispatchId ?? ''))
     if (!previous?.dispatchId || !failure.success) {

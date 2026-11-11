@@ -1,10 +1,14 @@
 import { z } from 'zod'
+import {
+  readHeadlessLaunchRecord,
+  resolveHeadlessLaunchRecord,
+  headlessLaunchProvider
+} from './headless-launch-record'
 import { OrchestrationError } from '../../runtime/orchestration/orchestration-error'
 import { recordClaudeLaunchObservation } from './claude-worker-combination'
 import { scheduleFailedWorkerRelease } from './attempt-worker-release'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { WorkerDispatchRow } from '../../runtime/orchestration/types'
-import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { gitExecFileAsync } from '../../git/runner'
 import { getMainE2EConfig } from '../../e2e-config'
 import { getAxiomControlPlane } from '../control-plane'
@@ -17,7 +21,6 @@ import { settleHeadlessExitFailure } from './attempt-exit-failure'
 import { parseHeadlessWorkerEvents, parseHeadlessReport } from './headless-worker-events'
 import {
   headlessAttemptDirectory,
-  HeadlessLaunchSchema,
   readHeadlessFile,
   ingestHeadlessArtifacts,
   persistClaudeLastMessage
@@ -55,16 +58,8 @@ async function submitExit(runtime: OrcaRuntimeService, attemptId: string) {
     return 'unchanged'
   }
   const directory = headlessAttemptDirectory(attemptId)
-  const launch = HeadlessLaunchSchema.parse(
-    JSON.parse((await readHeadlessFile(directory, 'launch.json')) ?? '{}')
-  )
-  // Scratch files are Worker-writable. Provider authority comes from the bound spec or
-  // the kernel's durable start options (legacy Codex rows may omit agent).
-  const provider =
-    store.getAgentSpec(authority.binding.agentSpecId)?.spec.provider ??
-    z
-      .object({ agent: z.enum(['codex', 'claude']).default('codex') })
-      .parse(JSON.parse(worker?.start_options ?? '{}')).agent
+  const launch = await readHeadlessLaunchRecord(directory)
+  const provider = headlessLaunchProvider(store, authority.binding, worker)
   const claudeEvents =
     provider === 'claude'
       ? parseHeadlessWorkerEvents(
@@ -104,14 +99,7 @@ async function submitExit(runtime: OrcaRuntimeService, attemptId: string) {
   let reportError: string | undefined
   let report: ReturnType<typeof parseHeadlessReport> | undefined
   let artifactIds: string[] = []
-  const worktree = splitWorktreeIdForFilesystem(launch.worktreeId)?.worktreePath
-  if (
-    !worktree ||
-    launch.worktreeId !== worker?.worktree_id ||
-    launch.branch !== authority.binding.branch
-  ) {
-    throw new Error('Headless launch binding mismatch')
-  }
+  const { worktreePath: worktree } = resolveHeadlessLaunchRecord(launch, worker, authority.binding)
   const failedResult = events.turnFailed
   if (exitCode === 0 && !failedResult) {
     try {

@@ -2,6 +2,13 @@ import { AXIOM_CODEX_ROLLOUT_SOURCE } from './axiom-codex-rollout'
 
 /** Opt-in fixture work plus the Codex 0.163.0 event shapes observed in the real chain. */
 export const AXIOM_INTERRUPTION_EVIDENCE_SOURCE = `${AXIOM_CODEX_ROLLOUT_SOURCE}
+async function stallWithPartialWork(taskId) {
+  const marker = process.env.AXIOM_E2E_LEDGER + '.stall-' + taskId
+  if (!existsSync(marker)) return
+  rmSync(marker)
+  leavePartialWork(taskId)
+  await new Promise(() => setInterval(() => {}, 60000))
+}
 function writeInterruptionEvidence(attemptId, taskId) {
   leavePartialWork(taskId)
   writeInterruptionRollout(attemptId, taskId)

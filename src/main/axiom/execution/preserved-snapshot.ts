@@ -21,10 +21,22 @@ export type PreservationInput = {
   verificationRules: unknown
 }
 
+const inFlightCaptures = new Map<string, Promise<WorktreePreservation>>()
+
+/** A single host can race exit settlement against recovery; both must await the same capture. */
+export function preserveAttemptWorktree(input: PreservationInput): Promise<WorktreePreservation> {
+  const key = JSON.stringify([input.launch.worktreePath, input.taskId, input.seq, input.attemptId])
+  const existing = inFlightCaptures.get(key)
+  if (existing) {
+    return existing
+  }
+  const pending = captureAttemptWorktree(input).finally(() => inFlightCaptures.delete(key))
+  inFlightCaptures.set(key, pending)
+  return pending
+}
+
 /** Best effort: immutable evidence may survive even if capture or settlement cannot finish. */
-export async function preserveAttemptWorktree(
-  input: PreservationInput
-): Promise<WorktreePreservation> {
+async function captureAttemptWorktree(input: PreservationInput): Promise<WorktreePreservation> {
   const { launch } = input
   const ref = `refs/axiom/preserved/${input.taskId}/${input.seq}`
   let snapshot: { ref: string; commitSha: string } | undefined
@@ -42,12 +54,16 @@ export async function preserveAttemptWorktree(
     const git = async (args: string[]) => (await gitExecFileAsync(args, options)).stdout.trim()
     await assertAttemptBranch(launch.worktreePath, launch.branch)
     // for-each-ref distinguishes an absent ref from a failed lookup, including timeouts.
-    const existing = await git(['for-each-ref', '--format=%(refname) %(objectname)', ref])
-    const entry = existing.split('\n').find((line) => line.startsWith(`${ref} `))
+    const readPublished = async () => {
+      const existing = await git(['for-each-ref', '--format=%(refname) %(objectname)', ref])
+      const entry = existing.split('\n').find((line) => line.startsWith(`${ref} `))
+      return entry ? GitObjectIdSchema.parse(entry.slice(ref.length + 1)) : undefined
+    }
+    const existing = await readPublished()
     const message = `axiom: preserved snapshot ${input.attemptId}`
     let treeSha: string
-    if (entry) {
-      snapshot = { ref, commitSha: GitObjectIdSchema.parse(entry.slice(ref.length + 1)) }
+    if (existing) {
+      snapshot = { ref, commitSha: existing }
       if ((await git(['show', '-s', '--format=%B', snapshot.commitSha])) !== message) {
         return unavailable('ref_conflict')
       }
@@ -65,12 +81,31 @@ export async function preserveAttemptWorktree(
           }
           const commitSha = await commit(message)
           snapshot = { ref, commitSha }
-          await publish(ref, commitSha, '0'.repeat(commitSha.length))
+          try {
+            await publish(ref, commitSha, '0'.repeat(commitSha.length))
+          } catch (error) {
+            // Another capture can win create-only publication while this private index is built.
+            const winner = await readPublished()
+            if (!winner) {
+              throw error
+            }
+            snapshot = { ref, commitSha: winner }
+            if ((await git(['show', '-s', '--format=%B', winner])) !== message) {
+              return 'ref_conflict' as const
+            }
+            return {
+              commitSha: winner,
+              treeSha: GitObjectIdSchema.parse(await git(['rev-parse', `${winner}^{tree}`]))
+            }
+          }
           return { commitSha, treeSha }
         }
       )
       if (!captured) {
         return { status: 'empty' }
+      }
+      if (captured === 'ref_conflict') {
+        return unavailable('ref_conflict')
       }
       snapshot = { ref, commitSha: captured.commitSha }
       treeSha = captured.treeSha
