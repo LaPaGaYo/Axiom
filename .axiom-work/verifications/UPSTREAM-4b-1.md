@@ -24,7 +24,7 @@ Candidate `86c0174eb9` on `axiom/attempt/UPSTREAM-4b/1`, from main `2ba95a07ed` 
 | Every Mission spec and exit m1 / m2 | 21 spec runs / 48 tests green, the same set and count as the UPSTREAM-4 host check (10:43–10:54) |
 | Cold-start egress, three stacks | host and attributed tallies `{}` in all six runs (both / chromium / node × fresh onboarding and default main window), 55–56 s per stack |
 | Packaging (`electron-builder --dir`) | `build:unpack` rc=1 in `afterPack`, for two reasons that do not depend on this change (next section); the bundle `dist/mac-arm64/Axiom.app` was assembled (identity `com.lapagayo.axiom`, Computer Use helper present, 524 MB) |
-| Packaged-app egress canary (foreground 75 s) | pending at the time of this commit: `launchers/upstream-4b-integrate.command` runs it first (`launchers/e2e-packaged-egress.command` on this bundle) and writes its verdict here in a separate commit before it merges |
+| Packaged-app egress canary (foreground 75 s) | `packaged-egress-20261111-164541.log`: the bundle built from `86c0174eb9`, fresh profile, every network path through the recording proxy, 75 s in the foreground — vendor hosts none, non-loopback total 0 (run by `launchers/upstream-4b-integrate.command` before the merge) |
 
 ## Full suite: what fails on main before and after
 
