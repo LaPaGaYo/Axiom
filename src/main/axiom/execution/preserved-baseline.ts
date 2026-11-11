@@ -21,8 +21,13 @@ export type SnapshotAttemptBaseline = {
   baselineSha: string
   artifactId?: string
   ending:
-    | { kind: 'interrupted'; failureClass: z.infer<typeof AttemptFailureSchema>['class'] }
-    | { kind: 'failed'; lastError: string; reportError?: string }
+    | {
+        kind: 'interrupted'
+        failureClass: z.infer<typeof AttemptFailureSchema>['class']
+        evidence?: 'runtime_restarted'
+      }
+    | { kind: 'failed'; lastError: string; reportError?: string; evidence?: 'process_exited' }
+    | { kind: 'stopped'; reason: string }
   skippedAttempts: SkippedAttempt[]
   underlying: LegacyAttemptBaseline
 }
@@ -32,6 +37,43 @@ const Failure = z.object({
   lastError: z.string().optional(),
   reportError: z.string().optional()
 })
+const Stopped = z.object({ reason: z.string() })
+const RecoveryEvidence = z.object({
+  reason: z.literal('process_exited'),
+  evidence: z.literal('runtime_restarted').optional(),
+  exitCode: z.undefined().optional()
+})
+
+function readEnding(failure: unknown, stopped: unknown): SnapshotAttemptBaseline['ending'] | null {
+  const failed = Failure.safeParse(failure)
+  if (failed.success) {
+    // Recovery metadata does not change which failures the existing schema accepts.
+    const recovery = RecoveryEvidence.safeParse(failure)
+    if (failed.data.settlement.kind === 'interrupted') {
+      return {
+        kind: 'interrupted',
+        failureClass: failed.data.failure?.class ?? 'unknown',
+        ...(recovery.success && recovery.data.evidence === 'runtime_restarted'
+          ? { evidence: 'runtime_restarted' as const }
+          : {})
+      }
+    }
+    return {
+      kind: 'failed',
+      lastError: redactContext(failed.data.lastError ?? '').content.slice(-2000),
+      ...(failed.data.reportError
+        ? { reportError: redactContext(failed.data.reportError).content.slice(-2000) }
+        : {}),
+      ...(recovery.success && recovery.data.evidence === undefined
+        ? { evidence: 'process_exited' as const }
+        : {})
+    }
+  }
+  const stop = Stopped.safeParse(stopped)
+  return stop.success
+    ? { kind: 'stopped', reason: redactContext(stop.data.reason).content.slice(-2000) }
+    : null
+}
 
 export function readPreservedBaseline(input: {
   taskId: string
@@ -39,15 +81,17 @@ export function readPreservedBaseline(input: {
   attemptId: string
   audit: unknown
   failure: unknown
+  stopped?: unknown
   allowedPaths: readonly string[]
 }):
   | { usable: Omit<SnapshotAttemptBaseline, 'skippedAttempts' | 'underlying'> }
-  | { unused: PreservedWorkNotUsed } {
+  | { unused: PreservedWorkNotUsed; stopWalk: boolean } {
   const identity = { seq: input.seq, attemptId: input.attemptId }
+  const ending = readEnding(input.failure, input.stopped)
   const unused = (
     reason: PreservedWorkNotUsed['reason'],
     extra: Pick<PreservedWorkNotUsed, 'paths' | 'detail'> = {}
-  ) => ({ unused: { ...identity, reason, ...extra } })
+  ) => ({ unused: { ...identity, reason, ...extra }, stopWalk: ending?.kind === 'stopped' })
   const parsed = AttemptPreservedAuditSchema.safeParse(input.audit)
   if (!parsed.success || parsed.data.taskId !== input.taskId) {
     return unused('unavailable', { detail: 'invalid_preservation_audit' })
@@ -71,8 +115,7 @@ export function readPreservedBaseline(input: {
   if (paths.length) {
     return unused('out_of_scope', { paths })
   }
-  const failed = Failure.safeParse(input.failure)
-  if (!failed.success) {
+  if (!ending) {
     return unused('unavailable', { detail: 'invalid_failure_audit' })
   }
   return {
@@ -84,16 +127,7 @@ export function readPreservedBaseline(input: {
       scopePaths: result.scopePaths,
       baselineSha,
       ...(artifactId ? { artifactId } : {}),
-      ending:
-        failed.data.settlement.kind === 'interrupted'
-          ? { kind: 'interrupted', failureClass: failed.data.failure?.class ?? 'unknown' }
-          : {
-              kind: 'failed',
-              lastError: redactContext(failed.data.lastError ?? '').content.slice(-2000),
-              ...(failed.data.reportError
-                ? { reportError: redactContext(failed.data.reportError).content.slice(-2000) }
-                : {})
-            }
+      ending
     }
   }
 }

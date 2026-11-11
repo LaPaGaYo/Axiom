@@ -2,10 +2,7 @@ import { seedCodexTestAccount } from './codex-test-account'
 import { seedClaudeTestAccount } from './claude-test-account'
 import { desktopCall } from './axiom-desktop-call'
 import { readGoalFile } from '../../../src/cli/handlers/axiom/input-files'
-import {
-  DEFAULT_MISSION_POLICY,
-  type AcceptanceCriterion
-} from '../../../src/shared/axiom-contract/mission-objects'
+import { DEFAULT_MISSION_POLICY } from '../../../src/shared/axiom-contract/mission-objects'
 import { spawnSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
@@ -16,6 +13,7 @@ import { expect } from './orca-app'
 import { createRestartSession } from './orca-restart'
 import { waitForSessionReady } from './store'
 import { fixturePlanProposal } from './fixture-plan-proposal'
+import { configureFixtureTasks, type FixtureTaskOptions } from './axiom-fixture-task-options'
 import {
   axiomFixtureRouting,
   configureAxiomFixtureProvider,
@@ -94,22 +92,18 @@ export async function withFixtureMission(
     releaseWorkers: () => void
     restart?: () => Promise<Page>
   }) => Promise<void>,
-  options: {
+  options: FixtureTaskOptions & {
     planner?: boolean
     holdWorkers?: boolean
     restart?: boolean
     runVerification?: boolean
     releaseTerminals?: boolean
-    maxAttempts?: number
     concurrencyLimit?: number
-    extraAllowedPaths?: string[]
     noCodexAccount?: boolean
     holdExitSubmission?: boolean
     holdAttemptDispatch?: boolean
     interruptionBackoffMs?: number[]
     provider?: AxiomFixtureProvider
-    taskIds?: string[]
-    acceptanceCriteria?: AcceptanceCriterion[]
   } = {}
 ) {
   const provider = options.provider ?? 'codex'
@@ -186,23 +180,7 @@ process.exit(require('node:child_process').spawnSync(process.execPath, [${JSON.s
       mission.activeGoalRevisionId
     )
     if (!options.planner) {
-      if (options.taskIds) {
-        proposal.tasks = proposal.tasks.filter((task) => options.taskIds!.includes(task.id))
-        proposal.edges = proposal.edges.filter(
-          (edge) =>
-            options.taskIds!.includes(edge.fromTaskId) && options.taskIds!.includes(edge.toTaskId)
-        )
-        proposal.milestones[0]!.exitCriteria = options.taskIds.map((id) => `${id} integrated`)
-      }
-      for (const task of proposal.tasks) {
-        if (options.acceptanceCriteria) {
-          task.acceptanceCriteria = options.acceptanceCriteria
-        }
-        if (options.maxAttempts !== undefined) {
-          task.retryPolicy.maxAttempts = options.maxAttempts
-        }
-        task.scope.allowedPaths.push(...(options.extraAllowedPaths ?? []))
-      }
+      configureFixtureTasks(proposal, options)
     }
     let planRevision
     if (options.planner) {
