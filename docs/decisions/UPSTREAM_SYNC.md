@@ -134,3 +134,15 @@
 未取：#36205 的 renderer 部分（Worker 禁改 `src/renderer/**`，按初筛记录留待复议）；`6c38b40984`、`bbb563e83a`、`e182f1daa2`、`a4e600a663`（推送错误细节、stale-lease 显示与 i18n 不属本批）；依赖、Electron 与原生补丁仍由 UPSTREAM-4b 经宿主处理。未 fetch、pull、push、cherry-pick 或 commit；同步点保持 `f6b86ecf62`。
 
 **已合入（2026-11-11）**：merge `a30332227b`，候选 `1050260103`（attempt 1，16 min），记录 `.axiom-work/verifications/UPSTREAM-4-1.md`。launcher OVERALL=PASS；宿主上全部 Mission 规格与 exit m1 / m2 全绿，改动的测试文件在 Node 下全绿，新测试对 main 的产品代码先红。上面"本节不表示已集成"一句以本条为准。依赖类各项仍按 UPSTREAM-4b 由验证者在宿主上做。
+
+### 已应用（UPSTREAM-4b，验证者宿主步骤）
+
+依赖与补丁类的一半。按 D56 第 2 条，依赖变更由验证者经宿主 launcher 安装并提交锁文件（`launchers/upstream-4b-host.command`），沙盒里不装任何东西。brief `.axiom-work/briefs/UPSTREAM-4b.md`，记录 `.axiom-work/verifications/UPSTREAM-4b-1.md`，候选 `86c0174eb9`。
+
+| upstream | Axiom 落点 | 移植与差异 |
+|---|---|---|
+| `914b260fa6`、`f586149b3d`、`f3c65cd556`（Electron 43.7.8 → 43.8.1 → 43.8.4 → 43.8.6） | `package.json`、`pnpm-lock.yaml`、`src/shared/node-runtime-pin.ts`、`config/scripts/electron-runtime-floor.test.ts`、`src/main/browser/` 下四个弹窗 Electron 测试 | 直接到 43.8.6（发布已超过 `minimumReleaseAge`，不加豁免）。下限取 43.8.6：这批就是为了它的 Chromium 回补；上游停在 43.8.4，之后删了这个测试。注释写明 43.8.1 / 43.8.4 / 43.8.6 各修了什么，测试标题取上游的。弹窗测试照搬上游为 43.8.1 行为做的改动，版本期望改为 43.8.6。 |
+| `d9dc87b2fb` 的 DOMPurify 一行与 `914b260fa6` 的覆盖 | `package.json`、`pnpm-workspace.yaml`、锁文件 | 3.4.16 → 3.4.17；`dompurify@<3.4.17: 3.4.17` 取代 `monaco-editor>dompurify: 3.4.16`，应用、Mermaid、Monaco 三处都是 3.4.17。渲染进程用它净化笔记本的 HTML 输出与 Mermaid SVG。 |
+| `9c7fe9793e`（桌面端一半） | `config/patches/` 下四个补丁文件（逐字节取自上游）、`pnpm-workspace.yaml` 的 `patchedDependencies`、`config/scripts/dependency-security-patches.test.mjs`、`config/patches/dependency-security.md` | 只打桌面端（都是构建与 lint 工具链）；mobile、文档站与审计工具的副本、deepmerge 不动，文档里写明。 |
+
+**不取**：`eb3379ff99`（`node-pty` 的 kqueue 描述符泄漏）——本树的 `node-pty` 补丁已与上游分叉（`07b437c9e9` 等六处），要对着我们的补丁重生成，再为 Electron、Node 与 orcad 预编译各重编一次原生模块；守护进程每起一个 PTY 漏一个描述符，V1 的用量离上限很远——等下次动 `node-pty` 或 DEF-7 一起做。body-parser 2.4.0（`18d25591f9`）与 `@hono/node-server` 2.1.5（`f3c65cd556`）——只由 `@modelcontextprotocol/sdk` 为 HTTP 传输引入，桌面端只用它的 stdio（`server/mcp.js`、`server/stdio.js`、`types.js`），随下次 MCP SDK 升级。happy-dom 20.14.6 / 21.0.4——测试环境，不发布。mobile、文档站、审计工具的部分（node-forge、deepmerge 及它们的 minimatch / glob 副本），`config/dependency-security-exceptions.json`（只有 pull_request 的依赖安全工作流读它）。另：D56 第 3 条写的 `verify:egress-allowlist` 早在 M0-08 被出口棘轮取代（`docs/reference/orca-mapping.md` §7）。
