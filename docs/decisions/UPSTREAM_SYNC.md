@@ -132,3 +132,5 @@
 | `0ded87821d`（#36205），`src/shared` 部分 | `src/shared/git-remote-error.ts` 及其测试 | 先去 ANSI 再脱敏；固定 `://` 扫描与 sticky userinfo 匹配避免长 scheme 文本的二次方重试，保留 URL 的端口、路径、query、fragment。沿用本树 `formatSubmodulePushFailureDetail`，不引入上游新的分类 API。 |
 
 未取：#36205 的 renderer 部分（Worker 禁改 `src/renderer/**`，按初筛记录留待复议）；`6c38b40984`、`bbb563e83a`、`e182f1daa2`、`a4e600a663`（推送错误细节、stale-lease 显示与 i18n 不属本批）；依赖、Electron 与原生补丁仍由 UPSTREAM-4b 经宿主处理。未 fetch、pull、push、cherry-pick 或 commit；同步点保持 `f6b86ecf62`。
+
+**已合入（2026-11-11）**：merge `a30332227b`，候选 `1050260103`（attempt 1，16 min），记录 `.axiom-work/verifications/UPSTREAM-4-1.md`。launcher OVERALL=PASS；宿主上全部 Mission 规格与 exit m1 / m2 全绿，改动的测试文件在 Node 下全绿，新测试对 main 的产品代码先红。上面"本节不表示已集成"一句以本条为准。依赖类各项仍按 UPSTREAM-4b 由验证者在宿主上做。
