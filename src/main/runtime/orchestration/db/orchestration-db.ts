@@ -35,6 +35,8 @@ class OrchestrationDbCore {
     this.db.pragma('journal_mode = WAL')
     this.db.pragma('synchronous = NORMAL')
     this.db.pragma('busy_timeout = 5000')
+    // Savepoint journals must not depend on a writable temp directory to settle worker reports.
+    this.db.pragma('temp_store = MEMORY')
     createTables.call(this as unknown as OrchestrationDb)
     migrate.call(this as unknown as OrchestrationDb)
     createRunCoordinatorAddressTriggers(this.db)

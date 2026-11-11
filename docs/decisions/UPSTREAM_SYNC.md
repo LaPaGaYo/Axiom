@@ -119,3 +119,16 @@
 
 - **另记**（不是 D56 的摘取，作为后续 brief 的输入）：#40967 / #40963（判定 worker 已退出后清掉派生的占用记录；启动时每种租约都对账到确定结论）与 #32341（同一个 id 换成新实例后清掉旧实例的退出证据）→ M3-06-2b-3；#33527 / #35003 / #39322 / #39349 / #40593（在原目录续、目录没了明确失败、续话写明"接着做原来的任务"、闲置 7 天以上的 rollout 会被压成 `.jsonl.zst`）→ M3-06-2c。
 - **初筛点**推进到 `f6b86ecf62`；下次从 `f6b86ecf62..upstream/main` 接着筛（每周一次，D56）。
+
+### 已应用（UPSTREAM-4）
+
+按 D56 的 2026-11-11 修订行，在 Axiom 现有目录中做最小语义移植；Worker 留下未提交改动，由宿主 launcher 提交、验证者验收。记录见 `.axiom-work/reports/UPSTREAM-4-1.md`，本节不表示已集成或宿主验证通过。
+
+| upstream | Axiom 落点 | 移植与差异 |
+|---|---|---|
+| `f0e7eaa070`（#38358） | `src/main/runtime/orchestration/db/orchestration-db.ts`、`lifecycle-transition.ts`、`lifecycle-transition.test.ts`；`src/main/axiom/db/axiom-store-rollback.test.ts` | `temp_store = MEMORY`；SQLite 已结束事务时不再回滚，保留原错误。增加顶层事务、嵌套 savepoint 与 AxiomStore 调用链的回归测试；runner 和 Axiom 生产代码不改。 |
+| `220347cae0`（#39825） | `src/main/daemon/daemon-pid-file-parse.ts`、`daemon-stale-kill.ts`、`daemon-pid-file-parse.test.ts`、`daemon-health.test.ts`；`daemon-host-relocation.ts` 仅注释 | 旧式 pid 必须为安全正整数；仅端点确证已死才回收无法解析的记录，`connected` / `unknown` 保留记录并阻止替换。JSON 与有效记录的所有权栅栏不变；不取上游 `endpoint/identity/`、`launch/` 重组。 |
+| `71404c99be`（#40992） | `src/main/codex/codex-usage-limits.ts` 及其测试；`src/main/axiom/execution/codex-rollout-limit.test.ts` | 仅 `usageLimitExceeded` 在没有 ≥100% 窗口时取尚未重置、最满且 ≥90% 的窗口。沿用本树的错误码读取变量与目录；rollout reader 只补测试，不刷新账号用量，不增加出站。 |
+| `0ded87821d`（#36205），`src/shared` 部分 | `src/shared/git-remote-error.ts` 及其测试 | 先去 ANSI 再脱敏；固定 `://` 扫描与 sticky userinfo 匹配避免长 scheme 文本的二次方重试，保留 URL 的端口、路径、query、fragment。沿用本树 `formatSubmodulePushFailureDetail`，不引入上游新的分类 API。 |
+
+未取：#36205 的 renderer 部分（Worker 禁改 `src/renderer/**`，按初筛记录留待复议）；`6c38b40984`、`bbb563e83a`、`e182f1daa2`、`a4e600a663`（推送错误细节、stale-lease 显示与 i18n 不属本批）；依赖、Electron 与原生补丁仍由 UPSTREAM-4b 经宿主处理。未 fetch、pull、push、cherry-pick 或 commit；同步点保持 `f6b86ecf62`。

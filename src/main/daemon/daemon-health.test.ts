@@ -24,6 +24,7 @@ import {
   startTimesWithinTolerance
 } from './daemon-process-start-time'
 import { parseDaemonPidFile } from './daemon-pid-file-parse'
+import * as daemonPidIdentity from './daemon-pid-identity'
 import type { SubprocessHandle } from './session-subprocess-handle'
 
 function createMockSubprocess(): SubprocessHandle {
@@ -548,15 +549,38 @@ describe('killStaleDaemon ownership decisions', () => {
     }
   })
 
-  it('removes a malformed pid record', async () => {
-    writeFileSync(getDaemonPidPath(dir), '{truncated', { mode: 0o600 })
+  it.each(['{truncated', ''])('removes a malformed pid record %j', async (record) => {
+    writeFileSync(getDaemonPidPath(dir), record, { mode: 0o600 })
 
     await killStaleDaemon(dir, socketPath, tokenPath, undefined, {
-      probeEndpoint: async () => 'missing'
+      probeEndpoint: async () => {
+        expect(existsSync(getDaemonPidPath(dir))).toBe(true)
+        return 'missing'
+      }
     })
 
     expect(existsSync(getDaemonPidPath(dir))).toBe(false)
   })
+
+  it.each(['connected', 'unknown'] as const)(
+    'keeps an empty pid record while its endpoint probe is %s',
+    async (outcome) => {
+      writeFileSync(getDaemonPidPath(dir), '', { mode: 0o600 })
+      // A malformed record names no process; keep this independent of host process-table access.
+      const identity = vi.spyOn(daemonPidIdentity, 'inspectDaemonProcessIdentity')
+      identity.mockResolvedValue('mismatch')
+      try {
+        await expect(
+          killStaleDaemon(dir, socketPath, tokenPath, undefined, {
+            probeEndpoint: async () => outcome
+          })
+        ).resolves.toEqual({ killed: false, liveOwnerSurvived: true })
+        expect(existsSync(getDaemonPidPath(dir))).toBe(true)
+      } finally {
+        identity.mockRestore()
+      }
+    }
+  )
 
   it('removes a legacy bare-integer pid record', async () => {
     writeFileSync(getDaemonPidPath(dir), String(999_999), { mode: 0o600 })
