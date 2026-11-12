@@ -27,6 +27,10 @@ it('stops an Attempt over its runtime limit under the timeout rule', async () =>
     {
       event: 'attempt.cadence',
       after: { maxEventGapMs: 2000, samples: 1, resolutionMs: 60_000, partial: false }
+    },
+    {
+      event: 'attempt.supervision_reconciled',
+      after: { rule: 'stalled', mode: 'observe', outcome: 'hit', endedBy: 'timeout' }
     }
   ])
   expect(f.store.getTaskStage(f.t01.taskId)).toMatchObject({ stage: 'READY', attemptCount: 1 })

@@ -10,9 +10,21 @@ it('decodes the desktop update response with its kernel mutation receipt', async
     if (!response.ok) {
       throw new Error(response.error.code)
     }
+    const empty = {
+      hits: 0,
+      falsePositives: 0,
+      known: 0,
+      inconclusive: 0,
+      hitRate: null,
+      savedMs: 0,
+      sinceSequence: 0,
+      throughSequence: 0
+    }
     expect(SupervisionUpdateResponse.parse(response.result)).toEqual({
       rules: [{ rule: 'stalled', globalMode: 'notify', globalSource: 'user' }],
-      notifications: []
+      notifications: [],
+      evidence: [{ rule: 'stalled', window: empty, total: empty }],
+      proposals: []
     })
   } finally {
     vi.restoreAllMocks()

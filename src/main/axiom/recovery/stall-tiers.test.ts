@@ -65,6 +65,16 @@ it('lists a stall notification while its Attempt is current', async () => {
   mode('notify')
   await f.tick()
   const view = await show(f.mission.id)
+  const empty = {
+    hits: 0,
+    falsePositives: 0,
+    known: 0,
+    inconclusive: 0,
+    hitRate: null,
+    savedMs: 0,
+    sinceSequence: 0,
+    throughSequence: 0
+  }
   expect(view).toEqual({
     rules: [
       {
@@ -87,7 +97,9 @@ it('lists a stall notification while its Attempt is current', async () => {
         lastEventAt: new Date(f.now() - 2000).toISOString(),
         notifiedAt: new Date(f.now()).toISOString()
       }
-    ]
+    ],
+    evidence: [{ rule: 'stalled', window: empty, total: empty }],
+    proposals: []
   })
   expect((await show()).notifications).toEqual(view.notifications)
   f.events()
