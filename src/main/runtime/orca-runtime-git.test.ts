@@ -358,6 +358,9 @@ describe('RuntimeGitCommands', () => {
     })
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => localTarget(worktreePath),
+      getCommitMessageAgentEnvironment: () => ({
+        prepareForCodexLaunch: () => '/managed/codex-home'
+      }),
       getRuntimeSettings: () =>
         ({
           sourceControlAi: {
@@ -367,10 +370,7 @@ describe('RuntimeGitCommands', () => {
               customPrompt: 'Saved default that should not win.'
             }
           }
-        }) as unknown as GlobalSettings,
-      getCommitMessageAgentEnvironment: () => ({
-        prepareForCodexLaunch: () => '/managed/codex-home'
-      })
+        }) as unknown as GlobalSettings
     })
 
     await expect(
@@ -422,6 +422,9 @@ describe('RuntimeGitCommands', () => {
     })
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => localTarget(worktreePath),
+      getCommitMessageAgentEnvironment: () => ({
+        prepareForCodexLaunch: () => '/managed/codex-home'
+      }),
       getRuntimeSettings: () =>
         ({
           sourceControlAi: {
@@ -431,10 +434,7 @@ describe('RuntimeGitCommands', () => {
               customPrompt: 'Saved default that should not win.'
             }
           }
-        }) as unknown as GlobalSettings,
-      getCommitMessageAgentEnvironment: () => ({
-        prepareForCodexLaunch: () => '/managed/codex-home'
-      })
+        }) as unknown as GlobalSettings
     })
 
     await expect(
