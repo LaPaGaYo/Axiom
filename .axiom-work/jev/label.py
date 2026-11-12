@@ -52,6 +52,17 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M3-06-2b-3', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'restart-lost-daemon ending preserved and settled as an interruption exactly as briefed; red-first unit tests '
+        '(24, the kernel verdict from the real reconcileMissingWorkerTerminal); new e2e green on its first host run; no verifier change',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': ['attempt-reconciliation.ts at 286 of 300 counted lines: the next branch there must move code out first'],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M3-08d-HYG', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'four kernel tests rewritten to D83 ruling 1 with their purpose kept; causes established before editing; '
