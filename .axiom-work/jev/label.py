@@ -52,6 +52,18 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M3-06-2c', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'Codex in-place continuation as briefed: twelve ordered rules with lazily read evidence, a ref-and-index-only '
+        'takeover to HEAD = snapshot, resume before the final dash, a refused resume settled refunded and due at once; unit and '
+        'e2e red checks fail on main for the behaviour; new e2e green on its first host run; no verifier change',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': ['attempt-launcher.ts at 290 of 300 counted lines: the next branch there must move code out first'],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M3-06-2b-3', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'restart-lost-daemon ending preserved and settled as an interruption exactly as briefed; red-first unit tests '
