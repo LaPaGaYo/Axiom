@@ -3,6 +3,7 @@ import { settleAttemptWithoutSubmission } from '../execution/attempt-settlement'
 import { settleInterruptedAttempt } from '../execution/attempt-interruption'
 import { getAxiomControlPlane } from '../control-plane'
 import type { captureRecoveryAttempt } from './attempt-recovery-preservation'
+import { settleSupervisionStop } from './supervision-stop-settlement'
 import {
   auditAttempt,
   lastAttemptAudit,
@@ -121,22 +122,12 @@ export function settleRecoveryBudget(
   supervision: { thresholdMs: number; thresholdSource: 'task' | 'policy'; elapsedMs: number },
   preserved: Preservation
 ) {
-  ctx.store.transaction('recovery_runtime_budget', () => {
-    const reason = 'timeout'
-    if (state === 'stopped' || state === 'stop_unknown') {
-      auditAttempt(ctx, binding, 'attempt.supervised', {
-        rule: 'timeout',
-        mode: 'auto',
-        ...supervision,
-        action: state
-      })
-    }
-    if (state === 'stopped') {
-      auditAttempt(ctx, binding, 'attempt.stopped', { reason })
-      recordPreservation(ctx, binding, preserved)
-      settle(ctx, binding, reason)
-    } else if (state === 'stop_unknown') {
-      auditAttempt(ctx, binding, 'attempt.stop_unknown', { reason })
-    }
-  })
+  settleSupervisionStop(
+    ctx,
+    binding,
+    state,
+    { rule: 'timeout', mode: 'auto', ...supervision },
+    preserved,
+    'recovery_runtime_budget'
+  )
 }

@@ -42,6 +42,7 @@ const TABLE_COLUMNS: Record<string, string> = {
   mission_policies:
     'mission_id concurrency_limit budget readiness_threshold approval_rules verification_rules nested_worker_max_depth unverifiable_tolerance_minutes created_at updated_at routing',
   audit_events: 'sequence mission_id actor object_kind object_id event before after created_at',
+  supervision_settings: 'rule mission_id revision mode actor provenance audit_sequence created_at',
   axiom_effects:
     'id mission_id kind effect_key payload status due_at attempts lease_epoch last_error created_at updated_at'
 }
@@ -52,6 +53,7 @@ const INDEX_COLUMNS: Record<string, string[]> = {
   idx_goal_revisions_mission: ['mission_id'],
   idx_plan_revisions_mission_status: ['mission_id', 'status'],
   idx_audit_events_mission_sequence: ['mission_id', 'sequence'],
+  idx_audit_events_event_sequence: ['event', 'sequence'],
   idx_candidates_task_status: ['task_id', 'status'],
   idx_verification_runs_candidate: ['candidate_id'],
   idx_verification_runs_status: ['status', 'created_at', 'id'],
@@ -64,7 +66,8 @@ const TRIGGERS = [
   'trg_tasks_delete_axiom',
   'trg_dispatches_delete_axiom',
   'trg_runs_delete_axiom',
-  'trg_missions_delete_axiom_effects'
+  'trg_missions_delete_axiom_effects',
+  'trg_missions_delete_supervision_settings'
 ]
 
 function axiomSchema(db: Database): string {
@@ -162,6 +165,7 @@ function seedMission(db: Database, id: string): void {
     },
     mission_policies: { concurrency_limit: 3 },
     audit_events: { actor: 'user', object_kind: 'mission', object_id: id, event: 'created' },
+    supervision_settings: { rule: 'stalled', revision: 1, mode: 'stop', actor: 'user' },
     axiom_effects: {
       id,
       kind: 'verification.enqueue',
@@ -212,11 +216,11 @@ describe('Axiom v44 side tables', () => {
     }
   })
 
-  it('creates all 18 tables, specified columns, indexes and four triggers on a fresh database', () => {
+  it('creates all 19 tables, specified columns, indexes and five triggers on a fresh database', () => {
     const { db } = open()
     expect(SCHEMA_VERSION).toBe(46)
     expect(db.pragma('user_version', { simple: true })).toBe(46)
-    expect(Object.keys(TABLE_COLUMNS)).toHaveLength(18)
+    expect(Object.keys(TABLE_COLUMNS)).toHaveLength(19)
     for (const [table, columns] of Object.entries(TABLE_COLUMNS)) {
       expect(
         db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(table)
@@ -391,6 +395,52 @@ describe('Axiom v44 side tables', () => {
     expect(reopened.db.prepare('SELECT * FROM axiom_effects').all()).toEqual([])
   })
 
+  it('adds the supervision settings table and the audit event index to an existing v46 database', () => {
+    const path = filePath()
+    const first = open(path)
+    seedMission(first.db, 'existing')
+    first.db.exec(`DROP TRIGGER trg_missions_delete_supervision_settings;
+      DROP TABLE supervision_settings; DROP INDEX idx_audit_events_event_sequence`)
+    const mission = first.db.prepare('SELECT * FROM missions').get()
+    const audits = first.db.prepare('SELECT * FROM audit_events').all()
+    const trigger = first.db
+      .prepare("SELECT sql FROM sqlite_master WHERE name = 'trg_runs_delete_axiom'")
+      .get()
+    close(first)
+    const upgraded = open(path)
+    expect(upgraded.db.pragma('user_version', { simple: true })).toBe(46)
+    expect(upgraded.db.prepare('SELECT * FROM missions').get()).toEqual(mission)
+    expect(upgraded.db.prepare('SELECT * FROM audit_events').all()).toEqual(audits)
+    expect(
+      upgraded.db
+        .prepare("SELECT sql FROM sqlite_master WHERE name = 'trg_runs_delete_axiom'")
+        .get()
+    ).toEqual(trigger)
+    expect(
+      upgraded.db
+        .prepare('PRAGMA index_info(idx_audit_events_event_sequence)')
+        .all()
+        .map((row) => row.name)
+    ).toEqual(['event', 'sequence'])
+    upgraded.db.exec(`INSERT INTO supervision_settings (rule, mission_id, revision, mode, actor)
+      VALUES ('stalled', '', 1, 'notify', 'user'), ('stalled', 'existing', 1, 'stop', 'user'),
+      ('stalled', 'existing', 2, NULL, 'user')`)
+    const rows = upgraded.db
+      .prepare('SELECT * FROM supervision_settings ORDER BY mission_id, revision')
+      .all()
+    expect(rows[0]).toMatchObject({ mission_id: '', provenance: '{}', audit_sequence: 0 })
+    expect(rows).toHaveLength(3)
+    const schema = axiomSchema(upgraded.db)
+    close(upgraded)
+    const reopened = open(path)
+    expect(axiomSchema(reopened.db)).toBe(schema)
+    expect(
+      reopened.db.prepare('SELECT * FROM supervision_settings ORDER BY mission_id, revision').all()
+    ).toEqual(rows)
+    reopened.db.exec("DELETE FROM runs WHERE id = 'run-existing'")
+    expect(reopened.db.prepare('SELECT * FROM supervision_settings').all()).toEqual([rows[0]])
+  })
+
   it.each([43, 45])(
     'upgrades old Axiom numbering %s and respells all session addresses',
     (version) => {
@@ -493,10 +543,14 @@ describe('Axiom v44 side tables', () => {
     const orchestration = open()
     const { db } = orchestration
     const before = axiomSchema(db)
-    for (const index of Object.keys(INDEX_COLUMNS)) {
+    for (const index of Object.keys(INDEX_COLUMNS).filter(
+      (name) => name !== 'idx_audit_events_event_sequence'
+    )) {
       db.exec(`DROP INDEX ${index}`)
     }
-    for (const trigger of TRIGGERS) {
+    for (const trigger of TRIGGERS.filter(
+      (name) => name !== 'trg_missions_delete_supervision_settings'
+    )) {
       db.exec(`DROP TRIGGER ${trigger}`)
     }
     const missing = axiomSchema(db)

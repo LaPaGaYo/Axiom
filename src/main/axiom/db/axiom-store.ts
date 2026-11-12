@@ -13,6 +13,7 @@ import { candidatesStore } from './candidates-store'
 import { submissionsStore } from './submissions-store'
 import { verificationRunsStore } from './verification-runs-store'
 import { effectsStore } from './effects-store'
+import { supervisionSettingsStore } from './supervision-settings-store'
 
 type AttemptBindings = ReturnType<typeof attemptBindingsStore>
 
@@ -26,9 +27,12 @@ type Candidates = ReturnType<typeof candidatesStore>
 type Submissions = ReturnType<typeof submissionsStore>
 type VerificationRuns = ReturnType<typeof verificationRunsStore>
 type Effects = ReturnType<typeof effectsStore>
+type SupervisionSettings = ReturnType<typeof supervisionSettingsStore>
 
 // One injected store; table modules keep SQL and validation within the file-size gate.
 export class AxiomStore {
+  readonly getSupervisionSetting: SupervisionSettings['getSupervisionSetting']
+  readonly appendSupervisionSetting: SupervisionSettings['appendSupervisionSetting']
   readonly enqueueEffect: Effects['enqueueEffect']
   readonly leaseDueEffect: Effects['leaseDueEffect']
   readonly completeEffect: Effects['completeEffect']
@@ -114,6 +118,9 @@ export class AxiomStore {
   readonly getContextTokenBudget: Artifacts['getContextTokenBudget']
 
   constructor(private readonly db: OrchestrationDb) {
+    const supervision = supervisionSettingsStore(db)
+    this.getSupervisionSetting = supervision.getSupervisionSetting
+    this.appendSupervisionSetting = supervision.appendSupervisionSetting
     const effects = effectsStore(db)
     this.enqueueEffect = effects.enqueueEffect
     this.leaseDueEffect = effects.leaseDueEffect

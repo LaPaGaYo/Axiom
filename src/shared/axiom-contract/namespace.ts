@@ -12,7 +12,8 @@ export const AXIOM_RPC_METHOD_PREFIXES = [
   'axiom.decision.',
   'axiom.artifact.',
   'axiom.message.',
-  'axiom.policy.'
+  'axiom.policy.',
+  'axiom.supervision.'
 ] as const
 
 export const AXIOM_CLI_COMMAND_NAMES = [
