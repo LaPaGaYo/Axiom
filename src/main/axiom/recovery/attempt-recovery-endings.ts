@@ -118,10 +118,19 @@ export function settleRecoveryBudget(
   ctx: RecoveryContext,
   binding: AttemptBinding,
   state: string,
-  reason: 'runtime_budget_exceeded',
+  supervision: { thresholdMs: number; thresholdSource: 'task' | 'policy'; elapsedMs: number },
   preserved: Preservation
 ) {
   ctx.store.transaction('recovery_runtime_budget', () => {
+    const reason = 'timeout'
+    if (state === 'stopped' || state === 'stop_unknown') {
+      auditAttempt(ctx, binding, 'attempt.supervised', {
+        rule: 'timeout',
+        mode: 'auto',
+        ...supervision,
+        action: state
+      })
+    }
     if (state === 'stopped') {
       auditAttempt(ctx, binding, 'attempt.stopped', { reason })
       recordPreservation(ctx, binding, preserved)

@@ -9,6 +9,22 @@ import { AttemptPreservedAuditSchema } from '../../src/main/axiom/execution/pres
 const source = process.env.AXIOM_FIXTURE_REPO
 test.skip(!source || process.platform === 'win32', 'Requires a POSIX host and AXIOM_FIXTURE_REPO')
 const Stopped = z.object({ reason: z.string() })
+const Supervised = z.discriminatedUnion('rule', [
+  z.object({
+    rule: z.literal('timeout'),
+    mode: z.literal('auto'),
+    action: z.enum(['stopped', 'stop_unknown']),
+    thresholdSource: z.enum(['task', 'policy'])
+  }),
+  z.object({
+    rule: z.literal('stalled'),
+    mode: z.literal('observe'),
+    thresholdMs: z.number(),
+    thresholdSource: z.enum(['measured', 'default', 'e2e']),
+    idleMs: z.number()
+  })
+])
+const Cadence = z.object({ samples: z.number().int().positive() })
 const FirstLaunch = z.object({ seq: z.number(), branch: z.string() })
 const ContinuedLaunch = z.object({
   seq: z.number(),
@@ -52,9 +68,32 @@ test('M3-06-2b-2: a budget-stopped Attempt continues automatically from its pres
         throw new Error('Missing stopped Attempt audit')
       }
       const firstAttemptId = stopped.object_id
-      expect(Stopped.parse(JSON.parse(stopped.after ?? '{}')).reason).toBe(
-        'runtime_budget_exceeded'
-      )
+      expect(Stopped.parse(JSON.parse(stopped.after ?? '{}')).reason).toBe('timeout')
+      const supervised = stoppedState.audits
+        .filter(
+          ({ event, object_id }) => event === 'attempt.supervised' && object_id === firstAttemptId
+        )
+        .map((audit) => ({ ...audit, after: Supervised.parse(JSON.parse(audit.after ?? '{}')) }))
+      expect(supervised.map(({ after }) => after)).toContainEqual({
+        rule: 'timeout',
+        mode: 'auto',
+        action: 'stopped',
+        thresholdSource: 'task'
+      })
+      const observations = supervised.filter(({ after }) => after.rule === 'stalled')
+      expect(observations).toHaveLength(1)
+      const observation = observations[0]
+      if (!observation || observation.after.rule !== 'stalled') {
+        throw new Error('Missing stall observation')
+      }
+      expect(observation.after).toMatchObject({
+        rule: 'stalled',
+        mode: 'observe',
+        thresholdMs: 1000,
+        thresholdSource: 'e2e'
+      })
+      expect(observation.after.idleMs).toBeGreaterThanOrEqual(1000)
+      expect(observation.sequence).toBeLessThan(stopped.sequence)
       const preservation = stoppedState.audits.find(
         ({ event, object_id }) => event === 'attempt.preserved' && object_id === firstAttemptId
       )
@@ -119,13 +158,21 @@ test('M3-06-2b-2: a budget-stopped Attempt continues automatically from its pres
         'I left partial work for the next Attempt to review.',
         // The section quotes a command as one JSON string, so its inner quotes arrive escaped.
         JSON.stringify(`git status --short -- "${partial}"`),
-        'runtime_budget_exceeded'
+        'timeout'
       ]) {
         expect(prompt).toContain(text)
       }
       expect(
         git(['-C', clone, 'ls-tree', '-r', '--name-only', candidate.commitSha]).split('\n')
       ).toContain(partial)
+      const cadences = () =>
+        inspect().audits.filter(
+          ({ event, object_id }) => event === 'attempt.cadence' && object_id === firstAttemptId
+        )
+      await expect.poll(() => cadences().length).toBe(1)
+      expect(
+        Cadence.parse(JSON.parse(cadences()[0]?.after ?? '{}')).samples
+      ).toBeGreaterThanOrEqual(1)
     },
     {
       provider: 'codex',
@@ -133,6 +180,7 @@ test('M3-06-2b-2: a budget-stopped Attempt continues automatically from its pres
       holdWorkers: true,
       maxAttempts: 2,
       taskRuntimeMinutes: 0.05,
+      stallThresholdMs: 1000,
       extraAllowedPaths: [partial],
       runVerification: false
     }

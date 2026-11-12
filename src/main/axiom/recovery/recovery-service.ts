@@ -10,6 +10,7 @@ import type { AxiomStore } from '../db/axiom-store'
 import type { MissionController } from '../mission-controller/mission-controller'
 import type { AttemptReconcileEntry } from '../../../shared/axiom-contract/mission-params'
 import { reconcileAttempt } from './attempt-reconciliation'
+import { flushAttemptCadences } from './attempt-cadence'
 import type { AttemptBinding, RecoveryContext } from './attempt-recovery-effects'
 
 export const ATTEMPT_RECONCILE_INTERVAL_MS = 60_000
@@ -102,6 +103,7 @@ export class RecoveryService {
         })
       }
     }
+    flushAttemptCadences(ctx, ATTEMPT_RECONCILE_INTERVAL_MS)
     return { attempts }
   }
 

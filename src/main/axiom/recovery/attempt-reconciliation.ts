@@ -1,5 +1,4 @@
 import { exposeUtcTimestamp } from '../../runtime/orchestration/db/utc-timestamp'
-import { z } from 'zod'
 import { TERMINAL_MISSION_STATUSES } from '../../../shared/axiom-contract/lifecycle'
 import type { AttemptReconcileEntry } from '../../../shared/axiom-contract/mission-params'
 import { resolveWorkerStartReadinessTimeoutMs } from '../../../shared/orchestration-timing-budgets'
@@ -8,6 +7,7 @@ import { stopLocalWorker } from '../../runtime/rpc/methods/orchestration/worker/
 import { foldAttemptLiveness } from '../execution/attempt-projection'
 import { settleAttemptWithoutSubmission } from '../execution/attempt-settlement'
 import { reconcilePlanner } from './planner-reconciliation'
+import { superviseAttempt } from './attempt-supervision'
 import { observeAgentExit } from './agent-exit-observation'
 import { isHeadlessAttempt, submitExitedAttempt } from '../execution/attempt-exit-submission'
 import { isUnusableHeadlessLaunch } from '../execution/headless-launch-record'
@@ -18,11 +18,7 @@ import {
   hasAcceptedExitMarker,
   settleRecoveryDaemonLoss
 } from './attempt-daemon-loss'
-import {
-  settleRecoveryTerminal,
-  settleRecoveryProcessExit,
-  settleRecoveryBudget
-} from './attempt-recovery-endings'
+import { settleRecoveryTerminal, settleRecoveryProcessExit } from './attempt-recovery-endings'
 import {
   abandonmentEvidence,
   activeWorkerStates as activeStates,
@@ -36,7 +32,6 @@ import {
   type RecoveryContext
 } from './attempt-recovery-effects'
 
-const StopReceipt = z.object({ state: z.string() })
 const terminalReasons = new Map([
   ['failed', 'attempt_failed'],
   ['stopped', 'attempt_stopped'],
@@ -223,28 +218,14 @@ export async function reconcileAttempt(
   const policy = store.getPolicy(binding.missionId)!
   if (!stopUnknown && entry.liveness === 'live') {
     observeAttemptLiveness(ctx, binding, { status: 'live', ptyIds: [] })
-    const minutes = task.spec.budget?.maxRuntimeMinutes ?? policy.budget.maxRuntimeMinutes
-    if (
-      minutes !== undefined &&
-      ctx.now() - Date.parse(exposeUtcTimestamp(binding.createdAt)!) > minutes * 60_000
-    ) {
-      const stopped = StopReceipt.parse(await stopLocalWorker(runtime, dispatchId))
-      const stoppedWorker = db.getWorkerDispatch(dispatchId)
-      const preserved =
-        headless && stopped.state === 'stopped'
-          ? await captureRecoveryAttempt(ctx, binding, 'stopped')
-          : undefined
-      if (
-        headless &&
-        (stoppedWorker?.state !== stopped.state ||
-          !recoveryEndingStillCurrent(ctx, binding, stoppedWorker))
-      ) {
-        return reconcileAttempt(ctx, binding)
-      }
-      settleRecoveryBudget(ctx, binding, stopped.state, 'runtime_budget_exceeded', preserved)
-      entry.action = stopped.state
-    }
-    return entry
+    return superviseAttempt(ctx, binding, entry, {
+      headless,
+      minutes: task.spec.budget?.maxRuntimeMinutes ?? policy.budget.maxRuntimeMinutes,
+      thresholdSource: task.spec.budget?.maxRuntimeMinutes === undefined ? 'policy' : 'task',
+      startedAt: Date.parse(exposeUtcTimestamp(binding.createdAt)!),
+      stop: () => stopLocalWorker(runtime, dispatchId),
+      reconcile: () => reconcileAttempt(ctx, binding)
+    })
   }
   if (!stopUnknown && entry.liveness !== 'unverifiable') {
     return entry
