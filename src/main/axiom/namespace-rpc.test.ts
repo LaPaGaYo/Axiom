@@ -31,7 +31,8 @@ describe('Axiom RPC namespace', () => {
       'axiom.verification.list',
       'axiom.artifact.read',
       'axiom.artifact.list',
-      'axiom.policy.show'
+      'axiom.policy.show',
+      'axiom.supervision.show'
     ]
     const classified = [...AXIOM_MUTATION_METHODS, ...reads]
     expect(new Set(classified).size).toBe(classified.length)

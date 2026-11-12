@@ -1,3 +1,4 @@
+import { createAxiomSupervisionSql } from './create-axiom-supervision-sql'
 // Why: widening a status CHECK requires rebuilding tables and breaks older binaries. Axiom
 // enums are validated by axiom-contract at write boundaries; only D11's literal depth is pinned.
 // Every side row carries mission_id so run cleanup survives prior Task/Dispatch deletion.
@@ -241,6 +242,7 @@ CREATE TABLE IF NOT EXISTS axiom_effects (
   UNIQUE(kind, effect_key)
 );
 ${AXIOM_INDEXES_AND_DELETE_TRIGGERS_SQL}
+${createAxiomSupervisionSql()}
 `
 }
 

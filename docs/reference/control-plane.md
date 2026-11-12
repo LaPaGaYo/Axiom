@@ -37,9 +37,9 @@ Execution Kernel 继续拥有 Run、Orca Task、dispatch、PTY、进程、worktr
 
 新增逻辑不能进入 `@ts-nocheck` 的 runtime 文件（D12）；D59 明确授权的例外仅为完全标注类型的进程内转发访问器 `confirmTerminalShellForeground`，恢复决策仍在强类型 Control Plane 模块内。扩展 RPC 仍遵循 [orca-mapping](orca-mapping.md) §4c 的五步注册与 catalog 检查。
 
-## 3. 持久数据：18 张 side table
+## 3. 持久数据：19 张 side table
 
-权威数据库为 `<userData>/orchestration.db`。M1-03 的 `src/main/runtime/orchestration/db/schema/create-axiom-tables-sql.ts` / `migrate-v43.ts` 建立原有 17 张表；M3-06 在每次打开的幂等 DDL 增加 `axiom_effects`，共 18 张表；M1 的业务 store 使用下表前七张。已有表不改 CHECK 枚举，未来只做 additive migration。
+权威数据库为 `<userData>/orchestration.db`。M1-03 的 `src/main/runtime/orchestration/db/schema/create-axiom-tables-sql.ts` / `migrate-v43.ts` 建立原有 17 张表；M3-06 在每次打开的幂等 DDL 增加 `axiom_effects`，M3-06-3-2 增加 `supervision_settings`，共 19 张表；M1 的业务 store 使用下表前七张。已有表不改 CHECK 枚举，未来只做 additive migration。
 
 | 表                    | 内容 / M2 出口使用情况                                                                                                                       |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -50,6 +50,7 @@ Execution Kernel 继续拥有 Run、Orca Task、dispatch、PTY、进程、worktr
 | `mission_task_edges`  | 使用：物化后 Orca Task id 间的有向边及 readiness threshold                                                                                   |
 | `mission_policies`    | 使用：默认 concurrency/预算/阈值/审批与验证规则；v44 `routing` 由 policy RPC 更新；`nested_worker_max_depth=1`                               |
 | `audit_events`        | 使用：只追加的 sequence、actor、object、event、before/after、时间；mailbox 幂等依据                                                          |
+| `supervision_settings` | M3-06-3-2：全局 / Mission 停滞档位的只追加修订；有效值、写入权威与通知投影见 Supervision rules |
 | `agent_specs`         | M2-03 已写/读：v44 `spec` 存 canonical 完整合同，id = `spec_` + sha256；标量索引与合同必须一致                                               |
 | `context_packages`    | M2-02 已写/读：canonical manifest、预算；`mandatory_refs` = `[manifestArtifactId, renderArtifactId]`，`ranked_refs` = 已纳入候选 Artifact id |
 | `attempt_bindings`    | M2-04 admission 写/读：Task 序号、branch、AgentSpec、ContextPackage；`dispatch_id = NULL`，由 M2-05 launch 创建 dispatch 后回填（D6a）       |
@@ -563,18 +564,25 @@ agent 退出后到下一次成功 reconcile（≤ 一个 60 s 间隔），`attem
 
 M3-01 的 VerificationService 在 Mission recovery 后、首次 kick 前尝试验证队列重驱，逐项失败不阻止启动（见 Verification 节）；既有 60 s reconcile 同时触发 verification.kick，重试未完成的清理。M3-02/04 接检查与失败证据；M4 扩展 Integration/Approval 恢复。D58 的新通道必须保持相同 liveness 语义。
 
-### Supervision rules（M3-06-3；D88 9–10、D60 / D68 修订）
+### Supervision rules（M3-06-3 / M3-06-3-2；D88 9–10 及 2026-11-12 修订、D60 / D68 修订）
 
-`attempt-reconciliation.ts` 仍选择分支；只有 live、current、非 Planner、非 stop_unknown 的分支调用 `attempt-supervision.ts`。顺序为 headless stall observation → timeout，所以两者同轮命中时先记录观察再停止。使用已有 60 秒 reconcile，无新增 timer、模型调用或 DecisionEngine。
+`attempt-reconciliation.ts` 仍选择分支；只有 live、current、非 Planner、非 stop_unknown 的分支调用 `attempt-supervision.ts`。顺序为 headless stall rule → timeout；observe / notify 后照常检查 timeout，stall 选择 stop 后本轮不再评估 timeout。使用已有 60 秒 reconcile，无新增 timer、模型调用或 DecisionEngine。
 
 - **timeout / auto**：人设的运行上限；仍取 Task `budget.maxRuntimeMinutes ?? policy.budget.maxRuntimeMinutes`，从 binding.createdAt 按同一 `ctx.now()` 时钟计算 elapsedMs，严格超过才停。未设上限则没有此规则或审计。复用原 kernel stop 回执、停止后的 worker 重读、headless 保全与 current fence；失去权威仍从 reconcile 顶部重读。`attempt.supervised` 与 `attempt.stopped` / `attempt.stop_unknown`、可用的 preservation 和 Task 结算同事务，失败全部回滚。`stopped` 仍经 NEEDS_FIX → READY / BLOCKED，消耗当前 Attempt；`stop_unknown` 只记一次规则与停止不确定审计，不保全、不结算，后续仍由原 tolerance 路径处理。TUI 仍执行 timeout，不保全。现有 kernel 接口不提供 wrap-up，直接停止；停止与结算之间崩溃仍由下一轮以 kernel_stopped 结算。
-- **stalled / observe**：仅 headless 且 events.jsonl 存在且可取得 mtime 时采样；缺失表示 harness 尚未开始写，其他元数据读取错误也跳过本轮，不妨碍 timeout。`idleMs = max(0, now - mtime)` 严格超过阈值时，每 Attempt 仅写一次 `attempt.supervised {rule: stalled, mode: observe, thresholdMs, thresholdSource, idleMs, lastEventAt, wouldActAt}`，后两者为 ISO 时间，wouldActAt=lastEventAt+thresholdMs。观察只追加审计：不停止、不改 stage / binding / worker / effect，不发消息；恢复输出后再次静默也不重复。
+- **stalled / observe**：未设置档位时保持原行为。仅 headless 且 events.jsonl 存在且可取得 mtime 时采样；缺失表示 harness 尚未开始写，其他元数据读取错误也跳过本轮，不妨碍 timeout。`idleMs = max(0, now - mtime)` 严格超过阈值时，每 Attempt + mode 仅写一次 `attempt.supervised {rule: stalled, mode: observe, thresholdMs, thresholdSource, idleMs, lastEventAt, wouldActAt}`，后两者为 ISO 时间，wouldActAt=lastEventAt+thresholdMs。观察只追加审计：不停止、不改 stage / binding / worker / effect，不发消息；恢复输出后再次静默也不重复。
+
+- **stalled / notify**：相同静默条件与 audit fields，仅 mode=notify；每 Attempt + mode 一次，先前 observe 不抑制 notify。不停止、不改 stage、binding、worker、message 或 effect。`axiom.supervision.show` 从该审计投影 `notifications: [{missionId, taskId, seq, attemptId, idleMs, thresholdMs, thresholdSource, lastEventAt, notifiedAt}]`，notifiedAt 为审计时间，按时间 / sequence 从旧到新；只列 Task 的最新、未提交 RUNNING Attempt。给定 missionId 时过滤到该 Mission。恢复输出仍保留，Attempt 不再 current 后项目消失，审计留下；M3-09 渲染该列表。
+- **stalled / stop**：先前 observe / notify 不阻止停止。与 timeout 共用 `attempt-supervision-stop.ts` 的 kernel stop → 重读 worker → 仅 stopped 回执捕获 headless 保全 → current fence → settlement 顺序；fence 失败仍从 reconcile 顶部重读。`supervision-stop-settlement.ts` 在 `recovery_stall_stop` 事务写 `attempt.supervised {rule: stalled, mode: stop, thresholdMs, thresholdSource, idleMs, lastEventAt, action}`。stopped 再写 `attempt.stopped {reason: stalled}`、可用的 `attempt.preserved`，经 NEEDS_FIX(stalled) → READY(retry) / BLOCKED(retry_budget_exhausted)，计入 maxAttempts；stop_unknown 只再写 `attempt.stop_unknown {reason: stalled}`，既不保全也不结算，后续不再 stop。事务内任何错误回滚全部审计及 Task 结算。timeout 保留 `recovery_runtime_budget` 事务名与原语义。
+
+**档位与修订**：`supervision_settings` 是每次 open 幂等建表的新 side table，不改 schema version / mission_policies。主键 `(rule, mission_id, revision)`，`mission_id=''` 是全局；每个 scope 只追加修订，最高 revision 是当前值。mode=null 只用于清除 Mission 覆盖，全局不可为空。每条包含 actor、provenance、audit_sequence（写入时全库 audit_events 的最高 sequence；空库 0）及 created_at；下一个 revision 与 watermark 在插入事务内计算。Mission 删除时独立 trigger 清理它的修订，保留全局。有效档位 = 最新 Mission 非空覆盖 → 最新全局 → built-in observe。每次需要 stall rule 的 pass 读取一次，不跨 pass 缓存；设置读取失败只跳过本轮 stall，timeout 照常。
+
+**RPC**：`axiom.supervision.show {missionId?}` 是 read，返回 `{rules, notifications}`；唯一 rule=stalled，globalMode 与 globalSource=built_in / user 总是返回，给定 Mission 才有 missionMode（覆盖或 null）与 effectiveMode。`axiom.supervision.update {rule: stalled, missionId?, mode}` 是带 contract fence / receipt 的 desktop_only mutation，无 CLI 命令；CLI / Agent 不能更改。未知 Mission 报 mission_not_found；全局 null 报 invalid_argument，校验失败不写设置。Mission 更新在同事务追加修订和 `supervision.updated`（actor=user、objectKind=mission、objectId=missionId、payload `{rule,before,after}`）。全局没有 Mission 审计，只在修订记录 actor=user、provenance={kind:user}。当前 scope 值未变不写修订或审计（初始全局 observe、缺省 Mission null 也不写）；显式设置与继承相同的 Mission 模式仍建立覆盖。update 返回同 scope 的 show view。
 
 每个 runtime 的 WeakMap 在 live/current headless 有文件时记录首末采样时间、样本数和最大静默。每次 `reconcileAttemptBindings` 结束后检查持久状态；不再是最新、未提交 RUNNING Attempt 或 binding 消失时写一条 `attempt.cadence {maxEventGapMs,samples,resolutionMs,partial}`（两类审计均由 auditAttempt 添加 taskId / seq）。resolutionMs=60_000；首采样距 binding.createdAt 超过两周期则 partial=true。在仍 current 时不写；写失败只记身份日志、保留测量供下轮重试，成功后删除内存项。进程重启丢失采样，不重建；60 秒分辨率会漏掉采样间发生并结束的静默，数据不是精确的逐事件间隔。能写 Attempt 目录的 Worker 可刷新文件伪装活动，runtime limit 仍是后备上限。
 
 阈值由 `supervision-policy.ts` 按 pass 惰性计算至多一次，只有实际采到 live headless 文件时才需要。优先级：① getMainE2EConfig().enabled 时正整数 AXIOM_E2E_STALL_THRESHOLD_MS → source=e2e；② 跨 Mission 按 audit sequence 最新优先、查询结果最多 20 条 qualifying attempt.cadence：partial=false、samples≥2，且 Submission 的 Candidate 有 PASS VerificationRun；至少 5 条时取 max(300_000, 2 × 最大 maxEventGapMs)，source=measured；③ 否则 1_200_000，source=default。资格条件先于 SQL LIMIT，同一 Candidate 多个 PASS run 不重复计数。常量唯一词汇见 GLOSSARY §4.6 Supervision rules。
 
-Planner 沿其独立 runtime_budget_exceeded 预算路径；TUI 无 stall 或 cadence；本步无 token budget。观察与后续结果对账、证据表、升档提议和 stalled notify / stop tiers（含 policy / migration）属于 M3-06-3-2；budget_exhausted 属于 M3-06-3-3。
+Planner 沿其独立 runtime_budget_exceeded 预算路径；TUI 无 stall 或 cadence；本步无 token budget。观察 / 通知与后续结果对账、每规则证据表、全局升档提议及人的答复属于 M3-06-3-2b：最新全局决定的 audit_sequence 之后，至少 20 条结果已知、至少 90% 真停滞时提议，接受提议写入 provenance；本步不实施这些规则。budget_exhausted 属于 M3-06-3-3。
 
 ## 5. 合成 session party 与 Run 绑定（D14）
 
