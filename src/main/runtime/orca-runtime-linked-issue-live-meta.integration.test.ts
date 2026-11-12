@@ -129,6 +129,9 @@ describe('runtime commit-message generation linked-issue freshness', () => {
       }
     ])
     const runtime = new OrcaRuntimeService(store as never)
+    runtime.setCommitMessageAgentEnvironmentResolvers({
+      prepareForCodexLaunch: () => '/managed/codex-home'
+    })
 
     // Why: the first generation warms the resolved-worktree cache with the
     // unlinked projection, so a stale read would still answer `unlinked` below.

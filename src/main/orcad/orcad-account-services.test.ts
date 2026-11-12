@@ -115,11 +115,14 @@ describe('orcad account services', () => {
     await expect(
       call(runtime, 'accounts.selectClaude', { accountId: null })
     ).resolves.toMatchObject({ activeAccountId: null })
-    await expect(call(runtime, 'accounts.selectCodex', { accountId: null })).resolves.toMatchObject(
-      {
-        activeAccountId: null
-      }
-    )
+    const selectCodex = call(runtime, 'accounts.selectCodex', { accountId: null })
+    // D83 ruling ①: this non-WSL host only retains the system default on Windows.
+    await (process.platform !== 'win32'
+      ? expect(selectCodex).rejects.toMatchObject({
+          message: 'system_default_retired',
+          code: 'system_default_retired'
+        })
+      : expect(selectCodex).resolves.toMatchObject({ activeAccountId: null }))
   })
 
   it("resolves structured Codex launches to a client-sent home, else this host's selection", async () => {
@@ -133,9 +136,16 @@ describe('orcad account services', () => {
 
     await expect(prepareCodexStructuredLaunch({ launchEnv: clientEnv })).resolves.toBe(CLIENT_HOME)
     expect(resolveCodexStructuredLaunchHome({ launchEnv: clientEnv })).toBe(CLIENT_HOME)
-    // The system default selected here: null is the real ~/.codex, not an ambient CODEX_HOME.
+    // Without a Codex launch context, preparation leaves a plain shell without a managed home.
     await expect(prepareCodexStructuredLaunch({ launchEnv: {} })).resolves.toBeNull()
-    expect(resolveCodexStructuredLaunchHome({ launchEnv: {} })).toBeNull()
+    // D83 ruling ①: a read-only launch lookup refuses the missing account outside Windows.
+    if (process.platform !== 'win32') {
+      expect(() => resolveCodexStructuredLaunchHome({ launchEnv: {} })).toThrow(
+        'No Codex account selected. Add a Codex account in Settings › Accounts.'
+      )
+    } else {
+      expect(resolveCodexStructuredLaunchHome({ launchEnv: {} })).toBeNull()
+    }
     expect(services.listCodexSessionHomes()).toEqual(expect.any(Array))
   })
 

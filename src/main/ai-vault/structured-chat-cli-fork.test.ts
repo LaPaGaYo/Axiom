@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -55,7 +55,7 @@ afterEach(async () => {
   root = undefined
 })
 
-it('locates the current Codex rollout in its recorded home and materializes the selected home', async () => {
+it('locates the current Codex rollout and only materializes the system home on Windows', async () => {
   root = await mkdtemp(join(tmpdir(), 'chat-cli-fork-'))
   vi.stubEnv('ORCA_USER_DATA_PATH', root)
   const home = join(root, 'codex-runtime-home', 'home')
@@ -87,15 +87,25 @@ it('locates the current Codex rollout in its recorded home and materializes the 
       legacyCodexHomePath: home,
       systemCodexHomePath: system
     })
-    // Production uses its system home; this fixture selects the same materialized home explicitly.
+    // D83 ruling ①: macOS/Linux no longer migrate legacy history into the system home.
+    if (process.platform !== 'win32') {
+      expect(prepared).toEqual({ useRealCodexHome: false })
+      return prepared
+    }
+    expect(prepared).toEqual({ useRealCodexHome: true })
+    // Windows still materializes its system home; point the fixture at that temporary home.
     return { ...prepared, useRealCodexHome: false, substituteCodexHome: system }
   })
+  const selectedHome = process.platform === 'win32' ? system : home
   expect(result.cliForkSource).toMatchObject({
     sessionId: 'current-conversation',
-    codexHome: system,
-    filePath: join(system, 'sessions', relative),
+    codexHome: selectedHome,
+    filePath: join(selectedHome, 'sessions', relative),
     cwd: root
   })
+  if (process.platform !== 'win32') {
+    await expect(stat(system)).rejects.toMatchObject({ code: 'ENOENT' })
+  }
 })
 
 it('copies OpenCode directly from the selected record and preserves its typed account and copy id', async () => {

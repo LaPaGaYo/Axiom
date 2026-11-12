@@ -93,7 +93,10 @@ function localTarget(worktreePath: string, linkedIssue: number | null = null) {
 function makeCommands(worktreePath: string): RuntimeGitCommands {
   return new RuntimeGitCommands({
     resolveRuntimeGitTarget: async () => localTarget(worktreePath),
-    getRuntimeSettings: () => ({}) as GlobalSettings
+    getRuntimeSettings: () => ({}) as GlobalSettings,
+    getCommitMessageAgentEnvironment: () => ({
+      prepareForCodexLaunch: () => '/managed/codex-home'
+    })
   })
 }
 
@@ -364,7 +367,10 @@ describe('RuntimeGitCommands', () => {
               customPrompt: 'Saved default that should not win.'
             }
           }
-        }) as unknown as GlobalSettings
+        }) as unknown as GlobalSettings,
+      getCommitMessageAgentEnvironment: () => ({
+        prepareForCodexLaunch: () => '/managed/codex-home'
+      })
     })
 
     await expect(
@@ -425,7 +431,10 @@ describe('RuntimeGitCommands', () => {
               customPrompt: 'Saved default that should not win.'
             }
           }
-        }) as unknown as GlobalSettings
+        }) as unknown as GlobalSettings,
+      getCommitMessageAgentEnvironment: () => ({
+        prepareForCodexLaunch: () => '/managed/codex-home'
+      })
     })
 
     await expect(
@@ -562,7 +571,10 @@ describe('RuntimeGitCommands', () => {
     mocks.generateCommitMessageFromContext.mockResolvedValue({ success: true, message: 'docs' })
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => localTarget(worktreePath, 123),
-      getRuntimeSettings: () => ({}) as GlobalSettings
+      getRuntimeSettings: () => ({}) as GlobalSettings,
+      getCommitMessageAgentEnvironment: () => ({
+        prepareForCodexLaunch: () => '/managed/codex-home'
+      })
     })
 
     await commands.generateRuntimeCommitMessage('id:wt-1')
@@ -586,6 +598,9 @@ describe('RuntimeGitCommands', () => {
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => localTarget(worktreePath, 123),
       getRuntimeSettings: () => ({}) as GlobalSettings,
+      getCommitMessageAgentEnvironment: () => ({
+        prepareForCodexLaunch: () => '/managed/codex-home'
+      }),
       getWorktreeLinkedIssue
     })
 
@@ -612,6 +627,9 @@ describe('RuntimeGitCommands', () => {
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => localTarget(worktreePath, 123),
       getRuntimeSettings: () => ({}) as GlobalSettings,
+      getCommitMessageAgentEnvironment: () => ({
+        prepareForCodexLaunch: () => '/managed/codex-home'
+      }),
       getWorktreeLinkedIssue: () => null
     })
 
@@ -633,6 +651,9 @@ describe('RuntimeGitCommands', () => {
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => localTarget(worktreePath, 123),
       getRuntimeSettings: () => ({}) as GlobalSettings,
+      getCommitMessageAgentEnvironment: () => ({
+        prepareForCodexLaunch: () => '/managed/codex-home'
+      }),
       // Why: what the host reports when its store is not initialized yet.
       getWorktreeLinkedIssue: () => undefined
     })
@@ -664,6 +685,9 @@ describe('RuntimeGitCommands', () => {
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => localTarget(worktreePath, 123),
       getRuntimeSettings: () => ({}) as GlobalSettings,
+      getCommitMessageAgentEnvironment: () => ({
+        prepareForCodexLaunch: () => '/managed/codex-home'
+      }),
       getWorktreeLinkedIssue: () => 321
     })
 
