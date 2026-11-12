@@ -63,7 +63,7 @@
 | `SUBMITTED` | `worker_dispatches.state` + `dispatch_contexts.status` | `succeeded` ∧ `completed` |
 | `FAILED` | `worker_dispatches.state` 或 `dispatch_contexts.status` | `failed`；`circuit_broken`（`DISPATCH_CIRCUIT_BREAK_FAILURES = 3`，`db/dispatch-context/dispatch-circuit-breaker.ts`）→ FAILED 且触发 B4 |
 | `STOPPED` | `worker_dispatches.state` | `stopped`；`dispatch_contexts.termination_reason` ∈ `operator_close/signaled/exited/unknown` 作为附注 |
-| `ABANDONED` | `worker_dispatches.state` | `abandoned`（`abandonWorkerDispatch`，`db/worker-dispatch/worker-dispatch-abandon.ts`） |
+| `ABANDONED` | `worker_dispatches.state` | `abandoned`（`abandonWorkerDispatch` 写 stage=abandoned；`reconcileMissingWorkerTerminal` 写 stage=terminal_missing，见下文） |
 | `START_UNKNOWN` / `STOP_UNKNOWN` | `worker_dispatches.state` | `start_unknown` / `stop_unknown` |
 | `liveness` | `PtyLivenessVerdict`（`src/shared/pty-liveness-verdict.ts`）；持久化为 facet `liveness` + freshness（`db/attempt-outcome-projection.ts`，`DEFAULT_FRESH_AFTER_MS = 60_000`） | `live / unverifiable / exited`（§3d） |
 | `workspace` | `worker_terminal_resources.release_state` | `retained`→retained，`released`→released；`not_requested/requested/releasing/unknown` 折叠为 `pending`（术语表 §4.6） |
@@ -72,6 +72,10 @@
 | 失败计数 | `dispatch_contexts.failure_count`（跨重试累加） | Control Plane 的 `retryPolicy.maxAttempts` 为权威计数，circuit breaker 是下限保护（B4） |
 
 `src/main/axiom/execution/attempt-projection.ts` 复用 `projectFleetWorker(runtime, db, dispatchId)` 的 state / resource / workspace；resource absent → workspace null；workspace.id → worktreeId。M2-05 的 `axiom.attempt.show/list` 已注册，异步经 `inspectWorkerTerminal` 读取执行宿主 liveness（按 §3d 折叠，不用 fleet 的 agent-status 判定），可选 `livenessReason` 优先保留 reason、否则保留非 live/exited 的 status，无则 null。
+
+M3-06-2b-3 / D88 修订 ③：Axiom 通过既有 `db.getWorkerDispatch(dispatchId)` 读取该 Attempt 自己的 `worker_dispatches.stage`、state、runtime_epoch、last_error，不匹配错误文字、terminal handle、PTY id 或 liveness。`stage=terminal_missing` 的唯一写入者是 `runtime/orchestration/db/worker-dispatch/worker-terminal-recovery.ts` 的 `reconcileMissingWorkerTerminal`；调用者是 `RuntimeLegacyWorkerTerminalRecoveryPersistence.reconcileMissing`，由 `runLegacyWorkerTerminalRecovery` 在成功查询库存后证明本地 PTY 缺失、或确认 handle / incarnation 被替换时调用；SSH 还需 relay 的 isTerminalProvenAbsent，库存查询失败则延期。该 pass 在桌面 renderer-startup IPC `app:recoverLegacyWorkerTerminalsForRendererStartup`、headless serve 的 RPC 绑定前、orcad 启动 Control Plane 后执行，并在 SSH 重连与延期候选重试时执行。
+
+内核事务使活跃 dispatch failed（到阈值为 circuit_broken），failure_count +1，worker abandoned / terminal_missing；有 pending stop 则 worker stopped / terminal_missing。它不改 runtime_epoch 或终端资源。Axiom 仅对旧 runtime（含 null）的非 Planner headless abandoned / terminal_missing 且没有可接受整数 exit-code 采用保全与 interruption 结算，规则见 control-plane.md §4 Recovery b；其它终态含 pending-stop 的 stopped 不变。内核无需改动，不反向 import Axiom；不采用 Orca #40983 的 coordinator 邮件。
 
 ### 3c. 消息类型（D9）
 

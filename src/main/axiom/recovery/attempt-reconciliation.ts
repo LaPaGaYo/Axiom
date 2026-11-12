@@ -14,6 +14,11 @@ import { isUnusableHeadlessLaunch } from '../execution/headless-launch-record'
 import { watchHeadlessAttempt } from '../execution/headless-attempt-watcher'
 import { captureRecoveryAttempt, recoveryEndingStillCurrent } from './attempt-recovery-preservation'
 import {
+  isRestartTerminalMissing,
+  hasAcceptedExitMarker,
+  settleRecoveryDaemonLoss
+} from './attempt-daemon-loss'
+import {
   settleRecoveryTerminal,
   settleRecoveryProcessExit,
   settleRecoveryBudget
@@ -170,6 +175,22 @@ export async function reconcileAttempt(
   }
   const terminalReason = worker && terminalReasons.get(worker.state)
   if (terminalReason && worker) {
+    if (
+      headless &&
+      isRestartTerminalMissing(worker, runtime.getRuntimeId()) &&
+      !(await hasAcceptedExitMarker(dispatchId))
+    ) {
+      const preserved = await captureRecoveryAttempt(ctx, binding, 'terminal_missing')
+      if (
+        !recoveryEndingStillCurrent(ctx, binding, worker) ||
+        !isRestartTerminalMissing(db.getWorkerDispatch(dispatchId), runtime.getRuntimeId())
+      ) {
+        return reconcileAttempt(ctx, binding)
+      }
+      settleRecoveryDaemonLoss(ctx, { ...binding, dispatchId }, worker, preserved)
+      entry.action = 'interrupted'
+      return entry
+    }
     // kernel_stopped records a kernel receipt that has no Axiom stop settlement yet.
     const preserved =
       headless && worker.state === 'stopped'
