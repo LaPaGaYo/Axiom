@@ -104,6 +104,7 @@ export async function withFixtureMission(
     holdExitSubmission?: boolean
     holdAttemptDispatch?: boolean
     interruptionBackoffMs?: number[]
+    codexVersion?: string
     provider?: AxiomFixtureProvider
   } = {}
 ) {
@@ -111,6 +112,9 @@ export async function withFixtureMission(
   const temp = mkdtempSync(path.join(os.tmpdir(), 'axiom-fixture-mission-'))
   const executable = createAxiomFixtureProvider(temp, provider)
   const ledgerPath = path.join(temp, 'submissions.jsonl')
+  if (options.codexVersion !== undefined) {
+    writeFileSync(`${ledgerPath}.version`, options.codexVersion)
+  }
   const holdPath = `${ledgerPath}.hold`
   let cliEntry = path.join(process.cwd(), 'out', 'cli', 'index.js')
   if (options.holdWorkers) {

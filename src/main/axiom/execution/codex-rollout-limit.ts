@@ -1,6 +1,7 @@
 import { constants } from 'node:fs'
-import { open, readdir, realpath, stat } from 'node:fs/promises'
+import { open, realpath, stat } from 'node:fs/promises'
 import path from 'node:path'
+import { findCodexSessionRecord } from './codex-session-record'
 import { z } from 'zod'
 import { CodexUsageLimits } from '../../codex/codex-usage-limits'
 import type { AgentSessionUsageLimit } from '../../../shared/agent-session-usage-limit'
@@ -23,55 +24,6 @@ const LimitRecord = z.object({
     })
   })
 })
-
-function inside(root: string, file: string): boolean {
-  const relative = path.relative(root, file)
-  return (
-    relative !== '' &&
-    relative !== '..' &&
-    !relative.startsWith(`..${path.sep}`) &&
-    !path.isAbsolute(relative)
-  )
-}
-
-async function latestRollout(root: string, threadId: string, startedAt: number, now: number) {
-  const day = new Date(startedAt)
-  day.setHours(0, 0, 0, 0)
-  let latest: { file: string; mtimeMs: number } | undefined
-  // Only the Attempt's local calendar days, never a recursive account-home scan.
-  while (day.getTime() <= now) {
-    const directory = path.join(
-      root,
-      String(day.getFullYear()),
-      String(day.getMonth() + 1).padStart(2, '0'),
-      String(day.getDate()).padStart(2, '0')
-    )
-    day.setDate(day.getDate() + 1)
-    let resolved: string
-    try {
-      resolved = await realpath(directory)
-    } catch {
-      continue
-    }
-    if (!inside(root, resolved)) {
-      return undefined
-    }
-    for (const name of await readdir(resolved)) {
-      if (!name.startsWith('rollout-') || !name.endsWith(`-${threadId}.jsonl`)) {
-        continue
-      }
-      const file = await realpath(path.join(resolved, name))
-      if (!inside(root, file)) {
-        return undefined
-      }
-      const info = await stat(file)
-      if (info.isFile() && (!latest || info.mtimeMs > latest.mtimeMs)) {
-        latest = { file, mtimeMs: info.mtimeMs }
-      }
-    }
-  }
-  return latest?.file
-}
 
 function appServerWindow(window: z.infer<typeof Window> | null | undefined) {
   return window == null
@@ -136,11 +88,12 @@ export async function readCodexRolloutLimit(input: {
     ) {
       return undefined
     }
-    const root = path.join(await realpath(input.accountHome), 'sessions')
-    if ((await realpath(root)) !== root) {
-      return undefined
-    }
-    const file = await latestRollout(root, input.threadId, input.startedAt, now)
+    const file = await findCodexSessionRecord({
+      accountHome: input.accountHome,
+      threadId: input.threadId,
+      startedAt: input.startedAt,
+      now
+    })
     if (!file) {
       return undefined
     }

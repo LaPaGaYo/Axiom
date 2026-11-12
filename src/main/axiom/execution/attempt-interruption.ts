@@ -26,6 +26,7 @@ export function settleInterruptedAttempt(
     failure: AttemptFailure
     account?: z.infer<typeof AttemptContinuePayloadSchema>['account']
     now: number
+    resumeRefused?: boolean
   }
 ): { settled: boolean } {
   const { store, missions, db, runtime, effects } = ctx
@@ -41,7 +42,8 @@ export function settleInterruptedAttempt(
       return { settled: false }
     }
     const previous = store.getEffect('attempt.continue', `${input.taskId}/${input.seq - 1}`)
-    const chain = 1 + (previous?.kind === 'attempt.continue' ? previous.payload.chain : 0)
+    const previousChain = previous?.kind === 'attempt.continue' ? previous.payload.chain : 0
+    const chain = input.resumeRefused ? Math.max(1, previousChain) : 1 + previousChain
     missions.transitionTaskStage({
       taskId: input.taskId,
       to: 'NEEDS_FIX',
@@ -49,7 +51,7 @@ export function settleInterruptedAttempt(
       actor: input.actor,
       attemptCountDelta: -1
     })
-    if (input.failure.retryable && chain < INTERRUPTION_CHAIN_LIMIT) {
+    if (input.resumeRefused || (input.failure.retryable && chain < INTERRUPTION_CHAIN_LIMIT)) {
       missions.transitionTaskStage({
         taskId: input.taskId,
         to: 'READY',
@@ -60,7 +62,9 @@ export function settleInterruptedAttempt(
         missionId: task.missionId,
         kind: 'attempt.continue',
         key: `${input.taskId}/${input.seq}`,
-        dueAt: interruptionDueAt(input.failure, chain, input.now),
+        dueAt: input.resumeRefused
+          ? new Date(input.now).toISOString()
+          : interruptionDueAt(input.failure, chain, input.now),
         payload: {
           taskId: input.taskId,
           seq: input.seq,

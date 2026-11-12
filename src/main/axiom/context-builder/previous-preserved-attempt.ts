@@ -50,7 +50,10 @@ async function readRecords(artifacts: ArtifactStore, baseline: SnapshotAttemptBa
   }
 }
 
-function endingLine({ previousSeq, ending }: SnapshotAttemptBaseline) {
+export function endingLine({
+  previousSeq,
+  ending
+}: Pick<SnapshotAttemptBaseline, 'previousSeq' | 'ending'>) {
   if (ending.kind === 'stopped') {
     return `Attempt ${previousSeq} was stopped before it could submit; recorded reason: ${quote(ending.reason.slice(-200))}. A stopped run is suspect: its direction may have been wrong or stuck. Review what it left before building on it.`
   }

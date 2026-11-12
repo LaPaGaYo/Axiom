@@ -9,7 +9,7 @@ import { classifyHeadlessFailure } from './attempt-failure-classification'
 import { readAttemptAccount } from './attempt-account'
 import { readCodexRolloutLimit } from './codex-rollout-limit'
 import { INTERRUPTION_MAX_RESET_MS } from './interruption-policy'
-import { exposeUtcTimestamp } from '../../runtime/orchestration/db/utc-timestamp'
+import { sessionOriginStartedAt } from './in-place-session'
 import type { parseHeadlessWorkerEvents } from './headless-worker-events'
 import { collectAttemptPreservation } from './attempt-preservation'
 import type { PreservationInput } from './preserved-snapshot'
@@ -25,6 +25,7 @@ export async function settleHeadlessExitFailure(
     lastMessage: string
     reportError?: string
     eventAudit: Record<string, unknown>
+    resumeRefused?: boolean
     launch: PreservationInput['launch']
   }
 ) {
@@ -32,11 +33,16 @@ export async function settleHeadlessExitFailure(
   const db = runtime.getOrchestrationDb()
   const { store, missions, effects, artifacts } = getAxiomControlPlane(runtime)
   const now = Date.now()
-  const classified = classifyHeadlessFailure({
-    eventsText: input.eventsText,
-    provider: input.provider,
-    now
-  })
+  const classified = input.resumeRefused
+    ? {
+        kind: 'interrupted' as const,
+        failure: { class: 'unknown' as const, retryable: true, source: 'absent' as const }
+      }
+    : classifyHeadlessFailure({
+        eventsText: input.eventsText,
+        provider: input.provider,
+        now
+      })
   const { kind } = classified
   let failure = classified.failure
   const binding = store.getAttemptBindingByDispatch(attemptId)
@@ -48,9 +54,7 @@ export async function settleHeadlessExitFailure(
     const limit = await readCodexRolloutLimit({
       accountHome: launchAccount?.home,
       threadId: events.providerSessionId,
-      startedAt: Date.parse(
-        exposeUtcTimestamp(db.getWorkerDispatch(attemptId)?.created_at ?? null) ?? ''
-      ),
+      startedAt: binding ? sessionOriginStartedAt(db, store, binding) : Number.NaN,
       now: () => now
     })
     const reset = limit?.resetsAt
@@ -89,7 +93,7 @@ export async function settleHeadlessExitFailure(
       before: null,
       after: {
         taskId: authority.task.taskId,
-        reason: 'process_exited',
+        reason: input.resumeRefused ? 'resume_refused' : 'process_exited',
         evidence: 'exit_code',
         exitCode,
         settlement: { kind },
@@ -125,7 +129,8 @@ export async function settleHeadlessExitFailure(
           ...settlement,
           failure,
           now,
-          account: launchAccount?.account
+          account: launchAccount?.account,
+          resumeRefused: input.resumeRefused
         }
       )
     } else {

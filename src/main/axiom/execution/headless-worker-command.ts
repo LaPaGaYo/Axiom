@@ -15,22 +15,9 @@ export function hasHeadlessWorkerBuilder(provider: string, platform = process.pl
   return ['codex', 'claude'].includes(provider) && (platform === 'darwin' || platform === 'linux')
 }
 
-export function buildHeadlessWorkerCommand(input: {
-  provider: string
-  model: string
-  effort: string
-  worktree: string
-  attemptDir: string
-  platform?: NodeJS.Platform
-  commandOverride?: string
-  accountHomePath?: string
-  egressEnv?: Record<string, string>
-}) {
-  if (!hasHeadlessWorkerBuilder(input.provider, input.platform)) {
-    return null
-  }
-  const override = input.commandOverride?.trim()
-  const claude = input.provider === 'claude'
+export function resolveHeadlessWorkerBinary(provider: string, commandOverride?: string): string {
+  const override = commandOverride?.trim()
+  const claude = provider === 'claude'
   const binary = override
     ? structuredAgentCommandToken(override)
     : claude
@@ -41,6 +28,26 @@ export function buildHeadlessWorkerCommand(input: {
       `Headless ${claude ? 'Claude' : 'Codex'} requires an executable command override.`
     )
   }
+  return binary
+}
+
+export function buildHeadlessWorkerCommand(input: {
+  provider: string
+  model: string
+  effort: string
+  worktree: string
+  attemptDir: string
+  platform?: NodeJS.Platform
+  commandOverride?: string
+  accountHomePath?: string
+  egressEnv?: Record<string, string>
+  resumeSessionId?: string
+}) {
+  if (!hasHeadlessWorkerBuilder(input.provider, input.platform)) {
+    return null
+  }
+  const claude = input.provider === 'claude'
+  const binary = resolveHeadlessWorkerBinary(input.provider, input.commandOverride)
   const catalog = claude ? CLAUDE_SESSION_OPTION_CATALOG : CODEX_SESSION_OPTION_CATALOG
   const model =
     input.model === 'policy-default' ? [] : (catalog.modelApply.launchArgs?.(input.model) ?? [])
@@ -114,6 +121,7 @@ export function buildHeadlessWorkerCommand(input: {
       path.join(input.attemptDir, 'last-message.md'),
       ...model,
       ...effort,
+      ...(input.resumeSessionId ? ['resume', input.resumeSessionId] : []),
       '-'
     ],
     env,
