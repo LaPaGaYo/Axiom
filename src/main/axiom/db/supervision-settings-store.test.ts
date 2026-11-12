@@ -70,7 +70,9 @@ it('allocates scope revisions and the audit watermark within the writing transac
   })
   expect(
     db.db
-      .prepare('SELECT * FROM supervision_settings WHERE mission_id = ? AND revision = 1')
+      .prepare(
+        'SELECT mode, audit_sequence FROM supervision_settings WHERE mission_id = ? AND revision = 1'
+      )
       .get('')
   ).toEqual(expect.objectContaining({ mode: first.mode, audit_sequence: first.auditSequence }))
 })
