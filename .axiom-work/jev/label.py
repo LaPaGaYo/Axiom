@@ -52,6 +52,19 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M3-06-3-2', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'stall modes as briefed: append-only settings table without a schema version, desktop-only update with a '
+        'Mission audit, effective mode read per pass, notify once per Attempt and mode and state-free, one shared stop sequence '
+        'for timeout and stalled with the timeout transaction name unchanged; unit red check fails on main recovery files at '
+        'the assertions; new e2e green on its first host run; no verifier change',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': ['reconciliation, evidence table and upgrade proposals (M3-06-3-2b)'],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M3-06-3', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'supervision step as briefed: the runtime stop unchanged apart from the timeout reason and the audit in the '
