@@ -238,7 +238,7 @@ describe('Attempt recovery', () => {
       audits()
         .filter((e) => e.event === 'task.stage')
         .at(-2)?.after
-    ).toMatchObject({ reason: 'runtime_budget_exceeded' })
+    ).toMatchObject({ reason: 'timeout' })
   })
   it('settles a kernel-failed Attempt left RUNNING across the crash window', async () => {
     f.db.failDispatch(f.t01.attemptId, 'exit', {

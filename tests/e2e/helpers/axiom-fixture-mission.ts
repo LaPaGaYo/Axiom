@@ -104,6 +104,7 @@ export async function withFixtureMission(
     holdExitSubmission?: boolean
     holdAttemptDispatch?: boolean
     interruptionBackoffMs?: number[]
+    stallThresholdMs?: number
     codexVersion?: string
     provider?: AxiomFixtureProvider
   } = {}
@@ -139,6 +140,7 @@ process.exit(require('node:child_process').spawnSync(process.execPath, [${JSON.s
     PATH: `${temp}${path.delimiter}${process.env.PATH ?? ''}`,
     AXIOM_E2E_LEDGER: ledgerPath,
     AXIOM_E2E_INTERRUPTION_BACKOFF_MS: options.interruptionBackoffMs?.join(',') ?? '',
+    AXIOM_E2E_STALL_THRESHOLD_MS: options.stallThresholdMs?.toString() ?? '',
     ...(options.holdExitSubmission ? { AXIOM_E2E_HOLD_EXIT_SUBMISSION: '1' } : {}),
     ...(options.holdAttemptDispatch ? { AXIOM_E2E_HOLD_ATTEMPT_DISPATCH: '1' } : {}),
     ...(options.runVerification ? {} : { AXIOM_E2E_HOLD_VERIFICATION: '1' }),

@@ -36,8 +36,14 @@ it('preserves a headless Attempt after its runtime budget stop is confirmed', as
       .audits()
       .slice(before)
       .map((row) => row.event)
-  ).toEqual(['attempt.stopped', 'attempt.preserved', 'task.stage', 'task.stage'])
-  expect(f.audits().slice(before)[0]?.after).toMatchObject({ reason: 'runtime_budget_exceeded' })
+  ).toEqual([
+    'attempt.supervised',
+    'attempt.stopped',
+    'attempt.preserved',
+    'task.stage',
+    'task.stage'
+  ])
+  expect(f.audits().slice(before)[1]?.after).toMatchObject({ reason: 'timeout' })
   expect(f.store.getTaskStage(f.t01.taskId)).toMatchObject({ stage: 'READY', attemptCount: 1 })
   expect(await readFile(path.join(f.repo.root, 'partial.ts'), 'utf8')).toContain('partial')
   continued()

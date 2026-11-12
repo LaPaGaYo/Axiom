@@ -146,6 +146,16 @@ BLOCKED           → 按原因解除（D70 修订）：回到进入前的非运
 | `workspace: retained / released / pending`                                                                                                                          | `worker_terminal_resources.release_state`（`retained`、`released`；其余 `not_requested / requested / releasing / unknown` 折叠为 `pending`）                                                                                                                  |
 | 规则：`liveness = unverifiable` 期间 Attempt 视为仍在 RUNNING，禁止对同一 worktree 冷启动新 Attempt；超过 policy 时限后由 RecoveryService 转 `ABANDONED` 并留证据。 |
 
+#### Supervision rules（M3-06-3；D88 9–10、D60 / D68 修订）
+
+`timeout` 是人设的 Attempt runtime limit，模式 `auto`；超过 Task 的 `budget.maxRuntimeMinutes`（未设则 policy）后沿原停止、确认、保全、结算路径执行，停止与结算 reason 为 `timeout`，计入 `maxAttempts`。Planner 的独立 `runtime_budget_exceeded` 不变。`stalled` 是 headless events.jsonl 的 mtime 距今超过阈值，模式 `observe`：只记录本来何时会采取动作，不停止、不发消息、不改变状态。
+
+`attempt.supervised` 的共同字段为 `taskId / seq / rule / mode / thresholdMs / thresholdSource`；timeout 另含 `elapsedMs / action: stopped | stop_unknown`，source 为 `task | policy`，与停止审计同事务；stalled 另含 `idleMs / lastEventAt / wouldActAt`（后两者 ISO 时间），source 为 `measured | default | e2e`，每 Attempt 仅一条。`wouldActAt = lastEventAt + thresholdMs`。
+
+`attempt.cadence {taskId, seq, maxEventGapMs, samples, resolutionMs, partial}`：按 runtime 在内存中采样 live/current headless Attempt 的事件静默；文件缺失或不可读时跳过。Attempt 不再是 Task 的最新、未提交 RUNNING Attempt（或 binding 消失）后仅写一次；`maxEventGapMs` 是所采到的最大静默，`resolutionMs = ATTEMPT_RECONCILE_INTERVAL_MS = 60_000`。首次采样晚于 binding 创建两周期则 `partial=true`；重启丢失内存记录，不重建。
+
+停滞常量：`STALL_DEFAULT_THRESHOLD_MS = 1_200_000`（20 分钟）、`STALL_MIN_THRESHOLD_MS = 300_000`（5 分钟）、`STALL_CADENCE_WINDOW = 20`、`STALL_MIN_VERIFIED_ATTEMPTS = 5`、`STALL_GAP_MULTIPLIER = 2`。跨 Mission 按审计 sequence 降序选最新 20 条 qualifying cadence（非 partial、至少两次采样、Submission 的 Candidate 有 PASS VerificationRun）；至少 5 条才取 `max(5 分钟, 2 × 最大 maxEventGapMs)`，否则 default。仅 e2e enabled 时正整数 `AXIOM_E2E_STALL_THRESHOLD_MS` 优先，source=e2e。每 pass 惰性计算至多一次。结果对账、升档与 notify/stop tiers 属 M3-06-3-2；token budget 属 M3-06-3-3；TUI 不采样或观察停滞。
+
 ### 4.7 Candidate
 
 `ACTIVE → SUPERSEDED`。
