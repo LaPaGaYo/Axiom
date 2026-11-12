@@ -576,13 +576,39 @@ M3-01 的 VerificationService 在 Mission recovery 后、首次 kick 前尝试�
 
 **档位与修订**：`supervision_settings` 是每次 open 幂等建表的新 side table，不改 schema version / mission_policies。主键 `(rule, mission_id, revision)`，`mission_id=''` 是全局；每个 scope 只追加修订，最高 revision 是当前值。mode=null 只用于清除 Mission 覆盖，全局不可为空。每条包含 actor、provenance、audit_sequence（写入时全库 audit_events 的最高 sequence；空库 0）及 created_at；下一个 revision 与 watermark 在插入事务内计算。Mission 删除时独立 trigger 清理它的修订，保留全局。有效档位 = 最新 Mission 非空覆盖 → 最新全局 → built-in observe。每次需要 stall rule 的 pass 读取一次，不跨 pass 缓存；设置读取失败只跳过本轮 stall，timeout 照常。
 
-**RPC**：`axiom.supervision.show {missionId?}` 是 read，返回 `{rules, notifications}`；唯一 rule=stalled，globalMode 与 globalSource=built_in / user 总是返回，给定 Mission 才有 missionMode（覆盖或 null）与 effectiveMode。`axiom.supervision.update {rule: stalled, missionId?, mode}` 是带 contract fence / receipt 的 desktop_only mutation，无 CLI 命令；CLI / Agent 不能更改。未知 Mission 报 mission_not_found；全局 null 报 invalid_argument，校验失败不写设置。Mission 更新在同事务追加修订和 `supervision.updated`（actor=user、objectKind=mission、objectId=missionId、payload `{rule,before,after}`）。全局没有 Mission 审计，只在修订记录 actor=user、provenance={kind:user}。当前 scope 值未变不写修订或审计（初始全局 observe、缺省 Mission null 也不写）；显式设置与继承相同的 Mission 模式仍建立覆盖。update 返回同 scope 的 show view。
+**RPC**：`axiom.supervision.show {missionId?}` 是 read，返回 `{rules, notifications, evidence, proposals}`；唯一 rule=stalled，globalMode 与 globalSource=built_in / user / proposal 总是返回，给定 Mission 才有 missionMode（覆盖或 null）与 effectiveMode。`axiom.supervision.update {rule: stalled, missionId?, mode}` 是带 contract fence / receipt 的 desktop_only mutation，无 CLI 命令；CLI / Agent 不能更改。未知 Mission 报 mission_not_found；全局 null 报 invalid_argument，校验失败不写设置。Mission 更新在同事务追加修订和 `supervision.updated`（actor=user、objectKind=mission、objectId=missionId、payload `{rule,before,after}`）。全局没有 Mission 审计，只在修订记录 actor=user、provenance={kind:user}；直接改变全局档位在同一事务将该规则的 OPEN 提议标为 SUPERSEDED（resolver=user、resolved_at），Mission 覆盖改动不影响全局提议。当前 scope 值未变不写修订或审计（初始全局 observe、缺省 Mission null 也不写）；显式设置与继承相同的 Mission 模式仍建立覆盖。update 返回同 scope 的 show view。
 
 每个 runtime 的 WeakMap 在 live/current headless 有文件时记录首末采样时间、样本数和最大静默。每次 `reconcileAttemptBindings` 结束后检查持久状态；不再是最新、未提交 RUNNING Attempt 或 binding 消失时写一条 `attempt.cadence {maxEventGapMs,samples,resolutionMs,partial}`（两类审计均由 auditAttempt 添加 taskId / seq）。resolutionMs=60_000；首采样距 binding.createdAt 超过两周期则 partial=true。在仍 current 时不写；写失败只记身份日志、保留测量供下轮重试，成功后删除内存项。进程重启丢失采样，不重建；60 秒分辨率会漏掉采样间发生并结束的静默，数据不是精确的逐事件间隔。能写 Attempt 目录的 Worker 可刷新文件伪装活动，runtime limit 仍是后备上限。
 
 阈值由 `supervision-policy.ts` 按 pass 惰性计算至多一次，只有实际采到 live headless 文件时才需要。优先级：① getMainE2EConfig().enabled 时正整数 AXIOM_E2E_STALL_THRESHOLD_MS → source=e2e；② 跨 Mission 按 audit sequence 最新优先、查询结果最多 20 条 qualifying attempt.cadence：partial=false、samples≥2，且 Submission 的 Candidate 有 PASS VerificationRun；至少 5 条时取 max(300_000, 2 × 最大 maxEventGapMs)，source=measured；③ 否则 1_200_000，source=default。资格条件先于 SQL LIMIT，同一 Candidate 多个 PASS run 不重复计数。常量唯一词汇见 GLOSSARY §4.6 Supervision rules。
 
-Planner 沿其独立 runtime_budget_exceeded 预算路径；TUI 无 stall 或 cadence；本步无 token budget。观察 / 通知与后续结果对账、每规则证据表、全局升档提议及人的答复属于 M3-06-3-2b：最新全局决定的 audit_sequence 之后，至少 20 条结果已知、至少 90% 真停滞时提议，接受提议写入 provenance；本步不实施这些规则。budget_exhausted 属于 M3-06-3-3。
+Planner 沿其独立 runtime_budget_exceeded 预算路径；TUI 无 stall 或 cadence；本步无 token budget，budget_exhausted 属于 M3-06-3-3。
+
+**观察对账（M3-06-3-2b；D88 9(b)、2026-11-12 修订、DEF-35）**：每次 RecoveryService pass 在 flushAttemptCadences 之后调用 stall-reconciliation；按 audit sequence 从旧到新取至多 100 条尚未对账的 stalled observe / notify 观察，stop 与 timeout 观察不参与。每条单独事务重新查重，只有审计写入，没有 Attempt / Task / binding / worker / effect 变更；一条读取或写入失败只记录 observationSequence 并留到下一 pass，其他条目继续。结果按以下优先序判定：
+
+| 事实 | 结果 | endedBy |
+|---|---|---|
+| 有 Submission，Candidate 任一 run 为 PASS（优先于 FAIL 和非终态） | false_positive | verification_pass |
+| 有 Submission，无 PASS，仍有 QUEUED / RUNNING / INCONCLUSIVE / SPECIALIST_REVIEW / HUMAN_REVIEW | pending，不写 | — |
+| 有 Submission，无 PASS 和非终态，有 FAIL | hit | verification_fail |
+| Candidate 的 runs 全部 CANCELED | inconclusive | canceled_runs |
+| Submission 尚无 run | inconclusive | unknown |
+| 无 Submission，最新 binding 且 Task RUNNING | pending，不写 | — |
+| 无 Submission，attempt.stopped reason=timeout | hit | timeout |
+| 无 Submission，attempt.failed settlement.kind=failed / unchanged | hit | failed / unchanged |
+| attempt.failed settlement.kind=interrupted | inconclusive | interrupted |
+| attempt.failed settlement.kind=no_change / blocked | inconclusive | declared |
+| 其它 attempt.stopped（含 stalled、kernel_stopped、mission_canceled） | inconclusive | stopped |
+| attempt.abandoned | inconclusive | abandoned |
+| 非当前 binding，无上述事实（含 stop_unknown、缺失 settlement） | inconclusive | unknown |
+
+审计 `attempt.supervision_reconciled {rule:stalled, mode, observationSequence, outcome, endedBy, endedAt, savedMs?}` 经 auditAttempt 写在原 Attempt，补 taskId / seq。endedAt 用决定性 ending audit 的时间；验证结果（含 canceled_runs）用 Submission 时间；未知且无 ending audit 时用本 pass 的 now。SQLite UTC 经 exposeUtcTimestamp 转 ISO。仅 hit 写 savedMs=max(0, endedAt−wouldActAt)，展示分钟时除 60,000；不计算 token。已写的结果永久固定，即使之后验证重跑出现 PASS 也不重算。Mission 永不恢复时，其 pending 观察保持 pending。已删除或身份不匹配的 binding 不伪造身份，按单条读取失败保留。
+
+**证据表与提议**：show 的 evidence 数组包含 `{rule:stalled, window, total}`；两者均含 hits / falsePositives / known / inconclusive / hitRate / savedMs / sinceSequence / throughSequence。known=hits+falsePositives，hitRate=hits/known（known=0 时 null），savedMs 只累加 hit。窗口起点是 max(最新全局修订 audit_sequence，最新已解决提议 through_sequence)，都没有时为 0，只计 sequence 严格更高的 reconciliation；total 从 0 起计全部。读取强制走已有 idx_audit_events_event_sequence(event,sequence)，throughSequence 是最高计入序号（空集为 0）。Mission 覆盖不重置窗口。
+
+每 pass 对账结束后，globalMode 非 stop、无 OPEN 提议、window.known≥20 且 hitRate≥0.9 时，事务插入一条 `supervision_proposals`：fromMode 为当前全局档、toMode 是下一档 observe→notify→stop，evidence 为该窗口快照，since/through 为快照边界。数值集中在与 stall policy 相邻的 stall-proposal-policy.ts；唯一部分索引保证每 rule 至多一个 OPEN。提议是全局记录，不随 Mission 删除、不自动过期。show.proposals 返回 OPEN（如有），再按 resolved_at / rowid 降序取最近五条已解决记录，每条为 `{id,rule,fromMode,toMode,status,evidence,sinceSequence,throughSequence,resolver,createdAt,resolvedAt}`。
+
+**人的回答**：`axiom.supervision.resolve {proposalId, resolution:accept|dismiss}` 是 desktop_only mutation，复用 contract fence / receipt，无 CLI 或 Approval 对象。未知 id→invalid_argument；非 OPEN→illegal_transition；accept 时全局 mode 不等于 fromMode→stale_state，三者均不写。accept 在同一事务追加全局 revision（mode=toMode、actor=user、provenance={kind:proposal,proposalId}）并标 ACCEPTED；dismiss 仅标 DISMISSED。两者 resolver=user、resolved_at=当前 UTC，返回 show view；最新修订来自提议时 globalSource=proposal。dismiss 的窗口从该提议快照的 through_sequence 重开，提议打开之后的新结果保留在窗口；accept / 直接全局变更还应用新修订 watermark，所以当时已存在的审计不再计入新窗口。
 
 ## 5. 合成 session party 与 Run 绑定（D14）
 

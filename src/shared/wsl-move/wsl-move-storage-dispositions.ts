@@ -186,6 +186,7 @@ export const SQLITE_TABLE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> 
         'audit_events',
         'axiom_effects',
         'supervision_settings',
+        'supervision_proposals',
         'worker_dispatches',
         'worker_terminal_resources',
         'worker_terminal_archives',

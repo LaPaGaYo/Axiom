@@ -2,14 +2,26 @@ import { defineMethod } from '../../core'
 import { getAxiomControlPlane } from '../../../../axiom/control-plane'
 import {
   showSupervision,
-  updateSupervision
+  updateSupervision,
+  resolveSupervision
 } from '../../../../axiom/supervision/supervision-settings'
 import {
   SupervisionShowParams,
-  SupervisionUpdateParams
+  SupervisionUpdateParams,
+  SupervisionResolveParams
 } from '../../../../../shared/axiom-contract/supervision'
 
 export const AXIOM_SUPERVISION_METHODS = [
+  defineMethod({
+    name: 'axiom.supervision.resolve',
+    permission: 'workspace',
+    params: SupervisionResolveParams,
+    handler: (p, { runtime }) =>
+      resolveSupervision(
+        { store: getAxiomControlPlane(runtime).store, db: runtime.getOrchestrationDb() },
+        p
+      )
+  }),
   defineMethod({
     name: 'axiom.supervision.show',
     permission: 'workspace',

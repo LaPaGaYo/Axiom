@@ -27,7 +27,8 @@ export const AXIOM_MUTATION_METHODS = [
   'axiom.task.cancel',
   'axiom.artifact.put',
   'axiom.policy.update',
-  'axiom.supervision.update'
+  'axiom.supervision.update',
+  'axiom.supervision.resolve'
 ] as const
 
 const mutations: ReadonlySet<string> = new Set(AXIOM_MUTATION_METHODS)
