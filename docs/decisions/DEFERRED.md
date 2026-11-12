@@ -223,6 +223,18 @@ M3-06（merge `ddf038b3b5`）：`attempt.dispatch` 与 `verification.enqueue` �
 
 M3-06-2a（merge `57606ffb8e`）：无界面 Worker 的失败按类型化的原因结算。可自行恢复的打断（用量上限、provider 故障、应用重启带走 Worker、出事件之前就退出）不消耗 `maxAttempts`，Task 带着持久化的"不早于"时间回到 `READY`，到点由 `attempt.continue` effect 请求调度、起新 Attempt；等也没用的（结构化的登录 / 账单类，或连续第三次打断）进 `BLOCKED(environment)` 并留一条类型化待处理项，人用 `task.adjust` 恢复。DEF-22 ⑪ 仍 OPEN 的部分：Limited / Resume at reset 的可见形态（M3-09）。D88 其余：预防（账号级冷却、Codex 的重置时间）= M3-06-2a-2；保全 = M3-06-2b；原会话续上 = M3-06-2c（等真实 harness 探测）。DEF-48 ①：outbox 现有三种 effect，integration / delivery 的 effect 仍在 M4。
 
+## 2026-11-12 M3-06-3-2 合入：停滞档位（全局默认 + Mission 覆盖）与 `notify` / `stop`（D88 第 9 条与 2026-11-12 修订行；DEF-35）
+
+M3-06-3-2（merge `1a5cd2f379`）：档位存进只追加的 `supervision_settings`，人只能在 Axiom 应用里改；`notify` 记一次通知、不动状态；`stop` 走 `timeout` 的停止序列，原因 `stalled`。留下的缺口：
+
+- **对账、证据表、升档提议与人的回答**归 M3-06-3-2b：自最新全局决定的 `audit_sequence` 之后至少 20 条结果已知、至少 90% 是真停滞时提议升一档；提议与回答是 Axiom 自己的表与桌面专用方法（Approval 服务在 M4）。
+- **档位每轮读一次**：改动从下一轮生效，不撤回已经在进行的停。
+- **通知在它的 Attempt 不再是当前 Attempt 之前一直列着**，即使后来又有输出；没有桌面通知、没有消息，界面归 M3-09。
+- **停之前没有收尾**（同 `timeout`，D88 第 9 条 (c) 的退路）；停止与结算之间崩溃仍按 `kernel_stopped` 结算。
+- **全局改动没有 Mission 审计**：只有修订（actor、provenance、`audit_sequence`）与内核的 mutation 收据。
+- **人可以不经证据直接把某个 Mission 或全局设成 `stop`**：系统猜的阈值（没有足够实测时 20 分钟，按 60 秒取样）会误停长时间没有输出的正当工作（例如很长的测试命令），所以全局默认保持 `observe`，升档等 M3-06-3-2b 的证据。
+- **上游的迁移编号**：上游 Orca 自 merge-base `41661e3312` 以后用掉了自己的 v44–v46（与 Axiom 的 v44–v46 同号不同内容）；本 Task 没有新编号，下一次全量合并仍要改号（记进下一次 D56 初筛）。
+
 ## 2026-11-12 M3-06-3 合入：监工一步、`timeout` 规则、停滞只观察、事件节奏（D88 第 9、10 条；D60 / D68 修订行；DEF-35、DEF-13）
 
 M3-06-3（merge `333ae2f1d2`）：运行时长上限记为 `timeout` 规则（行为不变，原因改名，加 `attempt.supervised`）；无界面 Attempt 的停滞规则只观察；每个被取样过的无界面 Attempt 记一次 `attempt.cadence`；停滞阈值取自通过验证的 Attempt。留下的缺口：
