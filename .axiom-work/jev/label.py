@@ -52,6 +52,19 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M3-06-3', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'supervision step as briefed: the runtime stop unchanged apart from the timeout reason and the audit in the '
+        'same transaction; stall observation once and state-free, sampled only with an events file; one cadence audit per '
+        'Attempt; bounded threshold query once per pass; unit and e2e red checks fail on main; changed e2e green on its first '
+        'host run; no verifier change',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': ['the threshold query scans audit_events by event without an index; add one with the M3-06-3-2 migration if the table grows'],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M3-06-2c', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'Codex in-place continuation as briefed: twelve ordered rules with lazily read evidence, a ref-and-index-only '
