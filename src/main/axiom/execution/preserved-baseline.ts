@@ -43,9 +43,18 @@ const RecoveryEvidence = z.object({
   evidence: z.literal('runtime_restarted').optional(),
   exitCode: z.undefined().optional()
 })
+const DaemonLossEvidence = z.object({
+  reason: z.literal('terminal_missing'),
+  evidence: z.literal('runtime_restarted'),
+  exitCode: z.undefined().optional(),
+  settlement: z.object({ kind: z.literal('interrupted') })
+})
 
 function readEnding(failure: unknown, stopped: unknown): SnapshotAttemptBaseline['ending'] | null {
-  const failed = Failure.safeParse(failure)
+  const daemonLoss = DaemonLossEvidence.safeParse(failure)
+  const failed = (
+    daemonLoss.success ? Failure.extend({ lastError: z.string().nullish() }) : Failure
+  ).safeParse(failure)
   if (failed.success) {
     // Recovery metadata does not change which failures the existing schema accepts.
     const recovery = RecoveryEvidence.safeParse(failure)
@@ -53,7 +62,8 @@ function readEnding(failure: unknown, stopped: unknown): SnapshotAttemptBaseline
       return {
         kind: 'interrupted',
         failureClass: failed.data.failure?.class ?? 'unknown',
-        ...(recovery.success && recovery.data.evidence === 'runtime_restarted'
+        ...(daemonLoss.success ||
+        (recovery.success && recovery.data.evidence === 'runtime_restarted')
           ? { evidence: 'runtime_restarted' as const }
           : {})
       }

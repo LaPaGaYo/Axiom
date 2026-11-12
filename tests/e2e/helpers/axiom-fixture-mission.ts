@@ -11,6 +11,7 @@ import type { ElectronApplication, Page, TestInfo } from '@stablyai/playwright-t
 import { z } from 'zod'
 import { expect } from './orca-app'
 import { createRestartSession } from './orca-restart'
+import { stopFixtureDaemonsForRestart, type FixtureRestartOptions } from './axiom-fixture-restart'
 import { waitForSessionReady } from './store'
 import { fixturePlanProposal } from './fixture-plan-proposal'
 import { configureFixtureTasks, type FixtureTaskOptions } from './axiom-fixture-task-options'
@@ -90,7 +91,7 @@ export async function withFixtureMission(
     ledgerPath: string
     temp: string
     releaseWorkers: () => void
-    restart?: () => Promise<Page>
+    restart?: (options?: FixtureRestartOptions) => Promise<Page>
   }) => Promise<void>,
   options: FixtureTaskOptions & {
     planner?: boolean
@@ -244,12 +245,13 @@ process.exit(require('node:child_process').spawnSync(process.execPath, [${JSON.s
       temp,
       ...(options.restart
         ? {
-            restart: async () => {
+            restart: async (restartOptions?: FixtureRestartOptions) => {
               if (!app) {
                 throw new Error('Fixture app is not running')
               }
               await session.close(app)
               app = undefined
+              await stopFixtureDaemonsForRestart(session.userDataDir, restartOptions)
               const next = await session.launch({
                 extraEnv: {
                   AXIOM_E2E_HOLD_EXIT_SUBMISSION: '0',

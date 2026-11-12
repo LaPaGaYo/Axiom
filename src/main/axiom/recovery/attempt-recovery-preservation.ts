@@ -9,19 +9,25 @@ import {
   headlessLaunchProvider
 } from '../execution/headless-launch-record'
 import type { AttemptBinding, RecoveryContext } from './attempt-recovery-effects'
+import { isRestartTerminalMissing } from './attempt-daemon-loss'
 
-/** Caller supplies host exit proof before any worktree IO. Capture never owns settlement. */
+/** Caller supplies host exit proof or the accepted kernel loss verdict before worktree IO. */
 export async function captureRecoveryAttempt(
   ctx: RecoveryContext,
   binding: AttemptBinding,
-  proof: 'stopped' | 'exited'
+  proof: 'stopped' | 'exited' | 'terminal_missing'
 ) {
   try {
     if (!binding.dispatchId) {
       return undefined
     }
     const worker = ctx.db.getWorkerDispatch(binding.dispatchId)
-    if (!isHeadlessAttempt(worker) || (proof === 'stopped' && worker?.state !== 'stopped')) {
+    if (
+      !isHeadlessAttempt(worker) ||
+      (proof === 'stopped' && worker?.state !== 'stopped') ||
+      (proof === 'terminal_missing' &&
+        !isRestartTerminalMissing(worker, ctx.runtime.getRuntimeId()))
+    ) {
       return undefined
     }
     const directory = headlessAttemptDirectory(binding.dispatchId)
