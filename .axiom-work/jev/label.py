@@ -52,6 +52,17 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M3-08d-HYG', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'four kernel tests rewritten to D83 ruling 1 with their purpose kept; causes established before editing; '
+        'one verifier correction put two old type assertions back on unchanged lines for the changed-code gate',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('UPSTREAM-4', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'four semantic ports match upstream; scope clean; two control tests pass on main by design (the brief asked for them)',
