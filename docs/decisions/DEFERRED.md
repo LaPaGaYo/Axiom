@@ -223,6 +223,22 @@ M3-06（merge `ddf038b3b5`）：`attempt.dispatch` 与 `verification.enqueue` �
 
 M3-06-2a（merge `57606ffb8e`）：无界面 Worker 的失败按类型化的原因结算。可自行恢复的打断（用量上限、provider 故障、应用重启带走 Worker、出事件之前就退出）不消耗 `maxAttempts`，Task 带着持久化的"不早于"时间回到 `READY`，到点由 `attempt.continue` effect 请求调度、起新 Attempt；等也没用的（结构化的登录 / 账单类，或连续第三次打断）进 `BLOCKED(environment)` 并留一条类型化待处理项，人用 `task.adjust` 恢复。DEF-22 ⑪ 仍 OPEN 的部分：Limited / Resume at reset 的可见形态（M3-09）。D88 其余：预防（账号级冷却、Codex 的重置时间）= M3-06-2a-2；保全 = M3-06-2b；原会话续上 = M3-06-2c（等真实 harness 探测）。DEF-48 ①：outbox 现有三种 effect，integration / delivery 的 effect 仍在 M4。
 
+## 2026-11-12 M3-06-2c 合入：Codex 原地续（D88 修订行 ① ② ④ ⑤ ⑥；DEF-22 ⑪、DEF-48 ②、DEF-50）
+
+M3-06-2c（merge `fe97ba6011`）：被外因打断的无界面 Codex Attempt，在退出有硬证据、工作树仍等于它留下的样子、agent / 账号 / harness 版本 / 合同 / 会话记录都没变时，下一次 Attempt 接管同一棵工作树（新分支指向保全 commit，旧分支与保全 ref 留作证据）并恢复原会话；续被拒（在 `thread.started` 之前结束）不占连续三次、不等待，下一次新工作树 + 新会话。留下的缺口：
+
+- **能续的 harness 版本只有 `codex-cli 0.163.0`**：续被拒的判据（在 `thread.started` 之前结束）与压缩会话能续上，都只在这一版上探测过；Codex 升级后在能力记录里加版本之前，原地续一律关着（审计原因 `capability_unproven`），新版本要先重跑两份探测（`M3-06-2-resume-probe`、`M3-06-2c-resume-refusal-probe`）。归 DEF-45 的一键升级与一致性复验。
+- **接管写了 ref 之后失败**：这次启动按普通启动失败结算，不退回新工作树；下一次 Attempt 按启动失败的规则从集成基线起步。保全 ref 与旧分支都在，可以人工捞回；没有遇到过，概率很低。
+- **会话记录在、但 Codex 读不了**（截断、损坏）：只在恢复时被当成续被拒，多一次立即的新会话。
+- **`-m` 与 `resume` 一起**没在真实 harness 上探测过；policy-default 的 AgentSpec 不带 `-m`。
+- **续上的会话用量是整个会话的累计值**（`usageScope: session`），每次 Attempt 的差额没算；按 Task 链还是按 Attempt 记预算，随 M3-06-3 / V1.5 的记分卡定（T3 #22947）。
+- **同一工作树里旧 worker 的终端资源继续累积**（都是 `owned`），释放仍留待以后（见 2026-11-11 M3-06-2b-3 条目）。
+- **harness 退出后仍存活的子进程**可能写入复用的工作树；续作提示里的两条告诫与最终候选的独立验证兜底。
+- **续被拒之后的新会话**不会被告知刚才的续被拒（上下文不变），只在审计里看得到。
+- **`withWorktreeSnapshot` 第一次读分支沿用 git 的默认超时**，其余判定的 git 读取有保全超时、会话记录的按日查找有截止时间。
+- **e2e 只在 stub 上覆盖**：stub 照 0.163.0 的探测接受 / 拒绝 resume；经 Axiom 的真实 Codex 原地续还没跑过，可以在下一次真实冒烟里顺带（冒烟账号，先报范围）。
+- **Claude、TUI 与 Planner 不续**（DEF-50；V1.5 与会话层一起定）。界面上还看不到"原地续 / 续被拒"（DEF-22 ⑪，归 M3-09）。
+
 ## 2026-11-11 M3-06-2b-3 合入：重启时连守护进程也没了，按外因打断保全并接着做（D88 修订行 ③；DEF-13、DEF-22 ⑪、DEF-48 ③④）
 
 M3-06-2b-3（merge `eda530c847`）：无界面 Attempt 在 runtime 重启后被内核记为 `abandoned` / stage `terminal_missing`（由更早的 runtime 启动、没有可接受的退出标记）时，恢复先保全，再按外因打断结算（`attempt.failed { reason: terminal_missing, evidence: runtime_restarted, settlement: interrupted }`，退款、走等待阶梯，连续三次照旧挡住环境），后继在新工作树、新会话里从快照接着做，上下文说明启动它的 runtime 重启了。不调内核。留下的缺口：
