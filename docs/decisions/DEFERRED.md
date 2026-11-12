@@ -223,6 +223,21 @@ M3-06（merge `ddf038b3b5`）：`attempt.dispatch` 与 `verification.enqueue` �
 
 M3-06-2a（merge `57606ffb8e`）：无界面 Worker 的失败按类型化的原因结算。可自行恢复的打断（用量上限、provider 故障、应用重启带走 Worker、出事件之前就退出）不消耗 `maxAttempts`，Task 带着持久化的"不早于"时间回到 `READY`，到点由 `attempt.continue` effect 请求调度、起新 Attempt；等也没用的（结构化的登录 / 账单类，或连续第三次打断）进 `BLOCKED(environment)` 并留一条类型化待处理项，人用 `task.adjust` 恢复。DEF-22 ⑪ 仍 OPEN 的部分：Limited / Resume at reset 的可见形态（M3-09）。D88 其余：预防（账号级冷却、Codex 的重置时间）= M3-06-2a-2；保全 = M3-06-2b；原会话续上 = M3-06-2c（等真实 harness 探测）。DEF-48 ①：outbox 现有三种 effect，integration / delivery 的 effect 仍在 M4。
 
+## 2026-11-12 M3-06-3 合入：监工一步、`timeout` 规则、停滞只观察、事件节奏（D88 第 9、10 条；D60 / D68 修订行；DEF-35、DEF-13）
+
+M3-06-3（merge `333ae2f1d2`）：运行时长上限记为 `timeout` 规则（行为不变，原因改名，加 `attempt.supervised`）；无界面 Attempt 的停滞规则只观察；每个被取样过的无界面 Attempt 记一次 `attempt.cadence`；停滞阈值取自通过验证的 Attempt。留下的缺口：
+
+- **观察还没有对账、没有证据表、不能升档**：`attempt.supervised {mode: observe}` 只是记录；与事后结果的对账（后来通过验证 = 误伤，仍超时或失败 = 命中）、按规则的证据表、"建议升为自动"的待处理项、停滞的 `notify` / `stop` 两档，归 M3-06-3-2（policy 要加字段，需要迁移内核 schema 里的 `mission_policies`）。
+- **token 预算**（`budget_exhausted`）归 M3-06-3-3；续上的 Codex 会话用量是累计值（2026-11-12 M3-06-2c 条目），按 Attempt 还是按 Task 链记，到时一并定。
+- **静默只有 60 秒分辨率**：在两次对账之间开始又结束的空档测不到；`maxEventGapMs` 是取样到的最长静默，不是事件之间的精确间隔。
+- **事件节奏只在内存里**：进程重启就丢，不重建；重启后才开始取样的标 `partial`，不进阈值；比一个对账周期还短的 Attempt 没有 `attempt.cadence`。
+- **Worker 能写自己的 attempt 目录时可以让事件文件看起来一直有动静**（包括改 mtime）；运行时长上限仍是兜底，写入范围仍只在验证时按 diff 检查。
+- **停之前没有收尾**：内核的停止直接结束 pty（harness 与写事件文件的 `tee` 一起退出）；想给 harness 收尾要先经终端输入发中断，会与退出路径的结算竞争，没有做。
+- **停止与结算之间崩溃**，Attempt 仍按 `kernel_stopped` 结算（同以前）；`timeout` 的监工审计随结算事务一起回滚。
+- **阈值查询**按 event 扫 `audit_events`、没有索引；每轮至多一次、只在有未观察过的在跑无界面 Attempt 时才算。表很大时再加索引（内核 schema）。
+- **真实 harness 的节奏还没有测过**：停滞观察只在 stub 被扣住的 Worker 上跑过；真实 Codex / Claude 的 `attempt.cadence` 要等下一次真实运行。
+- **Planner 不受监工**（它自己的运行时长上限与 `runtime_budget_exceeded` 不变）；TUI Attempt 没有停滞规则与事件节奏。界面上的监工项归 M3-09。
+
 ## 2026-11-12 M3-06-2c 合入：Codex 原地续（D88 修订行 ① ② ④ ⑤ ⑥；DEF-22 ⑪、DEF-48 ②、DEF-50）
 
 M3-06-2c（merge `fe97ba6011`）：被外因打断的无界面 Codex Attempt，在退出有硬证据、工作树仍等于它留下的样子、agent / 账号 / harness 版本 / 合同 / 会话记录都没变时，下一次 Attempt 接管同一棵工作树（新分支指向保全 commit，旧分支与保全 ref 留作证据）并恢复原会话；续被拒（在 `thread.started` 之前结束）不占连续三次、不等待，下一次新工作树 + 新会话。留下的缺口：
