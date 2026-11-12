@@ -33,6 +33,7 @@ export async function prepareHeadlessAttemptFiles(input: {
   worktreeId: string
   branch: string
   prompt: string
+  stdinPrompt?: string
   provider?: string
 }) {
   const directory = headlessAttemptDirectory(input.attemptId)
@@ -53,7 +54,10 @@ export async function prepareHeadlessAttemptFiles(input: {
   } finally {
     await copy.close()
   }
-  await writeFile(path.join(directory, 'prompt.md'), input.prompt, { mode: 0o600, flag: 'wx' })
+  await writeFile(path.join(directory, 'prompt.md'), input.stdinPrompt ?? input.prompt, {
+    mode: 0o600,
+    flag: 'wx'
+  })
   const baselineSha = (
     await gitExecFileAsync(['rev-parse', 'HEAD'], { cwd: input.worktree })
   ).stdout.trim()

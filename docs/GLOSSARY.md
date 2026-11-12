@@ -285,6 +285,14 @@ M3-04b-3：报告中的 **typed QUESTION item** 是绑定 Task 的 `messages.pay
 - **接着做**：后继 Attempt 从最近可用保全 commit 创建新工作树，先检查继承工作再继续；当前 Task scope 与秘密扫描决定可用性。不是恢复 harness session，也不表示接受前驱的做法；最终 Candidate 对集成基线的全部变化仍须独立验证。
 - **Handoff records / 交接记录**：宿主从该 Attempt 自己的 headless event stream 选取、脱敏和限长的最近消息、shell 命令及结果，加上该 Attempt 自己的 Git 变化。存为 `AttemptSettlement` 创建、关联 Task / Attempt 的 JSON `log` Artifact；作为线索引用，不是模型总结或指令，不以 `handoff` / `worker_report` Artifact 传播给下游 Task。
 
+### 原地续（in-place continuation，M3-06-2c / D88）
+
+**原地续**：新的 Attempt 接管外因打断的前驱工作树，在自己的分支上恢复同一个 Codex 会话；快照和旧分支仍为证据。只接受宿主的退出硬证据与未改变的工作树、Agent、账号、合同和有实验证据的 harness 版本。**continuation prompt（续作提示）**是恢复会话的短提示，重申新 Attempt 身份、原任务、结束方式、工作树与提交约定；完整当前合同仍在 `.axiom/prompt.md`。
+
+启动审计 `session.strategy` 为 `resumed_in_place`（附 `id, originSeq, fromSeq`）或 `fresh`（附首个不满足规则的 `reason`）。reason 顺序：`not_interrupted`、`resume_refused`、`no_exit_evidence`、`snapshot_unusable`、`agent_changed`、`capability_unproven`、`account_changed`、`contract_changed`、`session_unknown`、`session_record_missing`、`worktree_changed`；读取异常或超时为 `evidence_unreadable`。首个 Attempt、TUI 和 Planner 没有 session 字段。
+
+**resume_refused**：请求原地续的运行在任何 `thread.started` 之前退出。仍结算为 `interrupted` 并退款，立即安排新工作树、新会话的下一次 Attempt，连续中断计数不增加。恢复运行的退出审计 `sessionContinued` 表示事件流是否报告请求的会话 id，`usageScope: session` 表示用量为整个会话累计值。
+
 ### Effect outbox（M3-06，D87 / DEF-48 ①）
 
 - **Effect / 副作用**：与命令的权威状态在同一事务写入 `axiom_effects` 的持久化执行请求；执行器仅在提交后、事务外执行。不是新的 Task / Attempt 生命周期。

@@ -7,7 +7,7 @@ import type { HarnessEgressEvidence } from './harness-egress-env'
 export { headlessClaudeCombination } from './claude-worker-combination'
 
 const versions = new Map<string, Promise<string | null>>()
-async function harnessVersion(command: string): Promise<string | null> {
+export async function harnessVersion(command: string): Promise<string | null> {
   const fingerprint = fingerprintCodex(command)
   if (!fingerprint) {
     return null

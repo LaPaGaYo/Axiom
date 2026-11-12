@@ -18,6 +18,7 @@ import { serializeAttemptSubmission, settleSubmission } from './attempt-submissi
 import { settleAttemptWithoutSubmission } from './attempt-settlement'
 import { settleDeclaredExit } from './attempt-exit-declared'
 import { settleHeadlessExitFailure } from './attempt-exit-failure'
+import { firstThreadStarted, readAttemptSession, resumedExitEvidence } from './in-place-session'
 import { parseHeadlessWorkerEvents, parseHeadlessReport } from './headless-worker-events'
 import {
   headlessAttemptDirectory,
@@ -81,6 +82,8 @@ async function submitExit(runtime: OrcaRuntimeService, attemptId: string) {
   const exitCode = Number(exit.trim())
   const eventsText = (await readHeadlessFile(directory, 'events.jsonl')) ?? ''
   const events = parseHeadlessWorkerEvents(eventsText, provider)
+  const session = readAttemptSession(store, authority.mission.id, attemptId)
+  const resumeRefused = !!session && !firstThreadStarted(eventsText).started
   await persistClaudeLastMessage(directory, provider, events)
   // A Claude report must originate in its terminal result, never a Worker-written file.
   const lastMessage =
@@ -89,6 +92,7 @@ async function submitExit(runtime: OrcaRuntimeService, attemptId: string) {
       : ((await readHeadlessFile(directory, 'last-message.md')) ?? '')
   const { providerSessionId, usage } = events
   const eventAudit = {
+    ...resumedExitEvidence(session, eventsText),
     ...(providerSessionId ? { providerSessionId } : {}),
     ...(usage ? { usage } : {}),
     ...(events.total_cost_usd !== undefined ? { total_cost_usd: events.total_cost_usd } : {}),
@@ -101,7 +105,7 @@ async function submitExit(runtime: OrcaRuntimeService, attemptId: string) {
   let artifactIds: string[] = []
   const { worktreePath: worktree } = resolveHeadlessLaunchRecord(launch, worker, authority.binding)
   const failedResult = events.turnFailed
-  if (exitCode === 0 && !failedResult) {
+  if (exitCode === 0 && !failedResult && !resumeRefused) {
     try {
       report = parseHeadlessReport(redactContext(lastMessage).content)
       artifactIds = await ingestHeadlessArtifacts({
@@ -116,7 +120,7 @@ async function submitExit(runtime: OrcaRuntimeService, attemptId: string) {
       reportError = redactContext(error instanceof Error ? error.message : 'Invalid report').content
     }
   }
-  if (exitCode !== 0 || failedResult || !report || reportError) {
+  if (resumeRefused || exitCode !== 0 || failedResult || !report || reportError) {
     return settleHeadlessExitFailure(runtime, {
       attemptId,
       provider,
@@ -126,6 +130,7 @@ async function submitExit(runtime: OrcaRuntimeService, attemptId: string) {
       lastMessage,
       reportError,
       eventAudit,
+      resumeRefused,
       launch: { worktreePath: worktree, branch: launch.branch, baselineSha: launch.baselineSha }
     })
   }

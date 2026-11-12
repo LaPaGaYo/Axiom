@@ -141,3 +141,5 @@ export function readPreservedBaseline(input: {
     }
   }
 }
+
+export { readEnding }

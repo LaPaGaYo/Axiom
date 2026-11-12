@@ -21,6 +21,7 @@ import {
 } from './attempt-fix-launch'
 import { hasHeadlessWorkerBuilder } from './headless-worker-command'
 import { createHeadlessWorkerLaunch } from './headless-worker-launch'
+import { placeAttemptWorktree } from './attempt-placement'
 import { watchHeadlessAttempt } from './headless-attempt-watcher'
 import { createAttemptLaunchAudit } from './attempt-launch-audit'
 import { claudePlannerLaunchPolicy } from './planner-claude-launch'
@@ -106,26 +107,37 @@ export function createAttemptLauncher(
       if (baseline) {
         workerAudit = { baseline: attemptBaselineAudit(baseline) }
       }
-      const created = await deps.runtime.createManagedWorktree({
-        repoSelector: `id:${mission.repoId}`,
-        name: planner
-          ? `planner-${attempt.missionId}-${planner.runSeq}`
-          : `attempt-${attempt.taskId}-${attempt.seq}`,
-        baseBranch: planner?.baseBranch ?? attemptBaselineRef(baseline, attempt.missionId),
-        branchNameOverride: attempt.branch,
-        runHooks: false,
-        setupDecision: 'run',
-        awaitTerminalProvisioning: true,
-        observeSetupCompletion: true,
-        createdWithAgent: spec.provider,
-        activate: false,
-        lineage: {
-          noParent: true,
-          orchestrationContext: { orchestrationRunId: run.id, taskId: attempt.taskId }
-        }
-      })
-      const worktreeId = created.worktree.id
       const headless = !planner && hasHeadlessWorkerBuilder(spec.provider)
+      const { worktree, continuation } = await placeAttemptWorktree({
+        deps,
+        attempt,
+        spec,
+        baseline,
+        headless,
+        audit: workerAudit,
+        create: async () =>
+          (
+            await deps.runtime.createManagedWorktree({
+              repoSelector: `id:${mission.repoId}`,
+              name: planner
+                ? `planner-${attempt.missionId}-${planner.runSeq}`
+                : `attempt-${attempt.taskId}-${attempt.seq}`,
+              baseBranch: planner?.baseBranch ?? attemptBaselineRef(baseline, attempt.missionId),
+              branchNameOverride: attempt.branch,
+              runHooks: false,
+              setupDecision: 'run',
+              awaitTerminalProvisioning: true,
+              observeSetupCompletion: true,
+              createdWithAgent: spec.provider,
+              activate: false,
+              lineage: {
+                noParent: true,
+                orchestrationContext: { orchestrationRunId: run.id, taskId: attempt.taskId }
+              }
+            })
+          ).worktree
+      })
+      const worktreeId = worktree.id
       if (!planner) {
         workerAudit = {
           ...workerAudit,
@@ -136,13 +148,7 @@ export function createAttemptLauncher(
       }
       const caller = missionCaller(mission.coordinatorOrcaSessionId, worktreeId)
       if (baseline) {
-        const prepared = await prepareWorkerFixLaunch(
-          db,
-          store,
-          attempt,
-          baseline,
-          created.worktree
-        )
+        const prepared = await prepareWorkerFixLaunch(db, store, attempt, baseline, worktree)
         existingTask = prepared.existingTask
         if (prepared.orcaTaskReopened) {
           workerAudit.orcaTaskReopened = true
@@ -186,7 +192,8 @@ export function createAttemptLauncher(
                   deps,
                   attempt,
                   spec,
-                  worktree: created.worktree,
+                  worktree,
+                  continuation,
                   render,
                   audit: workerAudit,
                   onPrepared: (id, after) => audit(attempt, 'attempt.headless_prepared', id, after),

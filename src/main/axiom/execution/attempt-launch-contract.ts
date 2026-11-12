@@ -8,7 +8,9 @@ import type { MissionController } from '../mission-controller/mission-controller
 import type { ArtifactStore } from '../artifacts/artifact-store'
 
 type LauncherRuntime = Pick<OrcaRuntimeService, 'createManagedWorktree' | 'requireStore'> &
-  Partial<Pick<OrcaRuntimeService, 'resolveClaudeHomeForWorkerLaunch'>>
+  Partial<
+    Pick<OrcaRuntimeService, 'resolveClaudeHomeForWorkerLaunch' | 'resolveCodexHomeForWorkerLaunch'>
+  >
 export type AttemptWorkerStartArgs = Omit<Parameters<typeof startLocalWorker>[0], 'runtime'> & {
   runtime: LauncherRuntime
 }

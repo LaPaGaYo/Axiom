@@ -1,7 +1,9 @@
 import { CodexAccountRequiredError } from '../../codex/codex-home-paths'
 import { readCodexAccountHomeAllowlist } from '../../codex/codex-worker-launch-home'
 import { headlessWorkerCombination, headlessClaudeCombination } from './worker-launch-combination'
-import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
+import type { AttemptWorktree } from './attempt-placement'
+import type { InPlaceContinuation } from './in-place-continuation'
+import { continuationPrompt } from '../context-builder/continuation-prompt'
 import type { AgentSpec } from '../../../shared/axiom-contract/agent-spec'
 import type { AuditEvent } from '../../../shared/axiom-contract/mission-objects'
 import type { AdmittedAttempt } from '../scheduler/scheduler'
@@ -17,7 +19,8 @@ export function createHeadlessWorkerLaunch(input: {
   deps: AttemptLauncherDependencies
   attempt: AdmittedAttempt
   spec: AgentSpec
-  worktree: CreateWorktreeResult['worktree']
+  worktree: AttemptWorktree
+  continuation?: InPlaceContinuation
   render: string
   audit: Record<string, AuditEvent['after']>
   onMismatch: (dispatchId: string, reasons: string[]) => void
@@ -32,7 +35,15 @@ export function createHeadlessWorkerLaunch(input: {
         worktreeId: worktree.id,
         branch: attempt.branch,
         provider: spec.provider,
-        prompt: input.render.replaceAll('{{attemptId}}', dispatchId)
+        prompt: input.render.replaceAll('{{attemptId}}', dispatchId),
+        ...(input.continuation
+          ? {
+              stdinPrompt: continuationPrompt({
+                ...attempt,
+                continuation: input.continuation
+              }).replaceAll('{{attemptId}}', dispatchId)
+            }
+          : {})
       })
       const settings = deps.runtime.requireStore().getSettings()
       const allowlist = readCodexAccountHomeAllowlist(settings)
@@ -58,7 +69,8 @@ export function createHeadlessWorkerLaunch(input: {
           ? settings.agentCmdOverrides?.claude
           : settings.agentCmdOverrides?.codex,
         accountHomePath: homePath ?? undefined,
-        egressEnv
+        egressEnv,
+        resumeSessionId: input.continuation?.id
       })
       if (!launch) {
         throw new Error('Headless builder unavailable')

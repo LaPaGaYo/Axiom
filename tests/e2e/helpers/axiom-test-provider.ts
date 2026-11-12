@@ -1,5 +1,6 @@
 import { FAKE_AGENT_PASTE_END_SCANNER_SOURCE } from './fake-agent-paste-end-scanner'
 import { AXIOM_INTERRUPTION_EVIDENCE_SOURCE } from './axiom-partial-work'
+import { AXIOM_CODEX_RESUME_SOURCE } from './axiom-codex-resume'
 
 /** D49: capture the preamble; the submit spec supplies a compiled CLI to run the frozen stub. */
 export const AXIOM_TEST_PROVIDER_SOURCE = `
@@ -7,9 +8,9 @@ const { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync
 const { createHash } = require('node:crypto')
 const { spawn, spawnSync } = require('node:child_process')
 const path = require('node:path')
-const os = require('node:os')
+const os = require('node:os')${AXIOM_CODEX_RESUME_SOURCE}
 if (process.argv[2] === '--version') {
-  process.stdout.write('codex-cli 0.0.0-e2e\\n')
+  process.stdout.write(fixtureCodexVersion() + '\\n')
   process.exit(0)
 }
 if (process.argv.slice(2).includes('app-server')) {
@@ -238,7 +239,7 @@ if (process.argv[2] === 'exec') {
       return [key, value && key.toLowerCase() !== 'no_proxy' && !new RegExp('^http://(?:127[.]0[.]0[.]1|localhost):[0-9]+/?$').test(value) ? '[inherited]' : value]
     }))
   }) + '\\n')
-  process.stdout.write(JSON.stringify({ type: 'thread.started', thread_id: 'fixture-' + attemptId }) + '\\n')
+  process.stdout.write(JSON.stringify({ type: 'thread.started', thread_id: fixtureCodexSession(argv, attemptId, taskId) }) + '\\n')
   process.stdout.write(JSON.stringify({ type: 'turn.started' }) + '\\n')
   // The launch-only spec deliberately keeps a live Worker without a submission.
   if (!process.env.ORCA_E2E_CLI_ENTRY) setInterval(() => {}, 60000)
