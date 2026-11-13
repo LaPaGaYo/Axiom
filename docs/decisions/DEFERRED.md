@@ -223,6 +223,18 @@ M3-06（merge `ddf038b3b5`）：`attempt.dispatch` 与 `verification.enqueue` �
 
 M3-06-2a（merge `57606ffb8e`）：无界面 Worker 的失败按类型化的原因结算。可自行恢复的打断（用量上限、provider 故障、应用重启带走 Worker、出事件之前就退出）不消耗 `maxAttempts`，Task 带着持久化的"不早于"时间回到 `READY`，到点由 `attempt.continue` effect 请求调度、起新 Attempt；等也没用的（结构化的登录 / 账单类，或连续第三次打断）进 `BLOCKED(environment)` 并留一条类型化待处理项，人用 `task.adjust` 恢复。DEF-22 ⑪ 仍 OPEN 的部分：Limited / Resume at reset 的可见形态（M3-09）。D88 其余：预防（账号级冷却、Codex 的重置时间）= M3-06-2a-2；保全 = M3-06-2b；原会话续上 = M3-06-2c（等真实 harness 探测）。DEF-48 ①：outbox 现有三种 effect，integration / delivery 的 effect 仍在 M4。
 
+## 2026-11-12 M3-06-3-2b 合入：停滞观察的对账、证据表、升档提议与人的回答（D88 第 9 条 (b) 与 2026-11-12 修订行；DEF-35）
+
+M3-06-3-2b（merge `31ba5a43b0`）：每条 `observe` / `notify` 观察在结果明确之后记一条对账审计；证据窗口从最新的全局决定之后算起；达到门槛记一条全局提议，人从桌面接受或驳回。留下的缺口：
+
+- **每轮从最旧的 100 条未对账观察看起，没有游标**：一直等着的观察（Mission 不再恢复）或一直对不上的观察（binding 缺失或不匹配，只记日志）占着名额，攒到 100 条会挡住更新的观察；扫描每轮经事件索引读全部停滞观察，随历史线性增长。
+- **结果写下即定**：之后的验证重跑（例如 FAIL 之后再 PASS）不改已写的结果（brief 的非目标）。
+- **驳回后窗口从提议快照的 `through_sequence` 之后算起**：提议开着期间新到的结果算进下一个窗口；如果它们已经够门槛，下一轮会马上再提。
+- **提议不过期，没有通知、界面或 CLI**：界面归 M3-09；只有全局的停滞规则会被提议，Mission 覆盖与 `timeout` 规则不提。
+- **提议与修订的时间是 SQLite 的 `YYYY-MM-DD HH:MM:SS`（UTC）**：`show` 原样返回（与其他 Axiom 行一致），界面要按 UTC 解析（M3-09）。
+- **`savedMs` 只算墙钟时间**：省下的 token 归 M3-06-3-3 的计量；`observe` 与 `notify` 的观察合在一起算，Mission 覆盖不重置窗口。
+- **提交了但候选没有任何验证 run 时记为不计入（`unknown`）**：正常的提交事务同时写 QUEUED run，只有不寻常的路径会出现。
+
 ## 2026-11-12 M3-06-3-2 合入：停滞档位（全局默认 + Mission 覆盖）与 `notify` / `stop`（D88 第 9 条与 2026-11-12 修订行；DEF-35）
 
 M3-06-3-2（merge `1a5cd2f379`）：档位存进只追加的 `supervision_settings`，人只能在 Axiom 应用里改；`notify` 记一次通知、不动状态；`stop` 走 `timeout` 的停止序列，原因 `stalled`。留下的缺口：
