@@ -2,6 +2,50 @@ import { expect, it } from 'vitest'
 import { readVerdictRecord, VerdictRecordSchema } from './verdict-record'
 import { verificationRun } from './contract-fixtures.test-support'
 
+it('counts the entries of a record it could not read', () => {
+  const clean = readVerdictRecord(verificationRun.verdictDetail)
+  expect(clean).not.toHaveProperty('unreadable')
+  const record = {
+    checks: [...clean.checks, null, { index: 'invalid' }],
+    acceptance: [...clean.acceptance, false],
+    evidenceArtifactIds: ['valid', null],
+    diff: {
+      scopeViolations: ['src/a.ts', 12],
+      dangerous: [{ path: 'p', pattern: 'p' }, null],
+      secrets: [false],
+      tampering: [{ path: 't', rule: 'skip', count: 1 }, {}],
+      generated: [null],
+      binary: ['file', 0],
+      ignoredScopeEntries: [true]
+    }
+  }
+  const parsed = readVerdictRecord(record)
+  expect(parsed).toMatchObject({
+    unreadable: 11,
+    checks: clean.checks,
+    acceptance: clean.acceptance
+  })
+  expect(parsed.diff?.dangerous).toEqual([{ path: 'p', pattern: 'p' }])
+  expect(
+    readVerdictRecord({
+      checks: {},
+      acceptance: 4,
+      evidenceArtifactIds: null,
+      diff: { binary: false }
+    })
+  ).not.toHaveProperty('unreadable')
+  expect(
+    readVerdictRecord({ checks: [{ ...clean.checks[0], failures: [null] }] })
+  ).not.toHaveProperty('unreadable')
+  for (const input of [undefined, null, false, [], 'record']) {
+    expect(readVerdictRecord(input)).toEqual({
+      checks: [],
+      acceptance: [],
+      evidenceArtifactIds: []
+    })
+  }
+})
+
 it('reads the disposition of a resolution and keeps a resolution with an unknown one', () => {
   const resolution = {
     verdict: 'PASS',

@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import type { VerdictRecord } from '../../../../shared/axiom-contract/verdict-record'
 import { VerificationStatus } from './VerificationStatus'
+import { verificationDispositionGloss } from './verification-disposition-copy'
 
 export function VerificationDisposition({ record }: { record: VerdictRecord }) {
   return (
@@ -15,6 +16,13 @@ export function VerificationDisposition({ record }: { record: VerdictRecord }) {
             <time dateTime={record.resolution.at}>{record.resolution.at}</time>
           </p>
           <p className="whitespace-pre-wrap break-words">{record.resolution.rationale}</p>
+          {record.resolution.disposition && (
+            <p>
+              {translate('missions.disposition', 'Disposition')}:{' '}
+              <span className="font-mono">{record.resolution.disposition}</span> ·{' '}
+              <span>{verificationDispositionGloss(record.resolution.disposition)}</span>
+            </p>
+          )}
           {!!record.resolution.criteria.length && (
             <ul
               aria-label={translate(

@@ -87,6 +87,10 @@ export function MissionsPageSurface({ controller: c }: { controller: MissionsPag
                   verificationError={c.taskDetail.verificationError}
                   usage={c.taskDetail.usage}
                   usageError={c.taskDetail.usageError}
+                  pendingItems={c.taskDetail.pendingItems}
+                  pendingError={c.taskDetail.pendingError}
+                  onResolveVerification={c.resolveVerification}
+                  onRerunVerification={c.rerunVerification}
                   tasks={c.detail.tasks}
                   onSelectTask={c.selectTask}
                   busy={c.busy}

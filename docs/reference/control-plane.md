@@ -828,6 +828,14 @@ Task 页将 run.status 作为状态及其颜色的权威，同时单独标出检
 
 M3-09-2b-1：读取器返回已知的 `resolution.disposition`；遇到未知值只丢该字段，保留其余有效的 resolution。旧记录没有该字段仍可读取，严格写入 schema 不放宽。界面显示和操作属于 M3-09-2b-2。
 
+### Task 页的人工处置与重验（M3-09-2b-2）
+
+选择或刷新 Task 时，`readTaskEvidence` 在同一轮独立读取 `axiom.mission.pending {missionId}`，只保留 `taskId` 匹配的项。读取失败不遮住其它详情；仅 `waitingOn.person=true` 时显示「无法读取可用操作。请刷新后重试」。没有轮询，也不从 stage、waitingOn 或 run.status 推算可用操作。
+
+等待行下方的「Task 操作」仅在 pending item 列出 `axiom.verification.resolve` 或 `axiom.verification.rerun` 时出现，按 actions 顺序去重；其余操作暂不呈现。一次只展开一个内联表单，打开聚焦首控件，关闭不调用并回焦原按钮。处置按 item.objectId 找已读 run，缺失时显示读取提示；提交 `{runId, verdict, rationale: trimmed, criteria: 升序索引, disposition?}`，类型字段完全由共享 `allowedVerificationDispositions(verdict, recordedReason)` 决定。重验提交 `{taskId, rationale: trimmed}`，说明同一 Candidate 重验、待审 run 取消。两种表单都要求非空且最多 4,000 字符的理由，说明后果，不再弹确认框。
+
+两个动作沿用 controller 的 `mutate` 收据与刷新路径：每次调用后都重读，无乐观状态、无自动重试；拒绝按 `code: message` 原样显示在页面警报与 toast，操作仍存在时保留表单及输入，由人决定下一步。重读后操作消失即收起表单，焦点回到 Task detail。历史人工处置按 Glossary §4.8 显示类型和共用说明；逐条 `human` 结果只有在 HUMAN_REVIEW / SPECIALIST_REVIEW 等待时提示需要人，已处置时附判定及是否点名，其余安静显示原词，不改记录。等待行的上游 Task 与 run 链接加标签、下划线。宽容读取器的可选 `unreadable` 汇总 checks、acceptance、evidenceArtifactIds 和 diff 各列表丢弃的条目（非数组不计，条目内的列表不计），详情显示条目数；没有丢弃时返回形状不变。
+
 ### 人工验证处置与同候选重验（M3-05；D82 / D85 / DEF-21 ④）
 
 所有 INCONCLUSIVE 都按上节进入 HUMAN_REVIEW，包括准备失败；不启动 Reviewer、Decision Engine 或自动答复。`axiom.verification.show / list` 保留原判定和 acceptance，status 表示当前处置状态。人可通过 `axiom verification list --mission <id> --status HUMAN_REVIEW` 查看待审项。

@@ -9,6 +9,7 @@ import * as message from '../../../shared/axiom-contract/message-params'
 import * as verification from '../../../shared/axiom-contract/verification-params'
 import * as artifact from '../../../shared/axiom-contract/artifact-params'
 import * as usage from '../../../shared/axiom-contract/token-usage'
+import * as pending from '../../../shared/axiom-contract/mission-pending'
 import { TaskListParams, TaskListResponseSchema } from '../../../shared/axiom-contract/task-params'
 import { GoalShowParams, GoalResponseSchema } from '../../../shared/axiom-contract/goal-params'
 
@@ -68,6 +69,35 @@ async function call<P, R>(
 }
 
 export const axiomClient = {
+  missionPending: (params: z.infer<typeof pending.MissionPendingParams>) =>
+    call(
+      'axiom.mission.pending',
+      params,
+      pending.MissionPendingParams,
+      pending.MissionPendingResponseSchema
+    ),
+  resolveVerification: (
+    params: z.infer<typeof verification.VerificationResolveParams>,
+    requestId: string = createNonSecureContextUuid()
+  ) =>
+    call(
+      'axiom.verification.resolve',
+      params,
+      verification.VerificationResolveParams,
+      z.object({ runId: z.string(), status: z.enum(['PASS', 'FAIL']) }),
+      requestId
+    ),
+  rerunVerification: (
+    params: z.infer<typeof verification.VerificationRerunParams>,
+    requestId: string = createNonSecureContextUuid()
+  ) =>
+    call(
+      'axiom.verification.rerun',
+      params,
+      verification.VerificationRerunParams,
+      z.object({ runId: z.string(), status: z.literal('QUEUED') }),
+      requestId
+    ),
   listVerificationRuns: (params: z.infer<typeof verification.VerificationListParams>) =>
     call(
       'axiom.verification.list',

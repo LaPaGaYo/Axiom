@@ -156,6 +156,8 @@ Mission 预算仅在 EXECUTING 调用 admission 的 `budgetExhaustion`，次序�
 
 `axiom.mission.pending {missionId}` 返回 `{missionId, items}`；每项 `{id, kind, objectId, taskId?, reason, summary?, blocking, blocks, actions, since, waitingOn?}`。`id = kind:objectId`；summary 仅用对象自己的文本。Task 项携带该 Task 的 waitingOn。since 来自记录此等待的行或审计，规范为 UTC ISO 8601。
 
+Task 页仅提供该 Task 的待处理项在 `actions` 中列出的操作；M3-09-2b-2 接入处置审查与重验，其余操作由后续 Task 接入，未列出时不显示控件。
+
 | kind（同分次序） | 对象 / 条件 | reason；blocking | actions（按顺序，受当前状态约束） |
 |---|---|---|---|
 | mission | PLANNED / PAUSED / BLOCKED；ANALYZING 无 PROPOSED plan、无 active Planner；EXECUTING 预算耗尽 | status；预算耗尽时 budget_exhausted（BLOCKED 保留 BLOCKED）；true | start（PLANNED）、resume（PAUSED）、plan（ANALYZING 且预算未耗尽）、cancel，均为 axiom.mission.* |
@@ -263,6 +265,8 @@ M3-09-2b-1（D82 2026-10-26 / 2026-11-13 修订）：人工处置增加可选参
 | PASS | 其它原因，包括缺失或未知原因 | 必填 `rejected`、`intentional` 或 `not_worth` |
 
 disposition 描述整条 run，不描述每条发现或 criterion；与 rationale 一起记入 `verdictDetail.resolution.disposition` 和 `verification.resolved.after.disposition`。不适用时两处都省略键；旧处置可以没有该字段，不迁移。它是 DEF-33 的噪音样本，V1 只存不计算；不能改变检查自己的 verdict / reason / acceptance 或推翻确定性 FAIL。
+
+Task 页的处置表单与历史记录共用同一组说明（M3-09-2b-2）：`fixed` — sent back to be fixed（退回修复）；`rejected` — the flag was wrong（检查标错了）；`intentional` — the flagged change is intended（标出的改动是有意的）；`not_worth` — real, but not worth fixing（确有其事，但不值得修复）。代码原样等宽显示。
 
 `axiom.task.adjust.acceptanceCriteria` 全量替换标准，按提案校验对象与命令；VERIFYING 仅在 ACTIVE Candidate 最新 run 为 HUMAN_REVIEW 时可调整。desktop-only `axiom.verification.rerun {taskId,rationale}` 接受此 VERIFYING 状态，或有 ACTIVE Candidate 的 BLOCKED（无 QUEUED / RUNNING 验证）；其它状态返回 `illegal_transition / task_not_rerunnable`。它将待审 run CANCELED（保存 `verdictDetail.rerun={rationale,by:user,at}`），为同一不可变 Candidate 新建 QUEUED，必要时 BLOCKED → VERIFYING，并记录 `verification.rerun_requested` 与收据。已 PASS / FAIL run 不变，不新增 Attempt；重验执行完整验证计划。CLI 形状为 `axiom verification resolve --run … --verdict PASS|FAIL --rationale … [--criterion <n>]...`、`axiom verification rerun --task … --rationale …`；人工动作仍受 D78 desktop 调用方限制。`verification list --status HUMAN_REVIEW` 列待审 run，文本输出含 reason / escalation。
 

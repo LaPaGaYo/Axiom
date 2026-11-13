@@ -85,14 +85,32 @@ export const VerdictRecordSchema = z
   })
   .catch({ checks: [], acceptance: [], evidenceArtifactIds: [] })
 
-export type VerdictRecord = z.infer<typeof VerdictRecordSchema>
+export type VerdictRecord = z.infer<typeof VerdictRecordSchema> & { unreadable?: number }
 export type VerdictCheck = VerdictRecord['checks'][number]
 export type VerdictDiff = NonNullable<VerdictRecord['diff']>
+
+function unreadableEntries(input: unknown, record: Record<string, unknown>): number {
+  const raw = z.record(z.string(), z.unknown()).safeParse(input)
+  if (!raw.success) {
+    return 0
+  }
+  return Object.entries(record).reduce((total, [key, value]) => {
+    const original = raw.data[key]
+    return (
+      total + (Array.isArray(original) && Array.isArray(value) ? original.length - value.length : 0)
+    )
+  }, 0)
+}
 
 /** A read-only, tolerant view of a row summary or a parsed evidence Artifact. */
 export function readVerdictRecord(input: unknown): VerdictRecord {
   try {
-    return VerdictRecordSchema.parse(input)
+    const record = VerdictRecordSchema.parse(input)
+    const raw = z.object({ diff: z.unknown().optional() }).safeParse(input)
+    const unreadable =
+      unreadableEntries(input, record) +
+      unreadableEntries(raw.success ? raw.data.diff : undefined, record.diff ?? {})
+    return unreadable > 0 ? { ...record, unreadable } : record
   } catch {
     return { checks: [], acceptance: [], evidenceArtifactIds: [] }
   }

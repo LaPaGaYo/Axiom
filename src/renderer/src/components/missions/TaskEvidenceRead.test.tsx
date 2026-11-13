@@ -18,6 +18,7 @@ import {
 } from '../../../../shared/axiom-contract/contract-fixtures.test-support'
 import { useMissionsPageController } from './use-missions-page-controller'
 import { TaskDetail } from './TaskDetail'
+import { TaskWaitingOnSchema } from '../../../../shared/axiom-contract/task-waiting-on'
 
 vi.mock('@/store', async () => {
   const { create } = await import('zustand')
@@ -43,7 +44,8 @@ vi.mock('@/lib/axiom-client', async (importOriginal) => {
       listAttempts: vi.fn(),
       listMessages: vi.fn(),
       listVerificationRuns: vi.fn(),
-      missionUsage: vi.fn()
+      missionUsage: vi.fn(),
+      missionPending: vi.fn()
     }
   }
 })
@@ -53,7 +55,8 @@ const task = {
   planRevisionId: 'plan-1',
   title: 'Task evidence',
   stage: 'VERIFYING' as const,
-  orcaStatus: 'completed' as const
+  orcaStatus: 'completed' as const,
+  waitingOn: TaskWaitingOnSchema.parse({ on: 'human', reason: 'acceptance_human', person: true })
 }
 let controller: ReturnType<typeof useMissionsPageController>
 function Harness() {
@@ -95,8 +98,41 @@ beforeEach(() => {
   })
   vi.mocked(axiomClient.listVerificationRuns).mockResolvedValue({ runs: [verificationRun] })
   vi.mocked(axiomClient.missionUsage).mockResolvedValue(missionUsage)
+  vi.mocked(axiomClient.missionPending).mockResolvedValue({ missionId: mission.id, items: [] })
 })
 afterEach(cleanup)
+
+it('keeps the Task page when the pending read fails', async () => {
+  for (const person of [true, false]) {
+    task.waitingOn = TaskWaitingOnSchema.parse({
+      on: person ? 'human' : 'verification',
+      reason: person ? 'acceptance_human' : 'QUEUED',
+      person
+    })
+    vi.mocked(axiomClient.missionPending).mockRejectedValue(new Error('offline'))
+    const mounted = mount()
+    await screen.findByRole('region', { name: 'Task detail' })
+    expect(
+      screen.getByRole('table', { name: 'Attempts' }).querySelectorAll('tbody tr')
+    ).toHaveLength(1)
+    expect(screen.getByRole('region', { name: 'Submission summary' })).toBeTruthy()
+    expect(screen.getByRole('list', { name: 'Task messages' }).textContent).toContain(
+      message.summary
+    )
+    expect(screen.getByRole('region', { name: 'Verification' })).toBeTruthy()
+    const note = screen.queryByText('Actions could not be read. Refresh to try again.')
+    expect(Boolean(note)).toBe(person)
+    expect(screen.queryByRole('region', { name: 'Task actions' })).toBeNull()
+    expect(controller.taskDetail?.pendingError).toBe(true)
+    expect(controller.error).toBeNull()
+    expect(toast.error).not.toHaveBeenCalled()
+    vi.mocked(axiomClient.missionPending).mockResolvedValue({ missionId: mission.id, items: [] })
+    await act(async () => controller.refresh())
+    expect(controller.taskDetail?.pendingError).toBe(false)
+    expect(screen.queryByText('Actions could not be read. Refresh to try again.')).toBeNull()
+    mounted.unmount()
+  }
+})
 
 it('keeps the Task page when the verification or usage read fails', async () => {
   for (const failing of ['verification', 'usage'] as const) {

@@ -2,7 +2,11 @@ import { translate } from '@/i18n/i18n'
 import type { VerdictRecord } from '../../../../shared/axiom-contract/verdict-record'
 import { VerificationStatus } from './VerificationStatus'
 
-export function VerificationCriteria({ acceptance }: Pick<VerdictRecord, 'acceptance'>) {
+export function VerificationCriteria({
+  acceptance,
+  resolution,
+  status
+}: Pick<VerdictRecord, 'acceptance' | 'resolution'> & { status?: string }) {
   return (
     <section aria-labelledby="verification-criteria-heading" className="space-y-2">
       <h4 id="verification-criteria-heading" className="text-sm font-medium">
@@ -21,7 +25,22 @@ export function VerificationCriteria({ acceptance }: Pick<VerdictRecord, 'accept
             <li key={`${criterion.index}:${position}`} className="space-y-1">
               <p className="whitespace-pre-wrap">
                 #{criterion.index} · {criterion.text} ·{' '}
-                <VerificationStatus value={criterion.result} />
+                <VerificationStatus
+                  value={criterion.result}
+                  humanWaiting={
+                    !resolution && (status === 'HUMAN_REVIEW' || status === 'SPECIALIST_REVIEW')
+                  }
+                />
+                {criterion.result === 'human' && resolution && (
+                  <>
+                    {' · '}
+                    {resolution.verdict}
+                    {' · '}
+                    {resolution.criteria.includes(criterion.index)
+                      ? translate('missions.criterionNamed', 'Named in the resolution')
+                      : translate('missions.criterionNotNamed', 'Not named in the resolution')}
+                  </>
+                )}
               </p>
               <p>
                 {translate('missions.criterionProof', 'Proof')}:{' '}
