@@ -14,8 +14,16 @@ import { getAxiomControlPlane, missionSummary } from '../../../../axiom/control-
 import { EffectListParams } from '../../../../../shared/axiom-contract/effects'
 import { MissionUsageParams } from '../../../../../shared/axiom-contract/token-usage'
 import { missionUsage } from '../../../../axiom/supervision/mission-usage'
+import { MissionPendingParams } from '../../../../../shared/axiom-contract/mission-pending'
+import { missionPending } from '../../../../axiom/read-models/mission-pending'
 
 export const AXIOM_MISSION_METHODS = [
+  defineMethod({
+    name: 'axiom.mission.pending',
+    permission: 'workspace',
+    params: MissionPendingParams,
+    handler: (p, { runtime }) => missionPending(runtime, p, () => new Date().toISOString())
+  }),
   defineMethod({
     name: 'axiom.mission.usage',
     permission: 'workspace',

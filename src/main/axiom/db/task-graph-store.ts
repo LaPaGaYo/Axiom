@@ -39,6 +39,18 @@ const CountRowSchema = z.object({ stage: TaskStageSchema, count: z.number().int(
 
 export function taskGraphStore(db: OrchestrationDb) {
   return {
+    listReadModelTaskEdges(missionId: string) {
+      return readRows(
+        TaskEdgeSchema.pick({ fromTaskId: true, toTaskId: true }).extend({
+          planRevisionId: AxiomIdSchema
+        }),
+        db.db
+          .prepare(`SELECT from_task_id AS fromTaskId, to_task_id AS toTaskId,
+          plan_revision_id AS planRevisionId FROM mission_task_edges
+          WHERE mission_id = ? ORDER BY from_task_id, to_task_id`)
+          .all(AxiomIdSchema.parse(missionId))
+      )
+    },
     insertTaskStage(record: z.input<typeof InsertSchema>): void {
       const p = InsertSchema.parse(record)
       db.db

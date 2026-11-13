@@ -132,6 +132,46 @@ BLOCKED           → 按原因解除（D70 修订）：回到进入前的非运
 - 重试预算耗尽 → `BLOCKED(retry_budget_exhausted)`：人选上述预算调整、取消，或重新规划（V1 的 replan 只由人发起，D8 修订；B4）。
 - 终态：`INTEGRATED`、`CANCELED`。
 
+### 4.4a Task `waitingOn` 与 Mission 待处理项（M3-09-1 / D86 ③）
+
+`waitingOn = {on, reason, person, taskIds?, runId?, seq?, budget?, until?, missionStatus?}` 是只读投影，不是 stage 或持久状态。`person` 表示此等待需要人处置；`budget = {scope: task | mission, dimension, limit, used}`。`until` 为 UTC ISO 8601。每次读取严格按下表取第一个匹配项；「准入前」指 `DEFINED / READY / NEEDS_FIX`。
+
+| 顺序 | on | 条件 | reason | person / 附加字段 |
+|---|---|---|---|---|
+| 1 | none | INTEGRATED / CANCELED | integrated / canceled | false |
+| 2 | mission | 准入前，Mission 非 EXECUTING，或所属 plan 非 APPROVED | Mission status 原值；后者 plan_not_approved | PLAN_REVIEW / PLANNED / PAUSED / BLOCKED 时 true；missionStatus |
+| 3 | dependency | 准入前，同 plan 的上游未全部 INTEGRATED | 任一 CANCELED 时 upstream_canceled，否则 upstream_not_integrated | 仅前者 true；taskIds 为未集成的上游 |
+| 4 | question | 准入前、RUNNING 或 BLOCKED，存在 pending gate、Attempt question thread 或未答 typed QUESTION | question | true |
+| 5 | approval | 准入前，Mission 有 blocking pending Approval | approval | true |
+| 6 | budget | BLOCKED 的最新入 BLOCKED 审计 reason 为 retry_budget_exhausted / token_budget_exhausted；或准入前依次检查 Mission 预算、Task tokens、Task attempts | BLOCKED 原因原值；其余 budget_exhausted / task_tokens / task_attempts | true；budget（已移除的 Task limit 不附带） |
+| 7 | admission | 准入前：未来 pending attempt.continue；READY 且 Mission RUNNING 数达到并发上限；READY 且最新 admission_refused 晚于最新 task.stage；否则 | backoff / concurrency / no_eligible_provider / next_round | false，唯无 account cooldown 的 no_eligible_provider 为 true；until 为 dueAt 或最早 cooldown end |
+| 8 | verification | SUBMITTED；或 VERIFYING 且 ACTIVE Candidate 最新 run 不为 HUMAN_REVIEW / SPECIALIST_REVIEW / INCONCLUSIVE | run status 原值，无 run 时 QUEUED | false；有 run 时 runId |
+| 9 | integration | VERIFIED / INTEGRATION_READY | integration_queue | false |
+| 10 | human | VERIFYING 且最新 run 为上述 review 状态；或其余 BLOCKED | 字符串 verdictDetail.reason，否则 human_review；BLOCKED 审计原值，无则 blocked | true；review 带 runId |
+| 11 | running | RUNNING | attempt_running | false；最新 binding 的 seq（有 binding 时） |
+
+Mission 预算仅在 EXECUTING 调用 admission 的 `budgetExhaustion`，次序为 attempts → wall clock → tokens。问题、审批先于预算/退避是本投影的展示次序，Scheduler 的检查次序不同；单一原因使用相同词汇。`provider_concurrency` 没有持久拒绝证据，因此显示 next_round。Mission status 只决定准入前的 Task 等待，不覆盖已运行、提交或验证的工作。
+
+`axiom.mission.pending {missionId}` 返回 `{missionId, items}`；每项 `{id, kind, objectId, taskId?, reason, summary?, blocking, blocks, actions, since, waitingOn?}`。`id = kind:objectId`；summary 仅用对象自己的文本。Task 项携带该 Task 的 waitingOn。since 来自记录此等待的行或审计，规范为 UTC ISO 8601。
+
+| kind（同分次序） | 对象 / 条件 | reason；blocking | actions（按顺序，受当前状态约束） |
+|---|---|---|---|
+| mission | PLANNED / PAUSED / BLOCKED；ANALYZING 无 PROPOSED plan、无 active Planner；EXECUTING 预算耗尽 | status；预算耗尽时 budget_exhausted（BLOCKED 保留 BLOCKED）；true | start（PLANNED）、resume（PAUSED）、plan（ANALYZING 且预算未耗尽）、cancel，均为 axiom.mission.* |
+| plan_review | 每个 PROPOSED PlanRevision | PLAN_REVIEW；true | axiom.plan.approve、axiom.plan.reject（仅 Mission PLAN_REVIEW；PAUSED / BLOCKED 时保留项，actions 为空） |
+| question | 非终态 Task 的 pending question；或 Planner 等非 plan Task 的 question | question；准入前、RUNNING、BLOCKED 或 Planner 为 true，已提交后 false | axiom.message.answer |
+| human_review | waitingOn=human 且有 runId | waitingOn.reason；true | axiom.verification.resolve（HUMAN_REVIEW）、axiom.verification.rerun、axiom.task.adjust、axiom.task.cancel |
+| task_blocked | person=true 的 task budget、无 run 的 human、dependency、admission | waitingOn.reason；true | axiom.task.adjust、axiom.verification.rerun、axiom.policy.update（仅 no_eligible_provider）、axiom.task.cancel |
+| subtask_request | pending REQUEST_SUBTASK | REQUEST_SUBTASK；false | axiom.message.resolve |
+| follow_up | pending REQUEST with followUp | follow_up；false | axiom.message.resolve |
+| stall_notice | current stall notification | stalled；false | axiom.task.cancel |
+| supervision_proposal | 全局 open proposal，列于每个非终态 Mission | stalled；false | axiom.supervision.resolve |
+
+adjust 只在 Mission PLANNED / EXECUTING、Task DEFINED / READY / NEEDS_FIX / BLOCKED 或 VERIFYING + HUMAN_REVIEW 提供，upstream_canceled / no_eligible_provider 不提供。rerun 需要 ACTIVE Candidate，Task BLOCKED 或 VERIFYING + HUMAN_REVIEW，最新 run 非 QUEUED / RUNNING。各命令仍自行检查参数、权限和竞态；actions 只承诺以上状态条件。BLOCKED Mission 只有 cancel；stall_notice 只有 Task cancel，没有单 Attempt stop。
+
+plan_review 的 Mission 状态过滤明确收窄 M3-09-1 brief 的无条件 action 表：实际 approve / reject 拒绝 PAUSED / BLOCKED，故遵守 brief 同时要求的「按 Mission status 只列可接受调用」。since 的精确性以现有证据为界：预算已持久阻塞用审计，未持久的 token 耗尽只能用当前账本的最近有效测量；账本不保留首次越界时刻。具体来源见 control-plane 的 M3-09-1 小节。
+
+`blocks`：blocking Task 项 = 自身及同 plan 的非终态传递下游 Task 数（去重）；mission / plan_review / Planner question = Mission 非终态 Task 总数；non-blocking = 0。先 blocking，再 blocks 降序，再上表 kind 次序，再 since 升序，再 id 升序。终态 Mission 无项，终态 Task 的 question 不列。每个 person=true 的 Task 应被 blocking question、mission / plan_review、human_review 或 task_blocked 覆盖；Approval 留 M4。裸 kernel gate 可以没有可列出的 message，此时保留 question 等待，不编造 pending item（已知覆盖例外）。
+
 ### 4.5 Task 执行投影（Orca `tasks.status`，非权威）
 
 `pending / ready / dispatched / completed / failed / blocked`。`completed` 含义 = 「当前 Attempt 已结算」，UI 不得显示为「完成」。

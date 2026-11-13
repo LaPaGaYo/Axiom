@@ -205,6 +205,24 @@ Mission 总 Attempts/wall-clock/new-token 耗尽通过既有 `blockMission(missi
 
 M2 之后：M3 的验证结算接入既有调度触发；M4 接预算 Approval，token/成本总预算仍未 enforce。
 
+### Task 等待与 Mission 待处理项（M3-09-1）
+
+`read-models/waiting-context.ts` 为每次读取收集 Mission、policy、Task stages、带 PlanRevision 身份的 edges、plans、bindings、ACTIVE Candidates、最新 VerificationRuns、并发计数及 Mission budget。`task-waiting-on.ts` 按 Glossary §4.4a 的规范 first-match 表返回每个 Task 唯一的 `waitingOn`；Task list/show handler 使用它，adjust/cancel/create 的响应不变。clock 由读 handler 传入，一次读取使用同一个时间；直接调用投影可注入固定时钟。
+
+这是纯读：没有新表、index、audit event、cursor、seen state 或等待原因的持久字段。它不申请准入、不计量 tokens、不安排后续 round、不改变 Task / Mission / run。Task tokens 是账本总和的普通比较；Mission 仅 EXECUTING 时调用 scheduler 的 `budgetExhaustion`，ANALYZING 只检查 Planner preflight 已支持的 attempts / tokens。active Planner 判定抽到 `execution/active-planner-attempt.ts`，preflight 和 pending 共用。没有新增 timer、模型或 DecisionEngine 调用。
+
+`question / approval / task_tokens / task_attempts / backoff / concurrency / no_eligible_provider` 使用 Scheduler 的词；展示把 dependency、question、approval 放在预算与退避之前，Scheduler 先检查预算/退避，多个条件同时成立时不同是预期行为。BLOCKED 使用最近一次入 BLOCKED 的 `task.stage.after.reason`。no_eligible_provider 使用比最新 task.stage 序号更大的最后拒绝审计，直到下一轮前可能过期；有 accountCooldown 时 until 是最早结束时间，读操作不重新判断 provider。provider_concurrency 没有独立持久投影，显示 next_round。
+
+`axiom.mission.pending` 是 read-class、strict `{missionId}`，无 CLI。它组合 Mission 启动/恢复/重新规划、PROPOSED plans、未答问题、人工验证、Task 阻塞、子任务请求、follow-up、current stall 通知及全局 open supervision proposal。kind / reason / action 集与状态限制的唯一完整定义在 Glossary §4.4a。仅使用对象原有文本；supervision proposal 当前没有文本字段，因此不合成 summary。BLOCKED Mission 只有 Mission cancel；stall notice 只有 Task cancel。actions 只镜像明确的 Mission status、Task stage 与最新 run 条件，命令仍执行自身的完整权限、参数和竞态校验。
+
+blocking item 的 blocks 为非终态自身与同 plan 的去重传递下游数量；Mission / plan review / Planner question 为全部非终态 Tasks；non-blocking 为 0。排序：blocking 优先 → blocks 降序 → kind 规范次序 → since 升序 → id 升序。终态 Mission 返回空列表；终态 Task 的 question 不列。person=true 的 Task 应有一个 blocking question、Mission/plan review 或自身 human_review/task_blocked 覆盖；Approval 留 M4。已知例外是裸 kernel decision gate：`createGate` 不创建 message，pending 不编造条目。
+
+since 从相关持久 row/audit 转为 UTC ISO 8601：Mission 最新匹配状态审计（预算 BLOCKED 用 budget.exhausted）；ANALYZING 在 Planner 结束后重新可启动时，取状态审计之后的最新 planner.launch_failed / attempt_failed / stopped / abandoned。plan 用 plan.proposed，消息用 createdAt，review 用最新 run.updatedAt，Task block 用 task.stage（provider 拒绝用 admission_refused；upstream_canceled 用规范化后最早的相关取消时间），stall 用 notifiedAt，supervision proposal 用 createdAt。缺失的旧审计以对象的 row 时间回退，plan 以 provenance.at 回退；不会用读取时间伪装事件时间。
+
+尚未持久阻塞的预算项：wall-clock 从首次 EXECUTING 起点与 limit 算出阈值时刻；attempts 取最近 binding 的创建时间（缺失则回退相关状态时间）；tokens 取当前正数账本行的最近 measuredAt。Mission 项不会早于当前状态或 Planner 结束的相关证据。证据限制：当前 token 账本覆盖测量值，没有首次越界历史；旧 binding 缺失、被退还计数的中断 Attempt、Task cap 调整也可能无法重建精确越界时刻。这些 since 表示现存证据时间，不能保证首次耗尽时间；保留纯读且不新增历史，已用 ponytail 注明。plan_review 在 PAUSED / BLOCKED 时保留项但不列 approve / reject，因为两个命令都要求 PLAN_REVIEW；这是对 brief 无条件 action 表的显式收窄。
+
+Mission 事实只在每次 context 中计算；Task 审计使用显式列的 ORDER BY sequence DESC LIMIT 1 读取并缓存 stage，避免逐 Task 扫 Mission 历史。Mission wall-clock budget 保留已有的一次历史读取。DAG 在内存中按 PlanRevision 关联；每个不同 blocking Task 一次去重遍历，有意的小图 O(T×(T+E)) 上限已用 ponytail 注明。每次调用重新计算，没有跨调用缓存。
+
 ### Effect outbox (M3-06)
 
 D87 / DEF-48 ① 的 v0 迁移两个副作用；M3-06-2a 增加 attempt.continue，`plane.effects` 持有 `EffectOutbox`。`axiom_effects` 是第 18 张 side table，列为 `id`、`mission_id`、`kind`、`effect_key`、严格 kind-specific JSON `payload`、`status`、`due_at`、`attempts`、`lease_epoch`、`last_error`、`created_at`、`updated_at`；`UNIQUE(kind,effect_key)` 防止同一请求重复入队，`(status,due_at)` 索引用于领取。due_at 始终由 `Date.toISOString()` 写入并按文本比较。新增表、索引和 Mission 删除触发器都是 `IF NOT EXISTS`，旧 v46 数据库每次打开时获得它们；不 bump `SCHEMA_VERSION`，不改原 Run 删除触发器，Run 删除仍清理其 Mission 的 effects。

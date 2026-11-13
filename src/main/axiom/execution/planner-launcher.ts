@@ -6,12 +6,12 @@ import { gitOptionsForWorktree } from '../../git/git-runtime-options'
 import { OrchestrationError } from '../../runtime/orchestration/orchestration-error'
 import { createAttemptLauncher, type AttemptLauncherDependencies } from './attempt-launcher'
 import { missionAttemptCount } from '../scheduler/admission-budget'
+import { hasActivePlannerAttempt } from './active-planner-attempt'
 
 type Dependencies = AttemptLauncherDependencies & {
   agentFactory: AgentFactory
   contextBuilder: ContextBuilder
 }
-const activeStates = new Set(['starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown'])
 const LaunchAudit = z.object({ worktreeId: z.string() })
 
 export function createPlannerLauncher(deps: Dependencies) {
@@ -35,20 +35,7 @@ export function createPlannerLauncher(deps: Dependencies) {
       return refuse('Mission has no active GoalRevision.')
     }
     const bindings = store.listPlannerBindings(missionId)
-    if (
-      bindings.some((b) =>
-        b.dispatchId
-          ? db.getDispatchContextById(b.dispatchId)?.status === 'dispatched' ||
-            activeStates.has(db.getWorkerDispatch(b.dispatchId)?.state ?? '')
-          : !store
-              .listAuditEvents({ missionId })
-              .some(
-                (a) =>
-                  a.objectId === `${b.taskId}/${b.seq}` &&
-                  ['planner.launch_failed', 'planner.attempt_failed'].includes(a.event)
-              )
-      )
-    ) {
+    if (hasActivePlannerAttempt(store, db, missionId, bindings)) {
       return refuse('A Planner Attempt is already active for this Mission.')
     }
     const max = store.getPolicy(missionId)?.budget.maxAttempts

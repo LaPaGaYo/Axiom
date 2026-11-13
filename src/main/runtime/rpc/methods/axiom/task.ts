@@ -7,6 +7,7 @@ import {
   TaskCancelParams
 } from '../../../../../shared/axiom-contract/task-params'
 import { getAxiomControlPlane, taskListItem } from '../../../../axiom/control-plane'
+import { taskList, taskShow } from '../../../../axiom/read-models/task-reads'
 
 export const AXIOM_TASK_METHODS = [
   defineMethod({
@@ -39,17 +40,13 @@ export const AXIOM_TASK_METHODS = [
     name: 'axiom.task.list',
     permission: 'workspace',
     params: TaskListParams,
-    handler: (p, { runtime }) => ({
-      tasks: getAxiomControlPlane(runtime).missions.listTasks(p).map(taskListItem)
-    })
+    handler: (p, { runtime }) => taskList(runtime, p, () => new Date().toISOString())
   }),
   defineMethod({
     name: 'axiom.task.show',
     permission: 'workspace',
     params: TaskShowParams,
-    handler: (p, { runtime }) => ({
-      task: taskListItem(getAxiomControlPlane(runtime).missions.getTask(p.taskId))
-    })
+    handler: (p, { runtime }) => taskShow(runtime, p, () => new Date().toISOString())
   }),
   defineMethod({
     name: 'axiom.task.cancel',

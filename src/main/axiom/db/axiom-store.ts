@@ -17,6 +17,7 @@ import { supervisionSettingsStore } from './supervision-settings-store'
 import { supervisionProposalsStore } from './supervision-proposals-store'
 import { supervisionEvidenceStore } from './supervision-evidence-store'
 import { attemptTokenUsageStore } from './attempt-token-usage-store'
+import { readModelAuditsStore } from './read-model-audits-store'
 
 type AttemptBindings = ReturnType<typeof attemptBindingsStore>
 
@@ -37,6 +38,9 @@ type AttemptTokenUsage = ReturnType<typeof attemptTokenUsageStore>
 
 // One injected store; table modules keep SQL and validation within the file-size gate.
 export class AxiomStore {
+  readonly getLatestReadModelAudit: ReturnType<
+    typeof readModelAuditsStore
+  >['getLatestReadModelAudit']
   readonly upsertAttemptTokenUsage: AttemptTokenUsage['upsertAttemptTokenUsage']
   readonly getAttemptTokenUsage: AttemptTokenUsage['getAttemptTokenUsage']
   readonly listAttemptTokenUsage: AttemptTokenUsage['listAttemptTokenUsage']
@@ -115,6 +119,7 @@ export class AxiomStore {
   readonly countTaskStages: TaskGraph['countTaskStages']
   readonly insertTaskEdges: TaskGraph['insertTaskEdges']
   readonly listTaskEdges: TaskGraph['listTaskEdges']
+  readonly listReadModelTaskEdges: TaskGraph['listReadModelTaskEdges']
   readonly listUpstreamEdges: TaskGraph['listUpstreamEdges']
   readonly listDownstreamEdges: TaskGraph['listDownstreamEdges']
   readonly upsertPolicy: PolicyAudit['upsertPolicy']
@@ -137,6 +142,7 @@ export class AxiomStore {
   readonly getContextTokenBudget: Artifacts['getContextTokenBudget']
 
   constructor(private readonly db: OrchestrationDb) {
+    this.getLatestReadModelAudit = readModelAuditsStore(db).getLatestReadModelAudit
     const tokenUsage = attemptTokenUsageStore(db)
     this.upsertAttemptTokenUsage = tokenUsage.upsertAttemptTokenUsage
     this.getAttemptTokenUsage = tokenUsage.getAttemptTokenUsage
@@ -235,6 +241,7 @@ export class AxiomStore {
     this.countTaskStages = graph.countTaskStages
     this.insertTaskEdges = graph.insertTaskEdges
     this.listTaskEdges = graph.listTaskEdges
+    this.listReadModelTaskEdges = graph.listReadModelTaskEdges
     this.listUpstreamEdges = graph.listUpstreamEdges
     this.listDownstreamEdges = graph.listDownstreamEdges
     const policyAudit = policyAuditStore(db)
