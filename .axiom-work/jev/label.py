@@ -52,6 +52,24 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M3-06-3-2b', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'reconciliation, evidence and proposals as briefed: once-only audits in their own transactions in the '
+        'brief outcome order, indexed window and total, one global open proposal, desktop-only answer with stale and '
+        'illegal checks, supersession on a direct global change; unit and e2e red checks fail on main recovery-service.ts '
+        'at the assertions; changed e2e green on its first host run; two verifier test-only fixes for exact expectations '
+        'the brief had not listed (three unit tests, the M3-06-3-2 stall-stop spec); the Worker reported the unit ones',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'the 100-row oldest-first reconciliation scan has no cursor: pending or failing rows can starve newer ones',
+            'briefs that add audit rows or response fields must list the existing exact expectations the Worker may update',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+        'failures': {'20261113T000351': [('candidate', 'host check 20261112-164619: its two host e2e failures are the expected red run of the changed budget-stop spec on main recovery-service.ts (triage.mjs did not yet exclude red-run logs) and the M3-06-3-2 stall-stop spec, whose exact view expectation the candidate additive show fields broke (verifier fix 2 80b1d62f95); both follow from the candidate change')] * 2},
+    },
     ('M3-06-3-2', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'stall modes as briefed: append-only settings table without a schema version, desktop-only update with a '
@@ -146,7 +164,13 @@ for path in sorted(glob.glob(os.path.join(logs, 'jev-*.json'))):
     verdict = None
     if key in FULL:
         verdict = dict(FULL[key])
-        assert not questions, (path, 'expected no failure questions')
+        # A FULL label may carry the failure labels of one record, keyed by its timestamp; other records need none.
+        labels = verdict.pop('failures', {}).get(os.path.basename(path)[: -len('.json')].rsplit('-', 1)[1], [])
+        assert len(labels) == len(questions), (path, len(labels), len(questions))
+        if labels:
+            verdict['failures_caused_by_candidate'] = [label == 'candidate' for label, _ in labels]
+            verdict['failure_labels'] = [label for label, _ in labels]
+            verdict['label_evidence'] = [evidence for _, evidence in labels]
     elif key in BACKFILL:
         labels = BACKFILL[key]
         assert len(labels) == len(questions), (path, len(labels), len(questions))

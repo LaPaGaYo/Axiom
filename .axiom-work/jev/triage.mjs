@@ -57,7 +57,7 @@ const gateResults = verifyLog
 const failures = []
 const lines = verifyLog.split('\n')
 for (let i = 0; i < lines.length; i++) {
-  const m = lines[i].match(/^ FAIL {2}(\S+)(?: > (.*))?$/)
+  const m = lines[i].match(/^ FAIL\s+(?:(?:bun|node)\s+)?(\S+)(?: > (.*))?$/)
   if (!m) {
     continue
   }
@@ -83,7 +83,7 @@ const hostTs = readdirSync(LOGS)
 if (hostTs) {
   const specLogs = readdirSync(LOGS).filter((f) => {
     const m = f.match(new RegExp(`^host-check-${escapedId}-(.+)-${hostTs}\\.log$`))
-    return m !== null && !/^(red-bun|red-node|node)$/.test(m[1])
+    return m !== null && !/^(red-.+|node)$/.test(m[1])
   })
   for (const f of specLogs) {
     const hostLines = strip(readFileSync(join(LOGS, f), 'utf8')).split('\n')
