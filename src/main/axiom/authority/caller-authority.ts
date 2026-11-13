@@ -49,6 +49,7 @@ export const AXIOM_METHOD_CALLER_CLASS: Record<string, CallerClass> = {
   'axiom.message.list': 'read',
   'axiom.mission.show': 'read',
   'axiom.mission.usage': 'read',
+  'axiom.mission.pending': 'read',
   'axiom.mission.list': 'read',
   'axiom.plan.show': 'read',
   'axiom.plan.list': 'read',

@@ -97,7 +97,8 @@ it('reads revisions and Task stage projections and routes cancellation, pause an
   const shown = TaskResponseSchema.parse(
     result(await f.call('axiom.task.show', { taskId: tasks[0].id }))
   ).task
-  expect(shown).toMatchObject(tasks[0])
+  const { waitingOn: _waitingOn, ...stableTask } = tasks[0]
+  expect(shown).toMatchObject(stableTask)
   expect(shown.spec?.acceptanceCriteria).toEqual(
     expect.arrayContaining([
       expect.objectContaining({

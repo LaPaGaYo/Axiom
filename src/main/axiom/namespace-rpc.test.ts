@@ -22,6 +22,7 @@ describe('Axiom RPC namespace', () => {
       'axiom.message.list',
       'axiom.mission.show',
       'axiom.mission.usage',
+      'axiom.mission.pending',
       'axiom.mission.list',
       'axiom.goal.show',
       'axiom.plan.list',
