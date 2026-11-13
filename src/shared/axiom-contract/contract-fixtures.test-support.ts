@@ -1,5 +1,6 @@
 import { DEFAULT_ROUTING_POLICY, type TaskSpec } from './mission-objects'
 import type { VerificationRunView } from './verification-params'
+import type { MissionPendingItem } from './mission-pending'
 
 // Hand-written shape of LaPaGaYo/flowtask-fixture, fixture-v1,
 // scenarios/goal/decomposition.json. IDs and dependsOn edges match the frozen file.
@@ -186,6 +187,23 @@ export const verificationRun: VerificationRunView = {
     verdictArtifactId: 'evidence-1',
     evidenceArtifactIds: ['evidence-1']
   }
+}
+
+export const reviewPendingItem: MissionPendingItem = {
+  id: `human_review:${verificationRun.id}`,
+  kind: 'human_review',
+  objectId: verificationRun.id,
+  taskId: attempt.taskId,
+  reason: 'acceptance_human',
+  blocking: true,
+  blocks: 1,
+  actions: [
+    'axiom.verification.resolve',
+    'axiom.verification.rerun',
+    'axiom.task.adjust',
+    'axiom.task.cancel'
+  ],
+  since: verificationRun.createdAt
 }
 
 export const missionUsage = {

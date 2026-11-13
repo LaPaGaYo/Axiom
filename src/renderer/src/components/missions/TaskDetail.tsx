@@ -11,6 +11,10 @@ import { TaskWaitingLine } from './TaskWaitingLine'
 import { VerificationRecord } from './VerificationRecord'
 import { useTaskVerification } from './use-task-verification'
 import type { TaskEvidenceReads } from './task-evidence-read'
+import {
+  TaskVerificationActions,
+  type TaskVerificationActionProps
+} from './TaskVerificationActions'
 
 export function TaskDetail({
   task,
@@ -23,9 +27,14 @@ export function TaskDetail({
   usageError,
   tasks,
   onSelectTask,
+  pendingItems,
+  pendingError,
+  onResolveVerification,
+  onRerunVerification,
   ...actions
 }: ComponentProps<typeof MessageTimeline> &
-  TaskEvidenceReads & {
+  TaskEvidenceReads &
+  TaskVerificationActionProps & {
     task: TaskListItem
     tasks?: readonly TaskListItem[]
     onSelectTask?: (id: string) => void
@@ -65,6 +74,16 @@ export function TaskDetail({
           tasks={tasks}
           onSelectTask={onSelectTask}
           onSelectRun={verification.openRun}
+        />
+        <TaskVerificationActions
+          task={task}
+          pendingItems={pendingItems}
+          pendingError={pendingError}
+          runs={runs}
+          busy={actions.busy}
+          detailRef={section}
+          onResolveVerification={onResolveVerification}
+          onRerunVerification={onRerunVerification}
         />
       </div>
       <AttemptList

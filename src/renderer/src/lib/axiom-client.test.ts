@@ -9,6 +9,7 @@ import {
   message,
   verificationRun,
   missionUsage,
+  reviewPendingItem,
   evidenceArtifact
 } from '../../../shared/axiom-contract/contract-fixtures.test-support'
 
@@ -33,6 +34,65 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('Axiom desktop client', () => {
+  it('sends a resolution and a rerun with the caller receipt id and reads the pending view', async () => {
+    const pending = { missionId: mission.id, items: [reviewPendingItem] }
+    call.mockResolvedValue(success(pending))
+    expect(await axiomClient.missionPending({ missionId: mission.id })).toEqual(pending)
+    expect(call).toHaveBeenLastCalledWith({
+      method: 'axiom.mission.pending',
+      params: { missionId: mission.id }
+    })
+    const resolution = {
+      runId: verificationRun.id,
+      verdict: 'PASS' as const,
+      rationale: 'Reviewed',
+      criteria: [1],
+      disposition: 'intentional' as const
+    }
+    const rerun = { taskId: attempt.taskId, rationale: 'Try again' }
+    for (const entry of [
+      {
+        method: 'axiom.verification.resolve',
+        params: resolution,
+        status: 'PASS',
+        run: () => axiomClient.resolveVerification(resolution, 'resolve-receipt')
+      },
+      {
+        method: 'axiom.verification.rerun',
+        params: rerun,
+        status: 'QUEUED',
+        run: () => axiomClient.rerunVerification(rerun, 'rerun-receipt')
+      }
+    ]) {
+      const result = { runId: verificationRun.id, status: entry.status }
+      call.mockResolvedValue(success(result))
+      expect(await entry.run()).toEqual(result)
+      expect(call).toHaveBeenLastCalledWith({
+        method: entry.method,
+        params: entry.params,
+        envelope: {
+          orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+          orchestrationRequestId: entry.status === 'PASS' ? 'resolve-receipt' : 'rerun-receipt'
+        }
+      })
+      call.mockResolvedValue(success({ ...result, status: 'HUMAN_REVIEW' }))
+      await expect(entry.run()).rejects.toMatchObject({ code: 'invalid_response' })
+    }
+    call.mockResolvedValue(
+      success({ ...pending, items: [{ ...reviewPendingItem, actions: ['unknown'] }] })
+    )
+    await expect(axiomClient.missionPending({ missionId: mission.id })).rejects.toMatchObject({
+      code: 'invalid_response'
+    })
+    call.mockClear()
+    await expect(
+      axiomClient.resolveVerification({ ...resolution, rationale: ' ' })
+    ).rejects.toMatchObject({ code: 'invalid_params' })
+    await expect(axiomClient.rerunVerification({ ...rerun, rationale: ' ' })).rejects.toMatchObject(
+      { code: 'invalid_params' }
+    )
+    expect(call).not.toHaveBeenCalled()
+  })
   it('parses runs, usage and an Artifact with the contract schemas', async () => {
     const reads = [
       {

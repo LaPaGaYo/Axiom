@@ -10,6 +10,8 @@ import {
   mission,
   policy,
   attempt,
+  reviewPendingItem,
+  verificationRun,
   message
 } from '../../../../shared/axiom-contract/contract-fixtures.test-support'
 
@@ -93,6 +95,12 @@ beforeEach(() => {
     if (method === 'axiom.mission.usage') {
       return success({ missionId: params.missionId, limit: null, used: 0, tasks: [] })
     }
+    if (method === 'axiom.mission.pending') {
+      return success({
+        missionId: params.missionId,
+        items: [reviewPendingItem, { ...reviewPendingItem, id: 'other', taskId: 'other-task' }]
+      })
+    }
     throw new Error(`Unexpected method: ${method}`)
   })
 })
@@ -102,6 +110,64 @@ afterEach(() => {
 })
 
 describe('Mission page reconciliation', () => {
+  it('reconciles after a resolution and reuses the receipt id after an uncertain result', async () => {
+    await mount()
+    await act(async () => controller.selectTask(attempt.taskId))
+    expect(controller.taskDetail?.pendingItems).toEqual([reviewPendingItem])
+    const base = call.getMockImplementation()!
+    let settled = false
+    call.mockImplementation((args) => {
+      if (args.method === 'axiom.verification.resolve') {
+        return settled
+          ? Promise.resolve(success({ runId: verificationRun.id, status: 'PASS' }))
+          : Promise.reject(new Error('lost response'))
+      }
+      if (args.method === 'axiom.mission.pending' && settled) {
+        return Promise.resolve(success({ missionId: mission.id, items: [] }))
+      }
+      if (args.method === 'axiom.verification.rerun') {
+        return Promise.resolve({
+          id: 'desktop-ipc',
+          ok: false,
+          error: { code: 'stale_state', message: 'Candidate changed' }
+        })
+      }
+      return base(args)
+    })
+    const params = {
+      runId: verificationRun.id,
+      verdict: 'PASS' as const,
+      criteria: [1],
+      rationale: 'Reviewed'
+    }
+    const before = call.mock.calls.length
+    await act(async () => controller.resolveVerification(params))
+    expect(controller.error).toBe('transport_error: lost response')
+    expect(controller.taskDetail?.pendingItems).toEqual([reviewPendingItem])
+    expect(call.mock.calls.slice(before).some(([a]) => a.method === 'axiom.mission.pending')).toBe(
+      true
+    )
+    expect(
+      call.mock.calls.slice(before).some(([a]) => a.method === 'axiom.verification.list')
+    ).toBe(true)
+    settled = true
+    await act(async () => controller.resolveVerification(params))
+    const writes = call.mock.calls.filter(([a]) => a.method === 'axiom.verification.resolve')
+    expect(writes).toHaveLength(2)
+    expect(writes[0][0]).toEqual(writes[1][0])
+    expect(controller.taskDetail?.pendingItems).toEqual([])
+    expect(controller.error).toBeNull()
+    const beforeRerun = call.mock.calls.length
+    await act(async () =>
+      controller.rerunVerification({ taskId: attempt.taskId, rationale: 'Retry' })
+    )
+    expect(controller.error).toBe('stale_state: Candidate changed')
+    expect(toast.error).toHaveBeenLastCalledWith('stale_state: Candidate changed')
+    expect(
+      call.mock.calls.slice(beforeRerun).some(([a]) => a.method === 'axiom.mission.pending')
+    ).toBe(true)
+    expect(call.mock.calls.filter(([a]) => a.method === 'axiom.verification.rerun')).toHaveLength(1)
+  })
   it('loads Task detail and re-reads pending messages after an uncertain answer', async () => {
     await mount()
     await act(async () => controller.selectTask(attempt.taskId))

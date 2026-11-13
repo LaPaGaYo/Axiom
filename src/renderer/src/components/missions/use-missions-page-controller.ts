@@ -215,7 +215,17 @@ export function useMissionsPageController() {
       () => mutate(JSON.stringify(['reject', params]), (id) => axiomClient.rejectPlan(params, id))
     )
   }
+  const resolveVerification = (params: Parameters<typeof axiomClient.resolveVerification>[0]) =>
+    mutate(JSON.stringify(['resolveVerification', params]), (id) =>
+      axiomClient.resolveVerification(params, id)
+    )
+  const rerunVerification = (params: Parameters<typeof axiomClient.rerunVerification>[0]) =>
+    mutate(JSON.stringify(['rerunVerification', params]), (id) =>
+      axiomClient.rerunVerification(params, id)
+    )
   return {
+    resolveVerification,
+    rerunVerification,
     missions,
     detail: detail?.mission.id === selectedId ? detail : null,
     selectedId,

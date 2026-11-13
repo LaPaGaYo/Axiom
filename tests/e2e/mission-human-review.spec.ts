@@ -81,6 +81,11 @@ for (const scenario of [
         }
         if (scenario === 'deterministic final') {
           await expect.poll(() => inspect().tasks[0]?.stage).toBe('READY')
+          await expect
+            .poll(
+              () => inspect().verification.find((row) => row.id === run.id)?.worktreeId === null
+            )
+            .toBe(true)
           const before = inspect()
           for (const [method, params, reason] of [
             [

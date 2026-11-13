@@ -13,14 +13,23 @@ export function verificationTone(value: string): string {
   return 'text-muted-foreground'
 }
 
-export function VerificationStatus({ value }: { value: string }) {
+export function VerificationStatus({
+  value,
+  humanWaiting = false
+}: {
+  value: string
+  humanWaiting?: boolean
+}) {
+  const quietHuman = value === 'human' && !humanWaiting
   return (
-    <span className={verificationTone(value)}>
+    <span className={quietHuman ? 'text-muted-foreground' : verificationTone(value)}>
       {value}
       {(value === 'QUEUED' || value === 'RUNNING') && (
         <> · {translate('missions.verificationInProgress', 'In progress')}</>
       )}
-      {(value === 'HUMAN_REVIEW' || value === 'SPECIALIST_REVIEW' || value === 'human') && (
+      {(value === 'HUMAN_REVIEW' ||
+        value === 'SPECIALIST_REVIEW' ||
+        (value === 'human' && humanWaiting)) && (
         <> · {translate('missions.needsPerson', 'Needs a person')}</>
       )}
     </span>

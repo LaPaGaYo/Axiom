@@ -39,6 +39,7 @@ export function TaskWaitingLine({
       <p>{taskWaitingGloss(wait)}</p>
       {!!wait.taskIds?.length && (
         <div className="flex flex-wrap gap-2">
+          <span>{translate('missions.upstreamTasks', 'Upstream Tasks')}</span>
           {wait.taskIds.map((id) => (
             <Button
               key={id}
@@ -47,7 +48,9 @@ export function TaskWaitingLine({
               className="h-auto whitespace-normal"
               onClick={() => onSelectTask?.(id)}
             >
-              {tasks?.find((entry) => entry.id === id)?.title ?? id}
+              <span className="underline">
+                {tasks?.find((entry) => entry.id === id)?.title ?? id}
+              </span>
             </Button>
           ))}
         </div>
@@ -84,14 +87,17 @@ export function TaskWaitingLine({
         <p>{translate('missions.waitAttempt', 'Attempt {{seq}}', { seq: wait.seq })}</p>
       )}
       {wait.runId && (
-        <Button
-          variant="link"
-          size="xs"
-          className="h-auto break-all"
-          onClick={() => onSelectRun(wait.runId!)}
-        >
-          {wait.runId}
-        </Button>
+        <p>
+          <span>{translate('missions.waitingVerificationRun', 'Verification run')}</span>{' '}
+          <Button
+            variant="link"
+            size="xs"
+            className="h-auto break-all"
+            onClick={() => onSelectRun(wait.runId!)}
+          >
+            <span className="underline">{wait.runId}</span>
+          </Button>
+        </p>
       )}
     </section>
   )

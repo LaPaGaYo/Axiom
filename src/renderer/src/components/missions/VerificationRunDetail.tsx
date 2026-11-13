@@ -45,9 +45,22 @@ export function VerificationRunDetail({ run }: { run: VerificationRunView }) {
         )}
       </div>
       <VerificationChecks record={record} />
-      <VerificationCriteria acceptance={record.acceptance} />
+      <VerificationCriteria
+        acceptance={record.acceptance}
+        resolution={record.resolution}
+        status={run.status}
+      />
       <VerificationDiff diff={record.diff} />
       <VerificationDisposition record={record} />
+      {record.unreadable && (
+        <p className="text-xs text-muted-foreground">
+          {translate(
+            'missions.unreadableRecordEntries',
+            '{{count}} entries of this record could not be read.',
+            { count: record.unreadable }
+          )}
+        </p>
+      )}
       <section aria-labelledby="verification-tools-heading" className="space-y-2 text-xs">
         <h4 id="verification-tools-heading" className="text-sm font-medium">
           {translate('missions.toolVersions', 'Tool versions')}
