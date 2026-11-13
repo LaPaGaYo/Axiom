@@ -1,4 +1,7 @@
-import { settleAttemptWithoutSubmission } from '../execution/attempt-settlement'
+import {
+  currentUnsubmittedTask,
+  settleAttemptWithoutSubmission
+} from '../execution/attempt-settlement'
 import type { captureRecoveryAttempt } from './attempt-recovery-preservation'
 import { auditAttempt, type AttemptBinding, type RecoveryContext } from './attempt-recovery-effects'
 
@@ -12,6 +15,13 @@ export type StallStopFacts = {
 }
 export type SupervisionStopFacts =
   | StallStopFacts
+  | {
+      rule: 'budget_exhausted'
+      mode: 'auto'
+      thresholdTokens: number
+      usedTokens: number
+      thresholdSource: 'task'
+    }
   | {
       rule: 'timeout'
       mode: 'auto'
@@ -29,6 +39,12 @@ export function settleSupervisionStop(
   transaction: string
 ) {
   ctx.store.transaction(transaction, () => {
+    if (
+      facts.rule === 'budget_exhausted' &&
+      !currentUnsubmittedTask(ctx.store, { ...binding, actor: 'RecoveryService' })
+    ) {
+      return
+    }
     if (state === 'stopped' || state === 'stop_unknown') {
       auditAttempt(ctx, binding, 'attempt.supervised', { ...facts, action: state })
     }
@@ -40,6 +56,7 @@ export function settleSupervisionStop(
       settleAttemptWithoutSubmission(ctx, {
         ...binding,
         reason: facts.rule,
+        ...(facts.rule === 'budget_exhausted' ? { blockReason: 'token_budget_exhausted' } : {}),
         actor: 'RecoveryService'
       })
     } else if (state === 'stop_unknown') {

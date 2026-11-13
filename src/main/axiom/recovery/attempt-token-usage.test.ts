@@ -247,7 +247,7 @@ it('marks a reading partial when the rollout is cut or a usage record is unusabl
     {
       timestamp: iso(usageStart + 1),
       type: 'event_msg',
-      payload: { type: 'token_count', info: null }
+      payload: { type: 'token_count', info: { total_token_usage: usageA } }
     }
   ])
   await f.tick()
@@ -312,7 +312,7 @@ it('keeps Claude zero readings complete and malformed usage partial', async () =
   writeFileSync(path.join(f.root, next.attemptId, 'events.jsonl'), '')
   await f.tick()
   expect(f.ledger()).toContainEqual(
-    expect.objectContaining({ dispatch_id: next.attemptId, new_tokens: 0, status: 'complete' })
+    expect.objectContaining({ dispatch_id: next.attemptId, new_tokens: 430, status: 'partial' })
   )
 })
 

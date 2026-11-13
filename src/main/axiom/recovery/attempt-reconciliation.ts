@@ -220,6 +220,7 @@ export async function reconcileAttempt(
     observeAttemptLiveness(ctx, binding, { status: 'live', ptyIds: [] })
     return superviseAttempt(ctx, binding, entry, {
       headless,
+      maxTokens: task.spec.budget?.maxTokens,
       minutes: task.spec.budget?.maxRuntimeMinutes ?? policy.budget.maxRuntimeMinutes,
       thresholdSource: task.spec.budget?.maxRuntimeMinutes === undefined ? 'policy' : 'task',
       startedAt: Date.parse(exposeUtcTimestamp(binding.createdAt)!),

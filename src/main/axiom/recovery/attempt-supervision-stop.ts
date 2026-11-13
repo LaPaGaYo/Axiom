@@ -37,7 +37,14 @@ export async function stopSupervisedAttempt(
   if (facts.rule === 'timeout') {
     settleRecoveryBudget(ctx, binding, stopped.state, facts, preserved)
   } else {
-    settleSupervisionStop(ctx, binding, stopped.state, facts, preserved, 'recovery_stall_stop')
+    settleSupervisionStop(
+      ctx,
+      binding,
+      stopped.state,
+      facts,
+      preserved,
+      facts.rule === 'budget_exhausted' ? 'recovery_token_stop' : 'recovery_stall_stop'
+    )
   }
   entry.action = stopped.state
   return entry

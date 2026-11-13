@@ -56,6 +56,10 @@ export function createPlannerLauncher(deps: Dependencies) {
     if (max !== undefined && used >= max) {
       return refuse('budget_exhausted', { reason: 'budget_exhausted' })
     }
+    const maxTokens = store.getPolicy(missionId)?.budget.maxTokens
+    if (maxTokens !== undefined && store.sumAttemptTokenUsage({ missionId }) >= maxTokens) {
+      return refuse('budget_exhausted', { reason: 'budget_exhausted' })
+    }
     return { mission, goalRevisionId: mission.activeGoalRevisionId, runSeq: bindings.length + 1 }
   }
   return {

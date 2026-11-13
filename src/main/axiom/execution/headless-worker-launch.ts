@@ -4,6 +4,7 @@ import { headlessWorkerCombination, headlessClaudeCombination } from './worker-l
 import type { AttemptWorktree } from './attempt-placement'
 import type { InPlaceContinuation } from './in-place-continuation'
 import { continuationPrompt } from '../context-builder/continuation-prompt'
+import { readTokenBudgets } from '../context-builder/token-budget'
 import type { AgentSpec } from '../../../shared/axiom-contract/agent-spec'
 import type { AuditEvent } from '../../../shared/axiom-contract/mission-objects'
 import type { AdmittedAttempt } from '../scheduler/scheduler'
@@ -40,6 +41,7 @@ export function createHeadlessWorkerLaunch(input: {
           ? {
               stdinPrompt: continuationPrompt({
                 ...attempt,
+                tokenBudgets: readTokenBudgets(deps.store, attempt.missionId, attempt.taskId),
                 continuation: input.continuation
               }).replaceAll('{{attemptId}}', dispatchId)
             }

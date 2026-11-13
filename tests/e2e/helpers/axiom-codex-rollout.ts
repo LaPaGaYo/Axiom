@@ -47,7 +47,7 @@ function writeUsageRollout(attemptId, taskId) {
   const first = record(usage(1000, 400, 50, 10), usage(1000, 400, 50, 10))
   const records = [
     { timestamp: now.toISOString(), type: 'session_meta', payload: { creator_account_id: 'USAGE_DECOY_ACCOUNT' } },
-    // Historical rate-limit-only evidence is outside the Attempt window; in-window null info is partial.
+    // Rate-limit-only info:null records contain no usage and are skipped in any Attempt window.
     { timestamp: new Date(0).toISOString(), type: 'event_msg', payload: { type: 'token_count', info: null,
       rate_limits: { plan_type: 'USAGE_DECOY_PLAN', credits: { balance: 'USAGE_DECOY_CREDITS' } } } },
     first, record(usage(2000, 1500, 80, 20), usage(3000, 1900, 130, 30)), first

@@ -115,6 +115,17 @@ export function adjustTask(
   const addedPaths = allowedPaths.filter((path) => !task.spec.scope.allowedPaths.includes(path))
   const retryPolicy = { ...task.retryPolicy, maxAttempts }
   const spec = { ...task.spec, scope: { ...task.spec.scope, allowedPaths }, retryPolicy }
+  if (p.maxTokens !== undefined) {
+    const used = ctx.store.sumAttemptTokenUsage({ taskId: task.taskId })
+    if (p.maxTokens <= used) {
+      throw new OrchestrationError(
+        'invalid_argument',
+        'maxTokens must be above the consumed Task token count.',
+        { taskId: task.taskId, used, maxTokens: p.maxTokens }
+      )
+    }
+    spec.budget = { ...spec.budget, maxTokens: p.maxTokens }
+  }
   if (p.acceptanceCriteria) {
     spec.acceptanceCriteria = p.acceptanceCriteria
     const parsedRules = VerificationRulesSchema.safeParse(
@@ -151,6 +162,7 @@ export function adjustTask(
     before: {
       allowedPaths: task.spec.scope.allowedPaths,
       maxAttempts: task.retryPolicy.maxAttempts,
+      ...(p.maxTokens !== undefined ? { maxTokens: task.spec.budget?.maxTokens ?? null } : {}),
       ...(p.acceptanceCriteria
         ? { acceptanceCriteria: acceptanceForAudit(task.spec.acceptanceCriteria) }
         : {})
@@ -163,6 +175,7 @@ export function adjustTask(
       afterAttemptSeq: ctx.store.nextAttemptSeq(task.taskId) - 1,
       origin: 'user',
       resolvedMessageIds,
+      ...(p.maxTokens !== undefined ? { maxTokens: p.maxTokens } : {}),
       ...(p.acceptanceCriteria
         ? { acceptanceCriteria: acceptanceForAudit(p.acceptanceCriteria) }
         : {})
@@ -181,6 +194,7 @@ export function adjustTask(
       taskId: task.taskId,
       addedPaths,
       maxAttempts,
+      ...(p.maxTokens !== undefined ? { maxTokens: p.maxTokens } : {}),
       rationale: p.rationale
     }
   })
@@ -191,7 +205,8 @@ export function adjustTask(
     candidate &&
     p.acceptanceCriteria &&
     !p.addAllowedPaths.length &&
-    p.maxAttempts === undefined
+    p.maxAttempts === undefined &&
+    p.maxTokens === undefined
   ) {
     return { task: projectTask(ctx, adjusted), retiredUsageLimit }
   }
