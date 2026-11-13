@@ -12,8 +12,16 @@ import {
 } from '../../../../../shared/axiom-contract/mission-params'
 import { getAxiomControlPlane, missionSummary } from '../../../../axiom/control-plane'
 import { EffectListParams } from '../../../../../shared/axiom-contract/effects'
+import { MissionUsageParams } from '../../../../../shared/axiom-contract/token-usage'
+import { missionUsage } from '../../../../axiom/supervision/mission-usage'
 
 export const AXIOM_MISSION_METHODS = [
+  defineMethod({
+    name: 'axiom.mission.usage',
+    permission: 'workspace',
+    params: MissionUsageParams,
+    handler: (p, { runtime }) => missionUsage(getAxiomControlPlane(runtime).store, p)
+  }),
   defineMethod({
     name: 'axiom.effect.list',
     permission: 'workspace',

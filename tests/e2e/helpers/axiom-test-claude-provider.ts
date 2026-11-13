@@ -1,5 +1,6 @@
 import { AXIOM_TEST_PROVIDER_SOURCE } from './axiom-test-provider'
 import { AXIOM_T01_FIXTURE_FILES } from './axiom-t01-fixture'
+import { AXIOM_CLAUDE_USAGE_SOURCE } from './axiom-claude-usage'
 
 export const AXIOM_TEST_CLAUDE_VERSION = '2.1.312'
 export const AXIOM_TEST_CLAUDE_MODEL = 'sonnet'
@@ -116,6 +117,7 @@ if (process.argv.slice(2).includes('-p')) {
     }))
   }) + '\\n')
   const emit = event => process.stdout.write(JSON.stringify(event) + '\\n')
+  ${AXIOM_CLAUDE_USAGE_SOURCE}
   const sessionId = 'fixture-' + attemptId
   emit({ type: 'system', subtype: 'init', session_id: sessionId, claude_code_version: '${AXIOM_TEST_CLAUDE_VERSION} (Claude Code)',
     model: '${AXIOM_TEST_CLAUDE_MODEL}', permissionMode: 'acceptEdits', tools: settings.permissions.allow,
@@ -145,6 +147,7 @@ if (process.argv.slice(2).includes('-p')) {
       artifacts: [{ path: '.axiom/artifacts/REPORT.md', kind: 'worker_report', mediaType: 'text/markdown' }],
       limitations: ['Deterministic fake provider; no live Claude invocation'], risks: [], questions: [], followUps: [] }
     emit({ type: 'assistant', session_id: sessionId, message: { role: 'assistant', content: [{ type: 'text', text: summary }] } })
+    emitFixtureClaudeUsage(emit, taskId)
     emit({ type: 'result', subtype: 'success', is_error: false, session_id: sessionId, num_turns: 1,
       result: reportText + '\\n\`\`\`json\\n' + JSON.stringify(report) + '\\n\`\`\`\\n',
       usage: { input_tokens: 100, cache_read_input_tokens: 40, cache_creation_input_tokens: 0, output_tokens: 25 },

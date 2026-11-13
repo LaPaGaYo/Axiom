@@ -33,7 +33,7 @@ async function submitFixture(attemptId, missionId, taskId, outputPath) {
   let seq
   if (headless) {
     while (existsSync(process.env.AXIOM_E2E_LEDGER + '.hold')) await new Promise(resolve => setTimeout(resolve, 50))
-    await stallWithPartialWork(taskId)
+    writeUsageRollout(attemptId, taskId); await stallWithPartialWork(taskId)
     const branch = spawnSync('git', ['branch', '--show-current'], { cwd: process.cwd(), encoding: 'utf8' })
     seq = Number(branch.stdout.trim().split('/').at(-1))
   } else {

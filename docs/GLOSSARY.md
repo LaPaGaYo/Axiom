@@ -27,7 +27,7 @@
 
 ## 2. 分层与角色
 
-**rollout（Codex session record）**：Codex 写在该 Attempt 账号目录的 `sessions/YYYY/MM/DD/rollout-<local time>-<thread id>.jsonl` 会话记录，包含对话与 `event_msg / token_count` 限额更新。不是 Axiom Artifact，也不是权威失败分类。M3-06-2a-3 / D88 仅在 Codex 错误文本已判 `usage_limit` 后，有界、只读地取窗口字段交内核解释；只允许 `{window?, resetsAt?}` 离开 reader，缺失证据沿用原阶梯。
+**rollout（Codex session record）**：Codex 写在该 Attempt 账号目录的 `sessions/YYYY/MM/DD/rollout-<local time>-<thread id>.jsonl` 会话记录，包含对话与 `event_msg / token_count` 限额更新。不是 Axiom Artifact，也不是权威失败分类。M3-06-2a-3 / D88 仅在 Codex 错误文本已判 `usage_limit` 后，有界、只读地取窗口字段交内核解释；该限额 reader 只允许 `{window?, resetsAt?}` 离开，缺失证据沿用原阶梯。M3-06-3-3 的独立 token reader 仅读取 usage 白名单并返回计数与完整性状态，见 §4.6 New tokens and Attempt usage。
 
 **Provider activation（provider 激活记录）**：当前 Axiom profile 中由用户动作产生的本地设置记录 `providerActivations`，保存 provider id、首次动作时间及来源。D37 用它约束启动与空闲认证/用量请求；默认 `{}`，不能由机器全局凭据、PATH 或既有 hook 推断。不是认证成功证明，也不是 Mission Approval。来源限 `agent-launch`、`settings-hook-install`、`integrations-recheck`、`account-added`；具体持久化提案见 `.axiom-work/reports/M0-09-3.md`。
 
@@ -158,11 +158,19 @@ BLOCKED           → 按原因解除（D70 修订）：回到进入前的非运
 
 `attempt.cadence {taskId, seq, maxEventGapMs, samples, resolutionMs, partial}`：按 runtime 在内存中采样 live/current headless Attempt 的事件静默；文件缺失或不可读时跳过。Attempt 不再是 Task 的最新、未提交 RUNNING Attempt（或 binding 消失）后仅写一次；`maxEventGapMs` 是所采到的最大静默，`resolutionMs = ATTEMPT_RECONCILE_INTERVAL_MS = 60_000`。首次采样晚于 binding 创建两周期则 `partial=true`；重启丢失内存记录，不重建。
 
-停滞常量：`STALL_DEFAULT_THRESHOLD_MS = 1_200_000`（20 分钟）、`STALL_MIN_THRESHOLD_MS = 300_000`（5 分钟）、`STALL_CADENCE_WINDOW = 20`、`STALL_MIN_VERIFIED_ATTEMPTS = 5`、`STALL_GAP_MULTIPLIER = 2`。跨 Mission 按审计 sequence 降序选最新 20 条 qualifying cadence（非 partial、至少两次采样、Submission 的 Candidate 有 PASS VerificationRun）；至少 5 条才取 `max(5 分钟, 2 × 最大 maxEventGapMs)`，否则 default。仅 e2e enabled 时正整数 `AXIOM_E2E_STALL_THRESHOLD_MS` 优先，source=e2e。每 pass 惰性计算至多一次。token budget 属 M3-06-3-3；TUI 不采样或观察停滞。
+停滞常量：`STALL_DEFAULT_THRESHOLD_MS = 1_200_000`（20 分钟）、`STALL_MIN_THRESHOLD_MS = 300_000`（5 分钟）、`STALL_CADENCE_WINDOW = 20`、`STALL_MIN_VERIFIED_ATTEMPTS = 5`、`STALL_GAP_MULTIPLIER = 2`。跨 Mission 按审计 sequence 降序选最新 20 条 qualifying cadence（非 partial、至少两次采样、Submission 的 Candidate 有 PASS VerificationRun）；至少 5 条才取 `max(5 分钟, 2 × 最大 maxEventGapMs)`，否则 default。仅 e2e enabled 时正整数 `AXIOM_E2E_STALL_THRESHOLD_MS` 优先，source=e2e。每 pass 惰性计算至多一次。token 计量见下节 M3-06-3-3，执行上限属于 M3-06-3-3b；TUI 不采样或观察停滞。
 
 M3-06-3-2b 的 `attempt.supervision_reconciled` 按 observationSequence 恰好一次，payload 为 `{taskId, seq, rule: stalled, mode: observe | notify, observationSequence, outcome, endedBy, endedAt, savedMs?}`。outcome：`hit`（无 Submission 而 timeout / failed / unchanged，或 Candidate 仅有终态且有 FAIL、无 PASS）、`false_positive`（Candidate 有 PASS）、`inconclusive`（外因打断、声明 no_change / blocked、其它停止、abandoned、全 CANCELED 验证或未知结尾）。当前 Attempt 或尚有非终态验证且无 PASS 时 pending，不写审计。endedBy 为 `timeout | failed | unchanged | verification_pass | verification_fail | interrupted | declared | stopped | abandoned | canceled_runs | unknown`；endedAt 是决定事实的 ISO 时间（验证结果用 Submission 时间），仅 hit 有 `savedMs = max(0, endedAt − wouldActAt)`。已写结果不因后来的验证重跑改变。
 
 证据窗口从最新全局修订的 audit_sequence 与最新已解决提议的 through_sequence 之较大者之后开始，另有全量 total；`known = hits + falsePositives`，inconclusive 单列，hitRate 在 known=0 时为 null，savedMs 只累加 hit。达到至少 20 条 known、hitRate ≥ 0.9，系统创建一个全局 `supervision_proposals` 提议（observe → notify → stop）；每条规则最多一个 `OPEN`。状态为 `OPEN → ACCEPTED | DISMISSED | SUPERSEDED`，不自动过期。桌面专用 `axiom.supervision.resolve` accept 追加 provenance.kind=proposal 的全局修订，dismiss 只关闭提议；直接改变全局模式会 SUPERSEDED 旧提议。两种回答都重开证据窗口；这不是 Decision 或 Approval 对象。
+
+#### New tokens and Attempt usage（M3-06-3-3；D88 2026-11-12 修订 ③）
+
+**新 token（new tokens）**：未命中缓存的输入 + 缓存写入 + 输出。Codex 的 input 包含缓存，因此为 `max(0, input_tokens − cached_input_tokens) + output_tokens`（cache writes 已在 input 内）；Claude 为 `input_tokens + cache_creation_input_tokens + output_tokens`。reasoning 单列展示，但已在 output 中，不能再次相加。Task 的 `budget.maxTokens` 是所有 Attempt 的总上限，policy 的 `budget.maxTokens` 是 Mission 总上限；本 Task 只计量，执行上限属于 M3-06-3-3b。
+
+`attempt_token_usage` 是以 dispatch_id 为主键的计量账本，不是 Attempt 状态机。保存 Mission / Task / seq / provider、六个 token 数、`status`、`final`、`measuredAt`；final 行不可更改。usage status：`complete`（读取窗口完整，零也有效）、`partial`（有界读取可能遗漏窗口，或窗口内 token usage 记录不可用）、`unavailable`（无来源或文件不可读）。Codex 窗口从当前 dispatch.created_at（含）到下一 binding 恢复同一 thread 的 dispatch.created_at（不含）；读取前序记录只维持 baseline，不计入当前 Attempt。Claude 按消息 id 对各字段取最大值，包含子 Agent 消息，不读 result.usage。
+
+`axiom.mission.usage {missionId, taskId?}` 是只读视图，无 CLI：返回 Mission limit / used、按 listTaskStages 顺序的 Task limit / used 及按 seq 排序的 Attempt 明细。limit 未设为 null；used 包含 final 与非 final 行。taskId 只缩小 tasks，Mission used 仍是全部 Task 之和。Planner 不计量；TUI 结束时为 unavailable。退出审计的 usage 保留 harness 自己的报告，Codex 仍是 thread 累计值。
 
 ### 4.7 Candidate
 

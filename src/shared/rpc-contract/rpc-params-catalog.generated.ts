@@ -55,6 +55,7 @@ import {
   TaskListParams,
   TaskShowParams
 } from '../axiom-contract/task-params'
+import { MissionUsageParams } from '../axiom-contract/token-usage'
 import {
   VerificationListParams,
   VerificationRerunParams,
@@ -861,6 +862,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'axiom.mission.resume': MissionCancelParams,
   'axiom.mission.show': MissionPlanParams,
   'axiom.mission.start': MissionPlanParams,
+  'axiom.mission.usage': MissionUsageParams,
   'axiom.namespace.get': null,
   'axiom.plan.approve': PlanApproveParams,
   'axiom.plan.list': PlanListParams,
