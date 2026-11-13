@@ -214,6 +214,7 @@ it.each([false, true])(
         resolveVerification(deps(), {
           runId: f.run.id,
           verdict: 'PASS',
+          disposition: 'intentional',
           rationale: 'Reviewed environment failure'
         })
       }

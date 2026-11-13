@@ -85,6 +85,7 @@ it.each([1, 2])(
       verdict: 'FAIL',
       rationale,
       criteria: [1],
+      disposition: 'fixed',
       by: 'user',
       at: expect.any(String)
     })

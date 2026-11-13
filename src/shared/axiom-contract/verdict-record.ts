@@ -64,6 +64,12 @@ const AcceptanceSchema = VerificationAcceptanceSchema.strip().extend({
     VerificationAcceptanceSchema.shape.check.options[2].strip()
   ])
 })
+const ResolutionSchema = VerificationResolutionSchema.strip()
+  .extend({ disposition: VerificationResolutionSchema.shape.disposition.catch(undefined) })
+  .transform(({ disposition, ...resolution }) => ({
+    ...resolution,
+    ...(disposition === undefined ? {} : { disposition })
+  }))
 export const VerdictRecordSchema = z
   .object({
     phase: optionalText,
@@ -72,7 +78,7 @@ export const VerdictRecordSchema = z
     checks: entries(CheckSchema),
     acceptance: entries(AcceptanceSchema),
     diff: DiffSchema.optional().catch(undefined),
-    resolution: VerificationResolutionSchema.strip().optional().catch(undefined),
+    resolution: ResolutionSchema.optional().catch(undefined),
     rerun: VerificationRerunDetailSchema.strip().optional().catch(undefined),
     verdictArtifactId: optionalText,
     evidenceArtifactIds: strings

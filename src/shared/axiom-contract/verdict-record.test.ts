@@ -2,6 +2,26 @@ import { expect, it } from 'vitest'
 import { readVerdictRecord, VerdictRecordSchema } from './verdict-record'
 import { verificationRun } from './contract-fixtures.test-support'
 
+it('reads the disposition of a resolution and keeps a resolution with an unknown one', () => {
+  const resolution = {
+    verdict: 'PASS',
+    rationale: 'Reviewed the evidence.',
+    criteria: [1],
+    by: 'user',
+    at: 'time'
+  }
+  for (const disposition of ['fixed', 'rejected', 'intentional', 'not_worth']) {
+    expect(readVerdictRecord({ resolution: { ...resolution, disposition } }).resolution).toEqual({
+      ...resolution,
+      disposition
+    })
+  }
+  const unknown = readVerdictRecord({ resolution: { ...resolution, disposition: 'future_value' } })
+  expect(unknown.resolution).toEqual(resolution)
+  expect(unknown.resolution).not.toHaveProperty('disposition')
+  expect(readVerdictRecord({ resolution }).resolution).toEqual(resolution)
+})
+
 it('reads a malformed or partial verdict record without failing', () => {
   const empty = { checks: [], acceptance: [], evidenceArtifactIds: [] }
   for (const value of [undefined, null, false, 42, 'verdict', [], {}]) {
