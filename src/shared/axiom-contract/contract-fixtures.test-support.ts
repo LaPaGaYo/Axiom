@@ -1,4 +1,5 @@
 import { DEFAULT_ROUTING_POLICY, type TaskSpec } from './mission-objects'
+import type { VerificationRunView } from './verification-params'
 
 // Hand-written shape of LaPaGaYo/flowtask-fixture, fixture-v1,
 // scenarios/goal/decomposition.json. IDs and dependsOn edges match the frozen file.
@@ -116,6 +117,119 @@ export const message = {
   related: {},
   createdAt: '2026-10-20T12:01:00Z',
   pending: true
+}
+
+export const verificationRun: VerificationRunView = {
+  id: 'verification-1',
+  missionId: mission.id,
+  taskId: attempt.taskId,
+  candidateId: 'candidate-1',
+  candidateCommitSha: 'a'.repeat(40),
+  candidateTreeSha: 'b'.repeat(40),
+  status: 'HUMAN_REVIEW',
+  phase: 'verdict',
+  verifier: 'VerificationService',
+  runtimeEpoch: 'epoch-1',
+  claimCount: 1,
+  worktreeId: null,
+  commands: ['node -e "process.exit(0)"'],
+  toolVersions: { node: 'v22.0.0', git: '2.45.0' },
+  startedAt: '2026-11-13T12:00:00Z',
+  finishedAt: '2026-11-13T12:00:02Z',
+  createdAt: '2026-11-13T11:59:00Z',
+  updatedAt: '2026-11-13T12:00:02Z',
+  verdictDetail: {
+    phase: 'verdict',
+    verdict: 'INCONCLUSIVE',
+    reason: 'acceptance_human',
+    checks: [
+      {
+        index: 0,
+        source: 'evidence',
+        command: 'node -e "process.exit(0)"',
+        criteria: [0],
+        result: 'pass',
+        exitCode: 0,
+        durationMs: 25,
+        failures: []
+      }
+    ],
+    acceptance: [
+      {
+        index: 0,
+        text: 'The command passes',
+        check: { kind: 'command', command: 'node -e "process.exit(0)"' },
+        result: 'pass',
+        checkIndexes: [0],
+        artifactIds: []
+      },
+      {
+        index: 1,
+        text: 'The example is clear',
+        check: { kind: 'human' },
+        result: 'human',
+        checkIndexes: [],
+        artifactIds: []
+      }
+    ],
+    diff: {
+      changedPaths: 1,
+      scopeViolations: [],
+      dangerous: [],
+      secrets: [],
+      tampering: [],
+      generated: [],
+      binary: [],
+      ignoredScopeEntries: [],
+      patchComplete: true
+    },
+    verdictArtifactId: 'evidence-1',
+    evidenceArtifactIds: ['evidence-1']
+  }
+}
+
+export const missionUsage = {
+  missionId: mission.id,
+  limit: 10000,
+  used: 350,
+  tasks: [
+    {
+      taskId: attempt.taskId,
+      limit: 1000,
+      used: 350,
+      attempts: [
+        {
+          attemptId: attempt.attemptId,
+          seq: 1,
+          provider: 'codex',
+          newTokens: 350,
+          inputTokens: 300,
+          cachedInputTokens: 50,
+          cacheWriteTokens: 0,
+          outputTokens: 100,
+          reasoningTokens: 10,
+          status: 'partial' as const,
+          final: true,
+          measuredAt: '2026-11-13T12:00:02Z'
+        }
+      ]
+    }
+  ]
+}
+
+export const evidenceArtifact = {
+  meta: {
+    id: 'evidence-1',
+    missionId: mission.id,
+    kind: 'evidence' as const,
+    sha256: 'a'.repeat(64),
+    sizeBytes: 2,
+    mediaType: 'application/json',
+    related: [verificationRun.id],
+    createdBy: 'VerificationService',
+    createdAt: '2026-11-13T12:00:02Z'
+  },
+  contentBase64: 'e30='
 }
 
 export function makeProposal() {

@@ -6,19 +6,33 @@ import type { TaskListItem } from '../../../../shared/axiom-contract/task-params
 import { AttemptList } from './AttemptList'
 import { SubmissionSummary } from './SubmissionSummary'
 import { MessageTimeline } from './MessageTimeline'
-import { TaskStageBadge } from './TaskStageBadge'
+import { TaskEvidenceStage } from './TaskEvidenceStage'
+import { TaskWaitingLine } from './TaskWaitingLine'
+import { VerificationRecord } from './VerificationRecord'
+import { useTaskVerification } from './use-task-verification'
+import type { TaskEvidenceReads } from './task-evidence-read'
 
 export function TaskDetail({
   task,
   attempts,
   messages,
   onOpenWorktree,
+  runs,
+  verificationError,
+  usage,
+  usageError,
+  tasks,
+  onSelectTask,
   ...actions
-}: ComponentProps<typeof MessageTimeline> & {
-  task: TaskListItem
-  onOpenWorktree: (worktreeId: string) => void
-}) {
+}: ComponentProps<typeof MessageTimeline> &
+  TaskEvidenceReads & {
+    task: TaskListItem
+    tasks?: readonly TaskListItem[]
+    onSelectTask?: (id: string) => void
+    onOpenWorktree: (worktreeId: string) => void
+  }) {
   useTranslation()
+  const verification = useTaskVerification(runs)
   const section = useRef<HTMLElement>(null)
   useEffect(() => {
     section.current?.focus({ preventScroll: true })
@@ -40,9 +54,32 @@ export function TaskDetail({
         </h2>
         <p className="text-sm">{task.title}</p>
         <p className="break-all text-xs text-muted-foreground">{task.id}</p>
-        <TaskStageBadge stage={task.stage} orcaStatus={task.orcaStatus} />
+        <TaskEvidenceStage
+          task={task}
+          latest={verification.latest}
+          failed={verificationError}
+          onOpen={verification.openRun}
+        />
+        <TaskWaitingLine
+          task={task}
+          tasks={tasks}
+          onSelectTask={onSelectTask}
+          onSelectRun={verification.openRun}
+        />
       </div>
-      <AttemptList attempts={attempts} onOpenWorktree={onOpenWorktree} />
+      <AttemptList
+        attempts={attempts}
+        onOpenWorktree={onOpenWorktree}
+        usage={usage}
+        usageError={usageError}
+      />
+      <VerificationRecord
+        runs={verification.newestFirst}
+        selected={verification.selected}
+        onSelect={verification.selectRun}
+        failed={verificationError}
+        regionRef={verification.region}
+      />
       <SubmissionSummary submission={submission} />
       <MessageTimeline messages={messages} attempts={attempts} {...actions} />
     </section>

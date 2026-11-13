@@ -6,6 +6,9 @@ import * as mission from '../../../shared/axiom-contract/mission-params'
 import * as plan from '../../../shared/axiom-contract/plan-params'
 import * as attempt from '../../../shared/axiom-contract/attempt-params'
 import * as message from '../../../shared/axiom-contract/message-params'
+import * as verification from '../../../shared/axiom-contract/verification-params'
+import * as artifact from '../../../shared/axiom-contract/artifact-params'
+import * as usage from '../../../shared/axiom-contract/token-usage'
 import { TaskListParams, TaskListResponseSchema } from '../../../shared/axiom-contract/task-params'
 import { GoalShowParams, GoalResponseSchema } from '../../../shared/axiom-contract/goal-params'
 
@@ -65,6 +68,22 @@ async function call<P, R>(
 }
 
 export const axiomClient = {
+  listVerificationRuns: (params: z.infer<typeof verification.VerificationListParams>) =>
+    call(
+      'axiom.verification.list',
+      params,
+      verification.VerificationListParams,
+      verification.VerificationListResponseSchema
+    ),
+  readArtifact: (params: z.infer<typeof artifact.ArtifactReadParams>) =>
+    call(
+      'axiom.artifact.read',
+      params,
+      artifact.ArtifactReadParams,
+      artifact.ArtifactReadResponseSchema
+    ),
+  missionUsage: (params: z.infer<typeof usage.MissionUsageParams>) =>
+    call('axiom.mission.usage', params, usage.MissionUsageParams, usage.MissionUsageResponseSchema),
   listAttempts: (params: z.infer<typeof attempt.AttemptListParams>) =>
     call(
       'axiom.attempt.list',

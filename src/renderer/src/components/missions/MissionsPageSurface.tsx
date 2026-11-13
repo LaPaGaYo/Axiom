@@ -83,6 +83,12 @@ export function MissionsPageSurface({ controller: c }: { controller: MissionsPag
                   task={selectedTask}
                   attempts={c.taskDetail.attempts}
                   messages={c.taskDetail.messages}
+                  runs={c.taskDetail.runs}
+                  verificationError={c.taskDetail.verificationError}
+                  usage={c.taskDetail.usage}
+                  usageError={c.taskDetail.usageError}
+                  tasks={c.detail.tasks}
+                  onSelectTask={c.selectTask}
                   busy={c.busy}
                   onAnswer={c.answer}
                   onResolve={c.resolve}

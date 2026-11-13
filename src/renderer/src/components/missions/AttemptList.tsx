@@ -2,11 +2,15 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import type { AttemptSummary } from '../../../../shared/axiom-contract/attempt-params'
+import { AttemptTokens, TaskTokenTotal } from './AttemptUsage'
+import type { TaskEvidenceReads } from './task-evidence-read'
 
 export function AttemptList({
   attempts,
-  onOpenWorktree
-}: {
+  onOpenWorktree,
+  usage,
+  usageError
+}: Pick<TaskEvidenceReads, 'usage' | 'usageError'> & {
   attempts: readonly AttemptSummary[]
   onOpenWorktree: (worktreeId: string) => void
 }) {
@@ -26,6 +30,7 @@ export function AttemptList({
       <h3 id="task-attempts-heading" className="text-sm font-semibold">
         {translate('missions.attempts', 'Attempts')}
       </h3>
+      <TaskTokenTotal usage={usage} failed={usageError} />
       {attempts.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           {translate('missions.noAttempts', 'No Attempts yet.')}
@@ -42,6 +47,7 @@ export function AttemptList({
                   translate('missions.attemptSeq', 'Attempt'),
                   translate('missions.branch', 'Branch'),
                   translate('missions.provider', 'Provider'),
+                  translate('missions.newTokens', 'New tokens'),
                   translate('missions.attemptState', 'State'),
                   translate('missions.liveness', 'Liveness'),
                   translate('missions.workspace', 'Workspace'),
@@ -62,6 +68,13 @@ export function AttemptList({
                     <td className="px-3 py-3 tabular-nums">{attempt.seq}</td>
                     <td className="break-all px-3 py-3 font-mono">{attempt.branch}</td>
                     <td className="px-3 py-3">{attempt.provider ?? '—'}</td>
+                    <td className="px-3 py-3">
+                      <AttemptTokens
+                        attemptId={attempt.attemptId}
+                        usage={usage}
+                        failed={usageError}
+                      />
+                    </td>
                     <td className="px-3 py-3">
                       <Badge variant="secondary">{states[attempt.state]}</Badge>
                     </td>
