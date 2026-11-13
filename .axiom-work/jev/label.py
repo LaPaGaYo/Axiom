@@ -52,6 +52,24 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M3-06-3-3b', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'token budget enforcement as briefed: the Task cap stops and preserves through the timeout path '
+        'in recovery_token_stop and blocks the Task whatever the remaining attempts, task.adjust maxTokens above the '
+        'usage, Task and Mission caps at admission inside the round transactions, a Token budget section that '
+        'sameContract skips, and the two ledger rules in the store and the reader; all five group red checks fail at '
+        'their assertions with no load error, the controls pass; new e2e green on the host; no verifier change',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'the AgentSpec maxTokens still falls back to the Mission cap when the Task has none',
+            'endingLine calls a token-stopped run suspect; word it by stop reason',
+            'the CLI task adjust has no --max-tokens',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M3-06-3-3', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'token metering as briefed: usage-only rollout parse with the kernel delta and dedupe helpers inside '
