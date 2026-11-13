@@ -1,6 +1,7 @@
 import type { z } from 'zod'
 import { VerificationResolveParams } from '../../../shared/axiom-contract/verification-params'
 import { VerificationAcceptanceSchema } from '../../../shared/axiom-contract/verification-acceptance'
+import { allowedVerificationDispositions } from '../../../shared/axiom-contract/verification-disposition'
 import { OrchestrationError } from '../../runtime/orchestration/orchestration-error'
 import { MissionControllerError } from '../mission-controller/controller-context'
 import { redactContext } from '../context-builder/redaction'
@@ -56,6 +57,17 @@ export function resolveVerification(
     ) {
       throw new OrchestrationError('invalid_argument', 'criterion_not_found')
     }
+    const allowed = allowedVerificationDispositions(p.verdict, run.verdictDetail.reason)
+    const disposition = p.disposition ?? (p.verdict === 'FAIL' ? 'fixed' : undefined)
+    if (allowed.length === 0) {
+      if (disposition !== undefined) {
+        throw new OrchestrationError('invalid_argument', 'disposition_not_applicable')
+      }
+    } else if (disposition === undefined) {
+      throw new OrchestrationError('invalid_argument', 'disposition_required')
+    } else if (!allowed.includes(disposition)) {
+      throw new OrchestrationError('invalid_argument', 'disposition_mismatch')
+    }
     if (
       !store.updateVerificationRun({
         id: run.id,
@@ -67,6 +79,7 @@ export function resolveVerification(
             verdict: p.verdict,
             rationale: p.rationale,
             criteria: p.criteria,
+            ...(disposition === undefined ? {} : { disposition }),
             by: 'user',
             at: new Date().toISOString()
           }
@@ -95,6 +108,7 @@ export function resolveVerification(
       verdict: p.verdict,
       rationale: p.rationale,
       criteria: p.criteria,
+      ...(disposition === undefined ? {} : { disposition }),
       taskId: run.taskId,
       candidateId: run.candidateId,
       by: 'user'

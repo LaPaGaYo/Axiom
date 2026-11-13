@@ -2,12 +2,14 @@ import { z } from 'zod'
 import { AxiomIdSchema } from './mission-objects'
 import { VerificationRunStatusSchema } from './lifecycle'
 import { GitObjectIdSchema } from './submission-params'
+import { VerificationDispositionSchema } from './verification-disposition'
 
 export const VerificationResolveParams = z.strictObject({
   runId: AxiomIdSchema,
   verdict: z.enum(['PASS', 'FAIL']),
   rationale: z.string().trim().min(1).max(4000),
-  criteria: z.array(z.number().int().nonnegative()).max(50).default([])
+  criteria: z.array(z.number().int().nonnegative()).max(50).default([]),
+  disposition: VerificationDispositionSchema.optional()
 })
 export const VerificationRerunParams = z.strictObject({
   taskId: AxiomIdSchema,

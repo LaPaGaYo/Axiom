@@ -254,6 +254,16 @@ M3-01 的 `verdictDetail.phase`：`claimed`（事务领取）、`prepared`（独
 
 M3-05 人工处置：desktop-only `axiom.verification.resolve {runId,verdict:PASS|FAIL,rationale,criteria?:number[]}` 只接受 HUMAN_REVIEW、Task VERIFYING 及归属匹配的 ACTIVE Candidate。rationale 必填、最多 4,000 字符；`redactContext` 命中秘密返回 `invalid_argument / secret_in_rationale`，不写入；criteria 为本 run acceptance 的零基索引，最多 50 个，越界拒绝。`verdictDetail.resolution={verdict,rationale,criteria,by:user,at}` 与 `verification.resolved` 是人工判定的记录；原始 verdict / acceptance 不改写。PASS 推 Task VERIFIED（actor=user）；FAIL 沿既有 NEEDS_FIX → READY 或 BLOCKED(retry_budget_exhausted)，与确定性 FAIL 共用 maxAttempts。已 PASS / FAIL 返回 `illegal_transition / deterministic_verdict_final`，其它非待审状态返回 run_not_pending；收据与状态事务一起提交，重放不重复审计。
 
+M3-09-2b-1（D82 2026-10-26 / 2026-11-13 修订）：人工处置增加可选参数 `disposition`，由 Control Plane 按 run 自己记录的 `verdictDetail.reason` 决定是否必填。四个值为 `fixed`（退回去修，不表示已经修好）、`rejected`（检查标错了）、`intentional`（标出的改动是有意的）、`not_worth`（确有其事但不值得修）。以下为规范定义；共享函数 `allowedVerificationDispositions` 是代码中的唯一规则，主进程执行，后续界面读取同一函数。
+
+| 人工 verdict | run 的 reason | 允许的 disposition / 存储规则 |
+| --- | --- | --- |
+| FAIL | 任意原因 | `fixed`；省略也记为 `fixed`，其它值拒绝 |
+| PASS | `acceptance_human`、`non_code` | 无；必须省略，不存该键（计划要求的人工确认，没有要驳回的发现） |
+| PASS | 其它原因，包括缺失或未知原因 | 必填 `rejected`、`intentional` 或 `not_worth` |
+
+disposition 描述整条 run，不描述每条发现或 criterion；与 rationale 一起记入 `verdictDetail.resolution.disposition` 和 `verification.resolved.after.disposition`。不适用时两处都省略键；旧处置可以没有该字段，不迁移。它是 DEF-33 的噪音样本，V1 只存不计算；不能改变检查自己的 verdict / reason / acceptance 或推翻确定性 FAIL。
+
 `axiom.task.adjust.acceptanceCriteria` 全量替换标准，按提案校验对象与命令；VERIFYING 仅在 ACTIVE Candidate 最新 run 为 HUMAN_REVIEW 时可调整。desktop-only `axiom.verification.rerun {taskId,rationale}` 接受此 VERIFYING 状态，或有 ACTIVE Candidate 的 BLOCKED（无 QUEUED / RUNNING 验证）；其它状态返回 `illegal_transition / task_not_rerunnable`。它将待审 run CANCELED（保存 `verdictDetail.rerun={rationale,by:user,at}`），为同一不可变 Candidate 新建 QUEUED，必要时 BLOCKED → VERIFYING，并记录 `verification.rerun_requested` 与收据。已 PASS / FAIL run 不变，不新增 Attempt；重验执行完整验证计划。CLI 形状为 `axiom verification resolve --run … --verdict PASS|FAIL --rationale … [--criterion <n>]...`、`axiom verification rerun --task … --rationale …`；人工动作仍受 D78 desktop 调用方限制。`verification list --status HUMAN_REVIEW` 列待审 run，文本输出含 reason / escalation。
 
 下一 Attempt 的失败证据以引用后的 rationale 显示 `A human resolved verification run <id> as FAIL: ...`；被选 criterion 显示 `[fail] <text> — a human judged this failed: ...`；重验显示 `Verification was re-run on the same candidate after the criteria changed: ...`。PASS resolution 不增加失败行。调整行增加 `acceptance criteria replaced (<n> → <m>)`；引用、脱敏与 8 KiB 预算规则见 control-plane 的 ContextPackage 节。
