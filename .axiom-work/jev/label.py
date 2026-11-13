@@ -52,6 +52,28 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M3-09-2', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'the read half of the Task page as briefed: waiting line with the two waitingOn codes verbatim '
+        'and a gloss, the verification record (runs, checks, criteria, diff gate, resolution, excerpt on demand), '
+        'a VERIFIED / INTEGRATED stage that is green only with a latest PASS run and lands on it in one click, '
+        'tokens per Attempt; a tolerant verdict-record reader tied to the real writer by a main-side test; no '
+        'main-process change; titles 1-12 and 16 fail at their assertions on main composition files with no load '
+        'error and 13-15 pass; new UI e2e green on its first host run and red on main files; three screenshots '
+        'reviewed; no verifier change; no other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'a resolved run still marks its human criteria as needing a person: fix with the disposition UI',
+            'link buttons in the waiting line have no label and no underline at rest',
+            'three time formats on one page: one formatter in part 3',
+            'the reader drops unreadable entries without counting them',
+            'five catalogs lack older missions keys (pre-existing): hygiene in M3-10',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M3-09-1', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'the read model as briefed: a first-match waitingOn on axiom.task.list / show and the read '
