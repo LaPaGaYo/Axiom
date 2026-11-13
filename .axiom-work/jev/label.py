@@ -52,6 +52,27 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M3-09-2b-2', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'review actions on the Task page as briefed: the region offers resolve and rerun only when a '
+        'pending item of the Task lists the call, the disposition control comes only from the shared rule, both '
+        'actions go through the controller mutate with a receipt id and a re-read and nothing optimistic, a refusal '
+        'keeps the form; stored disposition shown with a gloss; three items carried from M3-09-2 done; catalogs '
+        'compared key by key; titles 2-14 fail at their assertions on main display files with no load error and '
+        '1, 15-17 pass; new e2e spec (four flows through the page) and every Mission spec green on the host, e2e '
+        'red run fails as it must; three screenshots read; no verifier change; no other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'adjust and cancel on the Task page: M3-09-2b-3',
+            'copy pass in M3-10: 1 entries plural, the fixed label without a control, zh wording of resolve',
+            'the two result shapes of resolve and rerun live in the client: move to the contract if a second caller appears',
+            'tool versions line reads git git version: display nit left from M3-09-2',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M3-09-2b-1', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'typed disposition on axiom.verification.resolve as briefed: one shared pure rule over the '
