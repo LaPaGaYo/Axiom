@@ -52,6 +52,24 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M3-06-3-3', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'token metering as briefed: usage-only rollout parse with the kernel delta and dedupe helpers inside '
+        'each Attempt window, Claude per-message maximum, a ledger whose final rows never change, no write for a current '
+        'Attempt without new tokens, at most 20 finalizations per pass, a read-only usage view; the Worker found and '
+        'resolved the brief contradiction about the rate-limit-only record and fixed two reviewer findings; unit and e2e '
+        'red checks fail on main recovery-service.ts; new e2e green on its first host run; no verifier change',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'rate-limit-only rollout records mark a reading partial; skip them (M3-06-3-3b)',
+            'a lower or unavailable reading replaces recorded numbers; keep the larger numbers (M3-06-3-3b)',
+            'axiom-tables-migration.test.ts is at 800 of 800 counted lines: the next schema case needs a new file',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M3-06-3-2b', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'reconciliation, evidence and proposals as briefed: once-only audits in their own transactions in the '
