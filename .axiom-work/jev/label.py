@@ -52,6 +52,26 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M3-09-1', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'the read model as briefed: a first-match waitingOn on axiom.task.list / show and the read '
+        'axiom.mission.pending with nine kinds, blocks over the plan DAG and calls filtered by Mission status, Task '
+        'stage and latest run; pure reads over existing rows with bounded audit lookups; the plan-review calls '
+        'narrowed to PLAN_REVIEW as the real calls require, named in the report; titles 1-14 fail at their '
+        'assertions on main registration files with no load error; new e2e green on its first host run and red on '
+        'main registration files; no verifier change',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'unit tests parse responses with local schema copies; client tests must use the contract schemas',
+            'axiom.policy.update triggers no scheduler round after a routing change',
+            'no call stops one Attempt: a stall notice offers only task.cancel',
+            'strict response schemas with enums: parse tolerantly in the renderer',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M3-06-3-3b', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'token budget enforcement as briefed: the Task cap stops and preserves through the timeout path '
