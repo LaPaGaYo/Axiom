@@ -16,6 +16,7 @@ import { effectsStore } from './effects-store'
 import { supervisionSettingsStore } from './supervision-settings-store'
 import { supervisionProposalsStore } from './supervision-proposals-store'
 import { supervisionEvidenceStore } from './supervision-evidence-store'
+import { attemptTokenUsageStore } from './attempt-token-usage-store'
 
 type AttemptBindings = ReturnType<typeof attemptBindingsStore>
 
@@ -32,9 +33,14 @@ type Effects = ReturnType<typeof effectsStore>
 type SupervisionSettings = ReturnType<typeof supervisionSettingsStore>
 type SupervisionProposals = ReturnType<typeof supervisionProposalsStore>
 type SupervisionEvidence = ReturnType<typeof supervisionEvidenceStore>
+type AttemptTokenUsage = ReturnType<typeof attemptTokenUsageStore>
 
 // One injected store; table modules keep SQL and validation within the file-size gate.
 export class AxiomStore {
+  readonly upsertAttemptTokenUsage: AttemptTokenUsage['upsertAttemptTokenUsage']
+  readonly getAttemptTokenUsage: AttemptTokenUsage['getAttemptTokenUsage']
+  readonly listAttemptTokenUsage: AttemptTokenUsage['listAttemptTokenUsage']
+  readonly sumAttemptTokenUsage: AttemptTokenUsage['sumAttemptTokenUsage']
   readonly getSupervisionProposal: SupervisionProposals['getSupervisionProposal']
   readonly getOpenSupervisionProposal: SupervisionProposals['getOpenSupervisionProposal']
   readonly latestResolvedSupervisionSequence: SupervisionProposals['latestResolvedSupervisionSequence']
@@ -131,6 +137,11 @@ export class AxiomStore {
   readonly getContextTokenBudget: Artifacts['getContextTokenBudget']
 
   constructor(private readonly db: OrchestrationDb) {
+    const tokenUsage = attemptTokenUsageStore(db)
+    this.upsertAttemptTokenUsage = tokenUsage.upsertAttemptTokenUsage
+    this.getAttemptTokenUsage = tokenUsage.getAttemptTokenUsage
+    this.listAttemptTokenUsage = tokenUsage.listAttemptTokenUsage
+    this.sumAttemptTokenUsage = tokenUsage.sumAttemptTokenUsage
     const proposals = supervisionProposalsStore(db)
     this.getSupervisionProposal = proposals.getSupervisionProposal
     this.getOpenSupervisionProposal = proposals.getOpenSupervisionProposal

@@ -187,6 +187,7 @@ export const SQLITE_TABLE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> 
         'axiom_effects',
         'supervision_settings',
         'supervision_proposals',
+        'attempt_token_usage',
         'worker_dispatches',
         'worker_terminal_resources',
         'worker_terminal_archives',

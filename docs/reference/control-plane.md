@@ -582,7 +582,7 @@ M3-01 的 VerificationService 在 Mission recovery 后、首次 kick 前尝试�
 
 阈值由 `supervision-policy.ts` 按 pass 惰性计算至多一次，只有实际采到 live headless 文件时才需要。优先级：① getMainE2EConfig().enabled 时正整数 AXIOM_E2E_STALL_THRESHOLD_MS → source=e2e；② 跨 Mission 按 audit sequence 最新优先、查询结果最多 20 条 qualifying attempt.cadence：partial=false、samples≥2，且 Submission 的 Candidate 有 PASS VerificationRun；至少 5 条时取 max(300_000, 2 × 最大 maxEventGapMs)，source=measured；③ 否则 1_200_000，source=default。资格条件先于 SQL LIMIT，同一 Candidate 多个 PASS run 不重复计数。常量唯一词汇见 GLOSSARY §4.6 Supervision rules。
 
-Planner 沿其独立 runtime_budget_exceeded 预算路径；TUI 无 stall 或 cadence；本步无 token budget，budget_exhausted 属于 M3-06-3-3。
+Planner 沿其独立 runtime_budget_exceeded 预算路径；TUI 无 stall 或 cadence；token 计量见下节 M3-06-3-3，budget_exhausted 的执行属于 M3-06-3-3b。
 
 **观察对账（M3-06-3-2b；D88 9(b)、2026-11-12 修订、DEF-35）**：每次 RecoveryService pass 在 flushAttemptCadences 之后调用 stall-reconciliation；按 audit sequence 从旧到新取至多 100 条尚未对账的 stalled observe / notify 观察，stop 与 timeout 观察不参与。每条单独事务重新查重，只有审计写入，没有 Attempt / Task / binding / worker / effect 变更；一条读取或写入失败只记录 observationSequence 并留到下一 pass，其他条目继续。结果按以下优先序判定：
 
@@ -609,6 +609,22 @@ Planner 沿其独立 runtime_budget_exceeded 预算路径；TUI 无 stall 或 ca
 每 pass 对账结束后，globalMode 非 stop、无 OPEN 提议、window.known≥20 且 hitRate≥0.9 时，事务插入一条 `supervision_proposals`：fromMode 为当前全局档、toMode 是下一档 observe→notify→stop，evidence 为该窗口快照，since/through 为快照边界。数值集中在与 stall policy 相邻的 stall-proposal-policy.ts；唯一部分索引保证每 rule 至多一个 OPEN。提议是全局记录，不随 Mission 删除、不自动过期。show.proposals 返回 OPEN（如有），再按 resolved_at / rowid 降序取最近五条已解决记录，每条为 `{id,rule,fromMode,toMode,status,evidence,sinceSequence,throughSequence,resolver,createdAt,resolvedAt}`。
 
 **人的回答**：`axiom.supervision.resolve {proposalId, resolution:accept|dismiss}` 是 desktop_only mutation，复用 contract fence / receipt，无 CLI 或 Approval 对象。未知 id→invalid_argument；非 OPEN→illegal_transition；accept 时全局 mode 不等于 fromMode→stale_state，三者均不写。accept 在同一事务追加全局 revision（mode=toMode、actor=user、provenance={kind:proposal,proposalId}）并标 ACCEPTED；dismiss 仅标 DISMISSED。两者 resolver=user、resolved_at=当前 UTC，返回 show view；最新修订来自提议时 globalSource=proposal。dismiss 的窗口从该提议快照的 through_sequence 重开，提议打开之后的新结果保留在窗口；accept / 直接全局变更还应用新修订 watermark，所以当时已存在的审计不再计入新窗口。
+
+#### Attempt token metering（M3-06-3-3；D88 rule 10、2026-11-12 修订 ③）
+
+本步只测量 headless Worker 的 **new tokens**，不停止、不阻塞或拒绝任何工作。Task `spec.budget.maxTokens` 约束该 Task 所有 Attempts 的合计；policy `budget.maxTokens` 约束 Mission 合计。M3-06-3-3b 才执行 Task 停止 / 保全 / FAILED budget_exhausted、BLOCKED(budget)、task.adjust、Mission admission 与剩余额度 prompt。Planner 不计量，TUI 结束时记录 unavailable。
+
+**Codex**：可信 `attempt.headless_prepared` 的 account home 和 continuation session（否则 events.jsonl 的首个 thread.started）定位当前 thread 的 rollout；搜索从 `sessionOriginStartedAt` 开始，结束 Attempt 的搜索终点为 dispatch.updated_at。每次最多从文件尾读 32 MiB，丢弃被截断的首行，保留刚好对齐的完整首行。只解析 token_count 的 timestamp 与 info.total_token_usage / last_token_usage 白名单；在文件顺序上复用纯函数 normalizeRawUsage / resolveCodexUsageDelta，按 buildCodexUsageEventKey 去重。此前记录只建立 baseline；计量窗口为当前 dispatch.created_at（含）至下一 binding 恢复相同 thread 的 dispatch.created_at（不含，无同 thread 后继则无此上界）。读取期间若 current 状态或后继窗口身份变化，本轮不落账，下轮重读。newTokens 为各增量 `max(0, input − cached_input) + output` 之和；cache writes 已包含在 input 中，另存 input / cached input / cache writes / output / reasoning。reasoning 已在 output 中，不再相加。
+
+**Claude**：从本 Attempt 的 events.jsonl 开头最多读 64 MiB，只取 assistant.message.id / usage 的数字字段；同 message id 的每个字段取最大值，包括带 parent_tool_use_id 的子 Agent 消息。newTokens = input_tokens + cache_creation_input_tokens + output_tokens；cachedInputTokens = cache_read_input_tokens，cacheWriteTokens = cache_creation_input_tokens，reasoningTokens = 0。result.usage 不参与计量。退出审计的 usage 不改：它仍是 harness 自己的报告，Codex turn.completed.usage 为 thread 累计值，continuation 的 usageScope=session 也保留。
+
+**完整性**：无 account / thread / rollout、缺失或不可读文件为 unavailable；Codex 截尾且窗口可能早于第一条读到的记录，或窗口内 token_count 无可用 info / last usage，为 partial；Claude 达到截断上限或 usage 行损坏为 partial；其它为 complete，完整的零值有效。读取器不抛出文件错误，不返回或记录原文、路径、thread id、账号 / 限额信息；仅白名单计数和状态进入账本。rate-limit-only info=null 在窗口内也视为 partial。
+
+**账本与 pass**：`attempt_token_usage` 主键 dispatch_id，保存 mission_id / task_id / seq / provider、六个 token 计数、status、final、measured_at。upsert 只允许插入或更新 final=0；final 行永久固定。既有 60 秒 reconcile 在 reconcileStallObservations 后调用一次 metering，无新 timer。先处理最新、RUNNING、无 Submission 且有 dispatch id 的非 Planner binding：有 new tokens 才首次插入，已有非 final 行仅在计数或状态改变时更新。再按 dispatch 创建时间从旧到新处理最多 20 个非 current、未 final 的 Worker Attempts（current 不占配额），读一次后以 final=1 写入，包括 unavailable 零值。每条失败只记录 Mission / Task / Attempt ids 并留待下轮，扫描失败不阻断其它可处理项。该步只写账本，不写审计、Attempt / Task / binding / worker / effect。
+
+**只读视图**：`axiom.mission.usage {missionId, taskId?}`（caller class=read，无 CLI、无 mutation receipt）返回 `{missionId, limit, used, tasks:[{taskId, limit, used, attempts:[{attemptId, seq, provider, newTokens, inputTokens, cachedInputTokens, cacheWriteTokens, outputTokens, reasoningTokens, status, final, measuredAt}]}]}`。Mission limit 取 policy，Task limit 只取本 Task，未设为 null。Task 顺序为 listTaskStages，Attempt 按 seq；used 包含 final 与非 final 行。taskId 仅缩小 tasks，Mission used 始终为全部 Task 之和。未知 Mission 报 mission_not_found，未知或其它 Mission 的 Task 报 task_not_found；读取不落账。
+
+限制：每 pass 重读至上述上限，不保存 offset；Claude events.jsonl 在 worktree 外，但可写该位置的 Worker 仍能修改它；Codex 子 Agent thread 不计入。partial / unavailable 不伪装成零成本的完整证据；本 Task 不据此作预算决策。
 
 ## 5. 合成 session party 与 Run 绑定（D14）
 

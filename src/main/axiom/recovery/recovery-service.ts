@@ -12,6 +12,7 @@ import type { AttemptReconcileEntry } from '../../../shared/axiom-contract/missi
 import { reconcileAttempt } from './attempt-reconciliation'
 import { flushAttemptCadences } from './attempt-cadence'
 import { reconcileStallObservations } from './stall-reconciliation'
+import { meterAttemptTokens } from './attempt-token-metering'
 import type { AttemptBinding, RecoveryContext } from './attempt-recovery-effects'
 
 export const ATTEMPT_RECONCILE_INTERVAL_MS = 60_000
@@ -106,6 +107,7 @@ export class RecoveryService {
     }
     flushAttemptCadences(ctx, ATTEMPT_RECONCILE_INTERVAL_MS)
     reconcileStallObservations(ctx)
+    await meterAttemptTokens(ctx, filter)
     return { attempts }
   }
 
