@@ -43,6 +43,8 @@ const TABLE_COLUMNS: Record<string, string> = {
     'mission_id concurrency_limit budget readiness_threshold approval_rules verification_rules nested_worker_max_depth unverifiable_tolerance_minutes created_at updated_at routing',
   audit_events: 'sequence mission_id actor object_kind object_id event before after created_at',
   supervision_settings: 'rule mission_id revision mode actor provenance audit_sequence created_at',
+  supervision_proposals:
+    'id rule from_mode to_mode status evidence since_sequence through_sequence resolver created_at resolved_at',
   axiom_effects:
     'id mission_id kind effect_key payload status due_at attempts lease_epoch last_error created_at updated_at'
 }
@@ -54,6 +56,7 @@ const INDEX_COLUMNS: Record<string, string[]> = {
   idx_plan_revisions_mission_status: ['mission_id', 'status'],
   idx_audit_events_mission_sequence: ['mission_id', 'sequence'],
   idx_audit_events_event_sequence: ['event', 'sequence'],
+  idx_supervision_proposals_open: ['rule'],
   idx_candidates_task_status: ['task_id', 'status'],
   idx_verification_runs_candidate: ['candidate_id'],
   idx_verification_runs_status: ['status', 'created_at', 'id'],
@@ -216,11 +219,11 @@ describe('Axiom v44 side tables', () => {
     }
   })
 
-  it('creates all 19 tables, specified columns, indexes and five triggers on a fresh database', () => {
+  it('creates all 20 tables, specified columns, indexes and five triggers on a fresh database', () => {
     const { db } = open()
     expect(SCHEMA_VERSION).toBe(46)
     expect(db.pragma('user_version', { simple: true })).toBe(46)
-    expect(Object.keys(TABLE_COLUMNS)).toHaveLength(19)
+    expect(Object.keys(TABLE_COLUMNS)).toHaveLength(20)
     for (const [table, columns] of Object.entries(TABLE_COLUMNS)) {
       expect(
         db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(table)
@@ -441,6 +444,36 @@ describe('Axiom v44 side tables', () => {
     expect(reopened.db.prepare('SELECT * FROM supervision_settings').all()).toEqual([rows[0]])
   })
 
+  it('adds the supervision proposals table to an existing v46 database', () => {
+    const path = filePath()
+    const first = open(path)
+    seedMission(first.db, 'existing')
+    first.db.exec('DROP TABLE supervision_proposals')
+    const mission = first.db.prepare('SELECT * FROM missions').get()
+    const audit = first.db.prepare('SELECT * FROM audit_events').all()
+    close(first)
+    const upgraded = open(path)
+    expect(upgraded.db.pragma('user_version', { simple: true })).toBe(46)
+    expect(upgraded.db.prepare('SELECT * FROM missions').get()).toEqual(mission)
+    expect(upgraded.db.prepare('SELECT * FROM audit_events').all()).toEqual(audit)
+    const insert = upgraded.db.prepare(`INSERT INTO supervision_proposals
+      (id, rule, from_mode, to_mode, status, since_sequence, through_sequence)
+      VALUES (?, 'stalled', 'observe', 'notify', ?, 0, 20)`)
+    insert.run('open', 'OPEN')
+    expect(() => insert.run('duplicate', 'OPEN')).toThrow(/UNIQUE constraint failed/)
+    insert.run('resolved', 'DISMISSED')
+    const rows = upgraded.db.prepare('SELECT * FROM supervision_proposals ORDER BY id').all()
+    expect(rows[0]).toMatchObject({ evidence: '{}', resolver: null, resolved_at: null })
+    const schema = axiomSchema(upgraded.db)
+    close(upgraded)
+    const reopened = open(path)
+    expect(axiomSchema(reopened.db)).toBe(schema)
+    reopened.db.exec("DELETE FROM runs WHERE id = 'run-existing'")
+    expect(reopened.db.prepare('SELECT * FROM supervision_proposals ORDER BY id').all()).toEqual(
+      rows
+    )
+  })
+
   it.each([43, 45])(
     'upgrades old Axiom numbering %s and respells all session addresses',
     (version) => {
@@ -544,7 +577,8 @@ describe('Axiom v44 side tables', () => {
     const { db } = orchestration
     const before = axiomSchema(db)
     for (const index of Object.keys(INDEX_COLUMNS).filter(
-      (name) => name !== 'idx_audit_events_event_sequence'
+      (name) =>
+        !['idx_audit_events_event_sequence', 'idx_supervision_proposals_open'].includes(name)
     )) {
       db.exec(`DROP INDEX ${index}`)
     }
@@ -600,7 +634,13 @@ describe('Axiom v44 side tables', () => {
     // All other evidence remains addressable by mission_id after the Task has disappeared.
     for (const table of Object.keys(TABLE_COLUMNS).filter(
       (name) =>
-        !['missions', 'task_stages', 'mission_task_edges', 'attempt_bindings'].includes(name)
+        ![
+          'missions',
+          'task_stages',
+          'mission_task_edges',
+          'attempt_bindings',
+          'supervision_proposals'
+        ].includes(name)
     )) {
       expect(
         db.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE mission_id = ?`).get('removed'),
@@ -608,7 +648,9 @@ describe('Axiom v44 side tables', () => {
       ).toEqual({ count: 1 })
     }
     db.exec("DELETE FROM runs WHERE id = 'run-removed'")
-    for (const table of Object.keys(TABLE_COLUMNS)) {
+    for (const table of Object.keys(TABLE_COLUMNS).filter(
+      (name) => name !== 'supervision_proposals'
+    )) {
       const key = table === 'missions' ? 'id' : 'mission_id'
       expect(
         db.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE ${key} = ?`).get('removed'),

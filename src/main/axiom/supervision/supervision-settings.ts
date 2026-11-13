@@ -3,12 +3,14 @@ import {
   SupervisionShowParams,
   SupervisionShowResponse,
   SupervisionUpdateParams,
+  type SupervisionResolveParams,
   type StallMode
 } from '../../../shared/axiom-contract/supervision'
 import type { OrchestrationDb } from '../../runtime/orchestration/db/orchestration-db'
 import type { AxiomStore } from '../db/axiom-store'
 import { MissionControllerError } from '../mission-controller/controller-context'
 import { listStallNotifications } from './stall-notifications'
+import { resolveStallProposal, stallEvidence } from './supervision-proposals'
 
 type SupervisionContext = { db: OrchestrationDb; store: AxiomStore }
 
@@ -43,13 +45,16 @@ export function showSupervision(
       {
         rule: 'stalled',
         globalMode,
-        globalSource: global ? 'user' : 'built_in',
+        globalSource:
+          global?.provenance.kind === 'proposal' ? 'proposal' : global ? 'user' : 'built_in',
         ...(missionMode === undefined
           ? {}
           : { missionMode, effectiveMode: missionMode ?? globalMode })
       }
     ],
-    notifications: listStallNotifications(ctx.db, missionId)
+    notifications: listStallNotifications(ctx.db, missionId),
+    evidence: [stallEvidence(ctx.store)],
+    proposals: ctx.store.listSupervisionProposals()
   })
 }
 
@@ -70,6 +75,16 @@ export function updateSupervision(
       (p.missionId === undefined ? 'observe' : null)
     if (before !== p.mode) {
       ctx.store.appendSupervisionSetting({ ...p, actor: 'user', provenance: { kind: 'user' } })
+      if (p.missionId === undefined) {
+        const open = ctx.store.getOpenSupervisionProposal()
+        if (open) {
+          ctx.store.resolveSupervisionProposal({
+            id: open.id,
+            status: 'SUPERSEDED',
+            resolver: 'user'
+          })
+        }
+      }
       if (p.missionId !== undefined) {
         ctx.store.appendAuditEvent({
           missionId: p.missionId,
@@ -83,5 +98,15 @@ export function updateSupervision(
       }
     }
     return showSupervision(ctx, { missionId: p.missionId })
+  })
+}
+
+export function resolveSupervision(
+  ctx: SupervisionContext,
+  input: z.input<typeof SupervisionResolveParams>
+) {
+  return ctx.store.transaction('supervision_answer', () => {
+    resolveStallProposal(ctx.store, input)
+    return showSupervision(ctx, {})
   })
 }

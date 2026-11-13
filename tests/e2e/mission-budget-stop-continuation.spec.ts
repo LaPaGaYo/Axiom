@@ -5,6 +5,7 @@ import { test, expect } from './helpers/orca-app'
 import { git, withFixtureMission } from './helpers/axiom-fixture-mission'
 import { inspectFixtureMission } from './helpers/axiom-fixture-inspection'
 import { AttemptPreservedAuditSchema } from '../../src/main/axiom/execution/preserved-snapshot-contract'
+import { StallReconciliationSchema } from '../../src/shared/axiom-contract/supervision'
 
 const source = process.env.AXIOM_FIXTURE_REPO
 test.skip(!source || process.platform === 'win32', 'Requires a POSIX host and AXIOM_FIXTURE_REPO')
@@ -94,6 +95,23 @@ test('M3-06-2b-2: a budget-stopped Attempt continues automatically from its pres
       })
       expect(observation.after.idleMs).toBeGreaterThanOrEqual(1000)
       expect(observation.sequence).toBeLessThan(stopped.sequence)
+      const reconciliations = () =>
+        inspect().audits.filter(
+          ({ event, object_id }) =>
+            event === 'attempt.supervision_reconciled' && object_id === firstAttemptId
+        )
+      await expect.poll(() => reconciliations().length).toBe(1)
+      const reconciliation = StallReconciliationSchema.parse(
+        JSON.parse(reconciliations()[0]?.after ?? '{}')
+      )
+      expect(reconciliation).toMatchObject({
+        rule: 'stalled',
+        outcome: 'hit',
+        endedBy: 'timeout',
+        mode: 'observe',
+        observationSequence: observation.sequence
+      })
+      expect(reconciliation.savedMs).toBeGreaterThanOrEqual(0)
       const preservation = stoppedState.audits.find(
         ({ event, object_id }) => event === 'attempt.preserved' && object_id === firstAttemptId
       )

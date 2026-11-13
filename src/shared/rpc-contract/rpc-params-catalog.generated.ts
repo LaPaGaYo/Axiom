@@ -43,7 +43,11 @@ import {
   PlanShowParams
 } from '../axiom-contract/plan-params'
 import { PolicyShowParams, PolicyUpdateParams } from '../axiom-contract/policy-params'
-import { SupervisionShowParams, SupervisionUpdateParams } from '../axiom-contract/supervision'
+import {
+  SupervisionResolveParams,
+  SupervisionShowParams,
+  SupervisionUpdateParams
+} from '../axiom-contract/supervision'
 import {
   TaskAdjustParams,
   TaskCancelParams,
@@ -865,6 +869,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'axiom.plan.show': PlanShowParams,
   'axiom.policy.show': PolicyShowParams,
   'axiom.policy.update': PolicyUpdateParams,
+  'axiom.supervision.resolve': SupervisionResolveParams,
   'axiom.supervision.show': SupervisionShowParams,
   'axiom.supervision.update': SupervisionUpdateParams,
   'axiom.task.adjust': TaskAdjustParams,

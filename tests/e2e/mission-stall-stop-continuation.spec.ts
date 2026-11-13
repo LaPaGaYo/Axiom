@@ -60,6 +60,16 @@ test('M3-06-3-2: a stall-stopped Attempt continues automatically from its preser
       const shown = SupervisionShowResponse.parse(
         await desktopCall(page, 'axiom.supervision.show', { missionId: mission.id })
       )
+      const empty = {
+        hits: 0,
+        falsePositives: 0,
+        known: 0,
+        inconclusive: 0,
+        hitRate: null,
+        savedMs: 0,
+        sinceSequence: 0,
+        throughSequence: 0
+      }
       for (const view of [updated, shown]) {
         expect(view).toEqual({
           rules: [
@@ -71,7 +81,9 @@ test('M3-06-3-2: a stall-stopped Attempt continues automatically from its preser
               effectiveMode: 'stop'
             }
           ],
-          notifications: []
+          notifications: [],
+          evidence: [{ rule: 'stalled', window: empty, total: empty }],
+          proposals: []
         })
       }
       releaseWorkers()

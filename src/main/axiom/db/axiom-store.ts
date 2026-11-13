@@ -14,6 +14,8 @@ import { submissionsStore } from './submissions-store'
 import { verificationRunsStore } from './verification-runs-store'
 import { effectsStore } from './effects-store'
 import { supervisionSettingsStore } from './supervision-settings-store'
+import { supervisionProposalsStore } from './supervision-proposals-store'
+import { supervisionEvidenceStore } from './supervision-evidence-store'
 
 type AttemptBindings = ReturnType<typeof attemptBindingsStore>
 
@@ -28,9 +30,20 @@ type Submissions = ReturnType<typeof submissionsStore>
 type VerificationRuns = ReturnType<typeof verificationRunsStore>
 type Effects = ReturnType<typeof effectsStore>
 type SupervisionSettings = ReturnType<typeof supervisionSettingsStore>
+type SupervisionProposals = ReturnType<typeof supervisionProposalsStore>
+type SupervisionEvidence = ReturnType<typeof supervisionEvidenceStore>
 
 // One injected store; table modules keep SQL and validation within the file-size gate.
 export class AxiomStore {
+  readonly getSupervisionProposal: SupervisionProposals['getSupervisionProposal']
+  readonly getOpenSupervisionProposal: SupervisionProposals['getOpenSupervisionProposal']
+  readonly latestResolvedSupervisionSequence: SupervisionProposals['latestResolvedSupervisionSequence']
+  readonly listSupervisionProposals: SupervisionProposals['listSupervisionProposals']
+  readonly insertSupervisionProposal: SupervisionProposals['insertSupervisionProposal']
+  readonly resolveSupervisionProposal: SupervisionProposals['resolveSupervisionProposal']
+  readonly listUnreconciledStallObservations: SupervisionEvidence['listUnreconciledStallObservations']
+  readonly getUnreconciledStallObservation: SupervisionEvidence['getUnreconciledStallObservation']
+  readonly readSupervisionEvidence: SupervisionEvidence['readSupervisionEvidence']
   readonly getSupervisionSetting: SupervisionSettings['getSupervisionSetting']
   readonly appendSupervisionSetting: SupervisionSettings['appendSupervisionSetting']
   readonly enqueueEffect: Effects['enqueueEffect']
@@ -118,6 +131,17 @@ export class AxiomStore {
   readonly getContextTokenBudget: Artifacts['getContextTokenBudget']
 
   constructor(private readonly db: OrchestrationDb) {
+    const proposals = supervisionProposalsStore(db)
+    this.getSupervisionProposal = proposals.getSupervisionProposal
+    this.getOpenSupervisionProposal = proposals.getOpenSupervisionProposal
+    this.latestResolvedSupervisionSequence = proposals.latestResolvedSupervisionSequence
+    this.listSupervisionProposals = proposals.listSupervisionProposals
+    this.insertSupervisionProposal = proposals.insertSupervisionProposal
+    this.resolveSupervisionProposal = proposals.resolveSupervisionProposal
+    const evidence = supervisionEvidenceStore(db)
+    this.listUnreconciledStallObservations = evidence.listUnreconciledStallObservations
+    this.getUnreconciledStallObservation = evidence.getUnreconciledStallObservation
+    this.readSupervisionEvidence = evidence.readSupervisionEvidence
     const supervision = supervisionSettingsStore(db)
     this.getSupervisionSetting = supervision.getSupervisionSetting
     this.appendSupervisionSetting = supervision.appendSupervisionSetting
