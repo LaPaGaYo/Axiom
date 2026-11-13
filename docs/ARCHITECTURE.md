@@ -336,7 +336,7 @@ agentSpec:            # 内容寻址：id = sha256(spec)
     write: [src/frontend/**]        # 验证时以 diff scope 强制（G2）
     network: restricted
     tools: [shell, git-readonly]
-  budget:                           # 仅约束本次 Attempt
+  budget:                           # maxRuntimeMinutes 仅约束本次 Attempt；maxTokens 是整个 Task 跨所有 Attempt 的新 token 上限（D88 2026-11-12 修订 ③）
     maxRuntimeMinutes: 45
     maxTokens: optional
   workspace:

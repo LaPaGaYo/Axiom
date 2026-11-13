@@ -223,6 +223,18 @@ M3-06（merge `ddf038b3b5`）：`attempt.dispatch` 与 `verification.enqueue` �
 
 M3-06-2a（merge `57606ffb8e`）：无界面 Worker 的失败按类型化的原因结算。可自行恢复的打断（用量上限、provider 故障、应用重启带走 Worker、出事件之前就退出）不消耗 `maxAttempts`，Task 带着持久化的"不早于"时间回到 `READY`，到点由 `attempt.continue` effect 请求调度、起新 Attempt；等也没用的（结构化的登录 / 账单类，或连续第三次打断）进 `BLOCKED(environment)` 并留一条类型化待处理项，人用 `task.adjust` 恢复。DEF-22 ⑪ 仍 OPEN 的部分：Limited / Resume at reset 的可见形态（M3-09）。D88 其余：预防（账号级冷却、Codex 的重置时间）= M3-06-2a-2；保全 = M3-06-2b；原会话续上 = M3-06-2c（等真实 harness 探测）。DEF-48 ①：outbox 现有三种 effect，integration / delivery 的 effect 仍在 M4。
 
+## 2026-11-12 M3-06-3-3b 合入：token 预算的执行（D88 第 10 条与 2026-11-12 修订行 ③ 的后一半）
+
+M3-06-3-3b（merge `0989bc3967`）：Task 上限由监工一步执行（停、保全、计入次数、`BLOCKED(token_budget_exhausted)`，`task.adjust maxTokens` 提高），Task 与 Mission 上限在准入时检查，无界面提示写明剩余预算。留下的缺口：
+
+- **按轮检查**：每轮（60 秒）检查一次，一个 Task 最多可能超出一轮的用量；在两轮之间交了结果的 Attempt 不会被停，下一次准入时才拦住。
+- **Mission 上限只管准入**：到顶后不再起新的 Attempt，正在跑的照常跑完（与 `maxWallClockMinutes` 相同，D88 修订行 ③ 的原意）。
+- **AgentSpec 的 `maxTokens`**：Task 未设时仍取 policy（Mission）的值，显示在逐个 Attempt 的合同里，含义不对；改 AgentSpec 时去掉这个回退或改成只显示 Task 上限。
+- **Planner 的运行与 TUI 的 Attempt 不计量也不执行**；TUI 的提示里没有 `Token budget` 段。
+- **设了上限的 Task 每轮读两次**正在跑的 Attempt（监工一次、计量一次），每次读到各自的上限为止。
+- **`endingLine` 的措辞**：预算停下的一次在后继提示里也被叫作"可疑、方向可能错了或卡住了"，对预算停止不贴切；以后按停止原因分开写。
+- **CLI 没有 `--max-tokens`**：`axiom task adjust` 只能改次数与范围；提高 token 上限目前只有桌面的 `axiom.task.adjust`。
+
 ## 2026-11-12 M3-06-3-3 合入：token 计量（D88 第 10 条与 2026-11-12 修订行 ③ 的前一半）
 
 M3-06-3-3（merge `c919bd8d9d`）：每个无界面 Worker Attempt 的新 token 从 harness 自己的逐次记录里算出来，记进 `attempt_token_usage`，`axiom.mission.usage` 只读展示；还没有任何执行。留下的缺口：
