@@ -1042,6 +1042,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 
 **修订（2026-11-11，V1 的复用原则；讨论稿 `claude/interrupted-continuation-discussion-v1.md` §9.3 之后的"已定"段；Henry："同意你的观点护城河要认真自己做，新建的东西先找现成的；已经跑通的，不为换成更好的而重做"）**：V1 里 ① 护城河——独立验证、证据、治理、恢复与续作的规则——自己做；② 新建的东西先找现成的：Orca 有的复用它的机制与证据，分析过的项目借规则与思路；借来的先核实，别家规则成立的前提要先对上，不照搬策略；③ 已经跑通的，不为换成更好的而在 V1 里重做（例如 Worker 通道按本条不换）。V1.5 起按 D55 逐子系统替换。
 
+**修订（2026-11-13，验证者的细则，M3-09-2b-1 brief `.axiom-work/briefs/M3-09-2b-1.md`；已向 Henry 报告，Henry 可推翻）**：2026-10-26 修订行 ② 的类型化处置落成一条由 Control Plane 执行的规则，四个值不增不减：判 `FAIL` 一律记 `fixed`（退回去修）；机器标出问题而人判 `PASS` 时必须在 `rejected`（标错了）、`intentional`（标出的改动是有意的）、`not_worth`（确有其事但不值得修）里选一个；计划本来就要人确认的审查（`acceptance_human`、`non_code`）判 `PASS` 时不记类型——没有被驳回的"发现"。"计划要求的人工确认"按验证记录自己的原因码判定（`acceptance_human`、`non_code`），其余原因（`test_tampering`、`dangerous_change`、`diff_too_large`、`environment`、`plan_invalid`、`policy_invalid`、`flaky`、`known_flaky`，以及缺失或不认识的原因）都算机器标出的问题。类型描述整条 run，不是每条发现；不满足规则的调用整体拒绝、不写任何东西。规则放在一个共享函数里，界面读同一个函数来决定要不要让人选、能选哪几个，不另写一份。这些类型是 DEF-33 噪音度量的样本，V1 只存不算。
+
 ## D83 · Agent 账号目录改用 Axiom 的做法（方法 A）：登录沿用 Orca 的账号系统，账号目录由 Axiom 单向配置、按允许名单启用，按 harness 适配器逐个迁移 — ACCEPTED（Henry 2026-10-25："同意你的意见"；验证者 2026-10-25 提议）
 
 **背景**：M3-08 合入后查实（只读代码梳理）：无界面 Worker 用的是用户当前选中的 Codex 账号目录（系统默认时就是 `~/.codex`），连同其中全部 skills / 插件 / MCP / 钩子；Orca 的账号目录做法是"同一套配置换个账号用"——软链 `~/.codex` 的资源目录、`config.toml` 双向同步并写回 `~/.codex`，做不到逐项过滤；复制 `auth.json` 会因刷新令牌轮换让原登录失效（Codex 官方：同一份 `auth.json` 不能被并发任务刷新）。Henry 不要两套登录，也担心账号信息外传——核实：登录是本机运行的官方 CLI，凭据存在本机；通往 Orca 团队的通道在 M0 已全部关闭并有测试（D25、D37 / D38、D40，`src/shared/product-egress-policy.ts`）。
