@@ -52,6 +52,27 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M3-09-2b-1', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'typed disposition on axiom.verification.resolve as briefed: one shared pure rule over the '
+        'recorded reason, enforced before the first write inside the existing transaction, stored with the '
+        'resolution and its audit, tolerant reader keeps a resolution with an unknown value; resolution code '
+        'gains 14 lines and loses none; two existing tests gain one line each; titles 2-6 and 8 fail at their '
+        'assertions on main resolution code with no load error and 1, 7, 9, 10 pass; new e2e and every Mission '
+        'spec green on the host except one snapshot race in an unchanged spec (intermittent, not the candidate), e2e '
+        'red run fails as it must; no verifier change; no other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'the Task page asks for and shows the disposition in M3-09-2b-2',
+            'the CLI resolve command cannot succeed (desktop_only): hygiene in M3-10',
+            'mission-human-review deterministic final: wait for the worktree release before the snapshot (M3-09-2b-2)',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+        'failures': {'20261113T195215': [('flaky', 'verification_record:M3-09-2b-1-1: the unchanged spec mission-human-review (deterministic final) took its snapshot before the verification worktree was released, only cleanupPending and worktreeId differ; both refused calls return at the run-status check before the changed code; intermittent on the same candidate (rerun by the integrate launcher)')]},
+    },
     ('M3-09-2', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'the read half of the Task page as briefed: waiting line with the two waitingOn codes verbatim '
