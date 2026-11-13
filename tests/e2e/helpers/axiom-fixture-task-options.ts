@@ -6,6 +6,7 @@ export type FixtureTaskOptions = {
   acceptanceCriteria?: AcceptanceCriterion[]
   maxAttempts?: number
   taskRuntimeMinutes?: number
+  taskMaxTokens?: number
   extraAllowedPaths?: string[]
 }
 
@@ -31,6 +32,9 @@ export function configureFixtureTasks(proposal: PlanProposal, options: FixtureTa
     }
     if (options.taskRuntimeMinutes !== undefined) {
       task.budget = { ...task.budget, maxRuntimeMinutes: options.taskRuntimeMinutes }
+    }
+    if (options.taskMaxTokens !== undefined) {
+      task.budget = { ...task.budget, maxTokens: options.taskMaxTokens }
     }
     task.scope.allowedPaths.push(...(options.extraAllowedPaths ?? []))
   }

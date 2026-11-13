@@ -1,3 +1,4 @@
+import { readTokenBudgets, tokenBudgetLines } from './token-budget'
 import {
   VerificationRulesSchema,
   resolveVerificationPlan
@@ -141,6 +142,8 @@ export async function mandatorySections(
     : 'Verification rules are invalid (policy_invalid); the independent verifier will escalate to a human.'
   const decisions = store.listDecisions({ missionId, status: 'ACCEPTED' })
   const protocol = workerProtocol(missionId, taskId, channel, provider)
+  const tokenLines =
+    channel === 'headless' ? tokenBudgetLines(readTokenBudgets(store, missionId, taskId)) : []
   const entries = [
     {
       section: 'Task spec',
@@ -210,6 +213,15 @@ export async function mandatorySections(
         '- Suggested follow-up work'
       ].join('\n')
     },
+    ...(tokenLines.length
+      ? [
+          {
+            section: 'Token budget',
+            source: `token-usage:${taskId}`,
+            content: tokenLines.join('\n')
+          }
+        ]
+      : []),
     {
       section: 'Repository rules',
       source: `repository:${mission.targetBranch}`,

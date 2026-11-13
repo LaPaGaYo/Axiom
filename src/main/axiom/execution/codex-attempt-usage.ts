@@ -105,6 +105,9 @@ function measure(text: string, cut: boolean, start: number, end: number): TokenU
       inside = timestamp >= start && timestamp < end
       const record = Record.parse(raw)
       const info = record.payload.info
+      if (info === null) {
+        continue
+      }
       if (!info?.last_token_usage && inside) {
         result.status = 'partial'
       }

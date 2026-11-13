@@ -1,4 +1,5 @@
 import { budgetExhaustion, type BudgetExhaustion } from './admission-budget'
+import { blockTaskTokenBudget } from './task-token-budget'
 import type {
   AuditEvent,
   Policy,
@@ -33,13 +34,14 @@ export type ScheduleRoundResult = {
       | 'concurrency'
       | 'provider_concurrency'
       | 'task_attempts'
+      | 'task_tokens'
       | 'question'
       | 'approval'
       | 'backoff'
       | 'no_eligible_provider'
       | 'stale'
   }[]
-  blocked?: 'maxAttempts' | 'maxWallClockMinutes'
+  blocked?: BudgetExhaustion['dimension']
 }
 type SkipReason = ScheduleRoundResult['skipped'][number]['reason']
 type Check =
@@ -112,6 +114,9 @@ export class Scheduler {
     const budget = budgetExhaustion(this.store, missionId, policy, this.now)
     if (budget) {
       return { budget }
+    }
+    if (blockTaskTokenBudget(this.store, this.missions, task, this.now)) {
+      return { reason: 'task_tokens' }
     }
     if (task.attemptCount >= task.retryPolicy.maxAttempts) {
       return { reason: 'task_attempts' }

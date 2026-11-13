@@ -59,10 +59,25 @@ export function attemptTokenUsageStore(db: OrchestrationDb) {
           .prepare(`INSERT INTO attempt_token_usage (${columns})
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(dispatch_id) DO UPDATE SET
-          new_tokens = excluded.new_tokens, input_tokens = excluded.input_tokens,
-          cached_input_tokens = excluded.cached_input_tokens, cache_write_tokens = excluded.cache_write_tokens,
-          output_tokens = excluded.output_tokens, reasoning_tokens = excluded.reasoning_tokens,
-          status = excluded.status, final = excluded.final, measured_at = excluded.measured_at
+          new_tokens = MAX(attempt_token_usage.new_tokens, excluded.new_tokens),
+          input_tokens = MAX(attempt_token_usage.input_tokens, excluded.input_tokens),
+          cached_input_tokens = MAX(attempt_token_usage.cached_input_tokens, excluded.cached_input_tokens),
+          cache_write_tokens = MAX(attempt_token_usage.cache_write_tokens, excluded.cache_write_tokens),
+          output_tokens = MAX(attempt_token_usage.output_tokens, excluded.output_tokens),
+          reasoning_tokens = MAX(attempt_token_usage.reasoning_tokens, excluded.reasoning_tokens),
+          status = CASE WHEN
+            excluded.new_tokens < attempt_token_usage.new_tokens OR
+            excluded.input_tokens < attempt_token_usage.input_tokens OR
+            excluded.cached_input_tokens < attempt_token_usage.cached_input_tokens OR
+            excluded.cache_write_tokens < attempt_token_usage.cache_write_tokens OR
+            excluded.output_tokens < attempt_token_usage.output_tokens OR
+            excluded.reasoning_tokens < attempt_token_usage.reasoning_tokens OR
+            (excluded.status = 'unavailable' AND MAX(attempt_token_usage.new_tokens,
+              attempt_token_usage.input_tokens, attempt_token_usage.cached_input_tokens,
+              attempt_token_usage.cache_write_tokens, attempt_token_usage.output_tokens,
+              attempt_token_usage.reasoning_tokens) > 0)
+            THEN 'partial' ELSE excluded.status END,
+          final = excluded.final, measured_at = excluded.measured_at
         WHERE attempt_token_usage.final = 0`)
           .run(
             p.attemptId,

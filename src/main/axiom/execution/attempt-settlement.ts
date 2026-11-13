@@ -10,7 +10,7 @@ type AttemptSettlement = {
   actor: string
 }
 
-function currentUnsubmittedTask(store: AxiomStore, input: AttemptSettlement) {
+export function currentUnsubmittedTask(store: AxiomStore, input: AttemptSettlement) {
   const task = store.getTaskStage(input.taskId)
   const binding = store.getAttemptBinding(input.taskId, input.seq)
   // An old callback or recovery snapshot cannot settle a newer admission.
@@ -56,7 +56,7 @@ export function settleVerificationFailure(
 
 export function settleAttemptWithoutSubmission(
   ctx: { store: AxiomStore; missions: MissionController },
-  input: { taskId: string; seq: number; dispatchId: string | null; reason: string; actor: string }
+  input: AttemptSettlement & { reason: string; blockReason?: string }
 ): { settled: boolean } {
   return ctx.store.transaction('settle_attempt_without_submission', () => {
     const task = currentUnsubmittedTask(ctx.store, input)
@@ -69,11 +69,12 @@ export function settleAttemptWithoutSubmission(
       reason: input.reason,
       actor: input.actor
     })
-    const retry = task.attemptCount < task.retryPolicy.maxAttempts
+    const retry =
+      input.blockReason === undefined && task.attemptCount < task.retryPolicy.maxAttempts
     ctx.missions.transitionTaskStage({
       taskId: input.taskId,
       to: retry ? 'READY' : 'BLOCKED',
-      reason: retry ? 'retry' : 'retry_budget_exhausted',
+      reason: retry ? 'retry' : (input.blockReason ?? 'retry_budget_exhausted'),
       actor: input.actor
     })
     return { settled: true }

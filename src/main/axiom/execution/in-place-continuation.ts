@@ -74,6 +74,7 @@ function sameContract(a: Contract, b: Contract) {
       (section, index) =>
         section.section === b.mandatory[index].section &&
         (section.section === 'Previous-Attempt failure evidence' ||
+          section.section === 'Token budget' ||
           section.sha256 === b.mandatory[index].sha256)
     )
   )

@@ -3,7 +3,7 @@ import type { Policy } from '../../../shared/axiom-contract/mission-objects'
 import type { AxiomStore } from '../db/axiom-store'
 
 export type BudgetExhaustion = {
-  dimension: 'maxAttempts' | 'maxWallClockMinutes'
+  dimension: 'maxAttempts' | 'maxWallClockMinutes' | 'maxTokens'
   limit: number
   used: number
 }
@@ -47,6 +47,13 @@ export function budgetExhaustion(
     }
     if (used >= limit) {
       return { dimension: 'maxWallClockMinutes', limit, used }
+    }
+  }
+  const tokenLimit = policy.budget.maxTokens
+  if (tokenLimit !== undefined) {
+    const used = store.sumAttemptTokenUsage({ missionId })
+    if (used >= tokenLimit) {
+      return { dimension: 'maxTokens', limit: tokenLimit, used }
     }
   }
   return undefined
