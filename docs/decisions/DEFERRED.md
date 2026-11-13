@@ -223,6 +223,17 @@ M3-06（merge `ddf038b3b5`）：`attempt.dispatch` 与 `verification.enqueue` �
 
 M3-06-2a（merge `57606ffb8e`）：无界面 Worker 的失败按类型化的原因结算。可自行恢复的打断（用量上限、provider 故障、应用重启带走 Worker、出事件之前就退出）不消耗 `maxAttempts`，Task 带着持久化的"不早于"时间回到 `READY`，到点由 `attempt.continue` effect 请求调度、起新 Attempt；等也没用的（结构化的登录 / 账单类，或连续第三次打断）进 `BLOCKED(environment)` 并留一条类型化待处理项，人用 `task.adjust` 恢复。DEF-22 ⑪ 仍 OPEN 的部分：Limited / Resume at reset 的可见形态（M3-09）。D88 其余：预防（账号级冷却、Codex 的重置时间）= M3-06-2a-2；保全 = M3-06-2b；原会话续上 = M3-06-2c（等真实 harness 探测）。DEF-48 ①：outbox 现有三种 effect，integration / delivery 的 effect 仍在 M4。
 
+## 2026-11-12 M3-06-3-3 合入：token 计量（D88 第 10 条与 2026-11-12 修订行 ③ 的前一半）
+
+M3-06-3-3（merge `c919bd8d9d`）：每个无界面 Worker Attempt 的新 token 从 harness 自己的逐次记录里算出来，记进 `attempt_token_usage`，`axiom.mission.usage` 只读展示；还没有任何执行。留下的缺口：
+
+- **`info: null` 的 `token_count` 记录会把读数标成 `partial`**：brief 的规则是"窗口内有记录没有可用的 `info` 就算 partial"，但 Codex 在没有任何缺失时也会写只带限额的记录（例如第一次用量之前、撞到限额时），这些 Attempt 会显示 partial。M3-06-3-3b 改成：`info: null` 的记录直接跳过，只有带了用量却解析不了的才算 partial。
+- **新读数总是覆盖未定稿的行**：读不到（`unavailable`）或变小的读数会把已记的数改小；定稿时读不到（例如 Attempt 结束后 rollout 不见了）会留下 0。M3-06-3-3b 执行之前改成：读数不让已记的数变小，读不到时保留上一次的数、标 partial。
+- **每轮扫一遍所有 Mission 的 binding**，每个 binding 几次查询，即使都已定稿（随历史线性增长）；以后用一条 SQL 只取未定稿的 Worker binding。Codex 读取件为了拿线程 id 每轮读最多 64 MiB 的 `events.jsonl`。
+- **Planner 的运行与 TUI 的 Attempt 不计量**（TUI 定稿为 `unavailable`）；Codex 子 agent 的线程不计；每轮重读到上限为止，没有偏移缓存；Claude 的 `events.jsonl` 在工作树外，但不防能写那里的 Worker。
+- **`axiom.mission.usage` 的参数是普通对象**：多余的键被丢掉而不是拒绝，和 `axiom.supervision.*` 的严格参数不一致。
+- **`axiom-tables-migration.test.ts` 已到 800 / 800 行**：下一个 schema 用例必须放进新的测试文件。
+
 ## 2026-11-12 M3-06-3-2b 合入：停滞观察的对账、证据表、升档提议与人的回答（D88 第 9 条 (b) 与 2026-11-12 修订行；DEF-35）
 
 M3-06-3-2b（merge `31ba5a43b0`）：每条 `observe` / `notify` 观察在结果明确之后记一条对账审计；证据窗口从最新的全局决定之后算起；达到门槛记一条全局提议，人从桌面接受或驳回。留下的缺口：
