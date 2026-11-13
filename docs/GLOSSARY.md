@@ -150,6 +150,8 @@ BLOCKED           → 按原因解除（D70 修订）：回到进入前的非运
 | 10 | human | VERIFYING 且最新 run 为上述 review 状态；或其余 BLOCKED | 字符串 verdictDetail.reason，否则 human_review；BLOCKED 审计原值，无则 blocked | true；review 带 runId |
 | 11 | running | RUNNING | attempt_running | false；最新 binding 的 seq（有 binding 时） |
 
+Task 页（M3-09-2）直接呈现 `waitingOn`：`on · reason` 两个代码等宽原样显示，旁边用界面语言补一句说明；`person=true` 同时显示「需要人工处置」文字与警告状态颜色，false 仅用安静的次要文字。附带的上游 Task 按标题链接、run 链接到验证记录；预算归属与维度、用量及上限、Mission status、Attempt seq 和 until 时间均来自读取值。缺失 `waitingOn` 的旧运行时不显示该行，界面不从 stage 推算等待原因。
+
 Mission 预算仅在 EXECUTING 调用 admission 的 `budgetExhaustion`，次序为 attempts → wall clock → tokens。问题、审批先于预算/退避是本投影的展示次序，Scheduler 的检查次序不同；单一原因使用相同词汇。`provider_concurrency` 没有持久拒绝证据，因此显示 next_round。Mission status 只决定准入前的 Task 等待，不覆盖已运行、提交或验证的工作。
 
 `axiom.mission.pending {missionId}` 返回 `{missionId, items}`；每项 `{id, kind, objectId, taskId?, reason, summary?, blocking, blocks, actions, since, waitingOn?}`。`id = kind:objectId`；summary 仅用对象自己的文本。Task 项携带该 Task 的 waitingOn。since 来自记录此等待的行或审计，规范为 UTC ISO 8601。

@@ -820,6 +820,12 @@ verdict 文档为单个 application/json、kind=evidence Artifact，createdBy=Ve
 
 回收失败保留 worktreeId 与 cleanupPending=true；周期恢复现覆盖 PASS、FAIL、INCONCLUSIVE、两类 review 与 CANCELED 的待清理行，清理只更新元数据，不改变 verdict；人工 resolve / rerun 若在异步删除期间完成，清理保留其 resolution / rerun 与当前终态，仍校验 epoch / claim。shutdown 中 VerificationService.stop 中止运行中的进程树、停止 drain；RUNNING 保留，下一 boot 回收并重新 QUEUED。同一 plane 的 stop/start 也先等待旧 drain 退出，再换 epoch 恢复。E2E 唯一 hold seam：getMainE2EConfig().enabled 且 AXIOM_E2E_HOLD_VERIFICATION=1 时停在 prepared；非 E2E 模式不读取此变量。withFixtureMission 默认设置 hold，runVerification=true 时省略；新的 mission-verification.spec.ts 用 per-Task scenario marker 驱动三个冻结场景，并在批准的测试计划设 maxAttempts=1，阻止后续 Attempt 抢跑断言。
 
+### Task 页的验证记录读取（M3-09-2）
+
+`src/shared/axiom-contract/verdict-record.ts` 提供 `VerdictRecordSchema` 与 `readVerdictRecord`，以同一个宽容读取器解析 run 的 `verdictDetail` 摘要及证据 Artifact 的 JSON：phase、原始 verdict/reason、逐条 checks（Artifact 中有 excerpt 时保留）、acceptance、diff、resolution/rerun 和证据引用。未知键忽略；缺失或畸形的字段省略、列表回退为空，单个坏条目不遮住其它条目，读取函数不抛异常。acceptance、resolution 与 rerun 复用已有共享 schema。它不改主进程写入器、存储行或 RPC；`verification/verdict-record.test.ts` 通过真实验证路径同时检查行与 Artifact，防止读写形状漂移。
+
+Task 页将 run.status 作为状态及其颜色的权威，同时单独标出检查的原始 verdict/reason 与人工处置，绝不以人工 PASS 改写原始逐条结果。runs 与 Task usage 在选择或刷新时和其它详情一起读取，失败仅落在各自区块，仍受原 generation guard 约束。选中的 run 和展开的摘录仅为组件本地状态；每次展开都经 `axiomClient.readArtifact` 重新读取 verdict Artifact，用浏览器 API 解码后交同一读取器，原样作为文本展示，不打开 stdout/stderr log Artifact。Task 页的 VERIFIED/INTEGRATED 仅在已读的最新 run 为 PASS 时显示成功色，并一键选择该 run、聚焦验证区。集成树回归记录仍属 M4。
+
 ### 人工验证处置与同候选重验（M3-05；D82 / D85 / DEF-21 ④）
 
 所有 INCONCLUSIVE 都按上节进入 HUMAN_REVIEW，包括准备失败；不启动 Reviewer、Decision Engine 或自动答复。`axiom.verification.show / list` 保留原判定和 acceptance，status 表示当前处置状态。人可通过 `axiom verification list --mission <id> --status HUMAN_REVIEW` 查看待审项。

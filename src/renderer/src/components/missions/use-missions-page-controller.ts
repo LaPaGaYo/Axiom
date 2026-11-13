@@ -8,6 +8,7 @@ import { translate } from '@/i18n/i18n'
 import type { MissionSummary } from '../../../../shared/axiom-contract/mission-params'
 import type { CreateMissionInput } from './MissionCreateDialog'
 import type { MissionAction } from './MissionActions'
+import { readTaskEvidence } from './task-evidence-read'
 
 async function readMission(missionId: string, taskId: string | null) {
   const [{ mission }, { tasks }, { planRevisions }, { attempts }, { messages }, taskDetail] =
@@ -20,8 +21,14 @@ async function readMission(missionId: string, taskId: string | null) {
       taskId
         ? Promise.all([
             axiomClient.listAttempts({ missionId, taskId }),
-            axiomClient.listMessages({ missionId, taskId })
-          ]).then(([attempts, messages]) => ({ taskId, ...attempts, ...messages }))
+            axiomClient.listMessages({ missionId, taskId }),
+            readTaskEvidence(missionId, taskId)
+          ]).then(([attempts, messages, evidence]) => ({
+            taskId,
+            ...attempts,
+            ...messages,
+            ...evidence
+          }))
         : null
     ])
   const goal = mission.activeGoalRevisionId

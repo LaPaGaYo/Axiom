@@ -6,7 +6,10 @@ import {
   mission,
   policy,
   attempt,
-  message
+  message,
+  verificationRun,
+  missionUsage,
+  evidenceArtifact
 } from '../../../shared/axiom-contract/contract-fixtures.test-support'
 
 const call = vi.fn()
@@ -30,6 +33,44 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('Axiom desktop client', () => {
+  it('parses runs, usage and an Artifact with the contract schemas', async () => {
+    const reads = [
+      {
+        method: 'axiom.verification.list',
+        params: { missionId: mission.id, taskId: attempt.taskId },
+        result: { runs: [verificationRun] },
+        invalid: { runs: [{ ...verificationRun, status: 'done' }] },
+        read: () =>
+          axiomClient.listVerificationRuns({ missionId: mission.id, taskId: attempt.taskId })
+      },
+      {
+        method: 'axiom.mission.usage',
+        params: { missionId: mission.id, taskId: attempt.taskId },
+        result: missionUsage,
+        invalid: { ...missionUsage, used: -1 },
+        read: () => axiomClient.missionUsage({ missionId: mission.id, taskId: attempt.taskId })
+      },
+      {
+        method: 'axiom.artifact.read',
+        params: { id: evidenceArtifact.meta.id },
+        result: evidenceArtifact,
+        invalid: { ...evidenceArtifact, contentBase64: 'invalid' },
+        read: () => axiomClient.readArtifact({ id: evidenceArtifact.meta.id })
+      }
+    ]
+    for (const entry of reads) {
+      call.mockResolvedValue(success(entry.result))
+      expect(await entry.read()).toEqual(entry.result)
+      expect(call).toHaveBeenLastCalledWith({ method: entry.method, params: entry.params })
+      call.mockResolvedValue(success(entry.invalid))
+      await expect(entry.read()).rejects.toMatchObject({ code: 'invalid_response' })
+    }
+    call.mockClear()
+    await expect(axiomClient.readArtifact({ id: '' })).rejects.toMatchObject({
+      code: 'invalid_params'
+    })
+    expect(call).not.toHaveBeenCalled()
+  })
   it('validates Attempt and message reads without a mutation envelope', async () => {
     call.mockResolvedValue(success({ attempts: [attempt] }))
     expect(

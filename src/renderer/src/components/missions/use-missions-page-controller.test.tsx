@@ -87,6 +87,12 @@ beforeEach(() => {
     if (method === 'axiom.message.list') {
       return success({ messages: [message] })
     }
+    if (method === 'axiom.verification.list') {
+      return success({ runs: [] })
+    }
+    if (method === 'axiom.mission.usage') {
+      return success({ missionId: params.missionId, limit: null, used: 0, tasks: [] })
+    }
     throw new Error(`Unexpected method: ${method}`)
   })
 })
