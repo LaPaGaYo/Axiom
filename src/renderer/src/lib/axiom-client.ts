@@ -10,7 +10,14 @@ import * as verification from '../../../shared/axiom-contract/verification-param
 import * as artifact from '../../../shared/axiom-contract/artifact-params'
 import * as usage from '../../../shared/axiom-contract/token-usage'
 import * as pending from '../../../shared/axiom-contract/mission-pending'
-import { TaskListParams, TaskListResponseSchema } from '../../../shared/axiom-contract/task-params'
+import {
+  TaskListParams,
+  TaskListResponseSchema,
+  TaskShowParams,
+  TaskAdjustParams,
+  TaskCancelParams,
+  TaskResponseSchema
+} from '../../../shared/axiom-contract/task-params'
 import { GoalShowParams, GoalResponseSchema } from '../../../shared/axiom-contract/goal-params'
 
 export class AxiomRpcError extends Error {
@@ -69,6 +76,16 @@ async function call<P, R>(
 }
 
 export const axiomClient = {
+  showTask: (params: z.infer<typeof TaskShowParams>) =>
+    call('axiom.task.show', params, TaskShowParams, TaskResponseSchema),
+  adjustTask: (
+    params: z.infer<typeof TaskAdjustParams>,
+    requestId: string = createNonSecureContextUuid()
+  ) => call('axiom.task.adjust', params, TaskAdjustParams, TaskResponseSchema, requestId),
+  cancelTask: (
+    params: z.infer<typeof TaskCancelParams>,
+    requestId: string = createNonSecureContextUuid()
+  ) => call('axiom.task.cancel', params, TaskCancelParams, TaskResponseSchema, requestId),
   missionPending: (params: z.infer<typeof pending.MissionPendingParams>) =>
     call(
       'axiom.mission.pending',

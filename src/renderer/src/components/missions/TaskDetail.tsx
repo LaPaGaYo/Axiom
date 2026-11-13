@@ -31,6 +31,9 @@ export function TaskDetail({
   pendingError,
   onResolveVerification,
   onRerunVerification,
+  taskSpec,
+  onAdjustTask,
+  onCancelTask,
   ...actions
 }: ComponentProps<typeof MessageTimeline> &
   TaskEvidenceReads &
@@ -84,6 +87,10 @@ export function TaskDetail({
           detailRef={section}
           onResolveVerification={onResolveVerification}
           onRerunVerification={onRerunVerification}
+          taskSpec={taskSpec}
+          messages={messages}
+          onAdjustTask={onAdjustTask}
+          onCancelTask={onCancelTask}
         />
       </div>
       <AttemptList

@@ -1,9 +1,11 @@
 import { axiomClient } from '@/lib/axiom-client'
 import type { VerificationRunView } from '../../../../shared/axiom-contract/verification-params'
 import type { MissionPendingItem } from '../../../../shared/axiom-contract/mission-pending'
+import type { TaskSpec } from '../../../../shared/axiom-contract/mission-objects'
 
 export type TaskTokenUsage = Awaited<ReturnType<typeof axiomClient.missionUsage>>['tasks'][number]
 export type TaskEvidenceReads = {
+  taskSpec?: TaskSpec
   runs?: readonly VerificationRunView[]
   verificationError?: boolean
   usage?: TaskTokenUsage
@@ -16,12 +18,14 @@ export async function readTaskEvidence(
   missionId: string,
   taskId: string
 ): Promise<TaskEvidenceReads> {
-  const [verification, usage, pending] = await Promise.allSettled([
+  const [verification, usage, pending, task] = await Promise.allSettled([
     axiomClient.listVerificationRuns({ missionId, taskId }),
     axiomClient.missionUsage({ missionId, taskId }),
-    axiomClient.missionPending({ missionId })
+    axiomClient.missionPending({ missionId }),
+    axiomClient.showTask({ taskId })
   ])
   return {
+    taskSpec: task.status === 'fulfilled' ? task.value.task.spec : undefined,
     pendingItems:
       pending.status === 'fulfilled'
         ? pending.value.items.filter((item) => item.taskId === taskId)

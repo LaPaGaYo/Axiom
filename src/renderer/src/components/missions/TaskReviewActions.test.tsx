@@ -76,7 +76,7 @@ it('offers the actions the pending item of the Task lists and no others', () => 
     within(actions())
       .getAllByRole('button')
       .map((b) => b.textContent)
-  ).toEqual(['Resolve review', 'Rerun verification'])
+  ).toEqual(['Resolve review', 'Rerun verification', 'Adjust Task', 'Cancel Task'])
   expect(screen.queryByRole('textbox')).toBeNull()
   rerender(
     <TaskDetail
@@ -89,7 +89,7 @@ it('offers the actions the pending item of the Task lists and no others', () => 
     within(actions())
       .getAllByRole('button')
       .map((b) => b.textContent)
-  ).toEqual(['Rerun verification'])
+  ).toEqual(['Adjust Task', 'Rerun verification', 'Cancel Task'])
   rerender(
     <TaskDetail
       {...p}
