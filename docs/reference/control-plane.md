@@ -830,7 +830,7 @@ M3-09-2b-1：读取器返回已知的 `resolution.disposition`；遇到未知值
 
 ### Task 页的人工处置与重验（M3-09-2b-2）
 
-选择或刷新 Task 时，`readTaskEvidence` 在同一轮独立读取 `axiom.mission.pending {missionId}`，只保留 `taskId` 匹配的项。读取失败不遮住其它详情；仅 `waitingOn.person=true` 时显示「无法读取可用操作。请刷新后重试」。没有轮询，也不从 stage、waitingOn 或 run.status 推算可用操作。
+选择或刷新 Task 时，Task 详情接收同轮 Mission 读取的 `axiom.mission.pending {missionId}` 结果，只保留 `taskId` 匹配的项（M3-09-3a 将此读取从 `readTaskEvidence` 移至 `readMission`，与首页共享）。读取失败不遮住其它详情；仅 `waitingOn.person=true` 时显示「无法读取可用操作。请刷新后重试」。没有轮询，也不从 stage、waitingOn 或 run.status 推算可用操作。
 
 等待行下方的「Task 操作」按 pending item 的 actions 顺序去重，提供列出的 `axiom.verification.resolve`、`axiom.verification.rerun`（调整与取消见下一节）；其余操作暂不呈现。一次只展开一个内联表单，打开聚焦首控件，关闭不调用并回焦原按钮。处置按 item.objectId 找已读 run，缺失时显示读取提示；提交 `{runId, verdict, rationale: trimmed, criteria: 升序索引, disposition?}`，类型字段完全由共享 `allowedVerificationDispositions(verdict, recordedReason)` 决定。重验提交 `{taskId, rationale: trimmed}`，说明同一 Candidate 重验、待审 run 取消。两种表单都要求非空且最多 4,000 字符的理由，说明后果，不再弹确认框。
 
@@ -844,7 +844,19 @@ M3-09-2b-1：读取器返回已知的 `resolution.disposition`；遇到未知值
 
 取消表单说明正在运行的 Attempt 会停止、工作不被集成、取消不可恢复。blocking item 的 blocks > 1 时显示依赖 Task 数（blocks − 1）；blocks = 1 不加依赖说明；stall_notice 不知道数量，只说明依赖 Task 仍需逐个取消。理由必填且最多 4,000 字符，提交给 controller 的是 `{taskId,rationale:trimmed}` 与表单原样后果文字；确认框以该文字作描述，确认「取消 Task」为 destructive，退回「保留 Task」为 ghost。只有确认后才调用 cancel；退回保留表单及输入。调整提交为 default，操作区四个按钮为 outline，关闭为 ghost。
 
-两个动作均沿用 `mutate` 的 request id 与重读路径，无乐观更新、无自动重试。拒绝以 `code: message` 原样呈现在页面警报与 toast；操作仍存在时保留输入。重读后操作不再提供则收起表单并聚焦 Task detail。取消不级联；未被 pending view 列出 cancel 的 Task 在页面上无取消控件。
+两个动作均沿用 `mutate` 的 request id 与重读路径，无乐观更新、无自动重试。拒绝以 `code: message` 原样呈现在页面警报与 toast；操作仍存在时保留输入。M3-09-3a 补齐调整成功后的收起与回焦，见下一节。重读后操作不再提供则收起表单并聚焦 Task detail。取消不级联；未被 pending view 列出 cancel 的 Task 在页面上无取消控件。
+
+### Mission 首页的待处理项（M3-09-3a）
+
+每次选择或刷新 Mission（含切换 Task）时，`readMission` 以独立 settled read 调用一次 `axiom.mission.pending`，无论是否选中 Task。首页接收全部 `items`，Task 详情从同一结果按 `taskId` 筛选；`readTaskEvidence` 不再调用该视图。读取失败只显示待处理项读取提示，不显示计数或列表，不触发整页警报或 toast；其它 Mission / Task 详情照常显示。`pendingMessages` 为兼容旧组件仍读取并传入，但首页不再显示它。
+
+首页「待处理项」计数等于视图的行数，不添加、不丢弃、不重排。每行依次显示 `kind` 的本地化名称；存在于 Task 列表中的 `taskId` 以标题按钮打开 Task，否则仅显示 id；等宽原文 `reason`；仅 `mission / human_review / task_blocked` 使用附带 `waitingOn` 的共用说明与预算读数（归属、dimension、used / limit）；对象自身的 `summary`；blocking 且 blocks > 0 时显示阻塞 Task 数、非 blocking 显示不阻塞；最后按 `actions` 原顺序以文字列出 Control Plane 可接受的动作。kind 与 action 文案集中于 `mission-pending-copy.ts`，已有按钮文案复用同一 key。首页行只有 Task 跳转按钮，不新增处置控件；操作仍在 Task 页、计划面板与 Mission 按钮中执行。
+
+Task 表增加「等待对象」列：直接显示每个 Task 的 `waitingOn` 共用说明、等宽原文 `on · reason`，以及 person=true 时的「需要人工处置」文字与警告色；缺失字段则留空，不从 stage 推导。单元格仅有文字，保留行选择、键盘操作和前两列。
+
+`mutate` 在调用成功时返回 true，拒绝、传输失败或已有请求而未发送时返回 false；request id、重读、警报与 toast 语义不变。`adjustTask` 透传该结果，只用于成功后收起调整表单：动作仍提供时等待 busy 结束再回焦「调整 Task」，动作消失时聚焦 Task detail；失败保留表单与输入。其余表单行为不变，显示状态仍完全来自重读。
+
+本段不显示 `since` 或其它时间：`no_eligible_provider` 的 since 随准入再次拒绝更新，启动时也会发生；同一状态重启前后的首页与 Task 行文字须一致。时间语义与定时刷新留 M3-09-3b；监督档位与离开期间摘要留 M3-09-3c。
 
 ### 人工验证处置与同候选重验（M3-05；D82 / D85 / DEF-21 ④）
 

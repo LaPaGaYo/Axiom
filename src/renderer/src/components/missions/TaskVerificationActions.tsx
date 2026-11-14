@@ -52,6 +52,7 @@ export function TaskVerificationActions({
   const trigger = useRef<HTMLButtonElement | null>(null)
   const form = useRef<HTMLDivElement>(null)
   const previouslyOpen = useRef(false)
+  const returnToTrigger = useRef(false)
   const offered: OfferedAction[] = []
   for (const item of pendingItems ?? []) {
     if (item.taskId !== task.id) {
@@ -84,10 +85,22 @@ export function TaskVerificationActions({
     }
     previouslyOpen.current = !!open
   }, [open, detailRef])
+  useEffect(() => {
+    // A late result must not steal focus from a newly opened form.
+    if (!open && returnToTrigger.current && !busy) {
+      returnToTrigger.current = false
+      const target = trigger.current
+      if (target?.isConnected && !target.disabled) {
+        target.focus({ preventScroll: true })
+      } else {
+        detailRef.current?.focus({ preventScroll: true })
+      }
+    }
+  }, [open, busy, detailRef])
   const close = () => {
     previouslyOpen.current = false
+    returnToTrigger.current = true
     setOpen(null)
-    trigger.current?.focus({ preventScroll: true })
   }
   if (!offered.length) {
     return pendingError && task.waitingOn?.person ? (

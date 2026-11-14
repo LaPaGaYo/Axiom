@@ -10,7 +10,7 @@ import type { MissionPendingItem } from '../../../../shared/axiom-contract/missi
 
 export type AdjustTask = (
   params: Parameters<typeof axiomClient.adjustTask>[0]
-) => void | Promise<void>
+) => void | boolean | Promise<void | boolean>
 
 function adjustmentGuidance(item: MissionPendingItem) {
   if (item.kind === 'human_review') {
@@ -88,10 +88,10 @@ export function TaskAdjustForm({
     <form
       aria-label={translate('missions.adjustTask', 'Adjust Task')}
       className="space-y-3"
-      onSubmit={(event) => {
+      onSubmit={async (event) => {
         event.preventDefault()
         if (ready) {
-          void onSubmit?.({
+          const accepted = await onSubmit?.({
             taskId,
             rationale: rationale.trim(),
             addAllowedPaths: [
@@ -105,6 +105,9 @@ export function TaskAdjustForm({
             ...(attempts === '' ? {} : { maxAttempts: Number(attempts) }),
             ...(tokens === '' ? {} : { maxTokens: Number(tokens) })
           })
+          if (accepted) {
+            onClose()
+          }
         }
       }}
     >

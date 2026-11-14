@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import type { TaskListItem } from '../../../../shared/axiom-contract/task-params'
 import { TaskStageBadge } from './TaskStageBadge'
+import { taskWaitingGloss } from './task-waiting-copy'
 
 export function TaskStageTable({
   tasks,
@@ -30,6 +31,9 @@ export function TaskStageTable({
               <tr className="border-b border-border">
                 <th className="px-3 py-2 font-medium">{translate('missions.task', 'Task')}</th>
                 <th className="px-3 py-2 font-medium">{translate('missions.stage', 'Stage')}</th>
+                <th className="px-3 py-2 font-medium">
+                  {translate('missions.waitingOn', 'Waiting on')}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -54,6 +58,21 @@ export function TaskStageTable({
                   </td>
                   <td className="px-3 py-3">
                     <TaskStageBadge stage={task.stage} orcaStatus={task.orcaStatus} />
+                  </td>
+                  <td className="px-3 py-3 align-top">
+                    {task.waitingOn && (
+                      <div className="space-y-1 text-xs text-muted-foreground">
+                        <p>{taskWaitingGloss(task.waitingOn)}</p>
+                        <p className="font-mono">
+                          {task.waitingOn.on} · {task.waitingOn.reason}
+                        </p>
+                        {task.waitingOn.person && (
+                          <span className="bg-status-warning-background text-status-warning">
+                            {translate('missions.needsPerson', 'Needs a person')}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}

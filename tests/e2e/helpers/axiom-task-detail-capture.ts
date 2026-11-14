@@ -1,8 +1,13 @@
 import type { Page, TestInfo } from '@playwright/test'
 import { expect } from './orca-app'
 
-export async function captureDetail(page: Page, testInfo: TestInfo, name: string) {
-  const detail = page.getByRole('region', { name: 'Task detail', exact: true })
+export async function captureDetail(
+  page: Page,
+  testInfo: TestInfo,
+  name: string,
+  regionName = 'Task detail'
+) {
+  const detail = page.getByRole('region', { name: regionName, exact: true })
   // The application scrolls inside ancestors. Temporarily expand those ancestors so the
   // element screenshot contains the entire detail; restore all inline styles afterwards.
   const styles = await detail.evaluate((section) => {

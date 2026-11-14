@@ -20183,7 +20183,7 @@
     "awaitPlan": "Start Planner to propose a plan for review.",
     "reviewNext": "审核下方的计划提案。",
     "startNext": "准备好后启动已批准的计划。",
-    "executingNext": "{{running}} Attempt(s) running, {{submitted}} submitted — verification arrives in M3.",
+    "executingNext": "{{running}} 个 Attempt 正在运行，{{submitted}} 个已提交。",
     "statusNext": "查看 Mission 状态和待处理项。",
     "noGoal": "没有活跃的 Goal 修订。",
     "start": "启动 Mission",
@@ -20416,7 +20416,23 @@
     "cancelTaskConsequence": "取消会停止此 Task 正在运行的 Attempt。其工作不会被集成，已取消的 Task 无法恢复。",
     "cancelTaskDependentsUnknown": "依赖此 Task 的 Task 会一直等待，直到有人逐个取消它们。",
     "cancelTaskDependents": "依赖此 Task 的 Task 数：{{count}}。它们会一直等待，直到有人逐个取消它们。",
-    "taskSpecReadError": "无法读取 Task。请刷新后重试。"
+    "taskSpecReadError": "无法读取 Task。请刷新后重试。",
+    "pendingReadError": "无法读取待处理项。请刷新后重试。",
+    "pendingBlocks": "阻塞 {{count}} 个 Task",
+    "pendingNotBlocking": "不阻塞 Task",
+    "pendingYouCan": "可执行操作：",
+    "pendingKindMission": "Mission",
+    "pendingKindPlanReview": "计划审查",
+    "pendingKindQuestion": "问题",
+    "pendingKindReview": "审查",
+    "pendingKindBlockedTask": "受阻的 Task",
+    "pendingKindSubtaskRequest": "子任务请求",
+    "pendingKindFollowUp": "后续事项",
+    "pendingKindStallNotice": "停滞通知",
+    "pendingKindSupervisionProposal": "监督建议",
+    "pendingAcceptOrReject": "接受或拒绝",
+    "pendingUpdatePolicy": "更新策略",
+    "pendingResolveProposal": "处置建议"
   },
   "fileExplorer": {
     "root": {

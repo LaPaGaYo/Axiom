@@ -8,7 +8,9 @@ import {
   mission,
   goal,
   attempt,
-  message
+  message,
+  taskWithSpec,
+  reviewPendingItem
 } from '../../../../shared/axiom-contract/contract-fixtures.test-support'
 import { MissionHome } from './MissionHome'
 
@@ -99,12 +101,13 @@ describe('MissionHome', () => {
           <MissionHome
             mission={{ ...mission, status: 'ANALYZING' }}
             goal={null}
-            tasks={[]}
+            tasks={[taskWithSpec]}
             attempts={[
               attempt,
               { ...attempt, attemptId: 'planner', role: 'planner', state: 'RUNNING' }
             ]}
             pendingMessages={[message]}
+            pendingItems={[reviewPendingItem]}
             proposedPlans={0}
             busy={false}
             onAction={vi.fn()}
@@ -120,8 +123,8 @@ describe('MissionHome', () => {
     expect(
       buttons.find((b) => b.textContent === 'Start Planner')?.getAttribute('aria-disabled')
     ).toBe('true')
-    act(() => buttons.find((b) => b.textContent?.includes(message.summary))?.click())
-    expect(onSelectTask).toHaveBeenCalledWith(message.taskId)
+    act(() => buttons.find((b) => b.textContent === taskWithSpec.title)?.click())
+    expect(onSelectTask).toHaveBeenCalledWith(taskWithSpec.id)
   })
   it('shows execution counts and prevents planning while a proposal awaits review', () => {
     const props = {
@@ -144,9 +147,7 @@ describe('MissionHome', () => {
         </TooltipProvider>
       )
     )
-    expect(container.textContent).toContain(
-      '1 Attempt(s) running, 1 submitted — verification arrives in M3.'
-    )
+    expect(container.textContent).toContain('1 Attempt(s) running, 1 submitted.')
     act(() =>
       root.render(
         <TooltipProvider>
