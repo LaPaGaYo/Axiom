@@ -52,6 +52,28 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M3-09-2b-3', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'Task actions on the Task page as briefed: adjust and cancel are offered only when a pending '
+        'item lists them, in item order; the adjust form shows scope and limits from an isolated Task read, one '
+        'guidance line by reason, prefilled paths, sends only what was typed and predicts no refusal; cancel '
+        'states its cost, takes a rationale and calls only after the confirmation dialog; cancelTask refuses a '
+        'secret-looking rationale before its transaction; catalogs compared key by key; titles 1-10 and 14 fail '
+        'at their assertions on main files with no load error and 11-13 pass; new e2e spec (three flows through '
+        'the page) and every Mission spec green on the host, e2e red run fails as it must; three screenshots '
+        'read; no verifier change; no other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'brief gap: a successful adjustment on a Task under review leaves the form open with no feedback; close it on success in the next renderer part',
+            'cancel control for a Task that needs nobody: product decision open with Henry',
+            'acceptance criteria editor with the plan card: M3-09-4',
+            'two controller tests write the contract version as a literal',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M3-09-2b-2', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'review actions on the Task page as briefed: the region offers resolve and rerun only when a '
