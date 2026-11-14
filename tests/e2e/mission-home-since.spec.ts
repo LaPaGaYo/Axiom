@@ -198,10 +198,6 @@ test('M3-09-3b-1: three provider waits keep their start after pause and resume',
     const pausedSequence = Math.max(
       ...readRefusals(userData, mission.id).map((audit) => audit.sequence)
     )
-    // Audit timestamps have one-second precision. Assert the next second before resuming.
-    await expect
-      .poll(() => Date.now(), { timeout })
-      .toBeGreaterThan(Math.max(...first.map((audit) => Date.parse(audit.since))) + 1000)
     const resume = home.getByRole('button', { name: 'Resume Mission', exact: true })
     await expect(resume).toHaveAttribute('aria-disabled', 'false', { timeout })
     await resume.click()

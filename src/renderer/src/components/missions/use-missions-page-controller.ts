@@ -3,12 +3,12 @@ import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
 import { axiomClient, AxiomRpcError } from '@/lib/axiom-client'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
-import type { MissionSummary } from '../../../../shared/axiom-contract/mission-params'
 import type { CreateMissionInput } from './MissionCreateDialog'
 import type { MissionAction } from './MissionActions'
-import { readMission, type MissionDetail } from './mission-read'
+import { useMissionsPageRead } from './use-missions-page-read'
 
 export function useMissionsPageController() {
   useTranslation()
@@ -17,50 +17,41 @@ export function useMissionsPageController() {
   const createOpen = useAppStore((s) => s.missionCreateOpen)
   const error = useAppStore((s) => s.missionError)
   const requests = useAppStore((s) => s.missionRequests)
-  const [missions, setMissions] = useState<MissionSummary[]>([])
-  const [detail, setDetail] = useState<MissionDetail | null>(null)
-  const [loading, setLoading] = useState(true)
   const [confirming, setConfirming] = useState(false)
   const confirmingRef = useRef(false)
-  const generation = useRef(0)
   const confirm = useConfirmationDialog()
-  const reportError = useCallback((failure: unknown) => {
+  const reportError = useCallback((failure: unknown, quiet = false) => {
     const message =
       failure instanceof AxiomRpcError ? `${failure.code}: ${failure.message}` : String(failure)
     useAppStore.getState().setMissionError(message)
-    toast.error(message)
+    if (!quiet) {
+      toast.error(message)
+    }
   }, [])
-  const refresh = useCallback(async () => {
-    const current = ++generation.current
-    const { selectedMissionId: id, selectedTaskId: taskId } = useAppStore.getState()
-    setLoading(true)
-    try {
-      const [list, next] = await Promise.all([
-        axiomClient.listMissions(),
-        id ? readMission(id, taskId) : null
-      ])
-      if (current !== generation.current) {
-        return
-      }
-      setMissions(list.missions)
-      setDetail(next)
-      useAppStore.getState().setMissionError(null)
-    } catch (failure) {
-      if (current === generation.current) {
-        reportError(failure)
-      }
-    } finally {
-      if (current === generation.current) {
-        setLoading(false)
-      }
-    }
-  }, [reportError])
-  useEffect(() => {
-    void refresh()
-    return () => {
-      generation.current += 1
-    }
-  }, [selectedId, selectedTaskId, refresh])
+  const { missions, detail, loading, refresh, canRead } = useMissionsPageRead(
+    selectedId,
+    selectedTaskId,
+    reportError
+  )
+  useEffect(
+    () =>
+      installWindowVisibilityInterval({
+        intervalMs: 5000,
+        run: () => {
+          const store = useAppStore.getState()
+          if (
+            !canRead() ||
+            confirmingRef.current ||
+            store.missionCreateOpen ||
+            Object.values(store.missionRequests).some((request) => request.pending)
+          ) {
+            return
+          }
+          void refresh(true)
+        }
+      }),
+    [canRead, refresh]
+  )
 
   const mutate = async (key: string, operation: (id: string) => Promise<unknown>) => {
     const store = useAppStore.getState()

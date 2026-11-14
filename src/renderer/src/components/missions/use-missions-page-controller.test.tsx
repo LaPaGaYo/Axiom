@@ -5,6 +5,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import {
   taskWithSpec,
   goal,
@@ -27,6 +28,7 @@ vi.mock('@/store', async () => {
   return { useAppStore }
 })
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
+vi.mock('@/lib/window-visibility-interval', () => ({ installWindowVisibilityInterval: vi.fn() }))
 import { useAppStore } from '@/store'
 import {
   useMissionsPageController,
@@ -36,6 +38,14 @@ import { toast } from 'sonner'
 
 const call = vi.fn()
 const confirm = vi.fn(async () => true)
+const stopInterval = vi.fn()
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
 const container = document.createElement('div')
 const root = createRoot(container)
 let controller: MissionsPageController
@@ -65,12 +75,21 @@ async function mount() {
   )
 }
 beforeEach(() => {
+  vi.mocked(installWindowVisibilityInterval)
+    .mockReset()
+    .mockImplementation(({ run }) => {
+      run()
+      return stopInterval
+    })
+  stopInterval.mockClear()
+  vi.mocked(toast.error).mockClear()
   vi.stubGlobal('window', { api: { runtime: { call } } })
   useAppStore.setState({
     selectedMissionId: mission.id,
     selectedTaskId: null,
     missionRequests: {},
-    missionError: null
+    missionError: null,
+    missionCreateOpen: false
   })
   call.mockReset().mockImplementation(async ({ method, params }) => {
     if (method === 'axiom.mission.list') {
@@ -474,6 +493,177 @@ describe('Mission page reconciliation', () => {
     expect(container.textContent).toContain('mission-2')
     expect(container.textContent).not.toContain('mission-1')
   })
+})
+
+it('re-reads the Mission on a timed tick without marking the page busy', async () => {
+  useAppStore.setState({ selectedTaskId: attempt.taskId })
+  await mount()
+  expect(installWindowVisibilityInterval).toHaveBeenCalledTimes(1)
+  const interval = vi.mocked(installWindowVisibilityInterval).mock.calls[0][0]
+  expect(interval.intervalMs).toBe(5000)
+  expect(call.mock.calls.filter(([a]) => a.method === 'axiom.mission.list')).toHaveLength(1)
+  const initialMethods = call.mock.calls.map(([a]) => a.method)
+  const base = call.getMockImplementation()!
+  const response = deferred<unknown>()
+  call.mockImplementation((args) =>
+    args.method === 'axiom.mission.show' ? response.promise : base(args)
+  )
+  const before = call.mock.calls.length
+  await act(async () => interval.run())
+  expect(call.mock.calls.slice(before).map(([a]) => a.method)).toEqual(initialMethods)
+  expect(controller.loading).toBe(false)
+  expect(controller.busy).toBe(false)
+  await act(async () => response.resolve(success({ mission: { ...mission, status: 'PAUSED' } })))
+  expect(controller.detail?.mission.status).toBe('PAUSED')
+  expect(controller.taskDetail?.taskId).toBe(attempt.taskId)
+  expect(toast.error).not.toHaveBeenCalled()
+  call.mockImplementation(base)
+  await act(async () => controller.refresh())
+  await act(async () => controller.select('mission-2'))
+  expect(installWindowVisibilityInterval).toHaveBeenCalledTimes(1)
+  act(() => root.render(null))
+  expect(stopInterval).toHaveBeenCalledTimes(1)
+})
+
+it('skips a timed tick while the page is not idle', async () => {
+  const base = call.getMockImplementation()!
+  const mountRead = deferred<unknown>()
+  call.mockImplementation((args) =>
+    args.method === 'axiom.mission.list' ? mountRead.promise : base(args)
+  )
+  await mount()
+  expect(installWindowVisibilityInterval).toHaveBeenCalledTimes(1)
+  const tick = vi.mocked(installWindowVisibilityInterval).mock.calls[0][0].run
+  const expectSkipped = async () => {
+    const before = call.mock.calls.length
+    await act(async () => tick())
+    expect(call.mock.calls).toHaveLength(before)
+  }
+  const expectRead = async () => {
+    const before = call.mock.calls.filter(([a]) => a.method === 'axiom.mission.list').length
+    await act(async () => tick())
+    expect(call.mock.calls.filter(([a]) => a.method === 'axiom.mission.list')).toHaveLength(
+      before + 1
+    )
+  }
+  expect(call.mock.calls.filter(([a]) => a.method === 'axiom.mission.list')).toHaveLength(1)
+  await expectSkipped()
+  call.mockImplementation(base)
+  await act(async () => mountRead.resolve(success({ missions: [mission] })))
+  await expectRead()
+  const mutation = deferred<unknown>()
+  const reconciliation = deferred<unknown>()
+  call.mockImplementation((args) => {
+    if (args.method === 'axiom.mission.start') {
+      return mutation.promise
+    }
+    if (args.method === 'axiom.mission.list') {
+      return reconciliation.promise
+    }
+    return base(args)
+  })
+  act(() => controller.missionAction('start'))
+  await expectSkipped()
+  await act(async () => mutation.resolve(success({ mission })))
+  await expectSkipped()
+  call.mockImplementation(base)
+  await act(async () => reconciliation.resolve(success({ missions: [mission] })))
+  await expectRead()
+  const confirmation = deferred<boolean>()
+  confirm.mockReturnValueOnce(confirmation.promise)
+  act(() => controller.missionAction('cancel'))
+  await expectSkipped()
+  await act(async () => confirmation.resolve(false))
+  await expectRead()
+  act(() => controller.setCreateOpen(true))
+  await expectSkipped()
+  act(() => controller.setCreateOpen(false))
+  await expectRead()
+  const timed = deferred<unknown>()
+  call.mockImplementation((args) =>
+    args.method === 'axiom.mission.list' ? timed.promise : base(args)
+  )
+  await expectRead()
+  await expectSkipped()
+  call.mockImplementation(base)
+  await act(async () => timed.resolve(success({ missions: [mission] })))
+  await expectRead()
+})
+
+it('shows a failed timed read on the page and waits for the person', async () => {
+  await mount()
+  expect(installWindowVisibilityInterval).toHaveBeenCalledTimes(1)
+  const tick = vi.mocked(installWindowVisibilityInterval).mock.calls[0][0].run
+  const base = call.getMockImplementation()!
+  const detail = controller.detail
+  const refuse = () =>
+    call.mockImplementation((args) =>
+      args.method === 'axiom.mission.show'
+        ? Promise.resolve({
+            id: 'desktop-ipc',
+            ok: false,
+            error: { code: 'unavailable', message: 'Try again.' }
+          })
+        : base(args)
+    )
+  const expectStopped = async () => {
+    const before = call.mock.calls.length
+    await act(async () => {
+      tick()
+      tick()
+    })
+    expect(call.mock.calls).toHaveLength(before)
+  }
+  refuse()
+  await act(async () => tick())
+  expect(controller.detail).toBe(detail)
+  expect(controller.error).toBe('unavailable: Try again.')
+  expect(container.querySelector('[role="alert"]')?.textContent).toBe('unavailable: Try again.')
+  expect(toast.error).not.toHaveBeenCalled()
+  await expectStopped()
+  call.mockImplementation(base)
+  await act(async () => controller.refresh())
+  expect(controller.error).toBeNull()
+  const before = call.mock.calls.length
+  await act(async () => tick())
+  expect(call.mock.calls.length).toBeGreaterThan(before)
+  refuse()
+  await act(async () => controller.refresh())
+  expect(toast.error).toHaveBeenCalledExactlyOnceWith('unavailable: Try again.')
+  await expectStopped()
+  call.mockImplementation(base)
+  await act(async () => controller.refresh())
+  expect(controller.error).toBeNull()
+  act(() => useAppStore.getState().setMissionError('Keep this mutation error'))
+  const beforeRecovery = call.mock.calls.length
+  await act(async () => tick())
+  expect(call.mock.calls.length).toBeGreaterThan(beforeRecovery)
+  expect(controller.error).toBe('Keep this mutation error')
+  expect(toast.error).toHaveBeenCalledTimes(1)
+})
+
+it('drops a timed response that is older than the selection', async () => {
+  await mount()
+  expect(installWindowVisibilityInterval).toHaveBeenCalledTimes(1)
+  const tick = vi.mocked(installWindowVisibilityInterval).mock.calls[0][0].run
+  const base = call.getMockImplementation()!
+  const response = deferred<unknown>()
+  call.mockImplementation((args) =>
+    args.method === 'axiom.mission.show' && args.params.missionId === mission.id
+      ? response.promise
+      : base(args)
+  )
+  await act(async () => tick())
+  await act(async () => controller.select('mission-2'))
+  expect(controller.detail?.mission.id).toBe('mission-2')
+  const before = call.mock.calls.length
+  await act(async () => tick())
+  expect(call.mock.calls).toHaveLength(before)
+  await act(async () => response.resolve(success({ mission: { ...mission, status: 'PAUSED' } })))
+  expect(controller.detail?.mission.id).toBe('mission-2')
+  expect(container.textContent).not.toContain(mission.id)
+  await act(async () => tick())
+  expect(call.mock.calls.length).toBeGreaterThan(before)
 })
 
 it('requires confirmation with consequences before canceling or rejecting', async () => {

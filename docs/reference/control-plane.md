@@ -832,7 +832,7 @@ M3-09-2b-1：读取器返回已知的 `resolution.disposition`；遇到未知值
 
 ### Task 页的人工处置与重验（M3-09-2b-2）
 
-选择或刷新 Task 时，Task 详情接收同轮 Mission 读取的 `axiom.mission.pending {missionId}` 结果，只保留 `taskId` 匹配的项（M3-09-3a 将此读取从 `readTaskEvidence` 移至 `readMission`，与首页共享）。读取失败不遮住其它详情；仅 `waitingOn.person=true` 时显示「无法读取可用操作。请刷新后重试」。没有轮询，也不从 stage、waitingOn 或 run.status 推算可用操作。
+选择或刷新 Task 时，Task 详情接收同轮 Mission 读取的 `axiom.mission.pending {missionId}` 结果，只保留 `taskId` 匹配的项（M3-09-3a 将此读取从 `readTaskEvidence` 移至 `readMission`，与首页共享）。读取失败不遮住其它详情；仅 `waitingOn.person=true` 时显示「无法读取可用操作。请刷新后重试」。M3-09-3b-2 起随整页定时重读，不从 stage、waitingOn 或 run.status 推算可用操作。
 
 等待行下方的「Task 操作」按 pending item 的 actions 顺序去重，提供列出的 `axiom.verification.resolve`、`axiom.verification.rerun`（调整与取消见下一节）；其余操作暂不呈现。一次只展开一个内联表单，打开聚焦首控件，关闭不调用并回焦原按钮。处置按 item.objectId 找已读 run，缺失时显示读取提示；提交 `{runId, verdict, rationale: trimmed, criteria: 升序索引, disposition?}`，类型字段完全由共享 `allowedVerificationDispositions(verdict, recordedReason)` 决定。重验提交 `{taskId, rationale: trimmed}`，说明同一 Candidate 重验、待审 run 取消。两种表单都要求非空且最多 4,000 字符的理由，说明后果，不再弹确认框。
 
@@ -868,7 +868,17 @@ Task 表增加「等待对象」列：直接显示每个 Task 的 `waitingOn` �
 
 `MissionPendingList` 每行在「You can:」之前显示「Since」（`missions.pendingSince`；中文「开始等待于」）与该项的 `since`，没有 actions 的行也显示。时间原文置于 `<time dateTime={item.since}>`，正文与属性均为视图返回的同一字符串，不重排、不格式化、不计算相对时间；起点来源见 M3-09-1，provider 等待在后续准入轮次与重启后保持原值。
 
-`MissionHome` 的 `pendingMessages` prop 及 Mission 读取中的 pending-only 消息列表调用、返回字段均已移除，每次刷新少一次调用。`readMission` 与其导出的 `MissionDetail` 类型移至 missions/mission-read.ts，除该删除外调用顺序不变，pending view 的同一 settled read 仍供首页与选中 Task 的证据共用。页面仍仅在选择和按需刷新时读取；定时刷新留 M3-09-3b-2，监督档位与离开期间摘要留 M3-09-3c。
+`MissionHome` 的 `pendingMessages` prop 及 Mission 读取中的 pending-only 消息列表调用、返回字段均已移除，每次刷新少一次调用。`readMission` 与其导出的 `MissionDetail` 类型移至 missions/mission-read.ts，除该删除外调用顺序不变，pending view 的同一 settled read 仍供首页与选中 Task 的证据共用。定时刷新见下一节；监督档位与离开期间摘要留 M3-09-3c。
+
+### Mission 页的定时刷新（M3-09-3b-2）
+
+`useMissionsPageController` 在页面挂载期间只安装一次内核的 `installWindowVisibilityInterval`，间隔 5 000 ms，卸载时停止。隐藏窗口暂停、恢复可见时立即读取均由该 helper 处理；安装时同步触发的第一次回调会因挂载读取尚未回答而跳过，不增加挂载读取次数。
+
+`useMissionsPageRead` 共用手动刷新的调用顺序、`readMission` 和 generation 规则，读取列表、选中的 Mission 与 Task；定时读取只更新页面投影，不触发 mutation，不置 loading / busy，不禁用控件、不主动移焦、不显示加载行或 toast。成功不清除错误行。只有页面空闲才读取：没有尚未回答的读取（包括被新选择取代的旧读取）、没有待回答 mutation、没有确认框、没有创建对话框，且没有尚未由非定时成功读取解除的失败。
+
+定时读取失败保留现有数据，在页面错误行显示与手动读取相同的 `code: message`，不 toast；之后跳过定时读取，直到手动刷新、选择或 mutation 后的读取成功。手动读取失败也会暂停定时读取。没有自动重试或 backoff，跳过的 tick 不排队；除了错误行，没有其它暂停提示。
+
+页面最多落后一个间隔，慢读取或非空闲期间更久；窗口隐藏或离开 Missions 视图时不跟随。若重读不再提供某表单的动作，仍按原有行为收起表单，现在即使没有手动刷新也可能发生。pending view、验证记录或 usage 的局部读取失败沿用各自已有提示，与手动读取一致，不改成整页失败。
 
 ### 人工验证处置与同候选重验（M3-05；D82 / D85 / DEF-21 ④）
 
