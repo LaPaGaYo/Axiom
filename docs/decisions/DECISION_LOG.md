@@ -973,6 +973,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **后果**：V1 的人工动作只能在应用里做——已有 UI 的：建 Mission、开始规划、开始 / 暂停 / 继续 / 取消、批准 / 拒绝计划、回答 Question、处理子任务请求；policy 编辑与取消单个 Task 的最小入口进 M3-09，Goal 修订进 M5。E2E 的人工动作改走桌面调用方（`page.evaluate(window.api.runtime.call)`，与产品 `axiom-client.ts` 同一条路），测试 provider 增 `self-approve` 场景。实施：M3-04c。"CLI 发起、应用里确认"与配对设备的人工权限登记 DEF-31（V2）；DEF-25 不变。
 **取代规则**：以修订行记录；把任何 `desktop_only` 方法开放给其他调用方须新 Decision。
 
+**修订（2026-11-13，Henry："B"）**："后果"里"取消单个 Task 的最小入口"定为——Task 页上任何还没结束的 Task 都有一个不显眼的取消入口，不限于待处理项列出 `axiom.task.cancel` 的时候（M3-09-2b-3 只做了后一种，当时把两种做法 A / B 交 Henry 定）。同一张表单、同一个确认框；能否取消仍由 Control Plane 判定，拒绝原样显示；调用方规则不变（`axiom.task.cancel` 仍是 `desktop_only`）。落在 M3-09-2b-4。
+
 ## D79 · 集成失败的归属与单点 Approval：单候选批次的 CONFLICT / FAILED 都回原 Task 修复，FIX_TASK 只留给没有肇事候选的 Mission 级失败；高风险 Approval 只在批次一处 — ACCEPTED（Henry 2026-10-25："按建议"；验证者 2026-10-25 提议，`claude/fix-plan-v1.md` ②；取代 D3，D3 修订提议撤回）
 
 **背景**：D3 让回归失败（FAILED）新建 FIX_TASK、原候选 SUPERSEDED 且不得再入队，原 Task 因此永远没有 ACTIVE 候选可集成；GLOSSARY §4.4 又写 FIX_TASK 只阻止其重新入队，两处矛盾。D3 修订提议（2026-10-21）用"FIX_TASK 以失败批次合并树为基线、PROMOTED 时把所含候选的 Task 一并 INTEGRATED"补出路。但 D5 把批次固定为一个候选：回归失败时另一方已 PROMOTED，未集成的只有当前候选，与 CONFLICT 同为"一个候选对一个基线"。另外，Task 进 `INTEGRATION_READY` 与批次 `PROMOTABLE → AWAITING_APPROVAL` 各要一次 Approval，单候选批次下批的是同一个候选；`REJECTED` 之后的去向没有定义；等批准的批次会卡住串行队列。
