@@ -832,9 +832,19 @@ M3-09-2b-1：读取器返回已知的 `resolution.disposition`；遇到未知值
 
 选择或刷新 Task 时，`readTaskEvidence` 在同一轮独立读取 `axiom.mission.pending {missionId}`，只保留 `taskId` 匹配的项。读取失败不遮住其它详情；仅 `waitingOn.person=true` 时显示「无法读取可用操作。请刷新后重试」。没有轮询，也不从 stage、waitingOn 或 run.status 推算可用操作。
 
-等待行下方的「Task 操作」仅在 pending item 列出 `axiom.verification.resolve` 或 `axiom.verification.rerun` 时出现，按 actions 顺序去重；其余操作暂不呈现。一次只展开一个内联表单，打开聚焦首控件，关闭不调用并回焦原按钮。处置按 item.objectId 找已读 run，缺失时显示读取提示；提交 `{runId, verdict, rationale: trimmed, criteria: 升序索引, disposition?}`，类型字段完全由共享 `allowedVerificationDispositions(verdict, recordedReason)` 决定。重验提交 `{taskId, rationale: trimmed}`，说明同一 Candidate 重验、待审 run 取消。两种表单都要求非空且最多 4,000 字符的理由，说明后果，不再弹确认框。
+等待行下方的「Task 操作」按 pending item 的 actions 顺序去重，提供列出的 `axiom.verification.resolve`、`axiom.verification.rerun`（调整与取消见下一节）；其余操作暂不呈现。一次只展开一个内联表单，打开聚焦首控件，关闭不调用并回焦原按钮。处置按 item.objectId 找已读 run，缺失时显示读取提示；提交 `{runId, verdict, rationale: trimmed, criteria: 升序索引, disposition?}`，类型字段完全由共享 `allowedVerificationDispositions(verdict, recordedReason)` 决定。重验提交 `{taskId, rationale: trimmed}`，说明同一 Candidate 重验、待审 run 取消。两种表单都要求非空且最多 4,000 字符的理由，说明后果，不再弹确认框。
 
 两个动作沿用 controller 的 `mutate` 收据与刷新路径：每次调用后都重读，无乐观状态、无自动重试；拒绝按 `code: message` 原样显示在页面警报与 toast，操作仍存在时保留表单及输入，由人决定下一步。重读后操作消失即收起表单，焦点回到 Task detail。历史人工处置按 Glossary §4.8 显示类型和共用说明；逐条 `human` 结果只有在 HUMAN_REVIEW / SPECIALIST_REVIEW 等待时提示需要人，已处置时附判定及是否点名，其余安静显示原词，不改记录。等待行的上游 Task 与 run 链接加标签、下划线。宽容读取器的可选 `unreadable` 汇总 checks、acceptance、evidenceArtifactIds 和 diff 各列表丢弃的条目（非数组不计，条目内的列表不计），详情显示条目数；没有丢弃时返回形状不变。
+
+### Task 页的调整与取消（M3-09-2b-3）
+
+选择或刷新 Task 时，`readTaskEvidence` 另以独立 settled read 调用 `axiom.task.show {taskId}` 取得 spec；失败不影响其它详情或操作，只在展开调整时显示「无法读取 Task。请刷新后重试」与安静的关闭按钮。仍只在选择和刷新时读取，无轮询。`axiom.task.adjust` / `axiom.task.cancel` 与处置、重验共用原操作区，严格按本 Task 的 pending items/actions 顺序去重；每个动作使用第一条提供它的 item，不由 stage、waitingOn 或 run 状态推算操作。`axiom.policy.update` 仍无控件。
+
+调整表单只读显示 allowedPaths（等宽原文，空列表为无）、Attempt 上限、token 上限（未设为无上限），item.waitingOn 的 Task 预算在匹配维度显示已用量。按 item.kind/reason 说明如何解除当前阻塞；human_review 明示调整不会处置审查，需重验同一 Candidate。scope 项从已读消息中预填本 Task 的 pending BLOCKED/blocked_by_scope 路径，其它原因不预填。提交 `{taskId,rationale:trimmed,addAllowedPaths,maxAttempts?,maxTokens?}`：路径逐行 trim、去空、按顺序去重；空上限不发送，只检查输入为正整数字符串，不比较已用量。可只写理由；不发送 acceptanceCriteria，不弹确认框。
+
+取消表单说明正在运行的 Attempt 会停止、工作不被集成、取消不可恢复。blocking item 的 blocks > 1 时显示依赖 Task 数（blocks − 1）；blocks = 1 不加依赖说明；stall_notice 不知道数量，只说明依赖 Task 仍需逐个取消。理由必填且最多 4,000 字符，提交给 controller 的是 `{taskId,rationale:trimmed}` 与表单原样后果文字；确认框以该文字作描述，确认「取消 Task」为 destructive，退回「保留 Task」为 ghost。只有确认后才调用 cancel；退回保留表单及输入。调整提交为 default，操作区四个按钮为 outline，关闭为 ghost。
+
+两个动作均沿用 `mutate` 的 request id 与重读路径，无乐观更新、无自动重试。拒绝以 `code: message` 原样呈现在页面警报与 toast；操作仍存在时保留输入。重读后操作不再提供则收起表单并聚焦 Task detail。取消不级联；未被 pending view 列出 cancel 的 Task 在页面上无取消控件。
 
 ### 人工验证处置与同候选重验（M3-05；D82 / D85 / DEF-21 ④）
 
@@ -1008,7 +1018,7 @@ M3-04b-3 的报告项复用上述 message.list / answer / resolve 投影；M4 �
 
 acceptanceCriteria 为 1–50 个严格对象的全量替换，经 `validateTaskAcceptance` 与 `validateAcceptanceCommands`（由 `validateTaskCommands` 使用 Mission verificationRules 调用）校验，错误为 `plan_invalid {errors}`；不接受新的字符串标准。无 acceptanceCriteria 的旧调用不受影响。rationale 命中 `redactContext` 返回 secret_in_rationale，不写审计。
 
-同一事务写 `task.adjusted`：before=`{allowedPaths,maxAttempts}`，after=`{allowedPaths,maxAttempts,addedPaths,rationale,afterAttemptSeq:nextAttemptSeq(taskId)-1,origin:user,resolvedMessageIds}`；替换 criteria 时 before / after 另带各自 acceptanceCriteria（文本与命令先脱敏）；以及 `plan.minor_adjustment`：after=`{classification:MINOR_ADJUSTMENT,origin:task_adjust,taskId,addedPaths,maxAttempts,rationale}`。每个本 Task 的 pending typed BLOCKED 消息写 `blocked.resolved`（objectKind=message、objectId=messageId，after=`{decision:adjusted,taskId,rationale}`）；`cancelTask` 在取消事务内同样写 decision=canceled。Task stage 是权威，pending 只是上述审计的投影。
+同一事务写 `task.adjusted`：before=`{allowedPaths,maxAttempts}`，after=`{allowedPaths,maxAttempts,addedPaths,rationale,afterAttemptSeq:nextAttemptSeq(taskId)-1,origin:user,resolvedMessageIds}`；替换 criteria 时 before / after 另带各自 acceptanceCriteria（文本与命令先脱敏）；以及 `plan.minor_adjustment`：after=`{classification:MINOR_ADJUSTMENT,origin:task_adjust,taskId,addedPaths,maxAttempts,rationale}`。每个本 Task 的 pending typed BLOCKED 消息写 `blocked.resolved`（objectKind=message、objectId=messageId，after=`{decision:adjusted,taskId,rationale}`）；`cancelTask` 在取消事务内同样写 decision=canceled。M3-09-2b-3 起，`cancelTask` 在改变 stage 前检查 `redactContext(rationale).redacted`，命中则拒绝 `invalid_argument / secret_in_rationale`，不写 stage、audit 或消息解决；参数、结果、dispatcher 回执与不级联语义不变。Task stage 是权威，pending 只是上述审计的投影。
 
 RPC 以 `task_adjust_receipt` 外层事务把调整和 mutation receipt 一起提交；`AXIOM_MUTATION_METHODS`、契约版本栅栏、同 request id 回放均复用 create 路径。成功提交后触发 `scheduleAfterWrite(missionId,'stage_change')`，嵌套事务回滚抑制通知，真正 admission 仍由 Scheduler 执行。V1 以桌面调用方作为人工范围 / Task 重试预算授权，M4 再接 Approval 对象；此方法不提高 Mission 总预算。
 

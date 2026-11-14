@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
 import {
+  taskWithSpec,
   goal,
   mission,
   policy,
@@ -50,6 +51,7 @@ function Harness() {
   return (
     <div>
       {controller.detail?.mission.id}:{controller.detail?.mission.status}
+      {controller.error && <p role="alert">{controller.error}</p>}
     </div>
   )
 }
@@ -79,6 +81,9 @@ beforeEach(() => {
     }
     if (method === 'axiom.task.list') {
       return success({ tasks: [] })
+    }
+    if (method === 'axiom.task.show') {
+      return success({ task: taskWithSpec })
     }
     if (method === 'axiom.plan.list') {
       return success({ planRevisions: [] })
@@ -110,6 +115,102 @@ afterEach(() => {
 })
 
 describe('Mission page reconciliation', () => {
+  it('reconciles after an adjustment and shows a refusal verbatim', async () => {
+    await mount()
+    await act(async () => controller.selectTask(attempt.taskId))
+    const base = call.getMockImplementation()!
+    let accepted = false
+    call.mockImplementation((args) => {
+      if (args.method === 'axiom.task.adjust') {
+        return Promise.resolve(
+          accepted
+            ? success({ task: { ...taskWithSpec, stage: 'READY' } })
+            : {
+                id: 'desktop-ipc',
+                ok: false,
+                error: { code: 'retry_budget_exhausted', message: 'The Attempts are used up.' }
+              }
+        )
+      }
+      if (args.method === 'axiom.mission.pending' && accepted) {
+        return Promise.resolve(success({ missionId: mission.id, items: [] }))
+      }
+      return base(args)
+    })
+    const params = {
+      taskId: attempt.taskId,
+      rationale: 'Allow the test',
+      addAllowedPaths: ['src/test.ts']
+    }
+    const before = call.mock.calls.length
+    await act(async () => controller.adjustTask(params))
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(
+      'retry_budget_exhausted: The Attempts are used up.'
+    )
+    expect(toast.error).toHaveBeenLastCalledWith(
+      'retry_budget_exhausted: The Attempts are used up.'
+    )
+    expect(controller.taskDetail?.pendingItems).toEqual([reviewPendingItem])
+    expect(call.mock.calls.filter(([a]) => a.method === 'axiom.task.adjust')).toHaveLength(1)
+    for (const method of ['axiom.task.show', 'axiom.mission.pending', 'axiom.task.list']) {
+      expect(call.mock.calls.slice(before).some(([a]) => a.method === method)).toBe(true)
+    }
+    accepted = true
+    const beforeSuccess = call.mock.calls.length
+    await act(async () => controller.adjustTask({ ...params, maxAttempts: 3 }))
+    expect(
+      call.mock.calls.slice(beforeSuccess).find(([a]) => a.method === 'axiom.task.adjust')?.[0]
+    ).toMatchObject({
+      params: { ...params, maxAttempts: 3 },
+      envelope: { orchestrationContractVersion: 1, orchestrationRequestId: expect.any(String) }
+    })
+    expect(call.mock.calls.slice(beforeSuccess).some(([a]) => a.method === 'axiom.task.show')).toBe(
+      true
+    )
+    expect(controller.taskDetail?.pendingItems).toEqual([])
+    expect(controller.taskDetail?.taskSpec).toEqual(taskWithSpec.spec)
+    expect(controller.error).toBeNull()
+    expect(call.mock.calls.filter(([a]) => a.method === 'axiom.task.adjust')).toHaveLength(2)
+  })
+  it('cancels a Task only after the dialog is confirmed', async () => {
+    await mount()
+    await act(async () => controller.selectTask(attempt.taskId))
+    const base = call.getMockImplementation()!
+    call.mockImplementation((args) =>
+      args.method === 'axiom.task.cancel'
+        ? Promise.resolve(success({ task: { ...taskWithSpec, stage: 'CANCELED' } }))
+        : base(args)
+    )
+    const params = { taskId: attempt.taskId, rationale: 'No longer needed' }
+    const consequence =
+      'Canceling stops the running Attempt of this Task. Its work is not integrated, and a canceled Task cannot be resumed. Tasks that depend on it: 1. They wait until a person cancels them too.'
+    confirm.mockResolvedValueOnce(false)
+    await act(async () => controller.cancelTask(params, consequence))
+    expect(call.mock.calls.some(([a]) => a.method === 'axiom.task.cancel')).toBe(false)
+    expect(confirm).toHaveBeenLastCalledWith({
+      title: 'Cancel Task',
+      description: consequence,
+      confirmLabel: 'Cancel Task',
+      confirmVariant: 'destructive',
+      cancelLabel: 'Keep Task',
+      cancelVariant: 'ghost'
+    })
+    confirm.mockResolvedValueOnce(true)
+    const before = call.mock.calls.length
+    await act(async () => controller.cancelTask(params, consequence))
+    const writes = call.mock.calls.filter(([a]) => a.method === 'axiom.task.cancel')
+    expect(writes).toHaveLength(1)
+    expect(writes[0][0]).toMatchObject({
+      params,
+      envelope: { orchestrationContractVersion: 1, orchestrationRequestId: expect.any(String) }
+    })
+    for (const method of ['axiom.task.show', 'axiom.mission.pending', 'axiom.task.list']) {
+      expect(call.mock.calls.slice(before).some(([a]) => a.method === method)).toBe(true)
+    }
+    // Mutation result is CANCELED; the unchanged pending re-read remains authoritative.
+    expect(controller.taskDetail?.pendingItems).toEqual([reviewPendingItem])
+    expect(controller.busy).toBe(false)
+  })
   it('reconciles after a resolution and reuses the receipt id after an uncertain result', async () => {
     await mount()
     await act(async () => controller.selectTask(attempt.taskId))

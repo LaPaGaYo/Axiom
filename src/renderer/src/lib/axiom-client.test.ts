@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { axiomClient, AxiomRpcError } from './axiom-client'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
 import {
+  taskWithSpec,
   goal,
   mission,
   policy,
@@ -34,6 +35,61 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('Axiom desktop client', () => {
+  it('reads a Task with its spec and sends an adjustment and a cancellation with the caller receipt id', async () => {
+    const result = { task: taskWithSpec }
+    call.mockResolvedValue(success(result))
+    expect(await axiomClient.showTask({ taskId: taskWithSpec.id })).toEqual(result)
+    expect(call).toHaveBeenLastCalledWith({
+      method: 'axiom.task.show',
+      params: { taskId: taskWithSpec.id }
+    })
+    const adjustment = {
+      taskId: taskWithSpec.id,
+      rationale: 'Reviewed',
+      addAllowedPaths: ['src/test.ts'],
+      maxAttempts: 3,
+      maxTokens: 2000
+    }
+    const cancellation = { taskId: taskWithSpec.id, rationale: 'No longer needed' }
+    for (const entry of [
+      {
+        method: 'axiom.task.adjust',
+        params: adjustment,
+        run: () => axiomClient.adjustTask(adjustment, 'adjust-receipt'),
+        requestId: 'adjust-receipt'
+      },
+      {
+        method: 'axiom.task.cancel',
+        params: cancellation,
+        run: () => axiomClient.cancelTask(cancellation, 'cancel-receipt'),
+        requestId: 'cancel-receipt'
+      }
+    ]) {
+      call.mockResolvedValue(success(result))
+      expect(await entry.run()).toEqual(result)
+      expect(call).toHaveBeenLastCalledWith({
+        method: entry.method,
+        params: entry.params,
+        envelope: {
+          orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+          orchestrationRequestId: entry.requestId
+        }
+      })
+      call.mockResolvedValue(success({ task: { ...taskWithSpec, stage: 'done' } }))
+      await expect(entry.run()).rejects.toMatchObject({ code: 'invalid_response' })
+    }
+    await expect(axiomClient.showTask({ taskId: taskWithSpec.id })).rejects.toMatchObject({
+      code: 'invalid_response'
+    })
+    call.mockClear()
+    await expect(axiomClient.adjustTask({ ...adjustment, maxTokens: 0 })).rejects.toMatchObject({
+      code: 'invalid_params'
+    })
+    await expect(axiomClient.cancelTask({ ...cancellation, rationale: '' })).rejects.toMatchObject({
+      code: 'invalid_params'
+    })
+    expect(call).not.toHaveBeenCalled()
+  })
   it('sends a resolution and a rerun with the caller receipt id and reads the pending view', async () => {
     const pending = { missionId: mission.id, items: [reviewPendingItem] }
     call.mockResolvedValue(success(pending))

@@ -1,6 +1,8 @@
 import type { ScheduleTrigger } from '../scheduler/scheduler'
 import { createTask } from './task-creation'
 import { adjustTask, resolveBlockedMessages } from './task-adjustment'
+import { redactContext } from '../context-builder/redaction'
+import { OrchestrationError } from '../../runtime/orchestration/orchestration-error'
 import type { TaskCreateParams } from '../../../shared/axiom-contract/task-params'
 import type { SubtaskSource } from '../messaging/subtask-checks'
 import { randomUUID } from 'node:crypto'
@@ -216,6 +218,9 @@ export class MissionController {
     return result
   }
   cancelTask(input: { taskId: string; rationale: string; actor: string }) {
+    if (redactContext(input.rationale).redacted) {
+      throw new OrchestrationError('invalid_argument', 'secret_in_rationale')
+    }
     const result = this.write('cancel_task', () => {
       const task = projectTask(
         this.ctx,

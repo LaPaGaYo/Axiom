@@ -278,3 +278,13 @@ export function makeProposal() {
     provenance: { ...provenance }
   }
 }
+
+export const taskWithSpec = {
+  id: attempt.taskId,
+  missionId: mission.id,
+  planRevisionId: 'plan-1',
+  title: 'Task actions example',
+  stage: 'VERIFYING' as const,
+  orcaStatus: 'completed' as const,
+  spec: makeProposal().tasks[0]!
+}

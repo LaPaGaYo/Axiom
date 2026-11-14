@@ -128,7 +128,12 @@ export function useMissionsPageController() {
       useAppStore.getState().selectMission(result.mission.id)
       useAppStore.getState().setMissionCreateOpen(false)
     })
-  const confirmAction = async (title: string, description: string, action: () => Promise<void>) => {
+  const confirmAction = async (
+    title: string,
+    description: string,
+    action: () => Promise<void>,
+    cancelLabel?: string
+  ) => {
     if (confirmingRef.current) {
       return
     }
@@ -141,7 +146,8 @@ export function useMissionsPageController() {
           description,
           confirmLabel: title,
           confirmVariant: 'destructive',
-          cancelVariant: 'ghost'
+          cancelVariant: 'ghost',
+          ...(cancelLabel ? { cancelLabel } : {})
         })
       ) {
         await action()
@@ -223,7 +229,19 @@ export function useMissionsPageController() {
     mutate(JSON.stringify(['rerunVerification', params]), (id) =>
       axiomClient.rerunVerification(params, id)
     )
+  const adjustTask = (params: Parameters<typeof axiomClient.adjustTask>[0]) =>
+    mutate(JSON.stringify(['adjustTask', params]), (id) => axiomClient.adjustTask(params, id))
+  const cancelTask = (params: Parameters<typeof axiomClient.cancelTask>[0], consequence: string) =>
+    confirmAction(
+      translate('missions.cancelTask', 'Cancel Task'),
+      consequence,
+      () =>
+        mutate(JSON.stringify(['cancelTask', params]), (id) => axiomClient.cancelTask(params, id)),
+      translate('missions.keepTask', 'Keep Task')
+    )
   return {
+    adjustTask,
+    cancelTask,
     resolveVerification,
     rerunVerification,
     missions,

@@ -156,7 +156,7 @@ Mission 预算仅在 EXECUTING 调用 admission 的 `budgetExhaustion`，次序�
 
 `axiom.mission.pending {missionId}` 返回 `{missionId, items}`；每项 `{id, kind, objectId, taskId?, reason, summary?, blocking, blocks, actions, since, waitingOn?}`。`id = kind:objectId`；summary 仅用对象自己的文本。Task 项携带该 Task 的 waitingOn。since 来自记录此等待的行或审计，规范为 UTC ISO 8601。
 
-Task 页仅提供该 Task 的待处理项在 `actions` 中列出的操作；M3-09-2b-2 接入处置审查与重验，其余操作由后续 Task 接入，未列出时不显示控件。
+Task 页仅提供该 Task 的待处理项在 `actions` 中列出的操作：处置审查、重验（M3-09-2b-2）、调整与取消（M3-09-2b-3），未列出时不显示控件；`axiom.policy.update` 尚无控件（M3-09-4）。
 
 | kind（同分次序） | 对象 / 条件 | reason；blocking | actions（按顺序，受当前状态约束） |
 |---|---|---|---|

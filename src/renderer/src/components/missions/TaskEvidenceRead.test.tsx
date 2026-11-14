@@ -10,6 +10,7 @@ import { axiomClient } from '@/lib/axiom-client'
 import { useAppStore } from '@/store'
 import { toast } from 'sonner'
 import {
+  taskWithSpec,
   attempt,
   message,
   mission,
@@ -40,6 +41,7 @@ vi.mock('@/lib/axiom-client', async (importOriginal) => {
       listMissions: vi.fn(),
       showMission: vi.fn(),
       listTasks: vi.fn(),
+      showTask: vi.fn(),
       listPlans: vi.fn(),
       listAttempts: vi.fn(),
       listMessages: vi.fn(),
@@ -91,6 +93,7 @@ beforeEach(() => {
   vi.mocked(axiomClient.listMissions).mockResolvedValue({ missions: [mission] })
   vi.mocked(axiomClient.showMission).mockResolvedValue({ mission })
   vi.mocked(axiomClient.listTasks).mockResolvedValue({ tasks: [task] })
+  vi.mocked(axiomClient.showTask).mockResolvedValue({ task: taskWithSpec })
   vi.mocked(axiomClient.listPlans).mockResolvedValue({ planRevisions: [] })
   vi.mocked(axiomClient.listAttempts).mockResolvedValue({ attempts: [attempt] })
   vi.mocked(axiomClient.listMessages).mockResolvedValue({
