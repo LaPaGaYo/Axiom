@@ -12,6 +12,9 @@ import { RunMailboxConsumer } from '../mission-controller/run-mailbox-consumer'
 import { ORCHESTRATION_WORKER_LIST_METHOD } from '../../runtime/rpc/methods/orchestration/worker/worker-list-method'
 import * as snapshots from '../execution/candidate-snapshot'
 import { report } from '../execution/submission-fixture.test-support'
+import { getAxiomControlPlane } from '../control-plane'
+import { AttemptListResponseSchema } from '../../../shared/axiom-contract/attempt-params'
+import { TaskResponseSchema } from '../../../shared/axiom-contract/task-params'
 
 describe('Attempt recovery', () => {
   let f: ReturnType<typeof channelFixture>
@@ -311,6 +314,88 @@ describe('Attempt recovery', () => {
     const after = audits()
     await recovery.reconcileAttempts()
     expect(audits()).toEqual(after)
+  })
+  it('stops the running Attempt of a canceled Task before the cancellation answers', async () => {
+    const second = f.bind('T02')
+    const reconcile = vi.spyOn(getAxiomControlPlane(f.runtime).recovery, 'reconcileAttempts')
+    const before = audits()
+    expect(
+      await f.call('axiom.task.cancel', {
+        taskId: f.t01.taskId,
+        rationale: `ghp_${'a'.repeat(30)}`
+      })
+    ).toMatchObject({
+      ok: false,
+      error: { code: 'invalid_argument', message: 'secret_in_rationale' }
+    })
+    expect(reconcile).not.toHaveBeenCalled()
+    expect(f.runtime.closeTerminal).not.toHaveBeenCalled()
+    expect(audits()).toEqual(before)
+    const stopping = Promise.withResolvers<void>()
+    const finishStop = Promise.withResolvers<void>()
+    vi.mocked(f.runtime.closeTerminal).mockImplementationOnce(async () => {
+      expect(stage()?.stage).toBe('CANCELED')
+      stopping.resolve()
+      await finishStop.promise
+      return { handle: f.t01.from, tabId: 'tab', ptyKilled: true }
+    })
+    const pending = f.call('axiom.task.cancel', {
+      taskId: f.t01.taskId,
+      rationale: 'No longer needed'
+    })
+    let answered = false
+    const answer = pending.then((response) => {
+      answered = true
+      return response
+    })
+    try {
+      expect(
+        await Promise.race([stopping.promise.then(() => 'stopping'), answer.then(() => 'answered')])
+      ).toBe('stopping')
+      expect(answered).toBe(false)
+    } finally {
+      finishStop.resolve()
+    }
+    const response = await answer
+    expect(response.ok).toBe(true)
+    if (!response.ok) {
+      throw new Error('Task cancellation refused')
+    }
+    expect(TaskResponseSchema.parse(response.result).task.stage).toBe('CANCELED')
+    expect(f.runtime.closeTerminal).toHaveBeenCalledExactlyOnceWith(f.t01.from)
+    expect(reconcile).toHaveBeenCalledExactlyOnceWith({ missionId: f.mission.id })
+    expect(worker()?.state).toBe('stopped')
+    const listing = await f.call('axiom.attempt.list', { missionId: f.mission.id })
+    expect(listing.ok).toBe(true)
+    if (!listing.ok) {
+      throw new Error('Attempt read failed')
+    }
+    const attempts = AttemptListResponseSchema.parse(listing.result).attempts
+    expect(attempts.find((entry) => entry.attemptId === f.t01.attemptId)?.state).toBe('STOPPED')
+    expect(attempts.find((entry) => entry.attemptId === second.attemptId)?.state).toBe('RUNNING')
+    expect(f.store.getTaskStage(second.taskId)?.stage).toBe('RUNNING')
+    expect(f.db.getWorkerDispatch(second.attemptId)?.state).toBe('ready')
+    expect(audits().filter((event) => event.event === 'attempt.stopped')).toMatchObject([
+      { objectId: f.t01.attemptId, after: { reason: 'mission_canceled' } }
+    ])
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    reconcile.mockImplementationOnce(() => {
+      expect(f.store.getTaskStage(second.taskId)?.stage).toBe('CANCELED')
+      throw new Error('Reconciliation unavailable')
+    })
+    expect(
+      await f.call('axiom.task.cancel', {
+        taskId: second.taskId,
+        rationale: 'Also no longer needed'
+      })
+    ).toMatchObject({ ok: true, result: { task: { stage: 'CANCELED' } } })
+    expect(warn).toHaveBeenCalledExactlyOnceWith('[axiom] Attempt reconciliation failed', {
+      missionId: f.mission.id
+    })
+    expect(f.runtime.closeTerminal).toHaveBeenCalledOnce()
+    expect(f.db.getWorkerDispatch(second.attemptId)?.state).toBe('ready')
+    await getAxiomControlPlane(f.runtime).recovery.reconcileAttempts({ missionId: f.mission.id })
+    expect(f.db.getWorkerDispatch(second.attemptId)?.state).toBe('stopped')
   })
   it('allows the local service to stop a Mission worker while the RPC still rejects it', async () => {
     const dispatcher = new RpcDispatcher({

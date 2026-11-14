@@ -52,8 +52,15 @@ export const AXIOM_TASK_METHODS = [
     name: 'axiom.task.cancel',
     permission: 'workspace',
     params: TaskCancelParams,
-    handler: (p, { runtime }) => ({
-      task: taskListItem(getAxiomControlPlane(runtime).missions.cancelTask({ ...p, actor: 'user' }))
-    })
+    handler: async (p, { runtime }) => {
+      const plane = getAxiomControlPlane(runtime)
+      const task = plane.missions.cancelTask({ ...p, actor: 'user' })
+      try {
+        await plane.recovery.reconcileAttempts({ missionId: task.missionId })
+      } catch {
+        console.warn('[axiom] Attempt reconciliation failed', { missionId: task.missionId })
+      }
+      return { task: taskListItem(task) }
+    }
   })
 ]
