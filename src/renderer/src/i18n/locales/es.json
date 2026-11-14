@@ -20048,7 +20048,7 @@
     "awaitPlan": "Start Planner to propose a plan for review.",
     "reviewNext": "Review the proposed plan below.",
     "startNext": "Start the approved plan when ready.",
-    "executingNext": "{{running}} Attempt(s) running, {{submitted}} submitted — verification arrives in M3.",
+    "executingNext": "{{running}} Attempt(s) running, {{submitted}} submitted.",
     "statusNext": "Review the Mission status and pending items.",
     "humanResolution": "Human resolution",
     "resolvedCriteria": "Criteria named in the resolution",
@@ -20187,7 +20187,23 @@
     "cancelTaskDependents": "Tasks that depend on it: {{count}}. They wait until a person cancels them too.",
     "cancelTask": "Cancel Task",
     "taskSpecReadError": "The Task could not be read. Refresh to try again.",
-    "keepTask": "Keep Task"
+    "keepTask": "Keep Task",
+    "pendingReadError": "Pending items could not be read. Refresh to try again.",
+    "pendingBlocks": "Blocks {{count}} Task(s)",
+    "pendingNotBlocking": "Not blocking",
+    "pendingYouCan": "You can:",
+    "pendingKindMission": "Mission",
+    "pendingKindPlanReview": "Plan review",
+    "pendingKindQuestion": "Question",
+    "pendingKindReview": "Review",
+    "pendingKindBlockedTask": "Blocked Task",
+    "pendingKindSubtaskRequest": "Subtask request",
+    "pendingKindFollowUp": "Follow-up",
+    "pendingKindStallNotice": "Stall notice",
+    "pendingKindSupervisionProposal": "Supervision proposal",
+    "pendingAcceptOrReject": "Accept or reject",
+    "pendingUpdatePolicy": "Update policy",
+    "pendingResolveProposal": "Resolve proposal"
   },
   "fileExplorer": {
     "root": {

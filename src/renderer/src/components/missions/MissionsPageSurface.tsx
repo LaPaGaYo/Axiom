@@ -89,8 +89,12 @@ export function MissionsPageSurface({ controller: c }: { controller: MissionsPag
                   usageError={c.taskDetail.usageError}
                   pendingItems={c.taskDetail.pendingItems}
                   pendingError={c.taskDetail.pendingError}
-                  onResolveVerification={c.resolveVerification}
-                  onRerunVerification={c.rerunVerification}
+                  onResolveVerification={async (params) => {
+                    await c.resolveVerification(params)
+                  }}
+                  onRerunVerification={async (params) => {
+                    await c.rerunVerification(params)
+                  }}
                   taskSpec={c.taskDetail.taskSpec}
                   onAdjustTask={c.adjustTask}
                   onCancelTask={c.cancelTask}
@@ -117,7 +121,9 @@ export function MissionsPageSurface({ controller: c }: { controller: MissionsPag
           busy={c.busy}
           error={c.error}
           onClose={() => c.setCreateOpen(false)}
-          onCreate={c.create}
+          onCreate={async (params) => {
+            await c.create(params)
+          }}
         />
       )}
     </main>

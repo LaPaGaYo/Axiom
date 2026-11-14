@@ -1,6 +1,5 @@
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import type { z } from 'zod'
 import type { AttemptSummary } from '../../../../shared/axiom-contract/attempt-params'
 import type { MessageSummaryResponseSchema } from '../../../../shared/axiom-contract/message-params'
@@ -15,13 +14,16 @@ import type { MissionSummary } from '../../../../shared/axiom-contract/mission-p
 import type { GoalRevision } from '../../../../shared/axiom-contract/mission-objects'
 import type { TaskListItem } from '../../../../shared/axiom-contract/task-params'
 import { MissionActions, type MissionAction } from './MissionActions'
+import type { MissionPendingItem } from '../../../../shared/axiom-contract/mission-pending'
+import { MissionPendingList } from './MissionPendingList'
 
 export function MissionHome({
   mission,
   goal,
   tasks,
   attempts,
-  pendingMessages,
+  pendingItems,
+  pendingError,
   onSelectTask,
   proposedPlans,
   busy,
@@ -32,6 +34,8 @@ export function MissionHome({
   tasks: readonly TaskListItem[]
   attempts: readonly AttemptSummary[]
   pendingMessages: readonly z.infer<typeof MessageSummaryResponseSchema>[]
+  pendingItems?: readonly MissionPendingItem[]
+  pendingError?: boolean
   onSelectTask: (taskId: string) => void
   proposedPlans: number
   busy: boolean
@@ -44,9 +48,6 @@ export function MissionHome({
   const submitted = workers.filter((attempt) => attempt.state === 'SUBMITTED').length
   const plannerInProgress = attempts.some(
     (attempt) => attempt.role === 'planner' && ['STARTING', 'RUNNING'].includes(attempt.state)
-  )
-  const pending = pendingMessages.filter(
-    (message) => message.pending && ['QUESTION', 'REQUEST_SUBTASK'].includes(message.type)
   )
   return (
     <section className="space-y-5" aria-labelledby="mission-home-heading">
@@ -119,28 +120,12 @@ export function MissionHome({
       </div>
       <div className="space-y-2">
         <h2 className="text-sm font-semibold">{translate('missions.pending', 'Pending items')}</h2>
-        <p className="text-sm">
-          {translate('missions.pendingCount', '{{total}} pending item(s)', {
-            total: pending.length
-          })}
-        </p>
-        {pending.length > 0 && (
-          <ul className="space-y-2" aria-label={translate('missions.pending', 'Pending items')}>
-            {pending.map((message) => (
-              <li key={message.id} className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline">{message.type}</Badge>
-                <Button
-                  variant="link"
-                  size="sm"
-                  className="h-auto whitespace-normal text-left"
-                  onClick={() => onSelectTask(message.taskId)}
-                >
-                  {message.summary}
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
+        <MissionPendingList
+          items={pendingItems}
+          failed={pendingError}
+          tasks={tasks}
+          onSelectTask={onSelectTask}
+        />
         {proposedPlans > 0 && (
           <p className="text-sm">
             {translate('missions.proposedPlans', '{{total}} proposed plan(s) to review below.', {
@@ -173,7 +158,7 @@ export function MissionHome({
                 : mission.status === 'EXECUTING'
                   ? translate(
                       'missions.executingNext',
-                      '{{running}} Attempt(s) running, {{submitted}} submitted — verification arrives in M3.',
+                      '{{running}} Attempt(s) running, {{submitted}} submitted.',
                       { running, submitted }
                     )
                   : translate(

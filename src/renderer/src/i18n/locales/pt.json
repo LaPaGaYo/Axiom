@@ -21020,6 +21020,22 @@
     "cancelTaskDependents": "Tasks that depend on it: {{count}}. They wait until a person cancels them too.",
     "cancelTask": "Cancel Task",
     "taskSpecReadError": "The Task could not be read. Refresh to try again.",
-    "keepTask": "Keep Task"
+    "keepTask": "Keep Task",
+    "pendingReadError": "Pending items could not be read. Refresh to try again.",
+    "pendingBlocks": "Blocks {{count}} Task(s)",
+    "pendingNotBlocking": "Not blocking",
+    "pendingYouCan": "You can:",
+    "pendingKindMission": "Mission",
+    "pendingKindPlanReview": "Plan review",
+    "pendingKindQuestion": "Question",
+    "pendingKindReview": "Review",
+    "pendingKindBlockedTask": "Blocked Task",
+    "pendingKindSubtaskRequest": "Subtask request",
+    "pendingKindFollowUp": "Follow-up",
+    "pendingKindStallNotice": "Stall notice",
+    "pendingKindSupervisionProposal": "Supervision proposal",
+    "pendingAcceptOrReject": "Accept or reject",
+    "pendingUpdatePolicy": "Update policy",
+    "pendingResolveProposal": "Resolve proposal"
   }
 }

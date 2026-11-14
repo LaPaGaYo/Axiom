@@ -11,26 +11,37 @@ import type { MissionAction } from './MissionActions'
 import { readTaskEvidence } from './task-evidence-read'
 
 async function readMission(missionId: string, taskId: string | null) {
-  const [{ mission }, { tasks }, { planRevisions }, { attempts }, { messages }, taskDetail] =
-    await Promise.all([
-      axiomClient.showMission({ missionId }),
-      axiomClient.listTasks({ missionId }),
-      axiomClient.listPlans({ missionId }),
-      axiomClient.listAttempts({ missionId }),
-      axiomClient.listMessages({ missionId, pendingOnly: true }),
-      taskId
-        ? Promise.all([
-            axiomClient.listAttempts({ missionId, taskId }),
-            axiomClient.listMessages({ missionId, taskId }),
-            readTaskEvidence(missionId, taskId)
-          ]).then(([attempts, messages, evidence]) => ({
-            taskId,
-            ...attempts,
-            ...messages,
-            ...evidence
-          }))
-        : null
-    ])
+  const pendingRead = Promise.allSettled([axiomClient.missionPending({ missionId })]).then(
+    ([result]) => result
+  )
+  const [
+    { mission },
+    { tasks },
+    { planRevisions },
+    { attempts },
+    { messages },
+    taskDetail,
+    pending
+  ] = await Promise.all([
+    axiomClient.showMission({ missionId }),
+    axiomClient.listTasks({ missionId }),
+    axiomClient.listPlans({ missionId }),
+    axiomClient.listAttempts({ missionId }),
+    axiomClient.listMessages({ missionId, pendingOnly: true }),
+    taskId
+      ? Promise.all([
+          axiomClient.listAttempts({ missionId, taskId }),
+          axiomClient.listMessages({ missionId, taskId }),
+          readTaskEvidence(missionId, taskId, pendingRead)
+        ]).then(([attempts, messages, evidence]) => ({
+          taskId,
+          ...attempts,
+          ...messages,
+          ...evidence
+        }))
+      : null,
+    pendingRead
+  ])
   const goal = mission.activeGoalRevisionId
     ? (await axiomClient.showGoal({ missionId, goalRevisionId: mission.activeGoalRevisionId }))
         .goalRevision
@@ -42,6 +53,8 @@ async function readMission(missionId: string, taskId: string | null) {
     goal,
     attempts,
     pendingMessages: messages,
+    pendingItems: pending.status === 'fulfilled' ? pending.value.items : [],
+    pendingError: pending.status === 'rejected',
     taskDetail
   }
 }
@@ -102,12 +115,14 @@ export function useMissionsPageController() {
     const store = useAppStore.getState()
     const id = store.beginMissionRequest(key)
     if (!id) {
-      return
+      return false
     }
     store.setMissionError(null)
     let failure: unknown
+    let accepted = false
     try {
       await operation(id)
+      accepted = true
     } catch (caught) {
       failure = caught
     }
@@ -121,6 +136,7 @@ export function useMissionsPageController() {
     if (failure) {
       reportError(failure)
     }
+    return accepted
   }
   const create = (params: CreateMissionInput) =>
     mutate(JSON.stringify(['create', params]), async (id) => {
@@ -131,7 +147,7 @@ export function useMissionsPageController() {
   const confirmAction = async (
     title: string,
     description: string,
-    action: () => Promise<void>,
+    action: () => Promise<unknown>,
     cancelLabel?: string
   ) => {
     if (confirmingRef.current) {

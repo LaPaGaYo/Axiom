@@ -115,6 +115,51 @@ afterEach(() => {
 })
 
 describe('Mission page reconciliation', () => {
+  it('tells the caller whether a mutation went through', async () => {
+    await mount()
+    await act(async () => controller.selectTask(attempt.taskId))
+    const base = call.getMockImplementation()!
+    const params = {
+      taskId: attempt.taskId,
+      rationale: 'Allow another Attempt',
+      addAllowedPaths: [],
+      maxAttempts: 4
+    }
+    for (const accepted of [true, false]) {
+      call.mockImplementation((args) =>
+        args.method === 'axiom.task.adjust'
+          ? Promise.resolve(
+              accepted
+                ? success({ task: taskWithSpec })
+                : {
+                    id: 'desktop-ipc',
+                    ok: false,
+                    error: { code: 'retry_budget_exhausted', message: 'The Attempts are used up.' }
+                  }
+            )
+          : base(args)
+      )
+      const before = call.mock.calls.length
+      let outcome: unknown
+      await act(async () => {
+        outcome = await controller.adjustTask(params)
+      })
+      expect(outcome).toBe(accepted)
+      for (const method of ['axiom.task.show', 'axiom.mission.pending', 'axiom.task.list']) {
+        expect(call.mock.calls.slice(before).some(([a]) => a.method === method)).toBe(true)
+      }
+    }
+    const pendingId = useAppStore.getState().beginMissionRequest('another-request')
+    expect(pendingId).toBeTruthy()
+    const before = call.mock.calls.length
+    let outcome: unknown
+    await act(async () => {
+      outcome = await controller.adjustTask(params)
+    })
+    expect(outcome).toBe(false)
+    expect(call.mock.calls).toHaveLength(before)
+    useAppStore.getState().finishMissionRequest('another-request', false)
+  })
   it('reconciles after an adjustment and shows a refusal verbatim', async () => {
     await mount()
     await act(async () => controller.selectTask(attempt.taskId))
