@@ -38,6 +38,9 @@ type AttemptTokenUsage = ReturnType<typeof attemptTokenUsageStore>
 
 // One injected store; table modules keep SQL and validation within the file-size gate.
 export class AxiomStore {
+  readonly getOldestReadModelAuditAfter: ReturnType<
+    typeof readModelAuditsStore
+  >['getOldestReadModelAuditAfter']
   readonly getLatestReadModelAudit: ReturnType<
     typeof readModelAuditsStore
   >['getLatestReadModelAudit']
@@ -142,6 +145,7 @@ export class AxiomStore {
   readonly getContextTokenBudget: Artifacts['getContextTokenBudget']
 
   constructor(private readonly db: OrchestrationDb) {
+    this.getOldestReadModelAuditAfter = readModelAuditsStore(db).getOldestReadModelAuditAfter
     this.getLatestReadModelAudit = readModelAuditsStore(db).getLatestReadModelAudit
     const tokenUsage = attemptTokenUsageStore(db)
     this.upsertAttemptTokenUsage = tokenUsage.upsertAttemptTokenUsage

@@ -20420,6 +20420,7 @@
     "pendingReadError": "无法读取待处理项。请刷新后重试。",
     "pendingBlocks": "阻塞 {{count}} 个 Task",
     "pendingNotBlocking": "不阻塞 Task",
+    "pendingSince": "开始等待于",
     "pendingYouCan": "可执行操作：",
     "pendingKindMission": "Mission",
     "pendingKindPlanReview": "计划审查",

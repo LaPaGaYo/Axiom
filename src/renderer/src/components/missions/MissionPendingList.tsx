@@ -88,6 +88,10 @@ export function MissionPendingList({
                     {translate('missions.pendingNotBlocking', 'Not blocking')}
                   </p>
                 )}
+                <p className="text-muted-foreground">
+                  {translate('missions.pendingSince', 'Since')}{' '}
+                  <time dateTime={item.since}>{item.since}</time>
+                </p>
                 {item.actions.length > 0 && (
                   <p className="text-muted-foreground">
                     {translate('missions.pendingYouCan', 'You can:')}{' '}

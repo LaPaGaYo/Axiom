@@ -20191,6 +20191,7 @@
     "pendingReadError": "Pending items could not be read. Refresh to try again.",
     "pendingBlocks": "Blocks {{count}} Task(s)",
     "pendingNotBlocking": "Not blocking",
+    "pendingSince": "Since",
     "pendingYouCan": "You can:",
     "pendingKindMission": "Mission",
     "pendingKindPlanReview": "Plan review",

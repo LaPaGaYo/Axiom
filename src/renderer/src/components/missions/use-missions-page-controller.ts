@@ -8,56 +8,7 @@ import { translate } from '@/i18n/i18n'
 import type { MissionSummary } from '../../../../shared/axiom-contract/mission-params'
 import type { CreateMissionInput } from './MissionCreateDialog'
 import type { MissionAction } from './MissionActions'
-import { readTaskEvidence } from './task-evidence-read'
-
-async function readMission(missionId: string, taskId: string | null) {
-  const pendingRead = Promise.allSettled([axiomClient.missionPending({ missionId })]).then(
-    ([result]) => result
-  )
-  const [
-    { mission },
-    { tasks },
-    { planRevisions },
-    { attempts },
-    { messages },
-    taskDetail,
-    pending
-  ] = await Promise.all([
-    axiomClient.showMission({ missionId }),
-    axiomClient.listTasks({ missionId }),
-    axiomClient.listPlans({ missionId }),
-    axiomClient.listAttempts({ missionId }),
-    axiomClient.listMessages({ missionId, pendingOnly: true }),
-    taskId
-      ? Promise.all([
-          axiomClient.listAttempts({ missionId, taskId }),
-          axiomClient.listMessages({ missionId, taskId }),
-          readTaskEvidence(missionId, taskId, pendingRead)
-        ]).then(([attempts, messages, evidence]) => ({
-          taskId,
-          ...attempts,
-          ...messages,
-          ...evidence
-        }))
-      : null,
-    pendingRead
-  ])
-  const goal = mission.activeGoalRevisionId
-    ? (await axiomClient.showGoal({ missionId, goalRevisionId: mission.activeGoalRevisionId }))
-        .goalRevision
-    : null
-  return {
-    mission,
-    tasks,
-    plans: planRevisions,
-    goal,
-    attempts,
-    pendingMessages: messages,
-    pendingItems: pending.status === 'fulfilled' ? pending.value.items : [],
-    pendingError: pending.status === 'rejected',
-    taskDetail
-  }
-}
+import { readMission, type MissionDetail } from './mission-read'
 
 export function useMissionsPageController() {
   useTranslation()
@@ -67,7 +18,7 @@ export function useMissionsPageController() {
   const error = useAppStore((s) => s.missionError)
   const requests = useAppStore((s) => s.missionRequests)
   const [missions, setMissions] = useState<MissionSummary[]>([])
-  const [detail, setDetail] = useState<Awaited<ReturnType<typeof readMission>> | null>(null)
+  const [detail, setDetail] = useState<MissionDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [confirming, setConfirming] = useState(false)
   const confirmingRef = useRef(false)
