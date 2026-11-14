@@ -52,6 +52,31 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M3-09-2b-4', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'the Task page offers one quiet Cancel Task on every unfinished Task as briefed: shown from '
+        'the shared lifecycle function, the pending items and the handler only, outside the Task actions '
+        'region, never next to the region cancel, gone on a finished Task, present when the pending read '
+        'fails; same form with an optional item and the sentence without a number, same confirmation; focus '
+        'in, back and to the Task detail as briefed; the task RPC handler awaits the reconciliation of the '
+        'Mission after the commit, answers the canceled Task even when that throws and reconciles nothing '
+        'after a refusal; titles 1-8 fail at their assertions on the three main files with no load or render '
+        'error; new e2e spec green on its first host run with the Attempt stopped on the page without a '
+        'refresh, every Mission spec green, e2e red run fails as it must; two screenshots read; no verifier '
+        'change; no other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'the quiet control and the region each derive whether a pending item lists the cancellation: keep them in step',
+            'audit reason of an Attempt stopped by a Task cancellation is still mission_canceled (DEF-21, M3-10)',
+            'copy and alignment pass: the ghost button label sits right of the lines around it (M3-10)',
+            'later sidecars: say whether test-support files count as non-test files of the missions folder',
+            'cancel does not cascade (DEF-21 item 1)',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M3-09-3a', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'Mission Home lists the pending view as briefed: one read per refresh shared with the Task '
