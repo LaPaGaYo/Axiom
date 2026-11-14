@@ -52,6 +52,30 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M3-09-3b-1', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'every pending row of Mission Home shows the since string of the view verbatim in a time '
+        'element before the actions line, as briefed; a provider wait is dated from the oldest refusal above '
+        'the stage audit of its Task through one new single-row store read with the boundary admissionWait '
+        'uses; pendingMessages and the pending-only read are gone; the Mission read is a pure move into its '
+        'own module and the controller is 239 lines; titles 1-3 fail at their assertions on the three main '
+        'files with no load or render error; new e2e spec green on its first host run with the three start '
+        'times equal to the first refusal audits and unchanged after pause and resume, exit m1 unchanged '
+        'across a restart with the times on the page, every Mission spec green, e2e red run fails at the '
+        'first row time; one screenshot read; no verifier change; no other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'the brief said audit times have one-second precision; refusal audits carry the scheduler clock with milliseconds: correct the spec comment and drop its one-second wait (M3-09-3b-2)',
+            'two near-identical statements in read-model-audits-store.ts: fold them when a third variant appears',
+            'copy pass: one form for times on Mission Home and on the Task page waiting line, catalogs for Since (M3-10)',
+            'refusal audits accumulate, one per waiting Task per round (M3-10 hygiene)',
+            'the since of a token-budget item still follows the latest measurement and will move under a timed refresh (M3-09-3b-2)',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M3-09-2b-4', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'the Task page offers one quiet Cancel Task on every unfinished Task as briefed: shown from '
