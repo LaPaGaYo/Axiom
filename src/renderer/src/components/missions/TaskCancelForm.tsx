@@ -19,7 +19,7 @@ export function TaskCancelForm({
   onClose
 }: {
   taskId: string
-  item: MissionPendingItem
+  item?: MissionPendingItem
   busy: boolean
   onSubmit?: CancelTask
   onClose: () => void
@@ -30,7 +30,7 @@ export function TaskCancelForm({
     'missions.cancelTaskConsequence',
     'Canceling stops the running Attempt of this Task. Its work is not integrated, and a canceled Task cannot be resumed.'
   )
-  const dependents = !item.blocking
+  const dependents = !item?.blocking
     ? translate(
         'missions.cancelTaskDependentsUnknown',
         'Tasks that depend on it wait until a person cancels them too.'

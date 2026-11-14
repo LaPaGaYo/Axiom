@@ -585,6 +585,8 @@ agent 退出后到下一次成功 reconcile（≤ 一个 60 s 间隔），`attem
 
 `axiom.mission.cancel` 先同步持久化 CANCELED/Task CANCELED，再 await reconciliation；返回 `{mission, attempts?}`，entries 为 `{attemptId,taskId,seq,liveness,action}`。CLI 每 Attempt 输出 action；旧响应省略 attempts 仍兼容。pause 只停止 admission；RUNNING Attempt 继续，cancel/restart 的剩余清理由同一恢复路径处理。
 
+M3-09-2b-4：`axiom.task.cancel` 也在取消提交后 await `recovery.reconcileAttempts({missionId})`，等待所属 Mission 的整轮对账结束才返回，响应仍为 `{task}`。取消被拒绝时不对账；对账抛错只按 Control Plane 现有方式记录警告，不把已提交的取消变成错误，留给定时器下一轮重试。停止与审计沿用同一恢复路径；无法确认的停止仍待下一轮，已提交的 Attempt 不停止，Task 取消导致的 Attempt 审计 reason 仍为 `mission_canceled`。
+
 **stop_unknown 的内核边界（M2-08 Attempt 2）**：beginWorkerStop 拒绝第二次 stop，受支持的退出路径是 abandon；这与 verifier 核对的上游 Orca `ce2d60834c` 一致，不需要改内核或增加生命周期边。取消时下一 tick 直接 abandon（无 evidence Artifact），记录 priorStop、放弃时的宿主 liveness 与 release 收据；RUNNING 时无论宿主观测如何，按 e 等待 tolerance 后带 evidence abandon。abandon 只结束执行权威，不宣称进程退出；possibly-live 资源仍由内核保留，通常 release 为 retained / identity_unproven。旧 runtime stranded stopping 归一化后遵守同一规则；同 runtime 正在 stopping 的调用仍拥有结果，恢复不抢占。后续 tick 不重复 attempt.stop_unknown，取消审计重放保留最初的 priorStop/liveness，不因宿主观测变化重复记录。`.axiom-work/reports/M2-08-1.md` 保留为历史证据，其 scope-gap 判断由本规则取代；修复与验证记录见 `.axiom-work/reports/M2-08-2.md`。
 
 M3-01 的 VerificationService 在 Mission recovery 后、首次 kick 前尝试验证队列重驱，逐项失败不阻止启动（见 Verification 节）；既有 60 s reconcile 同时触发 verification.kick，重试未完成的清理。M3-02/04 接检查与失败证据；M4 扩展 Integration/Approval 恢复。D58 的新通道必须保持相同 liveness 语义。
@@ -844,7 +846,13 @@ M3-09-2b-1：读取器返回已知的 `resolution.disposition`；遇到未知值
 
 取消表单说明正在运行的 Attempt 会停止、工作不被集成、取消不可恢复。blocking item 的 blocks > 1 时显示依赖 Task 数（blocks − 1）；blocks = 1 不加依赖说明；stall_notice 不知道数量，只说明依赖 Task 仍需逐个取消。理由必填且最多 4,000 字符，提交给 controller 的是 `{taskId,rationale:trimmed}` 与表单原样后果文字；确认框以该文字作描述，确认「取消 Task」为 destructive，退回「保留 Task」为 ghost。只有确认后才调用 cancel；退回保留表单及输入。调整提交为 default，操作区四个按钮为 outline，关闭为 ghost。
 
-两个动作均沿用 `mutate` 的 request id 与重读路径，无乐观更新、无自动重试。拒绝以 `code: message` 原样呈现在页面警报与 toast；操作仍存在时保留输入。M3-09-3a 补齐调整成功后的收起与回焦，见下一节。重读后操作不再提供则收起表单并聚焦 Task detail。取消不级联；未被 pending view 列出 cancel 的 Task 在页面上无取消控件。
+两个动作均沿用 `mutate` 的 request id 与重读路径，无乐观更新、无自动重试。拒绝以 `code: message` 原样呈现在页面警报与 toast；操作仍存在时保留输入。M3-09-3a 补齐调整成功后的收起与回焦，见「Mission 首页的待处理项」。重读后操作不再提供则收起表单并聚焦 Task detail。取消不级联；未被 pending view 列出 cancel 的 Task 的入口见下一节。
+
+### Task 页的安静取消入口（M3-09-2b-4）
+
+D78 的 2026-11-13 修订：Task 详情头部在等待行和原操作区（含读取失败提示）之后提供一个小号 ghost「取消 Task」。显示条件直接读取共享 `isLegalTaskStageTransition(task.stage, 'CANCELED')`：转换合法、页面提供 `onCancelTask`，且本 Task 没有 pending item 列出 `axiom.task.cancel`。有 item 列出时取消仍由原「Task actions」区提供，其顺序、按钮与提示不变；pending read 失败不隐藏安静入口，不从等待原因或 Attempt 推算可否取消。
+
+入口只展开原取消表单并聚焦理由；无 item 时仍说明取消后果，并只说依赖 Task 要等人逐个取消，不计算或显示数量。关闭回焦入口；换 Task 不保留表单或输入；重读后取消入口消失时收起表单、聚焦详情，新出现的入口不抢焦点。提交仍经原确认框与 `mutate`，退回或拒绝保留输入，拒绝原样呈现；忙时禁用入口。取消不级联，依赖 Task 需到各自页面取消。
 
 ### Mission 首页的待处理项（M3-09-3a）
 

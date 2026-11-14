@@ -8,6 +8,7 @@ import { SubmissionSummary } from './SubmissionSummary'
 import { MessageTimeline } from './MessageTimeline'
 import { TaskEvidenceStage } from './TaskEvidenceStage'
 import { TaskWaitingLine } from './TaskWaitingLine'
+import { TaskQuietCancel } from './TaskQuietCancel'
 import { VerificationRecord } from './VerificationRecord'
 import { useTaskVerification } from './use-task-verification'
 import type { TaskEvidenceReads } from './task-evidence-read'
@@ -90,6 +91,13 @@ export function TaskDetail({
           taskSpec={taskSpec}
           messages={messages}
           onAdjustTask={onAdjustTask}
+          onCancelTask={onCancelTask}
+        />
+        <TaskQuietCancel
+          task={task}
+          pendingItems={pendingItems}
+          busy={actions.busy}
+          detailRef={section}
           onCancelTask={onCancelTask}
         />
       </div>
