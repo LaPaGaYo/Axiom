@@ -52,6 +52,31 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M3-09-3b-2', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'the Missions page re-reads every five seconds on the kernel visibility interval, installed '
+        'once by the page controller and stopped on unmount, as briefed; the timed read is the manual read under '
+        'the same generation counter without the busy state and the toast, started only when the page is idle; '
+        'a failed timed read keeps the data, shows the failure on the error line and stops the timed reads until '
+        'a read that is not timed succeeds; the read lifecycle moved into its own hook and the controller is 230 '
+        'lines; titles 1-5 fail at their first assertion on main controller with no load or render error; new '
+        'e2e spec green on its first host run (a Mission created from outside appears by itself while a typed '
+        'reason keeps text and focus, nothing arrives while the document is hidden, an approval from outside '
+        'reaches the plan panel), every Mission spec green with the timed read under it, e2e red run fails where '
+        'the second Mission should appear; one screenshot read; no verifier change; no other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'axiom.attempt.list asks the execution host about the terminal of every Attempt on every read, twice per read with a Task selected; the timed read makes that twelve times a minute (M3-10 hygiene)',
+            'the refresh handed to the page takes a quiet flag: wrap it when the controller is next touched',
+            'the count of unanswered reads includes superseded ones: a read that never answers holds the timed reads back',
+            'a read that no longer offers the action of an open form closes it, now possibly without the person asking for a read (reported to Henry)',
+            'the native visibilityState of the never-shown e2e window was not measured, only overridden by the new spec',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M3-09-3b-1', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'every pending row of Mission Home shows the since string of the view verbatim in a time '
