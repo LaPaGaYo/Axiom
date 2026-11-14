@@ -52,6 +52,30 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M3-09-3a', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'Mission Home lists the pending view as briefed: one read per refresh shared with the Task '
+        'page, rows in the view order with kind, Task link, reason verbatim, gloss and budget reading for the '
+        'three wait kinds only, blocks line, action names as text, count equal to rows, a note when the read '
+        'fails; the Task table gains a text-only Waiting on column; mutate reports its outcome and the adjust '
+        'form closes on success with focus returned once the page is idle; catalogs compared key by key; '
+        'titles 1-10 fail at their assertions on the seven main files with no load or render error; new e2e '
+        'spec (two flows through the page) green on its first host run, exit m1 still reads the same after a '
+        'restart, every Mission spec green, e2e red run fails as it must; two screenshots read; no verifier '
+        'change; no other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'cancel control on any unfinished Task (Henry chose B): M3-09-2b-4',
+            'settle since for no_eligible_provider in the read model before Mission Home shows times: M3-09-3b',
+            'move readMission out of the page controller (283 of 300 lines) before adding the timed refresh',
+            'remove the pendingMessages prop and its read once no red check needs main MissionHome',
+            'copy pass: zh term for supervision, ASCII comma between action names, the plan sentence under a pending row',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M3-09-2b-3', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'Task actions on the Task page as briefed: adjust and cancel are offered only when a pending '
