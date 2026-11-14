@@ -4,7 +4,6 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   mission,
-  message,
   taskWithSpec
 } from '../../../../shared/axiom-contract/contract-fixtures.test-support'
 import type {
@@ -19,7 +18,6 @@ const props = {
   goal: null,
   tasks: [taskWithSpec],
   attempts: [],
-  pendingMessages: [message],
   proposedPlans: 2,
   busy: false,
   onAction: vi.fn(),
@@ -72,7 +70,53 @@ it('lists the pending items of the Mission in the order the view returns them', 
   expect(screen.getByRole('region', { name: 'Mission Home' }).textContent).not.toMatch(
     /done|completed/i
   )
-  expect(screen.queryByText('2026-11-13T12:00:00Z')).toBeNull()
+})
+
+it('shows since when each pending item has waited', () => {
+  const items = [
+    item({
+      kind: 'question',
+      reason: 'question',
+      summary: 'Which path is allowed?',
+      blocks: 2,
+      actions: ['axiom.message.answer']
+    }),
+    item({
+      id: 'follow-up',
+      kind: 'follow_up',
+      reason: 'follow_up',
+      blocking: false,
+      since: '2026-11-12T04:05:06.789Z',
+      actions: ['axiom.message.resolve']
+    }),
+    item({ id: 'no-actions', since: '2026-11-11T01:02:03Z' })
+  ]
+  render(home(items))
+  const pendingRows = rows()
+  expect(pendingRows).toHaveLength(items.length)
+  pendingRows.forEach((row, i) => {
+    const times = row.querySelectorAll('time')
+    expect(times).toHaveLength(1)
+    expect(times[0].dateTime).toBe(items[i].since)
+    expect(times[0].textContent).toBe(items[i].since)
+    const line = within(row).getByText(/^Since/)
+    expect(line.textContent).toBe(`Since ${items[i].since}`)
+    expect(line.contains(times[0])).toBe(true)
+    const actions = within(row).queryByText(/^You can:/)
+    if (items[i].actions.length) {
+      expect(line.nextElementSibling).toBe(actions)
+    } else {
+      expect(actions).toBeNull()
+      expect(line.nextElementSibling).toBeNull()
+    }
+  })
+  expect(pendingRows[0].textContent).toBe(
+    `QuestionquestionWhich path is allowed?Blocks 2 Task(s)Since ${items[0].since}You can: Answer`
+  )
+  expect(pendingRows[1].textContent).toBe(
+    `Follow-upfollow_upNot blockingSince ${items[1].since}You can: Accept or reject`
+  )
+  expect(pendingRows[2].textContent).toBe(`MissionPLANNEDSince ${items[2].since}`)
 })
 
 it('counts exactly the pending items it lists', () => {

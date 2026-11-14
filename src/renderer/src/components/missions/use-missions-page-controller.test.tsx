@@ -115,6 +115,38 @@ afterEach(() => {
 })
 
 describe('Mission page reconciliation', () => {
+  it('reads the Mission without the pending message list', async () => {
+    await mount()
+    for (const selected of [false, true]) {
+      if (selected) {
+        await act(async () => controller.selectTask(attempt.taskId))
+      }
+      for (const refresh of [false, true]) {
+        if (refresh) {
+          call.mockClear()
+          await act(async () => controller.refresh())
+        }
+        expect(
+          call.mock.calls.filter(([a]) => a.method === 'axiom.message.list' && a.params.pendingOnly)
+        ).toHaveLength(0)
+        expect(call.mock.calls.filter(([a]) => a.method === 'axiom.mission.pending')).toHaveLength(
+          1
+        )
+        expect(controller.detail?.pendingItems).toEqual([
+          reviewPendingItem,
+          { ...reviewPendingItem, id: 'other', taskId: 'other-task' }
+        ])
+        if (selected) {
+          expect(controller.taskDetail?.pendingItems).toEqual([reviewPendingItem])
+          expect(controller.taskDetail?.pendingItems?.[0]).toBe(controller.detail?.pendingItems[0])
+          expect(controller.taskDetail?.messages).toEqual([message])
+        } else {
+          expect(controller.taskDetail).toBeNull()
+        }
+        call.mockClear()
+      }
+    }
+  })
   it('tells the caller whether a mutation went through', async () => {
     await mount()
     await act(async () => controller.selectTask(attempt.taskId))
@@ -314,7 +346,7 @@ describe('Mission page reconciliation', () => {
     ).toBe(true)
     expect(call.mock.calls.filter(([a]) => a.method === 'axiom.verification.rerun')).toHaveLength(1)
   })
-  it('loads Task detail and re-reads pending messages after an uncertain answer', async () => {
+  it('loads Task detail and re-reads the pending view after an uncertain answer', async () => {
     await mount()
     await act(async () => controller.selectTask(attempt.taskId))
     expect(controller.taskDetail?.messages).toEqual([message])
@@ -331,11 +363,9 @@ describe('Mission page reconciliation', () => {
     )
     const before = call.mock.calls.length
     await act(async () => controller.answer(message.id, 'Use A'))
-    expect(
-      call.mock.calls
-        .slice(before)
-        .some(([a]) => a.method === 'axiom.message.list' && a.params.pendingOnly)
-    ).toBe(true)
+    expect(call.mock.calls.slice(before).some(([a]) => a.method === 'axiom.mission.pending')).toBe(
+      true
+    )
     await act(async () => controller.answer(message.id, 'Use A'))
     const answers = call.mock.calls.filter(([a]) => a.method === 'axiom.message.answer')
     expect(answers[0][0]).toEqual(answers[1][0])

@@ -1,8 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
-import type { z } from 'zod'
 import type { AttemptSummary } from '../../../../shared/axiom-contract/attempt-params'
-import type { MessageSummaryResponseSchema } from '../../../../shared/axiom-contract/message-params'
 import { translate } from '@/i18n/i18n'
 import { TASK_STAGES } from '../../../../shared/axiom-contract/lifecycle'
 import {
@@ -33,7 +31,6 @@ export function MissionHome({
   goal: GoalRevision | null
   tasks: readonly TaskListItem[]
   attempts: readonly AttemptSummary[]
-  pendingMessages: readonly z.infer<typeof MessageSummaryResponseSchema>[]
   pendingItems?: readonly MissionPendingItem[]
   pendingError?: boolean
   onSelectTask: (taskId: string) => void

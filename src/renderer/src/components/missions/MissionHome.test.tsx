@@ -8,7 +8,6 @@ import {
   mission,
   goal,
   attempt,
-  message,
   taskWithSpec,
   reviewPendingItem
 } from '../../../../shared/axiom-contract/contract-fixtures.test-support'
@@ -30,7 +29,6 @@ describe('MissionHome', () => {
             goal={null}
             tasks={[]}
             attempts={[]}
-            pendingMessages={[]}
             onSelectTask={vi.fn()}
             proposedPlans={0}
             busy={false}
@@ -73,7 +71,6 @@ describe('MissionHome', () => {
             }))}
             proposedPlans={1}
             attempts={[]}
-            pendingMessages={[]}
             onSelectTask={vi.fn()}
             busy
             onAction={vi.fn()}
@@ -106,7 +103,6 @@ describe('MissionHome', () => {
               attempt,
               { ...attempt, attemptId: 'planner', role: 'planner', state: 'RUNNING' }
             ]}
-            pendingMessages={[message]}
             pendingItems={[reviewPendingItem]}
             proposedPlans={0}
             busy={false}
@@ -130,7 +126,6 @@ describe('MissionHome', () => {
     const props = {
       goal: null,
       tasks: [],
-      pendingMessages: [],
       busy: false,
       onSelectTask: vi.fn(),
       onAction: vi.fn(),

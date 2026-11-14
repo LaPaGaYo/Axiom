@@ -217,7 +217,7 @@ M2 之后：M3 的验证结算接入既有调度触发；M4 接预算 Approval�
 
 blocking item 的 blocks 为非终态自身与同 plan 的去重传递下游数量；Mission / plan review / Planner question 为全部非终态 Tasks；non-blocking 为 0。排序：blocking 优先 → blocks 降序 → kind 规范次序 → since 升序 → id 升序。终态 Mission 返回空列表；终态 Task 的 question 不列。person=true 的 Task 应有一个 blocking question、Mission/plan review 或自身 human_review/task_blocked 覆盖；Approval 留 M4。已知例外是裸 kernel decision gate：`createGate` 不创建 message，pending 不编造条目。
 
-since 从相关持久 row/audit 转为 UTC ISO 8601：Mission 最新匹配状态审计（预算 BLOCKED 用 budget.exhausted）；ANALYZING 在 Planner 结束后重新可启动时，取状态审计之后的最新 planner.launch_failed / attempt_failed / stopped / abandoned。plan 用 plan.proposed，消息用 createdAt，review 用最新 run.updatedAt，Task block 用 task.stage（provider 拒绝用 admission_refused；upstream_canceled 用规范化后最早的相关取消时间），stall 用 notifiedAt，supervision proposal 用 createdAt。缺失的旧审计以对象的 row 时间回退，plan 以 provenance.at 回退；不会用读取时间伪装事件时间。
+since 从相关持久 row/audit 转为 UTC ISO 8601：Mission 最新匹配状态审计（预算 BLOCKED 用 budget.exhausted）；ANALYZING 在 Planner 结束后重新可启动时，取状态审计之后的最新 planner.launch_failed / attempt_failed / stopped / abandoned。plan 用 plan.proposed，消息用 createdAt，review 用最新 run.updatedAt，Task block 用 task.stage（no_eligible_provider 用序号严格大于当前 Task 的 stage 审计、按 sequence 最早的 task.admission_refused，边界与 admissionWait 相同；upstream_canceled 用规范化后最早的相关取消时间），stall 用 notifiedAt，supervision proposal 用 createdAt。provider 等待的后续拒绝与重启不移动起点；进入新 stage 后重新计起。最初的 account cooldown 拒绝也计入这段等待。readModelAuditsStore 的 getOldestReadModelAuditAfter 以 SELECT、ORDER BY sequence ASC LIMIT 1 读取一行，不加载整段审计。缺失的旧审计以对象的 row 时间回退，plan 以 provenance.at 回退；不会用读取时间伪装事件时间。
 
 尚未持久阻塞的预算项：wall-clock 从首次 EXECUTING 起点与 limit 算出阈值时刻；attempts 取最近 binding 的创建时间（缺失则回退相关状态时间）；tokens 取当前正数账本行的最近 measuredAt。Mission 项不会早于当前状态或 Planner 结束的相关证据。证据限制：当前 token 账本覆盖测量值，没有首次越界历史；旧 binding 缺失、被退还计数的中断 Attempt、Task cap 调整也可能无法重建精确越界时刻。这些 since 表示现存证据时间，不能保证首次耗尽时间；保留纯读且不新增历史，已用 ponytail 注明。plan_review 在 PAUSED / BLOCKED 时保留项但不列 approve / reject，因为两个命令都要求 PLAN_REVIEW；这是对 brief 无条件 action 表的显式收窄。
 
@@ -856,7 +856,7 @@ D78 的 2026-11-13 修订：Task 详情头部在等待行和原操作区（含�
 
 ### Mission 首页的待处理项（M3-09-3a）
 
-每次选择或刷新 Mission（含切换 Task）时，`readMission` 以独立 settled read 调用一次 `axiom.mission.pending`，无论是否选中 Task。首页接收全部 `items`，Task 详情从同一结果按 `taskId` 筛选；`readTaskEvidence` 不再调用该视图。读取失败只显示待处理项读取提示，不显示计数或列表，不触发整页警报或 toast；其它 Mission / Task 详情照常显示。`pendingMessages` 为兼容旧组件仍读取并传入，但首页不再显示它。
+每次选择或刷新 Mission（含切换 Task）时，`readMission` 以独立 settled read 调用一次 `axiom.mission.pending`，无论是否选中 Task。首页接收全部 `items`，Task 详情从同一结果按 `taskId` 筛选；`readTaskEvidence` 不再调用该视图。读取失败只显示待处理项读取提示，不显示计数或列表，不触发整页警报或 toast；其它 Mission / Task 详情照常显示。
 
 首页「待处理项」计数等于视图的行数，不添加、不丢弃、不重排。每行依次显示 `kind` 的本地化名称；存在于 Task 列表中的 `taskId` 以标题按钮打开 Task，否则仅显示 id；等宽原文 `reason`；仅 `mission / human_review / task_blocked` 使用附带 `waitingOn` 的共用说明与预算读数（归属、dimension、used / limit）；对象自身的 `summary`；blocking 且 blocks > 0 时显示阻塞 Task 数、非 blocking 显示不阻塞；最后按 `actions` 原顺序以文字列出 Control Plane 可接受的动作。kind 与 action 文案集中于 `mission-pending-copy.ts`，已有按钮文案复用同一 key。首页行只有 Task 跳转按钮，不新增处置控件；操作仍在 Task 页、计划面板与 Mission 按钮中执行。
 
@@ -864,7 +864,11 @@ Task 表增加「等待对象」列：直接显示每个 Task 的 `waitingOn` �
 
 `mutate` 在调用成功时返回 true，拒绝、传输失败或已有请求而未发送时返回 false；request id、重读、警报与 toast 语义不变。`adjustTask` 透传该结果，只用于成功后收起调整表单：动作仍提供时等待 busy 结束再回焦「调整 Task」，动作消失时聚焦 Task detail；失败保留表单与输入。其余表单行为不变，显示状态仍完全来自重读。
 
-本段不显示 `since` 或其它时间：`no_eligible_provider` 的 since 随准入再次拒绝更新，启动时也会发生；同一状态重启前后的首页与 Task 行文字须一致。时间语义与定时刷新留 M3-09-3b；监督档位与离开期间摘要留 M3-09-3c。
+### Mission 首页的起始时间（M3-09-3b-1）
+
+`MissionPendingList` 每行在「You can:」之前显示「Since」（`missions.pendingSince`；中文「开始等待于」）与该项的 `since`，没有 actions 的行也显示。时间原文置于 `<time dateTime={item.since}>`，正文与属性均为视图返回的同一字符串，不重排、不格式化、不计算相对时间；起点来源见 M3-09-1，provider 等待在后续准入轮次与重启后保持原值。
+
+`MissionHome` 的 `pendingMessages` prop 及 Mission 读取中的 pending-only 消息列表调用、返回字段均已移除，每次刷新少一次调用。`readMission` 与其导出的 `MissionDetail` 类型移至 missions/mission-read.ts，除该删除外调用顺序不变，pending view 的同一 settled read 仍供首页与选中 Task 的证据共用。页面仍仅在选择和按需刷新时读取；定时刷新留 M3-09-3b-2，监督档位与离开期间摘要留 M3-09-3c。
 
 ### 人工验证处置与同候选重验（M3-05；D82 / D85 / DEF-21 ④）
 

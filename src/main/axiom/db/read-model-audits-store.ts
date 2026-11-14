@@ -12,9 +12,37 @@ const Latest = z.object({
   stage: z.string().optional(),
   status: z.string().optional()
 })
+const OldestAfter = Latest.extend({ afterSequence: z.number().int().nonnegative() })
 
 export function readModelAuditsStore(db: OrchestrationDb) {
   return {
+    getOldestReadModelAuditAfter(input: z.input<typeof OldestAfter>) {
+      const p = OldestAfter.parse(input)
+      return readRow(
+        AuditRowCodec,
+        db.db
+          .prepare(`SELECT ${AXIOM_COLUMNS.audit_events} FROM audit_events
+          WHERE mission_id = ? AND sequence > ? AND (? IS NULL OR object_id = ?)
+            AND (? IS NULL OR object_kind = ?)
+            AND event IN (SELECT value FROM json_each(?))
+            AND (? IS NULL OR json_extract(after, '$.stage') = ?)
+            AND (? IS NULL OR json_extract(after, '$.status') = ?)
+          ORDER BY sequence ASC LIMIT 1`)
+          .get(
+            p.missionId,
+            p.afterSequence,
+            p.objectId ?? null,
+            p.objectId ?? null,
+            p.objectKind ?? null,
+            p.objectKind ?? null,
+            JSON.stringify(p.events),
+            p.stage ?? null,
+            p.stage ?? null,
+            p.status ?? null,
+            p.status ?? null
+          )
+      )
+    },
     getLatestReadModelAudit(input: z.input<typeof Latest>) {
       const p = Latest.parse(input)
       return readRow(

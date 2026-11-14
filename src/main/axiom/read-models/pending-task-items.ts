@@ -57,11 +57,12 @@ function taskSince(ctx: WaitingContext, task: TaskStageRecord, wait: TaskWaiting
   }
   if (wait.reason === 'no_eligible_provider') {
     return (
-      ctx.store.getLatestReadModelAudit({
+      ctx.store.getOldestReadModelAuditAfter({
         missionId: task.missionId,
         objectKind: 'task',
         objectId: task.taskId,
-        events: ['task.admission_refused']
+        events: ['task.admission_refused'],
+        afterSequence: ctx.stageAudit(task)?.sequence ?? 0
       })?.createdAt ?? task.updatedAt
     )
   }
