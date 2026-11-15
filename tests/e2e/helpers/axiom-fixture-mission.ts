@@ -260,7 +260,7 @@ process.exit(require('node:child_process').spawnSync(process.execPath, [${JSON.s
               await stopFixtureDaemonsForRestart(session.userDataDir, restartOptions)
               const next = await session.launch({
                 extraEnv: {
-                  AXIOM_E2E_HOLD_EXIT_SUBMISSION: '0',
+                  AXIOM_E2E_HOLD_EXIT_SUBMISSION: restartOptions?.holdExitSubmission ? '1' : '0',
                   AXIOM_E2E_HOLD_ATTEMPT_DISPATCH: '0'
                 }
               })

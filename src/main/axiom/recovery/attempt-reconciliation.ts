@@ -15,7 +15,7 @@ import { watchHeadlessAttempt } from '../execution/headless-attempt-watcher'
 import { captureRecoveryAttempt, recoveryEndingStillCurrent } from './attempt-recovery-preservation'
 import {
   isRestartTerminalMissing,
-  hasAcceptedExitMarker,
+  readAcceptedExitMarker,
   settleRecoveryDaemonLoss
 } from './attempt-daemon-loss'
 import { settleRecoveryTerminal, settleRecoveryProcessExit } from './attempt-recovery-endings'
@@ -170,11 +170,8 @@ export async function reconcileAttempt(
   }
   const terminalReason = worker && terminalReasons.get(worker.state)
   if (terminalReason && worker) {
-    if (
-      headless &&
-      isRestartTerminalMissing(worker, runtime.getRuntimeId()) &&
-      !(await hasAcceptedExitMarker(dispatchId))
-    ) {
+    if (headless && isRestartTerminalMissing(worker, runtime.getRuntimeId())) {
+      const exitMarker = await readAcceptedExitMarker(dispatchId)
       const preserved = await captureRecoveryAttempt(ctx, binding, 'terminal_missing')
       if (
         !recoveryEndingStillCurrent(ctx, binding, worker) ||
@@ -182,7 +179,7 @@ export async function reconcileAttempt(
       ) {
         return reconcileAttempt(ctx, binding)
       }
-      settleRecoveryDaemonLoss(ctx, { ...binding, dispatchId }, worker, preserved)
+      settleRecoveryDaemonLoss(ctx, { ...binding, dispatchId }, worker, preserved, exitMarker)
       entry.action = 'interrupted'
       return entry
     }

@@ -1,6 +1,6 @@
 import { cleanupE2EDaemons } from './electron-process-shutdown'
 
-export type FixtureRestartOptions = { stopDaemons?: boolean }
+export type FixtureRestartOptions = { stopDaemons?: boolean; holdExitSubmission?: boolean }
 
 /** Called after the app closes, before the next launch. Warm restart remains the default. */
 export async function stopFixtureDaemonsForRestart(
