@@ -890,6 +890,18 @@ Mission Home 之后、计划面板之前的独立「Supervision」区域显示 `
 
 边界：全局默认和提议会影响每个没有覆盖的 Mission；监督与 pending 是两次读取，可能暂时不同步。终态 Mission 的 pending 为空，不能回答；没有开放的 Mission 时也没有页面入口。新档位从下一轮检查起生效，不改变已停止的 Attempt；宿主不能确认停止时不保全、不结算，确认文字只以「确认停止后」提示这一边界。规则仅覆盖无界面 Worker；停滞阈值不显示也不可编辑，不展示提议门槛、提议之外的证据表、已解决提议或提议时间。无「你不在时」摘要。单测用合同 schema 解析的视图覆盖提议；本段 e2e 不产生真实提议（没有批准或启动工作），真实提议端到端仍留 M3-10。
 
+### 计划卡（M3-09-4a）
+
+`MissionsPageSurface` 从 `axiom.plan.list` 展示所有 PROPOSED 版本和 Mission 的 activePlanRevisionId；两者都没有时，若最新版本为 REJECTED，则保留该只读卡与退回理由。每张「Plan review」卡逐个 Task 显示目标、允许路径、风险档、尝试次数和各项预算上限、里程碑与角色；验收标准经共享 `resolveAcceptance` 兼容读取，逐条显示证明种类、原文命令或 Artifact 类型，以及一句证明说明。卡片同时显示里程碑与出口标准、风险、持久化警告及其明细、依赖边。仅当页面 `axiom.goal.show` 读到的 Goal id 等于本版 goalRevisionId 时，用共享 `planCoverage` 显示零起始索引和覆盖它的 Task。
+
+每次 `readMission` 通过 `mission-policy-read.ts` 的 `readMissionPolicy` 调用一次 `axiom.policy.show {missionId}`，与其它读取同时开始；手动和定时读取共用，无计划也读取。同步抛错、RPC 拒绝或传输失败返回 null，只在卡上显示普通说明，不影响 Mission、计划、Task、待处理项，不显示整页错误或 toast。PROPOSED 卡用 `VerificationRulesSchema.safeParse` 解析存储规则，再直接用 `resolveVerificationPlan` 按 Task 风险生成 setup / evidence / gate 命令列表；不复制排序、去重或准入判断。规则无效时明确说明 INCONCLUSIVE (policy_invalid)、不会运行命令，读取失败或解析失败均不自行补默认值。已批准或退回的卡不列运行清单，批准后以 Task 页为准。
+
+批准和退回分别只在同 revision id 的 `plan_review` 待处理项 actions 列出 `axiom.plan.approve` / `axiom.plan.reject` 时提供；pending 读取失败或无动作时说明原因，不以 Mission 状态代替。页面 busy 仍禁用控件。批准先走应用确认框，主按钮为非破坏性「Approve plan」，返回按钮「Keep reviewing」，写明 Task 数量、开始前不运行、目前不能替换已批准计划（之后只能在提供入口时改单个 Task 或取消 Mission），有警告时附数量。退回沿用理由和破坏性确认。拒绝确认不发送调用；调用后沿用 receipt、mutate 与重读，不乐观修改权威对象，拒绝以 code: message 原样显示。
+
+PROPOSED 卡仅比较编号小于当前版本的最近 REJECTED 版本，显示其原文理由。Task 按 Planner 选的 id 配对：新增和移除只列 id 与标题；同 id 的标题、目标、角色、风险、尝试上限、里程碑 id、kind 列前后值，路径、`resolveAcceptance` 后的标准（文本与 proof）、覆盖索引、已声明预算字段列增删项。列表按条目及出现次数比较，单纯重排不算变化；旧字符串与同文 human 标准等价。依赖边以 from / to / threshold 比较，阈值变化是一删一增；里程碑和风险变化各用一句说明（也忽略重排），无变化明确写出。
+
+边界：运行清单只是页面本次读到的 policy 下会运行什么，验证运行前 policy 仍可变；批准不会重新校验提案命令。命令按 Planner 原文显示，不脱敏；验证清单的修剪与去重来自共享函数。Task id 改名是一删一增，复用 id 是修改；只比较最近退回版本，不完整展示旧 Task。不匹配的 Goal 不显示覆盖；每次页面读取增加一个 policy 调用。下一次 Planner 尚不接收退回理由（4b）；没有计划成本估算。pending 与计划列表为两次读取，下次读取前可能暂时不一致。policy 编辑器、主进程准入与 provenance 后续分别属于 4c / 4b。
+
 ### 人工验证处置与同候选重验（M3-05；D82 / D85 / DEF-21 ④）
 
 所有 INCONCLUSIVE 都按上节进入 HUMAN_REVIEW，包括准备失败；不启动 Reviewer、Decision Engine 或自动答复。`axiom.verification.show / list` 保留原判定和 acceptance，status 表示当前处置状态。人可通过 `axiom verification list --mission <id> --status HUMAN_REVIEW` 查看待审项。

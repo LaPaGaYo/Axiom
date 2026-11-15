@@ -74,6 +74,10 @@ test('creates a Mission, reviews its plan and starts twelve authoritative Tasks'
   await expect(orcaPage.locator('[data-mission-status]')).toHaveText('Plan review')
   await expect(orcaPage.getByRole('region', { name: 'Plan review' })).toContainText('T01 → T04')
   await orcaPage.getByRole('button', { name: 'Approve plan', exact: true }).click()
+  await orcaPage
+    .getByRole('dialog', { name: 'Approve plan', exact: true })
+    .getByRole('button', { name: 'Approve plan', exact: true })
+    .click()
   await expect(orcaPage.locator('[data-mission-status]')).toHaveText('Planned')
   await orcaPage.getByRole('button', { name: 'Start Mission', exact: true }).click()
   await expect(orcaPage.locator('[data-mission-status]')).toHaveText('Executing')

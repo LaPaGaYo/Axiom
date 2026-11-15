@@ -5,6 +5,7 @@ import { MissionList } from './MissionList'
 import { MissionCreateDialog } from './MissionCreateDialog'
 import { MissionHome } from './MissionHome'
 import { MissionSupervision } from './MissionSupervision'
+import { visiblePlanRevisions } from './plan-revision-diff'
 import { PlanReviewPanel } from './PlanReviewPanel'
 import { TaskStageTable } from './TaskStageTable'
 import { TaskDetail } from './TaskDetail'
@@ -63,23 +64,22 @@ export function MissionsPageSurface({ controller: c }: { controller: MissionsPag
                 onUpdate={c.updateSupervision}
                 onResolve={c.resolveSupervision}
               />
-              {c.detail.plans
-                .filter(
-                  (plan) =>
-                    plan.status === 'PROPOSED' || plan.id === c.detail?.mission.activePlanRevisionId
-                )
-                .map((plan) => (
+              {visiblePlanRevisions(c.detail.plans, c.detail.mission.activePlanRevisionId).map(
+                (plan) => (
                   <PlanReviewPanel
                     key={plan.id}
                     plan={plan}
-                    busy={
-                      c.busy ||
-                      !['PLAN_REVIEW', 'REPLANNING'].includes(c.detail?.mission.status ?? '')
-                    }
+                    busy={c.busy}
+                    goal={c.detail?.goal}
+                    policy={c.detail?.policy}
+                    revisions={c.detail?.plans}
+                    pendingItems={c.detail?.pendingItems}
+                    pendingError={c.detail?.pendingError}
                     onApprove={() => c.approve(plan.id)}
                     onReject={(reason) => c.reject(plan.id, reason)}
                   />
-                ))}
+                )
+              )}
               <TaskStageTable
                 tasks={c.detail.tasks}
                 selectedTaskId={c.selectedTaskId}

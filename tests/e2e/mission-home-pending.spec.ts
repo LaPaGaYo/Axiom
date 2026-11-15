@@ -299,6 +299,10 @@ test('M3-09-3a: Mission Home explains the next human step before a Mission runs'
     actions: ['axiom.plan.approve', 'axiom.plan.reject']
   })
   await page.getByRole('button', { name: 'Approve plan', exact: true }).click()
+  await page
+    .getByRole('dialog', { name: 'Approve plan', exact: true })
+    .getByRole('button', { name: 'Approve plan', exact: true })
+    .click()
   await expect(page.locator('[data-mission-status]')).toHaveText('Planned')
   const planned = await assertPending(page, missionId)
   expect(planned).toHaveLength(1)
