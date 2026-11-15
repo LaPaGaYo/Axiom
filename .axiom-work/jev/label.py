@@ -52,6 +52,33 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M3-09-4a', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'the plan card, as briefed: per Task the scope, risk level, limits and how each criterion is '
+        'proven, and for a proposed revision the commands verification will run, taken from the contract function '
+        'resolveVerificationPlan with rules parsed by VerificationRulesSchema and no default of its own; milestones, '
+        'stored warnings and Goal coverage from planCoverage; the earlier rejection with a difference keyed by Task '
+        'id; a rejected revision kept on the page; approval behind a non-destructive confirmation; approval and '
+        'rejection offered only from the pending view; the transport moved out of the client verbatim and '
+        'showPolicy added; the policy read with the Mission and apart from it; titles 1-8 fail at an assertion on '
+        'main wiring files with no load or render error; new e2e spec green on its first host run (verification '
+        'list equal to the contract function, rejection through the page, revision 2 with its changes, approval '
+        'declined then confirmed), every Mission spec green, e2e red run fails where the list should be; one '
+        'screenshot read; no verifier change; no other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'Goal coverage renders an empty heading when the Goal lists no acceptance criteria: leave the block out or say so (next renderer Task)',
+            'the changes block sits below the Tasks and the dependency list; move it near the top of the card (M3-10 polish)',
+            'the sentence for an unreadable or invalid policy repeats under every Task; say it once per card',
+            'Task-level blocks are level-3 headings inside a level-3 group: accessibility pass of M3-10',
+            'one more call per page read (axiom.policy.show): one read model for the Mission page (M3-10)',
+            'PlanCard.test.tsx is at 785 of 800 counted lines and the controller at 245 of 250: the next Task splits',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M3-09-3c', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'the Mission page gains a Supervision region of its own below Mission Home, as briefed: the stall '
