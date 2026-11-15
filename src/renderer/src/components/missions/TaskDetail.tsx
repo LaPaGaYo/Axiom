@@ -9,6 +9,7 @@ import { MessageTimeline } from './MessageTimeline'
 import { TaskEvidenceStage } from './TaskEvidenceStage'
 import { TaskWaitingLine } from './TaskWaitingLine'
 import { TaskQuietCancel } from './TaskQuietCancel'
+import { TaskCurrentAcceptance } from './TaskCurrentAcceptance'
 import { VerificationRecord } from './VerificationRecord'
 import { useTaskVerification } from './use-task-verification'
 import type { TaskEvidenceReads } from './task-evidence-read'
@@ -33,6 +34,7 @@ export function TaskDetail({
   onResolveVerification,
   onRerunVerification,
   taskSpec,
+  policy,
   onAdjustTask,
   onCancelTask,
   ...actions
@@ -89,6 +91,7 @@ export function TaskDetail({
           onResolveVerification={onResolveVerification}
           onRerunVerification={onRerunVerification}
           taskSpec={taskSpec}
+          policy={policy}
           messages={messages}
           onAdjustTask={onAdjustTask}
           onCancelTask={onCancelTask}
@@ -101,6 +104,7 @@ export function TaskDetail({
           onCancelTask={onCancelTask}
         />
       </div>
+      <TaskCurrentAcceptance spec={taskSpec} />
       <AttemptList
         attempts={attempts}
         onOpenWorktree={onOpenWorktree}

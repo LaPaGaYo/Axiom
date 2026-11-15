@@ -72,7 +72,7 @@ export function PlanReviewSections({
           </ul>
         </PlanReviewGroup>
       )}
-      {goal?.id === plan.goalRevisionId && (
+      {goal?.id === plan.goalRevisionId && goal.acceptanceCriteria.length > 0 && (
         <PlanReviewGroup title={translate('missions.planGoalCoverage', 'Goal coverage')}>
           <ul className="space-y-2 text-xs">
             {planCoverage(plan, goal.acceptanceCriteria).criteria.map((criterion) => (

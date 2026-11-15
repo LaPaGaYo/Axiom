@@ -88,6 +88,14 @@ export function PlanReviewPanel({
             )}
           </p>
         )}
+        {plan.status === 'APPROVED' && (
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'missions.planAdjustedSince',
+              "Tasks can be adjusted after a plan is approved. A Task's own page shows its acceptance criteria as they are now."
+            )}
+          </p>
+        )}
         <ol className="space-y-4 text-sm">
           {plan.tasks.map((task) => (
             <PlanTaskDetails
