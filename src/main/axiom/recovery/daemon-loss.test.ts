@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { recoveryPreservationFixture } from './preservation-fixture.test-support'
@@ -10,6 +10,8 @@ import { attemptBaselineAudit, attemptBaselineRef } from '../execution/attempt-f
 import { previousAttemptSection } from '../context-builder/previous-attempt'
 import { captureRecoveryAttempt } from './attempt-recovery-preservation'
 import { readPreservedBaseline } from '../execution/preserved-baseline'
+import { report } from '../execution/submission-fixture.test-support'
+import { decideInPlaceContinuation } from '../execution/in-place-continuation'
 
 let f: Awaited<ReturnType<typeof recoveryPreservationFixture>>
 beforeEach(async () => {
@@ -202,13 +204,166 @@ it('keeps a pending stop lost with its daemon on the stopped path', async () => 
   expect(f.store.getTaskStage(f.t01.taskId)?.attemptCount).toBe(1)
   expect(f.effect(1)).toBeUndefined()
 })
-it('does not treat an Attempt that left an exit marker as lost with its daemon', async () => {
+it('settles an Attempt lost with its daemon as an interruption even when it left a marker of its ending', async () => {
   restart()
   loseTerminal()
   replaceFile('exit-code', '-1\n')
-  vi.spyOn(snapshots, 'preserveAttemptWorktree')
+  const before = f.audits().length
+  const resource = f.db.getWorkerTerminalResourceByOwner(f.t01.attemptId)
+  const dispatch = f.db.getDispatchContextById(f.t01.attemptId)
+  const capture = vi.spyOn(snapshots, 'preserveAttemptWorktree')
+  const fail = vi.spyOn(f.db, 'failDispatch')
+  const stop = vi.spyOn(f.db, 'beginWorkerStop')
+  const abandon = vi.spyOn(f.db, 'abandonWorkerDispatch')
+  expect(await f.recovery.reconcileAttempts()).toMatchObject({
+    attempts: [{ action: 'interrupted' }]
+  })
+  expect(capture).toHaveBeenCalledTimes(1)
+  expect(fail).not.toHaveBeenCalled()
+  expect(stop).not.toHaveBeenCalled()
+  expect(abandon).not.toHaveBeenCalled()
+  expect(f.runtime.closeTerminal).not.toHaveBeenCalled()
+  expect(f.releaseWorker).not.toHaveBeenCalled()
+  expect(f.db.getWorkerTerminalResourceByOwner(f.t01.attemptId)).toEqual(resource)
+  expect(f.db.getDispatchContextById(f.t01.attemptId)).toEqual(dispatch)
+  const audits = f.audits().slice(before)
+  expect(audits.map((row) => row.event)).toEqual([
+    'attempt.failed',
+    'attempt.preserved',
+    'task.stage',
+    'task.stage'
+  ])
+  expect(audits[0]).toMatchObject({
+    actor: 'RecoveryService',
+    objectKind: 'attempt',
+    objectId: f.t01.attemptId
+  })
+  expect(audits[0]?.after).toEqual({ ...lostDaemonFailure(), exitMarker: -1 })
+  expect(audits[0]?.after).not.toHaveProperty('exitCode')
+  expect(audits[2]?.after).toMatchObject({ stage: 'NEEDS_FIX', reason: 'interrupted' })
+  expect(audits[3]?.after).toMatchObject({ stage: 'READY', reason: 'retry_after_interruption' })
+  expect(f.recorded().result).toMatchObject({
+    status: 'preserved',
+    scopePaths: ['partial.ts'],
+    secrets: [],
+    snapshot: { commitSha: await f.repo.git(['rev-parse', f.ref]) }
+  })
+  expect(f.store.getTaskStage(f.t01.taskId)).toMatchObject({ stage: 'READY', attemptCount: 0 })
+  expect(f.effect(1)).toMatchObject({
+    status: 'pending',
+    key: `${f.t01.taskId}/1`,
+    payload: { taskId: f.t01.taskId, seq: 1, chain: 1, failureClass: 'unknown' }
+  })
+  const created = Date.parse(
+    f.binding.createdAt.replace(' ', 'T') + (f.binding.createdAt.endsWith('Z') ? '' : 'Z')
+  )
+  expect(f.effect(1)?.dueAt).toBe(new Date(created + 180_000).toISOString())
+  const allAudits = f.audits()
+  const effect = f.effect(1)
   await f.recovery.reconcileAttempts()
-  expectCounted()
+  expect(f.audits()).toEqual(allAudits)
+  expect(f.effect(1)).toEqual(effect)
+  expect(f.store.getTaskStage(f.t01.taskId)?.attemptCount).toBe(0)
+  expect(capture).toHaveBeenCalledTimes(1)
+})
+
+function lostDaemonFailure() {
+  return {
+    taskId: f.t01.taskId,
+    seq: 1,
+    reason: 'terminal_missing',
+    lastError: missingReason,
+    failure: { class: 'unknown', retryable: true, source: 'absent' },
+    evidence: 'runtime_restarted',
+    settlement: { kind: 'interrupted' }
+  }
+}
+
+it('keeps the marker of a finished Attempt lost with its daemon as evidence only', async () => {
+  restart()
+  loseTerminal()
+  const directory = path.join(f.repo.root, '.axiom', 'attempt')
+  await mkdir(directory, { recursive: true })
+  vi.mocked(files.headlessAttemptDirectory).mockReturnValue(directory)
+  vi.mocked(files.readHeadlessFile).mockRestore()
+  const { filesChanged: _files, ...headlessReport } = report
+  await writeFile(path.join(directory, 'launch.json'), JSON.stringify(f.launch))
+  await writeFile(path.join(directory, 'exit-code'), '0\n')
+  await writeFile(path.join(directory, 'events.jsonl'), '{"type":"turn.completed"}\n')
+  await writeFile(
+    path.join(directory, 'last-message.md'),
+    `Done\n\`\`\`json\n${JSON.stringify(headlessReport)}\n\`\`\``
+  )
+  expect(await f.recovery.reconcileAttempts()).toMatchObject({
+    attempts: [{ action: 'interrupted' }]
+  })
+  const failure = f.audits().find((row) => row.event === 'attempt.failed')?.after
+  expect(failure).toEqual({ ...lostDaemonFailure(), exitMarker: 0 })
+  expect(failure).not.toHaveProperty('exitCode')
+  expect(f.recorded().result.status).toBe('preserved')
+  expect(f.store.getTaskStage(f.t01.taskId)).toMatchObject({ stage: 'READY', attemptCount: 0 })
+  expect(f.store.getSubmissionByDispatch(f.t01.attemptId)).toBeUndefined()
+  expect(f.audits().filter((row) => row.event === 'attempt.submitted')).toEqual([])
+  expect(f.snapshotGit).not.toHaveBeenCalled()
+})
+
+it.each(['not-an-exit', undefined])(
+  'writes the lost-daemon audit unchanged when the marker holds no integer',
+  async (marker) => {
+    restart()
+    loseTerminal()
+    replaceFile('exit-code', marker)
+    expect(await f.recovery.reconcileAttempts()).toMatchObject({
+      attempts: [{ action: 'interrupted' }]
+    })
+    const failure = f.audits().find((row) => row.event === 'attempt.failed')?.after
+    expect(failure).toEqual(lostDaemonFailure())
+    expect(failure).not.toHaveProperty('exitMarker')
+    expect(failure).not.toHaveProperty('exitCode')
+  }
+)
+
+it('continues with a fresh session after an Attempt lost with its daemon left a marker', async () => {
+  restart()
+  loseTerminal()
+  replaceFile('exit-code', '143\n')
+  expect(await f.recovery.reconcileAttempts()).toMatchObject({
+    attempts: [{ action: 'interrupted' }]
+  })
+  const baseline = resolveAttemptBaseline(f.store, { taskId: f.t01.taskId, seq: 2 })
+  expect(baseline).toMatchObject({
+    kind: 'snapshot',
+    previousSeq: 1,
+    attemptId: f.t01.attemptId,
+    snapshot: { commitSha: await f.repo.git(['rev-parse', f.ref]) },
+    ending: { kind: 'interrupted', failureClass: 'unknown', evidence: 'runtime_restarted' }
+  })
+  const failure = f.audits().find((row) => row.event === 'attempt.failed')?.after
+  expect(failure).toEqual({ ...lostDaemonFailure(), exitMarker: 143 })
+  const unexpectedRead = () => {
+    throw new Error('Lost-daemon continuation must stop at the exit evidence rule')
+  }
+  expect(
+    await decideInPlaceContinuation(f.t01.taskId, baseline, {
+      previous: () => ({
+        seq: 1,
+        dispatchId: f.t01.attemptId,
+        branch: f.binding.branch,
+        failure,
+        preservation: f.recorded(),
+        stopped: false,
+        submitted: !!f.store.getSubmissionByDispatch(f.t01.attemptId)
+      }),
+      agents: unexpectedRead,
+      version: unexpectedRead,
+      accounts: unexpectedRead,
+      manifests: unexpectedRead,
+      thread: unexpectedRead,
+      originStartedAt: unexpectedRead,
+      recordExists: unexpectedRead,
+      worktree: unexpectedRead
+    })
+  ).toEqual({ strategy: 'fresh', reason: 'no_exit_evidence' })
 })
 it('keeps a TUI Attempt lost with its daemon on the counted path', async () => {
   restart()

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { z } from 'zod'
 import { test, expect } from './helpers/orca-app'
@@ -75,6 +75,41 @@ function worktreeForBranch(clone: string, branch: string) {
   return worktree
 }
 
+async function stallFirstAttempt(
+  {
+    userData,
+    mission,
+    ledgerPath,
+    releaseWorkers
+  }: Parameters<Parameters<typeof withFixtureMission>[2]>[0],
+  partial: string
+) {
+  const inspect = () => inspectFixtureMission(userData, mission.id)
+  await expect
+    .poll(() => inspect().audits.some(({ event }) => event === 'attempt.started'), {
+      timeout: 60_000
+    })
+    .toBe(true)
+  const firstStart = inspect().audits.find(({ event }) => event === 'attempt.started')
+  if (!firstStart) {
+    throw new Error('Missing first Attempt launch')
+  }
+  const firstId = firstStart.object_id
+  const first = Started.parse(JSON.parse(firstStart.after ?? '{}'))
+  expect(first.seq).toBe(1)
+  const taskId = first.taskId
+  writeFileSync(`${ledgerPath}.scenario-${taskId}`, 'agent-crash')
+  writeFileSync(`${ledgerPath}.stall-${taskId}`, '')
+  writeFileSync(`${ledgerPath}.partial-${taskId}`, partial)
+  releaseWorkers()
+  await expect
+    .poll(() => reachedStall(path.join(userData, 'axiom', 'attempts', firstId, 'events.jsonl')), {
+      timeout: 60_000
+    })
+    .toBe(true)
+  return { inspect, firstId, first, taskId }
+}
+
 test('M3-06-2b-3: an Attempt lost with its daemon continues from preserved work after restart', async (// oxlint-disable-next-line no-empty-pattern -- Fixture owns the background app lifecycle.
 {}, testInfo) => {
   if (!source) {
@@ -85,36 +120,12 @@ test('M3-06-2b-3: an Attempt lost with its daemon continues from preserved work 
   await withFixtureMission(
     testInfo,
     source,
-    async ({ userData, mission, ledgerPath, clone, releaseWorkers, restart }) => {
+    async (fixture) => {
+      const { userData, clone, restart } = fixture
       if (!restart) {
         throw new Error('Missing restart fixture')
       }
-      const inspect = () => inspectFixtureMission(userData, mission.id)
-      await expect
-        .poll(() => inspect().audits.some(({ event }) => event === 'attempt.started'), {
-          timeout: 60_000
-        })
-        .toBe(true)
-      const firstStart = inspect().audits.find(({ event }) => event === 'attempt.started')
-      if (!firstStart) {
-        throw new Error('Missing first Attempt launch')
-      }
-      const firstId = firstStart.object_id
-      const first = Started.parse(JSON.parse(firstStart.after ?? '{}'))
-      expect(first.seq).toBe(1)
-      const taskId = first.taskId
-      writeFileSync(`${ledgerPath}.scenario-${taskId}`, 'agent-crash')
-      writeFileSync(`${ledgerPath}.stall-${taskId}`, '')
-      writeFileSync(`${ledgerPath}.partial-${taskId}`, partial)
-      releaseWorkers()
-      await expect
-        .poll(
-          () => reachedStall(path.join(userData, 'axiom', 'attempts', firstId, 'events.jsonl')),
-          {
-            timeout: 60_000
-          }
-        )
-        .toBe(true)
+      const { inspect, firstId, first, taskId } = await stallFirstAttempt(fixture, partial)
       await restart({ stopDaemons: true })
       // Only observe after restart; the first pass reading the kernel verdict may be 60 s later.
       await expect
@@ -245,6 +256,134 @@ test('M3-06-2b-3: an Attempt lost with its daemon continues from preserved work 
       provider: 'codex',
       taskIds: ['T01'],
       holdWorkers: true,
+      maxAttempts: 1,
+      interruptionBackoffMs: [100, 200, 300],
+      restart: true,
+      extraAllowedPaths: [partial],
+      runVerification: false
+    }
+  )
+})
+
+test('M3-06-2b-4: an Attempt lost with its daemon that left a marker continues from preserved work', async (// oxlint-disable-next-line no-empty-pattern -- Fixture owns the background app lifecycle.
+{}, testInfo) => {
+  if (!source) {
+    throw new Error('Missing fixture repository')
+  }
+  test.setTimeout(300_000)
+  const partial = 'src/services/daemon-lost-partial.ts'
+  await withFixtureMission(
+    testInfo,
+    source,
+    async (fixture) => {
+      const { userData, clone, restart } = fixture
+      if (!restart) {
+        throw new Error('Missing restart fixture')
+      }
+      const { inspect, firstId, first, taskId } = await stallFirstAttempt(fixture, partial)
+      const exitFile = path.join(userData, 'axiom', 'attempts', firstId, 'exit-code')
+      writeFileSync(`${exitFile}.tmp`, '143\n')
+      renameSync(`${exitFile}.tmp`, exitFile)
+      await restart({ stopDaemons: true, holdExitSubmission: true })
+      // Observe either ending so main fails on the counted settlement, without a timeout.
+      await expect
+        .poll(
+          () =>
+            inspect().audits.some(
+              ({ event, object_id, after }) =>
+                (event === 'attempt.failed' && object_id === firstId) ||
+                (event === 'task.stage' &&
+                  object_id === taskId &&
+                  TaskStage.parse(JSON.parse(after ?? '{}')).reason === 'attempt_abandoned')
+            ),
+          { timeout: 150_000 }
+        )
+        .toBe(true)
+      const interrupted = inspect()
+      const stages = interrupted.audits
+        .filter(({ event, object_id }) => event === 'task.stage' && object_id === taskId)
+        .map((row) => TaskStage.parse(JSON.parse(row.after ?? '{}')))
+      expect(stages.some((row) => row.reason === 'attempt_abandoned')).toBe(false)
+      const worker = z
+        .array(Worker)
+        .parse(interrupted.rows.workers)
+        .find((row) => row.dispatch_id === firstId)
+      expect(worker).toMatchObject({ state: 'abandoned', stage: 'terminal_missing' })
+      const failure = interrupted.audits.find(
+        ({ event, object_id }) => event === 'attempt.failed' && object_id === firstId
+      )
+      const failed = JSON.parse(failure?.after ?? '{}')
+      expect(Failed.extend({ exitMarker: z.number().int() }).parse(failed)).toEqual({
+        taskId,
+        seq: 1,
+        reason: 'terminal_missing',
+        lastError: worker?.last_error,
+        failure: { class: 'unknown', retryable: true, source: 'absent' },
+        evidence: 'runtime_restarted',
+        settlement: { kind: 'interrupted' },
+        exitMarker: 143
+      })
+      expect(failed).not.toHaveProperty('exitCode')
+      const preservation = interrupted.audits.find(
+        ({ event, object_id }) => event === 'attempt.preserved' && object_id === firstId
+      )
+      const evidence = AttemptPreservedAuditSchema.parse(JSON.parse(preservation?.after ?? '{}'))
+      expect(evidence.taskId).toBe(taskId)
+      expect(evidence.result).toMatchObject({
+        status: 'preserved',
+        scopePaths: [partial],
+        secrets: []
+      })
+      if (evidence.result.status !== 'preserved') {
+        throw new Error('Missing lost-daemon snapshot')
+      }
+      const { snapshot } = evidence.result
+      expect(git(['-C', clone, 'rev-parse', snapshot.ref])).toBe(snapshot.commitSha)
+      expect(git(['-C', clone, 'show', `${snapshot.commitSha}:${partial}`])).toContain(
+        'partialWork = true'
+      )
+      expect(stages).toContainEqual({ stage: 'NEEDS_FIX', reason: 'interrupted' })
+      expect(stages).toContainEqual({ stage: 'READY', reason: 'retry_after_interruption' })
+      await expect
+        .poll(
+          () =>
+            inspect().audits.some(
+              ({ event, object_id }) => event === 'attempt.started' && object_id !== firstId
+            ),
+          { timeout: 120_000 }
+        )
+        .toBe(true)
+      const continued = inspect()
+      const secondStart = continued.audits.find(
+        ({ event, object_id }) => event === 'attempt.started' && object_id !== firstId
+      )
+      const second = Continued.parse(JSON.parse(secondStart?.after ?? '{}'))
+      expect(second).toMatchObject({
+        taskId,
+        seq: 2,
+        baseline: {
+          kind: 'snapshot',
+          strategy: 'continued',
+          reason: 'preserved_snapshot',
+          previousSeq: 1,
+          attemptId: firstId,
+          commitSha: snapshot.commitSha
+        }
+      })
+      const firstWorktree = worktreeForBranch(clone, first.branch)
+      const secondWorktree = worktreeForBranch(clone, second.branch)
+      expect(secondWorktree).not.toBe(firstWorktree)
+      expect(readFileSync(path.join(secondWorktree, partial), 'utf8')).toContain(
+        'partialWork = true'
+      )
+      expect(continued.tasks.find((row) => row.task_id === taskId)?.attempt_count).toBe(1)
+      expect(continued.submissions).toEqual([])
+    },
+    {
+      provider: 'codex',
+      taskIds: ['T01'],
+      holdWorkers: true,
+      holdExitSubmission: true,
       maxAttempts: 1,
       interruptionBackoffMs: [100, 200, 300],
       restart: true,

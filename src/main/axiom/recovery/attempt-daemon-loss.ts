@@ -16,17 +16,18 @@ export function isRestartTerminalMissing(worker: WorkerDispatchRow | undefined, 
   )
 }
 
-export async function hasAcceptedExitMarker(dispatchId: string): Promise<boolean> {
+export async function readAcceptedExitMarker(dispatchId: string): Promise<number | undefined> {
   // Match submitExitedAttempt exactly. An uncertain read must fail this reconciliation pass.
   const exit = await readHeadlessFile(headlessAttemptDirectory(dispatchId), 'exit-code')
-  return exit !== undefined && /^-?\d+\s*$/.test(exit)
+  return exit !== undefined && /^-?\d+\s*$/.test(exit) ? Number(exit.trim()) : undefined
 }
 
 export function settleRecoveryDaemonLoss(
   ctx: RecoveryContext,
   binding: AttemptBinding & { dispatchId: string },
   worker: WorkerDispatchRow,
-  preserved: Awaited<ReturnType<typeof captureRecoveryAttempt>>
+  preserved: Awaited<ReturnType<typeof captureRecoveryAttempt>>,
+  exitMarker: number | undefined
 ) {
   const failure = { class: 'unknown', retryable: true, source: 'absent' } as const
   ctx.store.transaction('recovery_daemon_loss', () => {
@@ -36,7 +37,8 @@ export function settleRecoveryDaemonLoss(
       lastError: worker.last_error ?? null,
       failure,
       evidence: 'runtime_restarted',
-      settlement: { kind: 'interrupted' }
+      settlement: { kind: 'interrupted' },
+      ...(exitMarker !== undefined ? { exitMarker } : {})
     })
     if (preserved) {
       auditAttempt(ctx, binding, 'attempt.preserved', preserved)
