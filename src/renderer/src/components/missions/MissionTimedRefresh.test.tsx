@@ -78,7 +78,21 @@ beforeEach(() => {
   vi.mocked(axiomClient.listTasks).mockResolvedValue({ tasks: [] })
   vi.mocked(axiomClient.listPlans).mockResolvedValue({ planRevisions: [plan] })
   vi.mocked(axiomClient.listAttempts).mockResolvedValue({ attempts: [] })
-  vi.mocked(axiomClient.missionPending).mockResolvedValue({ missionId: mission.id, items: [] })
+  vi.mocked(axiomClient.missionPending).mockResolvedValue({
+    missionId: mission.id,
+    items: [
+      {
+        id: 'pending-plan',
+        kind: 'plan_review',
+        objectId: plan.id,
+        reason: 'plan_review',
+        blocking: true,
+        blocks: 1,
+        actions: ['axiom.plan.approve', 'axiom.plan.reject'],
+        since: provenance.at
+      }
+    ]
+  })
 })
 afterEach(cleanup)
 

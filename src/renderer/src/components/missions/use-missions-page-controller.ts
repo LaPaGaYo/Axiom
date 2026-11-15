@@ -9,6 +9,7 @@ import { translate } from '@/i18n/i18n'
 import type { CreateMissionInput } from './MissionCreateDialog'
 import type { MissionAction } from './MissionActions'
 import { useMissionsPageRead } from './use-missions-page-read'
+import { planApprovalDescription } from './plan-approval'
 import { createSupervisionActions } from './supervision-actions'
 
 export function useMissionsPageController() {
@@ -91,7 +92,8 @@ export function useMissionsPageController() {
     title: string,
     description: string,
     action: () => Promise<unknown>,
-    cancelLabel?: string
+    cancelLabel?: string,
+    confirmVariant: 'default' | 'destructive' = 'destructive'
   ) => {
     if (confirmingRef.current) {
       return
@@ -104,7 +106,7 @@ export function useMissionsPageController() {
           title,
           description,
           confirmLabel: title,
-          confirmVariant: 'destructive',
+          confirmVariant,
           cancelVariant: 'ghost',
           ...(cancelLabel ? { cancelLabel } : {})
         })
@@ -151,7 +153,18 @@ export function useMissionsPageController() {
   }
   const approve = (planRevisionId: string) => {
     const params = { planRevisionId, resolver: 'desktop-user' }
-    void mutate(JSON.stringify(['approve', params]), (id) => axiomClient.approvePlan(params, id))
+    const plan = detail?.plans.find((revision) => revision.id === planRevisionId)
+    if (!plan) {
+      return
+    }
+    void confirmAction(
+      translate('missions.approvePlan', 'Approve plan'),
+      planApprovalDescription(plan),
+      () =>
+        mutate(JSON.stringify(['approve', params]), (id) => axiomClient.approvePlan(params, id)),
+      translate('missions.keepReviewing', 'Keep reviewing'),
+      'default'
+    )
   }
   const answer = (questionId: string, body: string) => {
     if (!selectedId) {

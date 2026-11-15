@@ -1,7 +1,5 @@
 import { z } from 'zod'
 import { createNonSecureContextUuid } from '../../../shared/non-secure-context-uuid'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
-import { RuntimeRpcEnvelopeSchema } from '../../../shared/runtime-rpc-envelope'
 import * as mission from '../../../shared/axiom-contract/mission-params'
 import * as plan from '../../../shared/axiom-contract/plan-params'
 import * as attempt from '../../../shared/axiom-contract/attempt-params'
@@ -10,6 +8,9 @@ import * as verification from '../../../shared/axiom-contract/verification-param
 import * as artifact from '../../../shared/axiom-contract/artifact-params'
 import * as usage from '../../../shared/axiom-contract/token-usage'
 import * as pending from '../../../shared/axiom-contract/mission-pending'
+import { call } from './axiom-rpc-call'
+export { AxiomRpcError } from './axiom-rpc-call'
+import * as policy from '../../../shared/axiom-contract/policy-params'
 import * as supervision from '../../../shared/axiom-contract/supervision'
 import {
   TaskListParams,
@@ -21,62 +22,9 @@ import {
 } from '../../../shared/axiom-contract/task-params'
 import { GoalShowParams, GoalResponseSchema } from '../../../shared/axiom-contract/goal-params'
 
-export class AxiomRpcError extends Error {
-  constructor(
-    readonly code: string,
-    message: string
-  ) {
-    super(message)
-    this.name = 'AxiomRpcError'
-  }
-}
-
-async function call<P, R>(
-  method: string,
-  params: P,
-  paramsSchema: z.ZodType<P>,
-  responseSchema: z.ZodType<R>,
-  requestId?: string
-): Promise<R> {
-  const parsed = paramsSchema.safeParse(params)
-  if (!parsed.success) {
-    throw new AxiomRpcError('invalid_params', parsed.error.message)
-  }
-  let raw: unknown
-  try {
-    raw = await window.api.runtime.call({
-      method,
-      params: parsed.data,
-      ...(requestId === undefined
-        ? {}
-        : {
-            envelope: {
-              orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-              orchestrationRequestId: requestId
-            }
-          })
-    })
-  } catch (error) {
-    throw new AxiomRpcError(
-      'transport_error',
-      error instanceof Error ? error.message : String(error)
-    )
-  }
-  const envelope = RuntimeRpcEnvelopeSchema.safeParse(raw)
-  if (!envelope.success || !('ok' in envelope.data)) {
-    throw new AxiomRpcError('invalid_response', 'Invalid runtime response')
-  }
-  if (!envelope.data.ok) {
-    throw new AxiomRpcError(envelope.data.error.code, envelope.data.error.message)
-  }
-  const result = responseSchema.safeParse(envelope.data.result)
-  if (!result.success) {
-    throw new AxiomRpcError('invalid_response', 'Invalid Axiom response')
-  }
-  return result.data
-}
-
 export const axiomClient = {
+  showPolicy: (params: z.infer<typeof policy.PolicyShowParams>) =>
+    call('axiom.policy.show', params, policy.PolicyShowParams, policy.PolicyResponseSchema),
   showSupervision: (params: z.infer<typeof supervision.SupervisionShowParams>) =>
     call(
       'axiom.supervision.show',

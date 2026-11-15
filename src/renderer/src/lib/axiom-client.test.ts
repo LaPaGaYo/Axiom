@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { PolicyResponseSchema } from '../../../shared/axiom-contract/policy-params'
 import { axiomClient, AxiomRpcError } from './axiom-client'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
 import { SupervisionShowResponse } from '../../../shared/axiom-contract/supervision'
@@ -36,6 +37,34 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('Axiom desktop client', () => {
+  it('reads the Mission policy and keeps the transport error class', async () => {
+    const response = { policy }
+    call.mockResolvedValue(success(response))
+    expect(await axiomClient.showPolicy({ missionId: mission.id })).toEqual(
+      PolicyResponseSchema.parse(response)
+    )
+    expect(call).toHaveBeenLastCalledWith({
+      method: 'axiom.policy.show',
+      params: { missionId: mission.id }
+    })
+    call.mockResolvedValue(success({ policy: 'invalid' }))
+    await expect(axiomClient.showPolicy({ missionId: mission.id })).rejects.toMatchObject({
+      code: 'invalid_response'
+    })
+    call.mockClear()
+    await expect(axiomClient.showPolicy({ missionId: '' })).rejects.toMatchObject({
+      code: 'invalid_params'
+    })
+    expect(call).not.toHaveBeenCalled()
+    call.mockResolvedValue({
+      id: 'desktop-ipc',
+      ok: false,
+      error: { code: 'refused', message: 'Policy refused' }
+    })
+    const failure = axiomClient.showPolicy({ missionId: mission.id })
+    await expect(failure).rejects.toBeInstanceOf(AxiomRpcError)
+    await expect(failure).rejects.toMatchObject({ code: 'refused', message: 'Policy refused' })
+  })
   it('reads the supervision view and sends an update and a proposal answer with the caller receipt id', async () => {
     const view = SupervisionShowResponse.parse({
       rules: [
