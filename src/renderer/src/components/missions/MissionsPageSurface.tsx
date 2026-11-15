@@ -4,6 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { MissionList } from './MissionList'
 import { MissionCreateDialog } from './MissionCreateDialog'
 import { MissionHome } from './MissionHome'
+import { MissionSupervision } from './MissionSupervision'
 import { PlanReviewPanel } from './PlanReviewPanel'
 import { TaskStageTable } from './TaskStageTable'
 import { TaskDetail } from './TaskDetail'
@@ -54,6 +55,13 @@ export function MissionsPageSurface({ controller: c }: { controller: MissionsPag
                 busy={c.busy}
                 onAction={c.missionAction}
                 onSelectTask={c.selectTask}
+              />
+              <MissionSupervision
+                key={c.detail.mission.id}
+                {...c.detail}
+                busy={c.busy}
+                onUpdate={c.updateSupervision}
+                onResolve={c.resolveSupervision}
               />
               {c.detail.plans
                 .filter(

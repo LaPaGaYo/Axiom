@@ -868,7 +868,7 @@ Task 表增加「等待对象」列：直接显示每个 Task 的 `waitingOn` �
 
 `MissionPendingList` 每行在「You can:」之前显示「Since」（`missions.pendingSince`；中文「开始等待于」）与该项的 `since`，没有 actions 的行也显示。时间原文置于 `<time dateTime={item.since}>`，正文与属性均为视图返回的同一字符串，不重排、不格式化、不计算相对时间；起点来源见 M3-09-1，provider 等待在后续准入轮次与重启后保持原值。
 
-`MissionHome` 的 `pendingMessages` prop 及 Mission 读取中的 pending-only 消息列表调用、返回字段均已移除，每次刷新少一次调用。`readMission` 与其导出的 `MissionDetail` 类型移至 missions/mission-read.ts，除该删除外调用顺序不变，pending view 的同一 settled read 仍供首页与选中 Task 的证据共用。定时刷新见下一节；监督档位与离开期间摘要留 M3-09-3c。
+`MissionHome` 的 `pendingMessages` prop 及 Mission 读取中的 pending-only 消息列表调用、返回字段均已移除，每次刷新少一次调用。`readMission` 与其导出的 `MissionDetail` 类型移至 missions/mission-read.ts，除该删除外调用顺序不变，pending view 的同一 settled read 仍供首页与选中 Task 的证据共用。定时刷新见下一节；监工档位见 M3-09-3c；离开期间摘要已挪到 M4 之后随对话外壳设计（Henry，2026-11-14）。
 
 ### Mission 页的定时刷新（M3-09-3b-2）
 
@@ -879,6 +879,16 @@ Task 表增加「等待对象」列：直接显示每个 Task 的 `waitingOn` �
 定时读取失败保留现有数据，在页面错误行显示与手动读取相同的 `code: message`，不 toast；之后跳过定时读取，直到手动刷新、选择或 mutation 后的读取成功。手动读取失败也会暂停定时读取。没有自动重试或 backoff，跳过的 tick 不排队；除了错误行，没有其它暂停提示。
 
 页面最多落后一个间隔，慢读取或非空闲期间更久；窗口隐藏或离开 Missions 视图时不跟随。若重读不再提供某表单的动作，仍按原有行为收起表单，现在即使没有手动刷新也可能发生。pending view、验证记录或 usage 的局部读取失败沿用各自已有提示，与手动读取一致，不改成整页失败。
+
+### Mission 首页的监工档位与升档提议（M3-09-3c）
+
+Mission Home 之后、计划面板之前的独立「Supervision」区域显示 `stalled` 规则：此 Mission 的生效档位与说明、Mission 覆盖（无覆盖为 `default`）、全局默认与来源（内置 / 由你设置 / 来自已接受的提议）。`readMission` 每次通过 `readSupervision` 调用一次 `axiom.supervision.show {missionId}`，与其它读取同时开始；手动与定时读取共用。同步抛错、拒绝或传输失败只在此区域显示普通文字「无法读取监工设置。刷新后重试。」，不显示控件、整页警报或 toast。页面交出的 `refresh` 忽略调用参数，始终手动读取并返回 promise；定时器仍依赖 hook 原函数，只安装一次。
+
+「更改此 Mission 的档位」与「更改默认档位」一次打开一张单选表单，选项来自 `StallModeSchema`。前者调用 `axiom.supervision.update {rule:stalled,missionId,mode}`，`default` 发 null；后者不带 missionId。当前值默认选中，未改变不能保存；页面忙碌时区域所有控件禁用。终态 Mission 不提供自身覆盖的修改入口。保存获接受且重读结束后收起，拒绝保留选择；显示值始终来自重读，不使用 mutation 返回值做乐观更新。改为 `stop` 先使用应用确认框，写明下一轮开始、不经询问停止、确认停止后保留工作并重试、占用尝试次数、用尽后等人处理；全局操作明确影响所有无覆盖的 Mission。拒绝确认不发送调用，退出 `stop` 不确认。
+
+仅展示 OPEN 的「Upgrade proposal」：全局默认的前后档位、提议快照里的已知结果数、失败数、通过验证数、失败比例（四舍五入为整数百分比）、不确定数与可节省分钟数（savedMs / 60 000，四舍五入），并说明接受和不采纳的后果。只当 pending view 中同 id 的 `supervision_proposal` 的 actions 含 `axiom.supervision.resolve` 时提供两个回答按钮；否则显示目前无法从此 Mission 回答的说明。回答通过 `axiom.supervision.resolve {proposalId,resolution}`；接受 `toMode=stop` 先走全局措辞的确认，不采纳不确认。两个写调用都复用 page controller 的 receipt、mutate、重读与原样 `code: message` 拒绝路径。
+
+边界：全局默认和提议会影响每个没有覆盖的 Mission；监督与 pending 是两次读取，可能暂时不同步。终态 Mission 的 pending 为空，不能回答；没有开放的 Mission 时也没有页面入口。新档位从下一轮检查起生效，不改变已停止的 Attempt；宿主不能确认停止时不保全、不结算，确认文字只以「确认停止后」提示这一边界。规则仅覆盖无界面 Worker；停滞阈值不显示也不可编辑，不展示提议门槛、提议之外的证据表、已解决提议或提议时间。无「你不在时」摘要。单测用合同 schema 解析的视图覆盖提议；本段 e2e 不产生真实提议（没有批准或启动工作），真实提议端到端仍留 M3-10。
 
 ### 人工验证处置与同候选重验（M3-05；D82 / D85 / DEF-21 ④）
 
