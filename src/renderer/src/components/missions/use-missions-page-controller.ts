@@ -11,6 +11,7 @@ import type { MissionAction } from './MissionActions'
 import { useMissionsPageRead } from './use-missions-page-read'
 import { planApprovalDescription } from './plan-approval'
 import { createSupervisionActions } from './supervision-actions'
+import { missionErrorText } from './mission-error-text'
 
 export function useMissionsPageController() {
   useTranslation()
@@ -23,8 +24,7 @@ export function useMissionsPageController() {
   const confirmingRef = useRef(false)
   const confirm = useConfirmationDialog()
   const reportError = useCallback((failure: unknown, quiet = false) => {
-    const message =
-      failure instanceof AxiomRpcError ? `${failure.code}: ${failure.message}` : String(failure)
+    const message = missionErrorText(failure)
     useAppStore.getState().setMissionError(message)
     if (!quiet) {
       toast.error(message)

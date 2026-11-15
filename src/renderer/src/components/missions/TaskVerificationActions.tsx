@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import type { RefObject, ComponentProps } from 'react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import type { Policy } from '../../../../shared/axiom-contract/mission-objects'
 import type { TaskListItem } from '../../../../shared/axiom-contract/task-params'
 import type { TaskEvidenceReads } from './task-evidence-read'
 import { VerificationResolveForm, type ResolveVerification } from './VerificationResolveForm'
@@ -12,6 +13,7 @@ import type { MessageTimeline } from './MessageTimeline'
 import type { MissionPendingItem } from '../../../../shared/axiom-contract/mission-pending'
 
 export type TaskVerificationActionProps = {
+  policy?: Policy | null
   onResolveVerification?: ResolveVerification
   onRerunVerification?: RerunVerification
   onAdjustTask?: AdjustTask
@@ -37,6 +39,7 @@ export function TaskVerificationActions({
   onResolveVerification,
   onRerunVerification,
   taskSpec,
+  policy,
   messages,
   onAdjustTask,
   onCancelTask
@@ -172,6 +175,7 @@ export function TaskVerificationActions({
                 key={current.objectId}
                 taskId={task.id}
                 spec={taskSpec}
+                policy={policy}
                 item={current.item}
                 initialPaths={initialPaths}
                 busy={busy}

@@ -5,7 +5,8 @@ import { RuntimeRpcEnvelopeSchema } from '../../../shared/runtime-rpc-envelope'
 export class AxiomRpcError extends Error {
   constructor(
     readonly code: string,
-    message: string
+    message: string,
+    readonly data?: unknown
   ) {
     super(message)
     this.name = 'AxiomRpcError'
@@ -48,7 +49,11 @@ export async function call<P, R>(
     throw new AxiomRpcError('invalid_response', 'Invalid runtime response')
   }
   if (!envelope.data.ok) {
-    throw new AxiomRpcError(envelope.data.error.code, envelope.data.error.message)
+    throw new AxiomRpcError(
+      envelope.data.error.code,
+      envelope.data.error.message,
+      envelope.data.error.data
+    )
   }
   const result = responseSchema.safeParse(envelope.data.result)
   if (!result.success) {

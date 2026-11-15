@@ -37,6 +37,49 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('Axiom desktop client', () => {
+  it('keeps the data of a refusal on the transport error', async () => {
+    const data = { errors: [{ message: 'The criterion cannot be checked.' }], reason: 'plan' }
+    call.mockResolvedValue({
+      id: 'desktop-ipc',
+      ok: false,
+      error: { code: 'plan_invalid', message: 'plan_invalid', data }
+    })
+    const failure = axiomClient.showPolicy({ missionId: mission.id })
+    await expect(failure).rejects.toMatchObject({
+      code: 'plan_invalid',
+      message: 'plan_invalid',
+      data
+    })
+    await expect(failure).rejects.toBeInstanceOf(AxiomRpcError)
+    call.mockResolvedValue({
+      id: 'desktop-ipc',
+      ok: false,
+      error: { code: 'refused', message: 'Refused' }
+    })
+    await expect(axiomClient.showPolicy({ missionId: mission.id })).rejects.toMatchObject({
+      code: 'refused',
+      data: undefined
+    })
+    await expect(axiomClient.showPolicy({ missionId: '' })).rejects.toMatchObject({
+      code: 'invalid_params',
+      data: undefined
+    })
+    call.mockRejectedValue(new Error('Offline'))
+    await expect(axiomClient.showPolicy({ missionId: mission.id })).rejects.toMatchObject({
+      code: 'transport_error',
+      data: undefined
+    })
+    call.mockResolvedValue({ wrong: 'envelope' })
+    await expect(axiomClient.showPolicy({ missionId: mission.id })).rejects.toMatchObject({
+      code: 'invalid_response',
+      data: undefined
+    })
+    call.mockResolvedValue(success({ policy: 'invalid' }))
+    await expect(axiomClient.showPolicy({ missionId: mission.id })).rejects.toMatchObject({
+      code: 'invalid_response',
+      data: undefined
+    })
+  })
   it('reads the Mission policy and keeps the transport error class', async () => {
     const response = { policy }
     call.mockResolvedValue(success(response))

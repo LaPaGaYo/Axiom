@@ -104,6 +104,7 @@ export function MissionsPageSurface({ controller: c }: { controller: MissionsPag
                     await c.rerunVerification(params)
                   }}
                   taskSpec={c.taskDetail.taskSpec}
+                  policy={c.detail.policy}
                   onAdjustTask={c.adjustTask}
                   onCancelTask={c.cancelTask}
                   tasks={c.detail.tasks}

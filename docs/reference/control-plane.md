@@ -902,6 +902,20 @@ PROPOSED 卡仅比较编号小于当前版本的最近 REJECTED 版本，显示�
 
 边界：运行清单只是页面本次读到的 policy 下会运行什么，验证运行前 policy 仍可变；批准不会重新校验提案命令。命令按 Planner 原文显示，不脱敏；验证清单的修剪与去重来自共享函数。Task id 改名是一删一增，复用 id 是修改；只比较最近退回版本，不完整展示旧 Task。不匹配的 Goal 不显示覆盖；每次页面读取增加一个 policy 调用。下一次 Planner 尚不接收退回理由（4b）；没有计划成本估算。pending 与计划列表为两次读取，下次读取前可能暂时不一致。policy 编辑器、主进程准入与 provenance 后续分别属于 4c / 4b。
 
+### 替换验收标准（M3-09-4d）
+
+Task 页在头部与 Attempts 之间显示「Current acceptance criteria」：来源为既有 `axiom.task.show` 返回的 `task.spec`，以 `resolveAcceptance` 兼容读取，复用 `PlanAcceptance` 显示原文、证明方式及说明；读取失败只显示重试提示。验证记录的「Acceptance criteria」仍是该 run 当时记录的标准。已批准的计划卡保留批准时的标准，并说明 Task 页才是当前标准；Goal 没有标准时不显示空的 Goal coverage。没有新增读取：Mission 页原有的 policy 经 TaskDetail → TaskVerificationActions → TaskAdjustForm 传递。
+
+调整表单默认不替换标准；勾选后才在事件处理器中从 spec 取一次草稿，可逐条编辑 command / artifact / human，Artifact 类型来自合同枚举。切换证明方式保留其它字段的草稿，添加、移除、取消勾选和页面重读不会用新的 spec 覆盖草稿。发送时按行序 trim text / command，仅带所选证明的字段；整个列表替换原列表，相同列表也照常发送。页面当前标准只随 Control Plane 答复后的重读变化，不显示草稿作权威状态。
+
+发送前对实际会发送的列表依次调用 `TaskAdjustParams.shape.acceptanceCriteria.safeParse`；结构合法后，对按写路径合成的 spec（含范围、限额与新列表）调用 `validateTaskAcceptance(spec, ['task'])`，并在 policy 已读且 `VerificationRulesSchema` 解析成功时调用 `validateAcceptanceCommands(resolveAcceptance(spec), rules)`，用 `evidenceCommandMessage` 原样措辞。字段错误放在字段下并关联 aria-invalid / aria-describedby；列表错误放在列表下；有错误禁用 Apply adjustment。policy 未读或规则不合法时不预判命令，也不在 renderer 补默认规则，但仍做结构和 Task 验收检查；规则不合法的说明复用计划卡的 policy_invalid 文案。旧 spec 以自身解析后的标准调用 `validateTaskAcceptance` 得到 required_evidence_retired 时不提供勾选框，其它调整仍可用。
+
+替换只改 Task spec，不改 PlanRevision；下一次验证与下一 Attempt 的 ContextPackage 读取修改后的 spec。HUMAN_REVIEW 中调整后 Task 仍为 VERIFYING，review 不关闭，须另行 rerun 才会取消旧 review 并在同一 Candidate 上重验。BLOCKED 且有 Candidate 的 Task 仅替换标准时保持阻塞；若还携带任一路径或限额（即使值没变）则按普通调整恢复到阻塞前的 stage，声明阻塞通常回 NEEDS_FIX，再在有剩余次数时 READY，否则整笔拒绝 retry_budget_exhausted。表单的此后果说明只依据 task_blocked item 是否列出 axiom.verification.rerun，不推断 stage 或运行状态。
+
+传输层 `AxiomRpcError.data` 保留拒绝详情。页面的 `missionErrorText` 直接导入传输层错误类，以 zod 读 data：message 等于 code 时优先取 errors 中的字符串 message，按首次出现顺序去重并以一个空格连接；无此消息时取字符串 reason，再回退原 message。message 自带说明时保持原说明。错误行与 toast 共用 `code: detail`；拒绝不关闭表单或清空草稿。
+
+限制：预判使用页面读取时的 policy，提交前 policy 仍可改变；非法 rules 下 Control Plane 用默认规则校验调整，但验证运行结束为 policy_invalid。renderer 的 `evidenceCommandMessage` 不经过主进程脱敏，疑似 secret 的命令可能与实际拒绝措辞不同；不在 renderer 检查标准、命令或 rationale 的 secret，标准与命令存储前也没有 secret 检查（调整审计会脱敏）。不预测 queued / running run 导致的 task_not_adjustable，只显示实际拒绝；不解除旧 requiredEvidence。替换后 review 仍能不经 rerun 而被人工处置；批准卡保留旧标准；草稿不会跟随外部 Task 调整更新；合同消息在所有语言下为英文；Task 页不列 rerun 将运行的命令清单。renderer 不预测其它状态、预算或权限拒绝，Control Plane 仍是最终权威。
+
 ### 人工验证处置与同候选重验（M3-05；D82 / D85 / DEF-21 ④）
 
 所有 INCONCLUSIVE 都按上节进入 HUMAN_REVIEW，包括准备失败；不启动 Reviewer、Decision Engine 或自动答复。`axiom.verification.show / list` 保留原判定和 acceptance，status 表示当前处置状态。人可通过 `axiom verification list --mission <id> --status HUMAN_REVIEW` 查看待审项。

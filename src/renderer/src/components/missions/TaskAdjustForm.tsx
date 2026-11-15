@@ -5,8 +5,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { translate } from '@/i18n/i18n'
-import type { TaskSpec } from '../../../../shared/axiom-contract/mission-objects'
+import type { Policy, TaskSpec } from '../../../../shared/axiom-contract/mission-objects'
 import type { MissionPendingItem } from '../../../../shared/axiom-contract/mission-pending'
+import { TaskCriteriaEditor } from './TaskCriteriaEditor'
+import { useTaskCriteriaDraft } from './use-task-criteria-draft'
 
 export type AdjustTask = (
   params: Parameters<typeof axiomClient.adjustTask>[0]
@@ -62,6 +64,7 @@ function validLimit(value: string) {
 export function TaskAdjustForm({
   taskId,
   spec,
+  policy,
   item,
   initialPaths,
   busy,
@@ -70,6 +73,7 @@ export function TaskAdjustForm({
 }: {
   taskId: string
   spec: TaskSpec
+  policy?: Policy | null
   item: MissionPendingItem
   initialPaths: string
   busy: boolean
@@ -81,7 +85,41 @@ export function TaskAdjustForm({
   const [attempts, setAttempts] = useState('')
   const [tokens, setTokens] = useState('')
   const [rationale, setRationale] = useState('')
-  const ready = !busy && !!rationale.trim() && validLimit(attempts) && validLimit(tokens)
+  const addAllowedPaths = [
+    ...new Set(
+      paths
+        .split('\n')
+        .map((path) => path.trim())
+        .filter(Boolean)
+    )
+  ]
+  const limits = {
+    ...(attempts === '' ? {} : { maxAttempts: Number(attempts) }),
+    ...(tokens === '' ? {} : { maxTokens: Number(tokens) })
+  }
+  const criteria = useTaskCriteriaDraft(
+    {
+      ...spec,
+      scope: {
+        ...spec.scope,
+        allowedPaths: [...new Set([...spec.scope.allowedPaths, ...addAllowedPaths])]
+      },
+      retryPolicy: {
+        ...spec.retryPolicy,
+        maxAttempts: limits.maxAttempts ?? spec.retryPolicy.maxAttempts
+      },
+      ...(limits.maxTokens === undefined
+        ? {}
+        : { budget: { ...spec.budget, maxTokens: limits.maxTokens } })
+    },
+    policy
+  )
+  const ready =
+    !busy &&
+    !!rationale.trim() &&
+    validLimit(attempts) &&
+    validLimit(tokens) &&
+    !criteria.issues.length
   const budget = item.waitingOn?.budget
   const guidance = adjustmentGuidance(item)
   return (
@@ -94,16 +132,9 @@ export function TaskAdjustForm({
           const accepted = await onSubmit?.({
             taskId,
             rationale: rationale.trim(),
-            addAllowedPaths: [
-              ...new Set(
-                paths
-                  .split('\n')
-                  .map((path) => path.trim())
-                  .filter(Boolean)
-              )
-            ],
-            ...(attempts === '' ? {} : { maxAttempts: Number(attempts) }),
-            ...(tokens === '' ? {} : { maxTokens: Number(tokens) })
+            addAllowedPaths,
+            ...limits,
+            ...criteria.replacement
           })
           if (accepted) {
             onClose()
@@ -199,6 +230,7 @@ export function TaskAdjustForm({
           onChange={(event) => setTokens(event.target.value)}
         />
       </div>
+      <TaskCriteriaEditor draft={criteria} item={item} busy={busy} />
       <div className="space-y-2">
         <Label htmlFor={`${id}-rationale`}>{translate('missions.rationale', 'Rationale')}</Label>
         <Textarea

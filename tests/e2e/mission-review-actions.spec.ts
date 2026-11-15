@@ -20,6 +20,11 @@ import {
   VerificationRerunDetailSchema
 } from '../../src/shared/axiom-contract/verification-params'
 import { readVerdictRecord } from '../../src/shared/axiom-contract/verdict-record'
+import { VerificationRulesSchema } from '../../src/shared/axiom-contract/verification-rules'
+import {
+  evidenceCommandMessage,
+  validateAcceptanceCommands
+} from '../../src/shared/axiom-contract/evidence-commands'
 
 type Fixture = Parameters<Parameters<typeof withFixtureMission>[2]>[0]
 const source = process.env.AXIOM_FIXTURE_REPO
@@ -365,6 +370,122 @@ test('M3-09-2b-2: a failed check and its verified fix stay readable on the Task 
       runVerification: true,
       maxAttempts: 2,
       extraAllowedPaths: ['src/domain/recurrence.ts']
+    }
+  )
+})
+
+test('M3-09-4d: a person replaces the criteria the plan got wrong and reruns verification from the Task page', async (// oxlint-disable-next-line no-empty-pattern -- Fixture owns the hidden background app lifecycle.
+{}, testInfo) => {
+  test.setTimeout(900_000)
+  if (!source || process.platform === 'win32') {
+    test.skip(true, 'Requires a POSIX fixture host')
+    return
+  }
+  await withFixtureMission(
+    testInfo,
+    source,
+    async (f) => {
+      const taskId = await releaseScenario(f, 'agent-crash')
+      const run = await waitForReview(f, taskId, 'plan_invalid')
+      const detail = await openDetail(f.page, f.mission.id, taskId)
+      const current = detail.getByRole('region', {
+        name: 'Current acceptance criteria',
+        exact: true
+      })
+      await expect(current).toBeVisible({ timeout: 10_000 })
+      await expect(
+        current.getByRole('list', { name: 'Current acceptance criteria', exact: true })
+      ).toContainText(invalid.text)
+      if (invalid.check.kind !== 'command' || passing.check.kind !== 'command') {
+        throw new Error('This scenario requires command criteria')
+      }
+      await expect(current.locator('code')).toHaveText(invalid.check.command)
+      const actions = detail.getByRole('region', { name: 'Task actions', exact: true })
+      await actions.getByRole('button', { name: 'Adjust Task', exact: true }).click()
+      const form = actions.getByRole('form', { name: 'Adjust Task', exact: true })
+      await expect(
+        form.getByRole('textbox', { name: 'Allowed paths to add', exact: true })
+      ).toBeFocused()
+      await form.getByRole('checkbox', { name: 'Replace acceptance criteria', exact: true }).check()
+      const list = form.getByRole('list', { name: 'New acceptance criteria', exact: true })
+      await expect(list.getByRole('listitem')).toHaveCount(1)
+      const row = list.getByRole('listitem', { name: 'Criterion 1', exact: true })
+      const text = row.getByRole('textbox', { name: 'Text of criterion 1', exact: true })
+      const command = row.getByRole('textbox', { name: 'Command of criterion 1', exact: true })
+      await expect(text).toHaveValue(invalid.text)
+      await expect(command).toHaveValue(invalid.check.command)
+      const { policy } = PolicyResponseSchema.parse(
+        await desktopCall(f.page, 'axiom.policy.show', { missionId: f.mission.id })
+      )
+      const rules = VerificationRulesSchema.parse(policy.verificationRules)
+      const issues = validateAcceptanceCommands(
+        [{ ...invalid, check: { kind: 'command', command: 'git status' } }],
+        rules
+      )
+      expect(issues).toHaveLength(1)
+      const message = evidenceCommandMessage(issues[0], issues[0].command)
+      await command.fill('git status')
+      await expect(command).toHaveAttribute('aria-invalid', 'true')
+      await expect(command).toHaveAccessibleDescription(message)
+      await expect(row.getByText(message, { exact: true })).toBeVisible()
+      await expect(
+        form.getByRole('button', { name: 'Apply adjustment', exact: true })
+      ).toBeDisabled()
+      await captureDetail(f.page, testInfo, 'criteria-command-refusal')
+      await text.fill(passing.text)
+      await command.fill(passing.check.command)
+      await form
+        .getByRole('textbox', { name: 'Rationale', exact: true })
+        .fill('Replace the missing script with the Candidate check.')
+      await form.getByRole('button', { name: 'Apply adjustment', exact: true }).click()
+      await expect(form).toHaveCount(0, { timeout: 10_000 })
+      await expect(current).toContainText(passing.text, { timeout: 10_000 })
+      await expect(current.locator('code')).toHaveText(passing.check.command)
+      const adjusted = await readTask(f, taskId)
+      expect(adjusted.spec?.acceptanceCriteria).toEqual([passing])
+      expect(adjusted.stage).toBe('VERIFYING')
+      expect((await readRuns(f, taskId)).find((entry) => entry.id === run.id)?.status).toBe(
+        'HUMAN_REVIEW'
+      )
+      await expect(f.page.getByRole('region', { name: 'Plan review', exact: true })).toContainText(
+        "Tasks can be adjusted after a plan is approved. A Task's own page shows its acceptance criteria as they are now."
+      )
+      await actions.getByRole('button', { name: 'Rerun verification', exact: true }).click()
+      const rerun = actions.getByRole('form', { name: 'Rerun verification', exact: true })
+      await rerun
+        .getByRole('textbox', { name: 'Rationale', exact: true })
+        .fill('Verify the corrected criteria against the same Candidate.')
+      await rerun.getByRole('button', { name: 'Queue rerun', exact: true }).click()
+      await expect
+        .poll(
+          async () =>
+            (await readRuns(f, taskId)).filter(
+              (entry) => entry.id !== run.id && entry.status === 'PASS'
+            ).length,
+          { timeout: 180_000 }
+        )
+        .toBe(1)
+      const runs = await readRuns(f, taskId)
+      expect(runs).toHaveLength(2)
+      const latest = runs.find((entry) => entry.id !== run.id)!
+      expect(latest.status).toBe('PASS')
+      expect(latest.candidateId).toBe(run.candidateId)
+      expect(latest.candidateCommitSha).toBe(run.candidateCommitSha)
+      expect(runs.find((entry) => entry.id === run.id)?.status).toBe('CANCELED')
+      expect((await readTask(f, taskId)).stage).toBe('VERIFIED')
+      expect(inspectFixtureMission(f.userData, f.mission.id).bindings).toHaveLength(1)
+      await expect(detail.getByRole('button', { name: 'Verified', exact: true })).toHaveAttribute(
+        'data-task-stage',
+        'VERIFIED',
+        { timeout: 15_000 }
+      )
+    },
+    {
+      taskIds: ['T01'],
+      acceptanceCriteria: [invalid],
+      holdWorkers: true,
+      runVerification: true,
+      maxAttempts: 3
     }
   )
 })
