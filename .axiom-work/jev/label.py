@@ -52,6 +52,31 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M3-09-3c', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'the Mission page gains a Supervision region of its own below Mission Home, as briefed: the stall '
+        'mode in effect and its source, one form for the Mission override and one for the global default sending '
+        'axiom.supervision.update, a confirmation before stop, and an open upgrade proposal with its evidence whose '
+        'answers are offered only while the pending view lists the action; the supervision view is read with the '
+        'Mission and any failure of it stays in the region; three client methods written like their neighbours; '
+        'the refresh handed to the page no longer takes the quiet flag; titles 1-6 fail at the region query on '
+        'main wiring files with no load or render error; new e2e spec green on its first host run (mode set '
+        'through the page and read back from the Control Plane, stop declined then confirmed, default changed, '
+        'override cleared, an outside update followed without a refresh), every Mission spec green, e2e red run '
+        'fails where the region should be; one screenshot read; no verifier change; no other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'Close in the stall mode form is disabled while the page is busy, unlike the other forms of the folder',
+            'after an accepted save the focus is left on the document instead of the button that opened the form',
+            'the zh catalog has two words for the proposal (the pending row of M3-09-3a and the new block): M3-10 copy pass',
+            'one more call per page read (axiom.supervision.show), twelve times a minute while the page is visible: one read model for the Mission page (M3-10)',
+            'no test drives a proposal produced by the Control Plane (twenty known outcomes): an e2e-only minimum is the seam M3-10 needs',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M3-09-3b-2', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'the Missions page re-reads every five seconds on the kernel visibility interval, installed '
