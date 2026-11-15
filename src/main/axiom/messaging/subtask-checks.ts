@@ -18,6 +18,7 @@ export type Check =
   | 'attempt'
   | 'evidence'
   | 'acceptance_uncheckable'
+  | 'secret_in_criterion'
 export type SubtaskSource = { taskId: string; attemptId: string; messageId: string }
 const normalize = (value: string) =>
   path.posix.normalize(value.replaceAll('\\', '/')).replace(/\/$/, '') || '/'
@@ -96,10 +97,11 @@ export function checkSubtask(
   if (validateAcceptanceCommands(resolveAcceptance(task), rules).length) {
     failed.push('evidence')
   }
-  if (
-    validateTaskAcceptance(task, ['task']).some((error) => error.code === 'acceptance_uncheckable')
-  ) {
-    failed.push('acceptance_uncheckable')
+  const acceptanceErrors = validateTaskAcceptance(task, ['task'])
+  for (const code of ['acceptance_uncheckable', 'secret_in_criterion'] as const) {
+    if (acceptanceErrors.some((error) => error.code === code)) {
+      failed.push(code)
+    }
   }
   if (
     !policy ||

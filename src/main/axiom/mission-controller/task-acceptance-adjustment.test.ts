@@ -120,9 +120,17 @@ it('keeps an exhausted blocked candidate available for adjust then rerun without
 it('redacts acceptance text and commands before writing adjustment audits', async () => {
   const secret = `ghp_${'x'.repeat(30)}`
   const replacement = [
-    { text: `Remove ${secret}`, check: { kind: 'command', command: `node -e "${secret}"` } }
+    {
+      text: `Remove ${secret}`,
+      check: { kind: 'command' as const, command: `node -e "${secret}"` }
+    }
   ]
-  expect(await adjust({ acceptanceCriteria: replacement })).toMatchObject({ ok: true })
+  f.store.updateTaskSpec({
+    taskId: f.task.taskId,
+    expectedStage: 'VERIFYING',
+    spec: { ...f.task.spec, acceptanceCriteria: replacement },
+    retryPolicy: f.task.retryPolicy
+  })
   expect(await adjust()).toMatchObject({ ok: true })
   const audits = f.store
     .listAuditEvents({ missionId: f.missionId })
@@ -131,6 +139,9 @@ it('redacts acceptance text and commands before writing adjustment audits', asyn
   const redacted = [
     { text: 'Remove [REDACTED]', check: { kind: 'command', command: 'node -e "[REDACTED]"' } }
   ]
-  expect(audits[0]).toMatchObject({ after: { acceptanceCriteria: redacted } })
-  expect(audits[1]).toMatchObject({ before: { acceptanceCriteria: redacted } })
+  expect(audits).toHaveLength(1)
+  expect(audits[0]).toMatchObject({
+    before: { acceptanceCriteria: redacted },
+    after: { acceptanceCriteria }
+  })
 })

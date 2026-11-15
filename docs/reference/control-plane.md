@@ -75,6 +75,8 @@ Task 的 `acceptanceCriteria` 为 `{text, check}` 数组：`check.kind=command` 
 
 M3-05-2：新 Task 至少有一个 command 或 artifact criterion；空标准或纯 human 经唯一的 `validateTaskAcceptance` 返回 `acceptance_uncheckable` error，message 同时指出这两种可检查类型。`TaskSpec.coversGoalCriteria?: number[]` 最多 50 个非负整数，是该 Task 帮助满足的 active Goal acceptanceCriteria 零基索引；Goal 有标准时 Planner 应为每个 Task 声明，没有标准时可省略。字段是声明的覆盖关系，不证明验收已满足；旧 Task 不设置它仍能读取。
 
+M3-09-4b-1：同一个 `validateTaskAcceptance` 在新写入时检查每个对象 criterion 的 `text`，以及 `check.kind=command` 的 `check.command`。只用内置 `private_key` / `provider_token` / `aws_access_key_id` 模式，不采用 Mission 的 `verificationRules.secretPatterns`。每个命中字段只产生一个 `{code:'secret_in_criterion',severity:'error',message,taskIds:[task.id],path}`；path 为 `[...path,'acceptanceCriteria',index,'text']` 或 `[...path,'acceptanceCriteria',index,'check','command']`，提案的根为 `['tasks',i]`，创建 / 调整 Task 的根为 `['task']`。message 形如 `Acceptance criterion text matches a secret pattern (provider_token). Remove the secret.`，命令字段用 `command` 替代 `text`，多模式名按内置列表顺序以逗号加空格连接；从不包含命中的文本或 criterion 内容。plan.propose / task.create / task.adjust 沿原路径返回 `plan_invalid {errors}`，在写 Plan / Task 或对应审计前拒绝；CLI 预检与调整表单沿用同一函数。子任务在下文 D50 检查中返回同名失败，不创建 Task；请求消息及 subtask.requested 审计仍按收到的内容保存。旧字符串标准与 requiredEvidence 仍由原规则拒绝，不额外扫描；已存 Plan / Task 不扫描、不迁移，批准已存提案仍以 persisted 跳过本检查。其它自由文本不在此检查范围，长标识符若命中前缀模式也拒绝且没有 override。
+
 `acceptance.ts` 的纯函数 `resolveAcceptance` 是兼容解释的唯一入口：已存字符串变为同文本的 human criterion；已存 `requiredEvidence` 中尚无 criterion 携带的非空命令，按原顺序追加为 `{text: 'Command passes: <command>', check: {kind: 'command', command}}`。`acceptanceCommands` 去重并保留 criterion 顺序。`requiredEvidence` 已退役，只作兼容读取；不迁移或重写已存 PlanRevision / Task JSON。验证、上下文、CLI、renderer 和 AgentFactory 都消费解析结果。`axiom task show --json` 暴露解析后的 spec，文本输出列出证明方式。
 
 ### ContextPackage（M2-02）
@@ -99,6 +101,8 @@ M3-05：最新 run 的 `resolution.verdict=FAIL` 时，criterion 前增加 `A hu
 只读已存 run、verdict Artifact、Task spec 与 transcript 元数据，不重跑检查、不读取 Worker 当前输出。相同输入得到相同 package id；run id 变化会改变 source 与 package id。
 
 预算按 `ceil(UTF-8 bytes / 4)` 估计，调用参数优先，其次已解析 policy.budget 的可选正整数 `contextTokens`，否则 24,000。M2-03 已加入共享 BudgetSchema，可在 mission create RPC 的 policy 中设置；后续预算修改仍需 M4 Approval。协议块计入第 4 节的 hash/token 数。强制集永不裁剪，超限设 `budgetExceededByMandatory: true`；候选按既有入边查询顺序（from_task_id）、再 created_at/id，去重后取直接上游的 handoff/worker_report，第一项放不下即停止，余项记 budget。
+
+内置模式的唯一列表现位于 `src/shared/axiom-contract/secret-patterns.ts`，Context 脱敏、diff gate 与验收标准写入检查共用它。
 
 规则与候选在纳入前脱敏：PRIVATE KEY 块、指定 provider token 前缀（兼容 hyphen/underscore）和 AKIA key 替换为 `[REDACTED]`；规则先脱敏再截断。候选的敏感部分在 omitted 中以 redacted 记录，安全替换文本仍可纳入；section header 标记 redacted。manifest ranked hash 绑定脱敏后的正文；强制 hash 绑定渲染节（第 4 节另含协议）。
 
@@ -914,7 +918,7 @@ Task 页在头部与 Attempts 之间显示「Current acceptance criteria」：�
 
 传输层 `AxiomRpcError.data` 保留拒绝详情。页面的 `missionErrorText` 直接导入传输层错误类，以 zod 读 data：message 等于 code 时优先取 errors 中的字符串 message，按首次出现顺序去重并以一个空格连接；无此消息时取字符串 reason，再回退原 message。message 自带说明时保持原说明。错误行与 toast 共用 `code: detail`；拒绝不关闭表单或清空草稿。
 
-限制：预判使用页面读取时的 policy，提交前 policy 仍可改变；非法 rules 下 Control Plane 用默认规则校验调整，但验证运行结束为 policy_invalid。renderer 的 `evidenceCommandMessage` 不经过主进程脱敏，疑似 secret 的命令可能与实际拒绝措辞不同；不在 renderer 检查标准、命令或 rationale 的 secret，标准与命令存储前也没有 secret 检查（调整审计会脱敏）。不预测 queued / running run 导致的 task_not_adjustable，只显示实际拒绝；不解除旧 requiredEvidence。替换后 review 仍能不经 rerun 而被人工处置；批准卡保留旧标准；草稿不会跟随外部 Task 调整更新；合同消息在所有语言下为英文；Task 页不列 rerun 将运行的命令清单。renderer 不预测其它状态、预算或权限拒绝，Control Plane 仍是最终权威。
+限制：预判使用页面读取时的 policy，提交前 policy 仍可改变；非法 rules 下 Control Plane 用默认规则校验调整，但验证运行结束为 policy_invalid。renderer 的 `evidenceCommandMessage` 不经过主进程脱敏，疑似 secret 的命令可能与实际拒绝措辞不同；表单通过同一个 `validateTaskAcceptance` 预判标准文本与命令中的内置 secret 模式并阻止发送，Control Plane 在写入前拒绝 `secret_in_criterion`；rationale 的 secret 拒绝仍不在 renderer 预判，调整审计仍脱敏。不预测 queued / running run 导致的 task_not_adjustable，只显示实际拒绝；不解除旧 requiredEvidence。替换后 review 仍能不经 rerun 而被人工处置；批准卡保留旧标准；草稿不会跟随外部 Task 调整更新；合同消息在所有语言下为英文；Task 页不列 rerun 将运行的命令清单。renderer 不预测其它状态、预算或权限拒绝，Control Plane 仍是最终权威。
 
 ### 人工验证处置与同候选重验（M3-05；D82 / D85 / DEF-21 ④）
 
@@ -1068,11 +1072,15 @@ M3-04b-3：questionId 若是本 Mission 的 typed QUESTION 消息，则在 `ques
 | dependency                                    | 所有 dependsOn 属于 Mission；追加原 Task → 新 Task 及请求依赖后 orderPlanTasks 无环                                                                                                |
 | budget                                        | policy.budget.maxAttempts 若设置，须大于 Mission attemptCount 总和                                                                                                                 |
 | evidence                                      | 每个 command criterion 满足 D85 命令边界，失败 reason=evidence                                                                                                                     |
+| acceptance_uncheckable                        | 同一个 validateTaskAcceptance 要求至少一个 command 或 artifact criterion；失败名保持 acceptance_uncheckable |
+| secret_in_criterion                           | 同一个 validateTaskAcceptance 检查对象 criterion 文本与 command 的内置 secret 模式；任意字段命中只追加一个同名 check 失败，不带命中文本 |
 | attempt                                       | 请求者 binding 匹配 Task/Mission，dispatch 仍为 dispatched                                                                                                                         |
 | 全部通过，subtaskAutoCreate 严格 boolean true | 消费者在 subtask.requested 后经 createTask 创建；继承 retryPolicy、milestoneId，kind=task，risk 默认 low；边使用 Mission readinessThreshold；subtask.resolved.decision=auto_accept |
 | 检查失败 / 自动创建未启用                     | 保持 pending；失败写 subtask.checks_failed（failed 数组），无 Task 创建                                                                                                            |
 | 人工 accept                                   | `axiom.message.resolve {missionId,messageId,decision:'accept',rationale}` 重跑全部检查，再走相同 createTask；失败仍 pending                                                        |
 | 人工 reject                                   | 同一 resolve，decision=reject；只写 subtask.resolved，不创建 Task                                                                                                                  |
+
+M3-09-4b-1：人工与自动路径均在 `checkSubtask` 返回 `secret_in_criterion`，`resolveSubtask` 写 `subtask.checks_failed {failed}` 并返回 `{resolved:false,failed}`，不抛异常、不创建 Task；自动消费者正常返回，人工 RPC 沿原失败路径返回 `invalid_argument`（`Subtask checks failed.`）与 `data.failed`。
 
 所有成功处置写 `subtask.resolved.after = {decision,reason,taskId?}`；再次 resolve 返回 invalid_argument。CLI `axiom message resolve --mission <id> --message <id> --accept|--reject --rationale <text>` 要求恰好一个决定。用户 task.create 无请求 Attempt，执行验收合同检查及 duplicate / dependency / budget；来源请求的创建执行上表全部检查。answer、resolve、task.create 均进 AXIOM_MUTATION_METHODS，与 ask 一起使用既有 envelope 栅栏和收据。M4 接 Approval，M5 将请求量作为 replan 信号。
 
@@ -1086,7 +1094,7 @@ M3-04b-3 的报告项复用上述 message.list / answer / resolve 投影；M4 �
 
 `maxTokens` 可选且为正整数；提供时必须严格大于 `sumAttemptTokenUsage({taskId})`，否则 `invalid_argument`、data=`{taskId,used,maxTokens}`，不写 spec、audit 或 receipt。通过后仅替换 spec.budget.maxTokens，保留其它 budget 字段。task.adjusted 的 before.maxTokens 是旧 cap 或 null，after.maxTokens 是新 cap；plan.minor_adjustment.after.maxTokens 同样记录。只有调用明确设置 cap 才添加这些审计字段。token-blocked Task 沿原 previousStage 解锁，NEEDS_FIX 仍受次数检查；两个预算都耗尽时必须一次同时提高。省略 maxTokens 保留原 cap；仍达 cap 的 Task 会在下次 admission 再次阻塞。无 --max-tokens CLI 参数。
 
-acceptanceCriteria 为 1–50 个严格对象的全量替换，经 `validateTaskAcceptance` 与 `validateAcceptanceCommands`（由 `validateTaskCommands` 使用 Mission verificationRules 调用）校验，错误为 `plan_invalid {errors}`；不接受新的字符串标准。无 acceptanceCriteria 的旧调用不受影响。rationale 命中 `redactContext` 返回 secret_in_rationale，不写审计。
+acceptanceCriteria 为 1–50 个严格对象的全量替换，经 `validateTaskAcceptance` 与 `validateAcceptanceCommands`（由 `validateTaskCommands` 使用 Mission verificationRules 调用）校验，错误为 `plan_invalid {errors}`；不接受新的字符串标准。文本或命令命中内置 secret 模式时由同一 validator 返回 `secret_in_criterion`，按上文「Task spec」的字段路径与固定消息拒绝，spec 与审计均不写入。无 acceptanceCriteria 的旧调用不受影响，不扫描旧 spec。rationale 命中 `redactContext` 返回 secret_in_rationale，不写审计。
 
 同一事务写 `task.adjusted`：before=`{allowedPaths,maxAttempts}`，after=`{allowedPaths,maxAttempts,addedPaths,rationale,afterAttemptSeq:nextAttemptSeq(taskId)-1,origin:user,resolvedMessageIds}`；替换 criteria 时 before / after 另带各自 acceptanceCriteria（文本与命令先脱敏）；以及 `plan.minor_adjustment`：after=`{classification:MINOR_ADJUSTMENT,origin:task_adjust,taskId,addedPaths,maxAttempts,rationale}`。每个本 Task 的 pending typed BLOCKED 消息写 `blocked.resolved`（objectKind=message、objectId=messageId，after=`{decision:adjusted,taskId,rationale}`）；`cancelTask` 在取消事务内同样写 decision=canceled。M3-09-2b-3 起，`cancelTask` 在改变 stage 前检查 `redactContext(rationale).redacted`，命中则拒绝 `invalid_argument / secret_in_rationale`，不写 stage、audit 或消息解决；参数、结果、dispatcher 回执与不级联语义不变。Task stage 是权威，pending 只是上述审计的投影。
 

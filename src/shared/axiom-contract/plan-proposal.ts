@@ -11,6 +11,7 @@ import {
   type TaskSpec
 } from './mission-objects'
 import { orderPlanTasks } from './plan-task-graph'
+import { detectBuiltInSecretPatterns } from './secret-patterns'
 
 export const PlanProposalSchema = z.object({
   goalRevisionId: AxiomIdSchema,
@@ -36,6 +37,7 @@ export type PlanProposalError = {
     | 'evidence_command_invalid'
     | 'required_evidence_retired'
     | 'criterion_shape'
+    | 'secret_in_criterion'
     | 'acceptance_uncheckable'
     | 'coverage_index_out_of_range'
   severity: 'error' | 'warning'
@@ -71,6 +73,27 @@ export function validateTaskAcceptance(
         taskIds: [task.id],
         path: [...path, 'acceptanceCriteria', index]
       })
+      return
+    }
+    const fields = [{ name: 'text', value: criterion.text, path: ['text'] }]
+    if (criterion.check.kind === 'command') {
+      fields.push({
+        name: 'command',
+        value: criterion.check.command,
+        path: ['check', 'command']
+      })
+    }
+    for (const field of fields) {
+      const patterns = detectBuiltInSecretPatterns(field.value)
+      if (patterns.length) {
+        errors.push({
+          code: 'secret_in_criterion',
+          severity: 'error',
+          message: `Acceptance criterion ${field.name} matches a secret pattern (${patterns.join(', ')}). Remove the secret.`,
+          taskIds: [task.id],
+          path: [...path, 'acceptanceCriteria', index, ...field.path]
+        })
+      }
     }
   })
   if (
