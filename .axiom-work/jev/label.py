@@ -52,6 +52,29 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M3-09-4b-1', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'acceptance criteria that hold a secret are refused where they are written, as briefed: the three '
+        'built-in patterns moved verbatim into one contract module and imported by the redactor; the rule added once, '
+        'to validateTaskAcceptance (text of every object criterion, command of a command check), with a typed issue '
+        'that names field and pattern and never the value; no call site changed, so the proposal, Task creation and '
+        'Task adjustment refuse through plan_invalid, the subtask checks fail with the same name, and the adjust form '
+        'predicts it through the function it already calls; stored plans stay approvable; twelve titles as briefed, '
+        'titles 1, 3, 4, 5, 7, 8 and 12 fail at one assertion each on main product files with no load or render error '
+        'and the five control titles pass there; both runners green; every Mission spec green on the host; the union '
+        'script (first Task under the short-sidecar convention) failed 0; no verifier change; no other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'the contract module exports regular-expression objects with the global flag: say so on the export or export sources (M3-10)',
+            'a subtask request that fails this check is still stored as received, and three audit rows keep criteria as given: redaction of those rows is not part of this Task',
+            'no override for a false positive on a long identifier that starts with one of the prefixes',
+            'the Mission secretPatterns take no part in this check, by decision',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M3-09-4d', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'the acceptance criteria of a Task, as briefed: shown on the Task page as they are now from the '
