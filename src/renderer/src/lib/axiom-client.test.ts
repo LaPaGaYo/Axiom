@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { axiomClient, AxiomRpcError } from './axiom-client'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
+import { SupervisionShowResponse } from '../../../shared/axiom-contract/supervision'
 import {
   taskWithSpec,
   goal,
@@ -35,6 +36,65 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('Axiom desktop client', () => {
+  it('reads the supervision view and sends an update and a proposal answer with the caller receipt id', async () => {
+    const view = SupervisionShowResponse.parse({
+      rules: [
+        {
+          rule: 'stalled',
+          globalMode: 'observe',
+          globalSource: 'built_in',
+          missionMode: null,
+          effectiveMode: 'observe'
+        }
+      ],
+      notifications: [],
+      evidence: [],
+      proposals: []
+    })
+    call.mockResolvedValue(success(view))
+    expect(await axiomClient.showSupervision({ missionId: mission.id })).toEqual(view)
+    expect(call).toHaveBeenLastCalledWith({
+      method: 'axiom.supervision.show',
+      params: { missionId: mission.id }
+    })
+    const update = { rule: 'stalled' as const, missionId: mission.id, mode: 'notify' as const }
+    const resolution = { proposalId: 'proposal-1', resolution: 'accept' as const }
+    for (const entry of [
+      {
+        method: 'axiom.supervision.update',
+        params: update,
+        id: 'update-receipt',
+        run: () => axiomClient.updateSupervision(update, 'update-receipt')
+      },
+      {
+        method: 'axiom.supervision.resolve',
+        params: resolution,
+        id: 'resolve-receipt',
+        run: () => axiomClient.resolveSupervision(resolution, 'resolve-receipt')
+      }
+    ]) {
+      call.mockResolvedValue(success(view))
+      expect(await entry.run()).toEqual(view)
+      expect(call).toHaveBeenLastCalledWith({
+        method: entry.method,
+        params: entry.params,
+        envelope: {
+          orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+          orchestrationRequestId: entry.id
+        }
+      })
+      call.mockResolvedValue(success({ rules: [] }))
+      await expect(entry.run()).rejects.toMatchObject({ code: 'invalid_response' })
+    }
+    await expect(axiomClient.showSupervision({ missionId: mission.id })).rejects.toMatchObject({
+      code: 'invalid_response'
+    })
+    call.mockClear()
+    await expect(
+      axiomClient.resolveSupervision({ proposalId: '', resolution: 'dismiss' }, 'empty-receipt')
+    ).rejects.toMatchObject({ code: 'invalid_params' })
+    expect(call).not.toHaveBeenCalled()
+  })
   it('reads a Task with its spec and sends an adjustment and a cancellation with the caller receipt id', async () => {
     const result = { task: taskWithSpec }
     call.mockResolvedValue(success(result))

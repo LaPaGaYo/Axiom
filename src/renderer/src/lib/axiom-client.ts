@@ -10,6 +10,7 @@ import * as verification from '../../../shared/axiom-contract/verification-param
 import * as artifact from '../../../shared/axiom-contract/artifact-params'
 import * as usage from '../../../shared/axiom-contract/token-usage'
 import * as pending from '../../../shared/axiom-contract/mission-pending'
+import * as supervision from '../../../shared/axiom-contract/supervision'
 import {
   TaskListParams,
   TaskListResponseSchema,
@@ -76,6 +77,35 @@ async function call<P, R>(
 }
 
 export const axiomClient = {
+  showSupervision: (params: z.infer<typeof supervision.SupervisionShowParams>) =>
+    call(
+      'axiom.supervision.show',
+      params,
+      supervision.SupervisionShowParams,
+      supervision.SupervisionShowResponse
+    ),
+  updateSupervision: (
+    params: z.infer<typeof supervision.SupervisionUpdateParams>,
+    requestId: string = createNonSecureContextUuid()
+  ) =>
+    call(
+      'axiom.supervision.update',
+      params,
+      supervision.SupervisionUpdateParams,
+      supervision.SupervisionUpdateResponse,
+      requestId
+    ),
+  resolveSupervision: (
+    params: z.infer<typeof supervision.SupervisionResolveParams>,
+    requestId: string = createNonSecureContextUuid()
+  ) =>
+    call(
+      'axiom.supervision.resolve',
+      params,
+      supervision.SupervisionResolveParams,
+      supervision.SupervisionResolveResponse,
+      requestId
+    ),
   showTask: (params: z.infer<typeof TaskShowParams>) =>
     call('axiom.task.show', params, TaskShowParams, TaskResponseSchema),
   adjustTask: (

@@ -9,6 +9,7 @@ import { translate } from '@/i18n/i18n'
 import type { CreateMissionInput } from './MissionCreateDialog'
 import type { MissionAction } from './MissionActions'
 import { useMissionsPageRead } from './use-missions-page-read'
+import { createSupervisionActions } from './supervision-actions'
 
 export function useMissionsPageController() {
   useTranslation()
@@ -198,6 +199,7 @@ export function useMissionsPageController() {
       translate('missions.keepTask', 'Keep Task')
     )
   return {
+    ...createSupervisionActions(mutate, confirmAction),
     adjustTask,
     cancelTask,
     resolveVerification,
@@ -215,7 +217,7 @@ export function useMissionsPageController() {
     error,
     createOpen,
     create,
-    refresh,
+    refresh: (_event?: unknown) => refresh(),
     missionAction,
     approve,
     reject,
