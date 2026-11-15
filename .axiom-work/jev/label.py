@@ -52,6 +52,27 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M3-06-2b-4', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'an Attempt lost with its daemon is preserved and settled as an interruption whether or not its '
+        'wrapper left an exit marker, as briefed: the marker condition is gone from the lost-daemon branch, the '
+        'marker is still read before the capture with the acceptance rule of the exit path, an accepted integer is '
+        'kept in the attempt.failed audit as exitMarker and nothing else of the audit changes; no other product '
+        'file changes; titles 1, 2 and 4 fail at their first assertion on main product files and titles 3 and 5 '
+        'pass there; the new e2e test reaches the state through the fixture hold and fails at its first assertion '
+        'on main files; the host experiment that failed twice on main (a 400 ms pause before the signal to the wrapper) passes twice on the candidate with exitMarker 143 in the audit and the work preserved; all 38 Mission specs (74 tests) pass on the first run; both runners green; the union script failed 0; no verifier change; no other '
+        'model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'when the exit path commits before the kernel verdict the ending is the exit path one (counted for a signal exit): order of the two paths at boot and classification of signal exits (M3-10)',
+            'a finished Attempt whose terminal was lost is preserved and continued, not submitted (V1 decision; M3-10 item)',
+            'the fixture restart unit test gained no case for the new option',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M3-09-4b-1', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'acceptance criteria that hold a secret are refused where they are written, as briefed: the three '
