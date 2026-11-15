@@ -52,6 +52,36 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M3-09-4d', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'the acceptance criteria of a Task, as briefed: shown on the Task page as they are now from the '
+        'Task read; replaceable as a whole from the adjust form behind an unchecked box, the draft taken once in the '
+        'handler and kept across page reads; refusals predicted only with the write path schema and functions '
+        '(TaskAdjustParams, validateTaskAcceptance, validateAcceptanceCommands with evidenceCommandMessage), no '
+        'default rules filled in when the policy is missing or invalid, no replacement offered for retired evidence; '
+        'the transport error keeps the refusal data and the error line words it by one rule; the approved plan card '
+        'says Tasks may have been adjusted and an empty Goal coverage is left out; titles 1-10 fail at an assertion '
+        'on main wiring files with no load or render error; the new e2e test green on its first host run (told '
+        'before sending with the message the contract functions give, replacement through the page, rerun to PASS on '
+        'the same Candidate without a second Attempt), every Mission spec green on the host except one run of the '
+        'unchanged main-process spec mission-daemon-lost-continuation (a timeout after the restart; three runs alone '
+        'on the same tree passed; not the candidate), e2e red run fails where the region should be; one screenshot '
+        'read; no verifier change; no other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'the three proof kinds are typed in the row component while Artifact kinds come from the contract enum: key the options by the contract kind type',
+            'zh says 限额 for a limit where the catalog says 上限 elsewhere: wording pass of M3-10',
+            'a legacy Task with requiredEvidence cannot have its criteria replaced: dropping the field on replacement is a main-process change (4b candidate, with Henry)',
+            'criteria and commands are not checked for secrets at the write paths (4b candidate, with Henry)',
+            'the Task page does not list the commands a rerun will run',
+            'mission-daemon-lost-continuation timed out once after the restart, cause not established: attach the Attempt audit rows and the worker row to the failure output (M3-10); the host-check launcher keeps test-results of failed runs',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+        'failures': {'20261115T041009': [('flaky', 'verification_record:M3-09-4d-1: the unchanged main-process spec mission-daemon-lost-continuation timed out once (150 s) waiting for attempt.failed after the restart; the candidate changes no file under src/main, src/preload, src/shared or src/cli and the spec reaches the Control Plane through the preload bridge only; the spec passed in the 18 host checks before and in three runs alone on the same tree; first occurrence, cause not established')]},
+    },
     ('M3-09-4a', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'the plan card, as briefed: per Task the scope, risk level, limits and how each criterion is '
