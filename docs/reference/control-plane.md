@@ -59,7 +59,7 @@ Execution Kernel 继续拥有 Run、Orca Task、dispatch、PTY、进程、worktr
 | `artifacts`           | M2-02 已写/读：Mission、kind、sha256、size、media type、related ids、createdBy；内容只存 `<userData>/axiom/artifacts/<sha256>`               |
 | `decisions`           | M2-02 `listDecisions({ missionId, status })` 只读；ContextBuilder 包含 ACCEPTED 的 title/resolution；Decision service/RPC 写入者仍待后续     |
 | `verification_runs`   | M2-07 入 QUEUED；M3-01 事务领取、独立 worktree 准备与重启重排队；v45 保存 runtime_epoch、claim_count、worktree_id、started_at、finished_at；自 M4-2a-1 起可带可空的 `batch_id`，仅 IntegrationBatch 的合并树回归使用，验证服务的 claim 与 recovery 都跳过这样的行；M4-2a-2 的 IntegrationController 写批次回归。listVerificationRuns / axiom.verification.list 默认仅列无 batch 的候选验证，显式 batchId 才列该批次 |
-| `integration_batches` | M4-1a 的合同 `integration-batch.ts` 与 `integration-batches-store.ts`：单候选、十个状态、带预期状态守卫的迁移与有序查询；IntegrationController 的 `integration.apply` 执行器写 APPLYING、TESTING、CONFLICT、回归后的 PROMOTABLE / FAILED，晋升后的 PROMOTED，或过期 / 耗尽后的 SUPERSEDED；晋升前进集成头并在同一事务记录 Task INTEGRATED，引用已前进的 PROMOTABLE 先补记、不作废；目前没有产品入队方 |
+| `integration_batches` | M4-1a 的合同 `integration-batch.ts` 与 `integration-batches-store.ts`：单候选、十个状态、带预期状态守卫的迁移与有序查询；IntegrationController 的 `integration.apply` 执行器写 APPLYING、TESTING、CONFLICT、回归后的 PROMOTABLE / FAILED，晋升后的 PROMOTED，或过期 / 耗尽后的 SUPERSEDED；晋升前进集成头并在同一事务记录 Task INTEGRATED，引用已前进的 PROMOTABLE 先补记、不作废；M4-2b 由 Scheduler 每轮的 requestIntegrations 入队 |
 | `approvals`           | 表已建；M4 ApprovalGateway 使用，不复用 decision gate                                                                                        |
 | `axiom_effects`       | M3-06 admission / VerificationRun 同事务入队；按 kind / Mission 串行执行 dispatch 或验证唤醒，保存 due_at、失败次数、lease epoch 与结果 |
 
@@ -157,7 +157,7 @@ Task: approve → DEFINED；start → READY；admission → RUNNING；submit →
       headless no_change / blocked → NEEDS_FIX → BLOCKED（交人调整，不自动重试）
 ```
 
-合法转换表包含未来阶段；M2 推进 RUNNING / SUBMITTED，M3 增加独立验证与人工处置，M4-2a-3 晋升推进 INTEGRATED；集成入队与 Mission 完成仍归后续任务。Orca `completed` 仅指当前 Attempt 已结算，不能显示为 Task 完成；UI 只有 INTEGRATED 计入进度。
+合法转换表包含未来阶段；M2 推进 RUNNING / SUBMITTED，M3 增加独立验证与人工处置，M4-2a-3 晋升推进 INTEGRATED；M4-2b 在 Scheduler round 内请求集成、推进 INTEGRATION_READY，Mission 完成仍归后续任务。Orca `completed` 仅指当前 Attempt 已结算，不能显示为 Task 完成；UI 只有 INTEGRATED 计入进度。
 
 暂停/阻塞前的 Mission 状态保存在 `missions.previous_status`；resume 只用于 PAUSED，内部 unblock 用于 BLOCKED，恢复目标必须等于该字段。嵌套 PAUSED/BLOCKED 经持久 `mission.status` 审计回放恢复更早返回点。Task 进入 BLOCKED 保存 `task_stages.previous_stage`，通常解除时返回该 stage（或取消）；M3-05 的明确例外是满足同候选重验条件时，以 actor=user / reason=rerun_requested 转 VERIFYING。条件更新不命中时抛 `stale_state`。
 
@@ -185,7 +185,7 @@ M2 仍仅允许首个 Plan 批准；替代计划批准属于 M5。`plan-material
 
 ### Scheduler admission 与预算（M2-04）
 
-`Scheduler.scheduleRound(missionId, trigger)` 只处理 EXECUTING Mission，先重算 readiness，再按最长下游链长度降序、Task id 升序遍历 READY Tasks。每轮从数据库读取状态；同实例/同 Mission 的重叠调用只保留一个待执行 trigger，当前轮结束后再跑一轮，无 polling/timer。当前轮抛错时，若已有待执行 trigger，仍执行该 trigger 对应的下一轮；没有待执行 trigger 则照旧拒绝 flight。后续轮接手时不再报告前一轮的错误，后续轮按自己的结果处理；flight 返回值也不包含失败轮已经准入的 Task（持久的 admission 不撤销，目前没有调用方读取该返回值）。进程重启只需重新实例化 Scheduler；序号、计数、provider 占用均从数据库恢复。
+`Scheduler.scheduleRound(missionId, trigger)` 只处理 EXECUTING Mission，先重算 readiness，紧接着同步调用 requestIntegrations 请求集成（见 Integration requests），再按最长下游链长度降序、Task id 升序遍历 READY Tasks。每轮从数据库读取状态；同实例/同 Mission 的重叠调用只保留一个待执行 trigger，当前轮结束后再跑一轮，无 polling/timer。当前轮抛错时，若已有待执行 trigger，仍执行该 trigger 对应的下一轮；没有待执行 trigger 则照旧拒绝 flight。后续轮接手时不再报告前一轮的错误，后续轮按自己的结果处理；flight 返回值也不包含失败轮已经准入的 Task（持久的 admission 不撤销，目前没有调用方读取该返回值）。进程重启只需重新实例化 Scheduler；序号、计数、provider 占用均从数据库恢复。
 
 ContextBuilder/AgentFactory 的异步构建在 admission 事务之前完成。事务内重新校验 Mission/Task、APPROVED Plan 与依赖、Question/Approval、预算/并发、构建前后的 Task/policy 一致性，以及 package/spec 存在且归属匹配；分配 `seq = max(seq) + 1`，写 `attempt_bindings(dispatch_id = NULL, branch = axiom/attempt/<taskId>/<seq>)`，CAS `READY → RUNNING` 并 `attempt_count += 1`，追加 `task.stage` / `attempt.admitted`。RUNNING 转换必须带 `actor: Scheduler` 与 `attemptCountDelta: 1`，否则 `illegal_transition(reason: admission_required)`。
 
@@ -238,9 +238,9 @@ D87 / DEF-48 ① 的 v0 迁移两个副作用；M3-06-2a 增加 attempt.continue
 | `attempt.dispatch` | `<taskId>/<seq>` / `{taskId,seq,branch,agentSpecId,contextPackageId}` | 先跳过已被更新 seq 取代的 effect，再调用既有 launcher；一个 Attempt 恰有一个 dispatch，已绑定或不再 RUNNING 时沿用其 no-op 守卫；`maxAttempts=1` |
 | `verification.enqueue` | VerificationRun id / `{runId}` | `void verification.kick().catch(warn)`，不等待验证 drain；`maxAttempts=3`，失败退避 1 s、5 s |
 | `attempt.continue` | 被中断的 `<taskId>/<seq>` / `{taskId,seq,chain,failureClass,resetsAt?}` | 到期只请求该 Mission 的 Scheduler round，重读 EXECUTING、READY、无更新 seq；`maxAttempts=3`，抛错退避 1 s、5 s，onOrphan=retry |
-| `integration.apply` | Candidate id / 严格 `{taskId,candidateId}` | 从集成头建临时 worktree，detached HEAD 上 `merge --no-ff`；钉住合并提交后 TESTING，同一次执行跑批次回归至 PROMOTABLE / FAILED，通过后前进集成头、记录 PROMOTED / INTEGRATED；INCONCLUSIVE 留 TESTING 并抛错重试；CONFLICT / FAIL 退回原 Task；支持 AbortSignal 停止、TESTING 与 PROMOTABLE 续跑；先按引用补记晋升再关闭过期批次，新批次核对审计记录的头；`maxAttempts=3`，抛错退避 1 s、5 s，onOrphan=retry；尚无产品入队方 |
+| `integration.apply` | Candidate id / 严格 `{taskId,candidateId}` | 从集成头建临时 worktree，detached HEAD 上 `merge --no-ff`；钉住合并提交后 TESTING，同一次执行跑批次回归至 PROMOTABLE / FAILED，通过后前进集成头、记录 PROMOTED / INTEGRATED；INCONCLUSIVE 留 TESTING 并抛错重试；CONFLICT / FAIL 退回原 Task；支持 AbortSignal 停止、TESTING 与 PROMOTABLE 续跑；先按引用补记晋升再关闭过期批次，新批次核对审计记录的头；`maxAttempts=3`，抛错退避 1 s、5 s，onOrphan=retry；M4-2b 由 Scheduler round 请求，Task → INTEGRATION_READY 与 effect 同事务 |
 
-`enqueue` 只能在调用方事务内执行，否则抛错。Scheduler 在 `scheduler_admission` 与 binding、RUNNING、attempt.admitted 一起写；Submission 在 `axiom_submit` 与 QUEUED run 一起写；rerun 在 `verification_rerun` 与新 run、审计、收据一起写。微任务仅唤醒；回滚没有 effect 行，执行器不会执行。相同 key 的 pending / failed / retired / done 条目被重新置为 pending、payload 替换、attempts 归零、dueAt 更新；running 条目不改。
+`enqueue` 只能在调用方事务内执行，否则抛错。Scheduler 在 `scheduler_admission` 与 binding、RUNNING、attempt.admitted 一起写 attempt.dispatch；每轮的 requestIntegrations 在 `integration_requested` 与 Task INTEGRATION_READY、integration.requested 一起写 integration.apply；Submission 在 `axiom_submit` 与 QUEUED run 一起写；rerun 在 `verification_rerun` 与新 run、审计、收据一起写。微任务仅唤醒；回滚没有 effect 行，执行器不会执行。相同 key 的 pending / failed / retired / done 条目被重新置为 pending、payload 替换、attempts 归零、dueAt 更新；running 条目不改。
 
 状态为 `pending | running | done | failed | retired`。领取按 `due_at,rowid`，以状态 CAS 变为 running 并记录进程 epoch 与 lease 时间（updated_at）。每个 `(kind,missionId)` 最多一个 running，不同 lane 独立；执行在事务外、提交后。返回 `done` 标记完成；返回 `{later: ISO}` 变 pending、保留失败次数；抛错才增加 attempts，未耗尽按 backoff 延后，耗尽标 failed，追加 `effect.failed {kind,key,attempts,lastError}`（actor `EffectOutbox`、objectKind `effect`、objectId effect id），再调用 onExhausted。lastError 经 `redactContext` 脱敏且最多 2,000 字符。dispatch 的 onExhausted 保留原 `attempt.launch_failed {reason:'launch_rejected'}`（actor Scheduler、objectId taskId/seq）与原 settlement。launcher 自己吞下的失败仍由原逻辑结算，effect 为 done；done 仅表示执行器返回，不是 Worker 成功或 Task 完成。
 
@@ -256,7 +256,7 @@ E2E seam：仅当 `getMainE2EConfig().enabled` 且 `AXIOM_E2E_HOLD_ATTEMPT_DISPA
 
 ### Integration apply（M4-1b）
 
-`integration/integration-apply.ts` 在 `createControlPlane` 注册 `integration.apply`。执行器串起 IntegrationController 的合并、下节的合并树回归与晋升：通过后前进集成分支并记录 PROMOTED / INTEGRATED。不把 Task 推到 INTEGRATION_READY，也没有产品路径入队；只有测试到达它。工作树经 kernel 的 `createManagedWorktree` / `removeManagedWorktree`，固定引用经既有 `pinCandidateRef` / `pinCommit` 创建，集成头只由 `advanceIntegrationHead` 前进。
+`integration/integration-apply.ts` 在 `createControlPlane` 注册 `integration.apply`。执行器串起 IntegrationController 的合并、下节的合并树回归与晋升：通过后前进集成分支并记录 PROMOTED / INTEGRATED。Task 推到 INTEGRATION_READY 与产品请求入队由 M4-2b 的 requestIntegrations 负责；Scheduler 每轮在 readiness 之后调用它，执行器消费已提交的请求。工作树经 kernel 的 `createManagedWorktree` / `removeManagedWorktree`，固定引用经既有 `pinCandidateRef` / `pinCommit` 创建，集成头只由 `advanceIntegrationHead` 前进。
 
 执行顺序：
 
@@ -269,7 +269,7 @@ E2E seam：仅当 `getMainE2EConfig().enabled` 且 `AXIOM_E2E_HOLD_ATTEMPT_DISPA
 7. 除回归被 outbox 停止外，无论结果如何，尝试检出先前从 git 读回的临时分支，再以 `{force:true,waitForBackgroundRemoval:true}` 交回 kernel。这样 kernel 能看到分支，且分支仍等于完整 base ref，可以通过本地合并等价检查删除，不需要拉取远程。checkout 失败仍调用 removal；失败审计不撤销已结算批次，原尝试失败也不会被清理错误替代。
 8. 本次回归 PASS 的批次在 scratch 交回后，重读请求并执行晋升（见 Integration promotion）：前进引用，然后在 integration_promoted 事务记录 PROMOTED 与可迁移的 Task INTEGRATED。
 
-合并阶段的持久结果：TESTING 有 baseCommit、唯一 candidateIds、mergeCommit 和 merged ref（已经包含候选时 mergeCommit=baseCommit）；CONFLICT 有冲突路径、空 mergeCommit，候选已 SUPERSEDED，原 Task READY/BLOCKED；三次不可用后先按引用补记晋升，剩下可判定的开放批次 SUPERSEDED、Task 若仍 INTEGRATION_READY 则 BLOCKED（integration_unavailable），previousStage=INTEGRATION_READY，Attempt 计数不变，候选保持 ACTIVE。最后一条由不会抛错的 onExhausted 先调用共享的晋升对账，再在 integration_abandoned 事务中取消剩余批次未结束的回归并结算，最后尽力清理遗留工作树；PROMOTABLE 读头失败或补记事务拒绝时保留开放，不作废，Task 仍可 BLOCKED；它仅运行一次，进程在 effect.failed 与回调之间退出仍会留下 APPLYING / INTEGRATION_READY，直到重新入队。数据库不可写时回调同样不能保证结算。
+合并阶段的持久结果：TESTING 有 baseCommit、唯一 candidateIds、mergeCommit 和 merged ref（已经包含候选时 mergeCommit=baseCommit）；CONFLICT 有冲突路径、空 mergeCommit，候选已 SUPERSEDED，原 Task READY/BLOCKED；三次不可用后先按引用补记晋升，剩下可判定的开放批次 SUPERSEDED、Task 若仍 INTEGRATION_READY 则 BLOCKED（integration_unavailable），previousStage=INTEGRATION_READY，Attempt 计数不变，候选保持 ACTIVE。最后一条由不会抛错的 onExhausted 先调用共享的晋升对账，再在 integration_abandoned 事务中取消剩余批次未结束的回归并结算，最后尽力清理遗留工作树；PROMOTABLE 读头失败或补记事务拒绝时保留开放，不作废，Task 仍可 BLOCKED；它仅运行一次，进程在 effect.failed 与回调之间退出仍会留下 APPLYING / INTEGRATION_READY，M4-2b 在下一轮重新入队。正常耗尽而 BLOCKED 的 Task 经 rationale-only adjust 回 INTEGRATION_READY 后，调整触发的下一轮也重新请求；pending / running 请求保持已有退避。数据库不可写时回调同样不能保证结算。
 
 git/kernel 失败只抛固定码：`integration_head_unavailable`（目录/集成头不可读）、`integration_head_moved`（开放批次或新 worktree 的头不匹配）、`repository_not_local`、`candidate_unpinned`、`scratch_worktree_unavailable`（准备/遗留回收失败）、`merge_failed`、`merged_ref_conflict`（merged pin 不可建立或不匹配）、`integration_batch_stale`（预期迁移未成功）。不持久化原始 stderr；既有合并路径的数据库错误或程序错误沿用 outbox 的脱敏/截断，M4-2a-3 新增的读写路径只暴露固定码。失败三次、退避 1 秒和 5 秒；旧 epoch 的 running effect 返回 retry，重用批次和确定性 commit。
 
@@ -285,7 +285,7 @@ git/kernel 失败只抛固定码：`integration_head_unavailable`（目录/集�
 
 冲突另写 `candidate.superseded`：objectKind=`candidate`、objectId=candidate.id、before=`{status:'ACTIVE'}`、after=`{status:'SUPERSEDED',supersededBy:null,reason:'integration_conflict'}`。Task 的两次迁移复用 MissionController 的 `task.stage` 审计，带上述 reason；不可用只写一次到 BLOCKED 的迁移。
 
-限制：M4-2a-2 把 TESTING 推到 PROMOTABLE / FAILED，M4-2a-3 在通过后晋升；仍未晋升的 PROMOTABLE 挡住后续候选，M4-2b 才启用入队。后续候选可能与已晋升的变化冲突；M4-3 才准备带旧候选的修复基线和冲突证据。临时工作树在侧栏可见且可被人删除。kernel 创建/删除分支仍运行仓库 post-checkout/reference-transaction hooks，仍可能查询 GitHub PR、配置 push.autoSetupRemote、复制 symlink/.worktreeinclude；这些行为不是执行器的 hooks 开关能禁止的。removal 需要 terminal provider；失败的工作树只由同批后续运行清理，done/failed 的孤儿启动清扫留给 M4-4。合并中崩溃会留下基点上的临时分支，头不变时下次 kernel 可复用；executor 信任 kernel 的安全删分支规则，规则变化可能导致保留分支或触达远程，不能自行强删。Git 低于 2.38 时 kernel 无法执行合并等价证明，普通已合并检查不通过就保留分支并记录 cleanup_failed。
+限制：M4-2a-2 把 TESTING 推到 PROMOTABLE / FAILED，M4-2a-3 在通过后晋升；M4-2b 已启用产品入队，仍未晋升的 PROMOTABLE 挡住后续候选。后续候选可能与已晋升的变化冲突；M4-3 才准备带旧候选的修复基线和冲突证据。临时工作树在侧栏可见且可被人删除。kernel 创建/删除分支仍运行仓库 post-checkout/reference-transaction hooks，仍可能查询 GitHub PR、配置 push.autoSetupRemote、复制 symlink/.worktreeinclude；这些行为不是执行器的 hooks 开关能禁止的。removal 需要 terminal provider；失败的工作树只由同批后续运行清理，done/failed 的孤儿启动清扫留给 M4-4。合并中崩溃会留下基点上的临时分支，头不变时下次 kernel 可复用；executor 信任 kernel 的安全删分支规则，规则变化可能导致保留分支或触达远程，不能自行强删。Git 低于 2.38 时 kernel 无法执行合并等价证明，普通已合并检查不通过就保留分支并记录 cleanup_failed。
 
 ### Integration regression（M4-2a-2）
 
@@ -321,13 +321,13 @@ git/kernel 失败只抛固定码：`integration_head_unavailable`（目录/集�
 
 新增失败码只有 regression_inconclusive、regression_unavailable、merged_commit_unavailable，保留上节旧码；原始 command / git / store 输出不进入新错误、审计或 lastError，只在运行 Artifact 中保存命令输出。
 
-限制：没有产品路径入队（M4-2b）；M4-2a-3 已实现 promotion / PROMOTED / INTEGRATED，尚未完成晋升的 PROMOTABLE 仍挡住同 Mission 的下一个候选。死批次只有该 Mission 的某次 try 才关闭。FAIL 后新 Attempt 从集成头开始，不携带回归证据（M4-3）。三次 INCONCLUSIVE 和仓库不可达一样阻塞 Task，退避只有秒级；没有 Mission 级待处理项。无命令计划通过；每次新 worktree 都重跑 setup 并探测三个版本，一次最多持有 integration.apply 的 Mission lane 一个 timeBudgetMinutes。
+限制：M4-2b 已由 Scheduler 请求集成；M4-2a-3 已实现 promotion / PROMOTED / INTEGRATED，尚未完成晋升的 PROMOTABLE 仍挡住同 Mission 的下一个候选。死批次只有该 Mission 的某次 try 才关闭。FAIL 后新 Attempt 从集成头开始，不携带回归证据（M4-3）。三次 INCONCLUSIVE 和仓库不可达一样阻塞 Task，退避只有秒级；没有 Mission 级待处理项。无命令计划通过；每次新 worktree 都重跑 setup 并探测三个版本，一次最多持有 integration.apply 的 Mission lane 一个 timeBudgetMinutes。
 
 人可在侧栏删除 scratch，随后命令失败可成为 FAIL（若最后 HEAD 无法读取则按上述 scratch_changed 修正）。命令若改动候选也改过的 tracked 文件，回到临时分支可能失败并留下分支（integration.cleanup_failed）；不先清理 scratch 内容。停止留下的 worktree 等下次 try 回收，真实 runtime 重用的临时分支仍可能留到 M4-4。单测 fixture 在 kernel git 函数之上、完整 runtime 之下，不能证明完整 runtime 的分支保留 / 侧栏 / 终端供应行为。stopAxiomControlPlane 不等待 outbox。暂停语义、更完整的孤儿清扫与环境失败处理留给 M4-4，显示回归留给 M4-5。
 
 ### Integration promotion（M4-2a-3）
 
-`integration-head.ts` 解析本机仓库并检查记录的头；`integration-promotion.ts` 负责晋升、引用对账和迟到的 Task 结算；`integration-base.ts` 的 `advanceIntegrationHead` 是产品前进集成分支的唯一地方。仍无产品路径入队 integration.apply，也不推进 VERIFIED → INTEGRATION_READY（M4-2b）。
+`integration-head.ts` 解析本机仓库并检查记录的头；`integration-promotion.ts` 负责晋升、引用对账和迟到的 Task 结算；`integration-base.ts` 的 `advanceIntegrationHead` 是产品前进集成分支的唯一地方。M4-2b 的 requestIntegrations 由 Scheduler round 调用，推进 VERIFIED → INTEGRATION_READY 并入队 integration.apply；本节继续描述执行器收到请求后的晋升。
 
 每个新批次开始（插入或 QUEUED → APPLYING）在 integration_begin 内读该 Mission 的审计一次，以 sequence 最大的相关事件为准：integration.batch_promoted 的 after.mergeCommit，或 objectKind=mission、objectId=该 Mission 的 integration.base_created / integration.base_reused 的 after.sha。start 失败重试留下多个 base 事件时最后一条生效；不按批次 created_at 排序。不存在记录、最新记录没有合法 GitObjectIdSchema id，或实际头不等于记录，固定 `integration_head_unexpected`，无批次写入。这里的 ponytail 简化会读 Mission 全部事件；规模增长时改为带过滤的 store 查询。APPLYING / TESTING 继续只核对已有 baseCommit。
 
@@ -355,9 +355,29 @@ advanceIntegrationHead 先验证 from / to，再用一个 for-each-ref 同时读
 
 `readIntegrationGit` / `writeIntegrationGit` 在其原有完整环境上设置（不是追加）`GIT_CEILING_DIRECTORIES=parent(cwd)`；scratch 丢失自身 .git 时不能走到父仓库执行。唯一豁免是 readIntegrationHead 的仓库路径读取，保留原环境，支持 catalog 路径不是仓库根的既有行为。其它目录的 git 调用不受此改动影响，WSL 内该变量不传给 git。
 
-限制与风险：检查 checkout 与写引用是两个 git 调用；中间仍可能有人检出，worktree 内的 rebase / bisect 不在 worktreepath 检查范围；手删目录但未 prune 的工作树仍算检出。worktreepath 需要 Git 2.23（在 2.25 基线内）。引用被人移动后，各 Task 集成在秒级三次重试后以 integration_unavailable 阻塞，只能先把引用放回；没有 Mission 级待处理项（M4-4）。检出的分支也会在三次后丢弃已经通过的回归。耗尽时无法判定的 PROMOTABLE 留开放、Task 阻塞，挡住 Mission 队列，直到解除阻塞且请求重跑，或 Task 取消后可读取引用的 try 清理；仓库不可读期间，任何开放 PROMOTABLE 都让该 Mission 的每个 try 在清理之前失败，包括已取消的 Mission。
+限制与风险：检查 checkout 与写引用是两个 git 调用；中间仍可能有人检出，worktree 内的 rebase / bisect 不在 worktreepath 检查范围；手删目录但未 prune 的工作树仍算检出。worktreepath 需要 Git 2.23（在 2.25 基线内）。引用被人移动后，各 Task 集成在秒级三次重试后以 integration_unavailable 阻塞，只能先把引用放回；没有 Mission 级待处理项（M4-4）。检出的分支也会在三次后丢弃已经通过的回归。耗尽时无法判定的 PROMOTABLE 留开放、Task 阻塞，挡住 Mission 队列，直到解除阻塞后由下一轮重新请求并重跑，或 Task 取消后可读取引用的 try 清理；仓库不可读期间，任何开放 PROMOTABLE 都让该 Mission 的每个 try 在清理之前失败，包括已取消的 Mission。
 
-最后一次资格检查与引用更新之间落下的 block、cancel、pause 不阻止晋升；mergeCommit 已是头时任何这些变化都不阻止补记。引用前进后被阻塞或取消的 Task 保持原状态，虽其变化已在集成分支；阻塞者解除后要等请求重跑才 INTEGRATED，M4-2b 前无人重排请求；取消者保持 CANCELED。INTEGRATED 是终态，没有反向操作，也未新增写入者守卫。已运行 Worker 从旧头起步，在自己的合并时遇到新头；没有保全快照、原本能在旧 worktree 继续的中断 Attempt 在头移动后重新启动。最后一个 Task 集成后 Mission 仍 EXECUTING（M4-6）。不触碰目标分支，不 push / fetch / 开 PR；不使用 AWAITING_APPROVAL；修复基线仍等 M4-3，完整恢复与孤儿清扫等 M4-4，展示等 M4-5，交付等 M4-8。
+最后一次资格检查与引用更新之间落下的 block、cancel、pause 不阻止晋升；mergeCommit 已是头时任何这些变化都不阻止补记。引用前进后被阻塞或取消的 Task 保持原状态，虽其变化已在集成分支；阻塞者解除后要等请求重跑才 INTEGRATED：M4-2b 的下一轮重排已结束的请求，仍 pending / running 的请求继续沿用；取消者保持 CANCELED。INTEGRATED 是终态，没有反向操作，也未新增写入者守卫。已运行 Worker 从旧头起步，在自己的合并时遇到新头；没有保全快照、原本能在旧 worktree 继续的中断 Attempt 在头移动后重新启动。最后一个 Task 集成后 Mission 仍 EXECUTING（M4-6）。不触碰目标分支，不 push / fetch / 开 PR；不使用 AWAITING_APPROVAL；修复基线仍等 M4-3，完整恢复与孤儿清扫等 M4-4，展示等 M4-5，交付等 M4-8。
+
+### Integration requests（M4-2b）
+
+`integration/integration-admission.ts` 的同步 `requestIntegrations(store, missions, effects, missionId)` 在每一轮 Scheduler 的 recomputeReadiness 之后、构建或准入新的 Attempt 之前调用。Mission 不是 EXECUTING 或 shouldHoldIntegration 为真时不做任何事。验证结算与人工 PASS 仍在自己的事务中只写 VERIFIED，由 MissionController 的 scheduleAfterWrite 在提交后触发 stage_change round；VERIFIED 在该事务与 round 之间短暂可见。
+
+新请求的三项条件：Task 为 VERIFIED 且有 ACTIVE Candidate；activeCandidateVerification 读到该候选最新的无 batch 验证为 PASS（人工处置的 PASS 也算，批次回归不算）；listUpstreamEdges 的每一个上游 Task 属于同一 Mission、同一 planRevisionId 且 INTEGRATED。已完成的工作不再受新 Attempt 的次数、预算或待答 Question 门禁影响。不满足条件的 Task 完全不写：没有 stage、审计、block 或待处理项，也不说明为什么没请求。
+
+先检查 INTEGRATION_READY 的重请求，再处理新的 VERIFIED。新的请求按 getLatestReadModelAudit 读到的最新 task.stage → VERIFIED 的 sequence 升序；无该事件的排最后，同序按 Task id。同一时间戳的两条事件仍以 sequence 区分，只有排序依据相同（包括都缺事件）才回退到 Task id。每个候选的 key 为 Candidate id，payload 严格为 `{taskId,candidateId}`；outbox 按 due_at,rowid 领取，同 kind / Mission 串行。
+
+每个 Task 一个 `store.transaction('integration_requested', …)`，锁内重新读取 Mission、Task、activeCandidateVerification，重请求还读取 effect；资格已变就不写。新请求通过 missions.transitionTaskStage 写 INTEGRATION_READY（actor=IntegrationController、reason=integration_requested），同事务 enqueue integration.apply 并追加 `integration.requested`：actor=IntegrationController、objectKind=candidate、objectId=candidate.id、before=null，after=`{taskId,runId,again:false}`。返回值只含已提交请求的 Task id，顺序等于写入顺序。stage change 安排提交后的 round；enqueue 的微任务唤醒 outbox，回滚不留下可执行行。
+
+INTEGRATION_READY 且仍有 ACTIVE Candidate 时，effect 不存在或状态为 failed / retired / done 就重新 enqueue，写同一个 integration.requested，after=`{taskId,again:true}`，不再改 stage，也不检查 run。pending / running 一律不碰，保留 attempts、dueAt 和 lastError。三次耗尽的 integration_unavailable 经人的 rationale-only adjust 回到 INTEGRATION_READY 后，由调整触发的 round 再请求；批次已 PROMOTED 的请求由 finishPromotedRequest 只补 Task INTEGRATED。
+
+一项事务出错只回滚该 Task，console.warn 仅含 `[axiom] Integration request failed` 与 `{missionId,taskId}`，继续后续 Task；外层读取出错仅带 missionId，返回此前已写的 id。错误内容不打印、不存储，整个调用不抛错，不妨碍本轮准入其它工作。旧的 M4-2a-3 晋升事务写 INTEGRATED 后触发 stage_change round，下一轮重算依赖，将满足条件的下游置 READY，并按通常准入路径写 attempt.dispatch；新的 Attempt 从已前进的集成头开始。
+
+重启：若 verdict 已提交但 round 尚未运行，boot 对 EXECUTING 且恢复未阻塞的 Mission 请求 resume round，读到 VERIFIED 后补请求；若请求事务已提交但执行器未运行，启动的 effects.recoverAtBoot / effects.start 消费 pending 行，round 不改它。旧 epoch 的 running integration.apply 依既有 onOrphan=retry 继续；无需在 verdict 内入队，也没有新增定时 round。
+
+`shouldHoldIntegration()` 是 `getMainE2EConfig().enabled && process.env.AXIOM_E2E_HOLD_INTEGRATION === '1'`。withFixtureMission 默认传入 AXIOM_E2E_HOLD_INTEGRATION=1，只有 `runIntegration: true` 才放开；现有 Mission e2e 的断言不改，只有新增 mission-integration.spec.ts 端到端跑 T01 → T04 的验证、合并、回归、晋升和依赖准入。
+
+限制与风险：没有周期性 round，只在 stage change、adjustment、policy update、start、resume、unblock 或 boot 等既有触发时请求；升级后 EXECUTING Mission 的第一轮会请求所有遗留 VERIFIED 中满足条件的 Task。重请求只看 effect 状态：failed 而 Task 仍在 INTEGRATION_READY（耗尽结算失败或进程先停）时，后续每轮可重新给三次尝试，直到 Task 离开该 stage；执行器正常情况下不应留下 done、同 ACTIVE Candidate、Task 仍 INTEGRATION_READY 的组合。Mission 暂停或 Task 阻塞时，已有执行器每 30 s 轮询，本模块不改变暂停语义。集成头前进后，没有保全快照、原本会在旧 worktree 继续的中断 Attempt 改为重新启动；已经运行的 Worker 在自己的合并时遇到新头。scheduler.ts 已到 300 counted lines 上限。所有旧 e2e 按住集成，新增用例的宿主执行由 verifier 负责。所有 Task 都 INTEGRATED 后 Mission 仍为 EXECUTING；修复基线、完整恢复、展示、收尾、Approval 与交付仍归后续 M4。
 
 ### Attempt launch（M2-05）
 
@@ -717,7 +737,7 @@ M3-09-2b-4：`axiom.task.cancel` 也在取消提交后 await `recovery.reconcile
 
 **stop_unknown 的内核边界（M2-08 Attempt 2）**：beginWorkerStop 拒绝第二次 stop，受支持的退出路径是 abandon；这与 verifier 核对的上游 Orca `ce2d60834c` 一致，不需要改内核或增加生命周期边。取消时下一 tick 直接 abandon（无 evidence Artifact），记录 priorStop、放弃时的宿主 liveness 与 release 收据；RUNNING 时无论宿主观测如何，按 e 等待 tolerance 后带 evidence abandon。abandon 只结束执行权威，不宣称进程退出；possibly-live 资源仍由内核保留，通常 release 为 retained / identity_unproven。旧 runtime stranded stopping 归一化后遵守同一规则；同 runtime 正在 stopping 的调用仍拥有结果，恢复不抢占。后续 tick 不重复 attempt.stop_unknown，取消审计重放保留最初的 priorStop/liveness，不因宿主观测变化重复记录。`.axiom-work/reports/M2-08-1.md` 保留为历史证据，其 scope-gap 判断由本规则取代；修复与验证记录见 `.axiom-work/reports/M2-08-2.md`。
 
-M3-01 的 VerificationService 在 Mission recovery 后、首次 kick 前尝试验证队列重驱，逐项失败不阻止启动（见 Verification 节）；既有 60 s reconcile 同时触发 verification.kick，重试未完成的清理。M3-02/04 接检查与失败证据；M4 扩展 Integration/Approval 恢复。D58 的新通道必须保持相同 liveness 语义。
+M3-01 的 VerificationService 在 Mission recovery 后、首次 kick 前尝试验证队列重驱，逐项失败不阻止启动（见 Verification 节）；既有 60 s reconcile 同时触发 verification.kick，重试未完成的清理。M3-02/04 接检查与失败证据；M4-2b 的 boot resume round 补请求，既有 outbox 启动恢复继续驱动集成，完整 Integration/Approval 恢复仍归 M4-4。D58 的新通道必须保持相同 liveness 语义。
 
 ### Supervision rules（M3-06-3 / M3-06-3-2；D88 9–10 及 2026-11-12 修订、D60 / D68 修订）
 
@@ -1325,11 +1345,11 @@ M2-06a `MessageRouter` 在 `store.transaction('message_route', …)` 内写 Cont
 
 恢复逐个检查非终态 Mission：Run 必须存在，合成 session id 必须有效且 `runBoundToCoordinator` 成立；否则 BLOCKED，记录一次 `recovery.run_binding_lost`，不悄悄重建 Run。正常恢复重算 readiness，**不会写 recovery 成功事件**；若 readiness 实际移动，仍按正常 Task 转换审计。
 
-`reconcileAttempts()` 的 Attempt 子集由 M2-08 接入启动、周期与退出消息触发（§4 Recovery）。M3-01 的 VerificationService 负责 Verification 队列重驱；Integration 队列重驱与 Approval 过期由 M4 接入。`docs/plans/M1.md` 的早期 M1-01 笔记写过先 drain 后注册，实际 M1-08 实现与测试为先注册再 drain，以实现为本节事实来源。
+`reconcileAttempts()` 的 Attempt 子集由 M2-08 接入启动、周期与退出消息触发（§4 Recovery）。M3-01 的 VerificationService 负责 Verification 队列重驱；Integration 队列由既有 outbox 在启动时恢复并唤醒，M4-2b 的 boot resume round 补 VERIFIED 与已结束请求的 INTEGRATION_READY；完整批次清扫与 Approval 过期仍归后续 M4。`docs/plans/M1.md` 的早期 M1-01 笔记写过先 drain 后注册，实际 M1-08 实现与测试为先注册再 drain，以实现为本节事实来源。
 
 M2-06b 审计：question.created / question.answered 的 objectKind=message、objectId=question message id；前者带 Task/Attempt，后者带 answerMessageId 与 status，不复制回答正文。消费者按 question_threads 识别无 Axiom payload 的 QUESTION，写 message.received。REQUEST_SUBTASK 的 subtask.requested、checks_failed、resolved 与 Task 创建在同批事务内；重放不重复创建。task.created 带 origin/provenance/messageId?；其 plan.minor_adjustment 带 classification=MINOR_ADJUSTMENT、origin=user|request_subtask、Task 与边。M3-04b 调整的 origin=task_adjust，字段和 task.adjusted / blocked.resolved 的事务关系见 §6。人工接受失败在返回 invalid_argument 前保留 checks_failed 审计，仍可修复后重试或拒绝。
 
-M3-01 已由 VerificationService 在启动时回收过期 RUNNING worktree 并重新 QUEUED，保留审计与 Artifact；M4 接 Integration 与 Approval 过期恢复，不以收件/ACK 代替完成证据。
+M3-01 已由 VerificationService 在启动时回收过期 RUNNING worktree 并重新 QUEUED，保留审计与 Artifact；集成请求已由 outbox 恢复与 M4-2b boot round 重驱，完整 Integration 清扫与 Approval 过期恢复留给后续 M4，不以收件/ACK 代替完成证据。
 
 ## 9. M2 出口操作与后续里程碑
 
