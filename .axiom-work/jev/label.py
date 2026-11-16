@@ -52,6 +52,26 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M3-09-4c-1', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'a committed policy update requests one admission round for its Mission and a trigger that arrives '
+        'while a round is failing is run instead of dropped, as briefed: the trigger literal, a three-line controller '
+        'method, the call after the transaction in the handler and a catch on the round in the scheduler loop; no '
+        'other product change; titles 1, 3, 4 and 6 fail at an assertion on main product files, titles 2 and 5 and '
+        'every older scheduler title pass there; the new e2e spec passes on the candidate and fails at its first poll '
+        'on main product files; every Mission spec passes on the host; both runners green; the union script failed 0; '
+        'no verifier change; no other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'the error of a failing round that is followed by a pending trigger is neither logged nor returned: one log line at that catch',
+            'every committed update requests a round, also one that changes nothing; refusals are not de-duplicated',
+            'no screen changes a policy yet (M3-09-4c-2)',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M3-09-4b-2', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'the Planner context gains one bounded section with the rejected plan revisions, as briefed: one '
