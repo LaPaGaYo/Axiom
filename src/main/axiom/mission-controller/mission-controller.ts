@@ -107,6 +107,9 @@ export class MissionController {
     })
   }
 
+  policyUpdated(missionId: string): void {
+    this.scheduleAfterWrite(missionId, 'policy')
+  }
   createMission(input: CreateMissionInput) {
     return this.write('create_mission', () => createMission(this.ctx, input))
   }

@@ -36,8 +36,8 @@ export const AXIOM_POLICY_METHODS = [
           code: 'approval_required'
         })
       }
-      const { store } = getAxiomControlPlane(runtime)
-      return store.transaction('policy_update', () => {
+      const { store, missions } = getAxiomControlPlane(runtime)
+      const result = store.transaction('policy_update', () => {
         const before = requirePolicy(store, p.missionId)
         const policy = {
           ...before,
@@ -64,6 +64,8 @@ export const AXIOM_POLICY_METHODS = [
         })
         return { policy }
       })
+      missions.policyUpdated(p.missionId)
+      return result
     }
   })
 ]
