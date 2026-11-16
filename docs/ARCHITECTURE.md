@@ -201,7 +201,7 @@ EXECUTING ↔ REPLANNING
 | `BLOCKED → <进入前的状态>` | 阻塞原因解除；目标状态 = `missions.previous_status`，由 MissionController 校验 |
 | `* → FAILED` | 无安全有界恢复路径且用户放弃；须记录原因 |
 
-集成在 `EXECUTING` 期间持续发生（每个 VERIFIED 候选即时入队），`FINALIZING` 只是最终回归与完成门评估。
+集成在 `EXECUTING` 期间持续发生（每个 VERIFIED 候选由验证结论触发的那一轮调度请求入队，M4-2b），`FINALIZING` 只是最终回归与完成门评估。
 
 `PAUSED`（D70）：停止新 admission 与新 VerificationRun 领取；运行中的 Attempt 按 policy `pauseMode: drain | stop`（默认 drain）；集成不开新批次；wall-clock 预算与 Approval 过期停表；恢复回 `previous_status`。
 
@@ -235,7 +235,7 @@ NEEDS_FIX → READY（新 Attempt）
 | `VERIFYING → VERIFIED` | verdict PASS |
 | `VERIFYING → NEEDS_FIX` | verdict FAIL；失败证据进入下一 Attempt 的 ContextPackage |
 | `VERIFYING → BLOCKED` | INCONCLUSIVE 升级到 HUMAN_REVIEW 且等待中 |
-| `VERIFIED → INTEGRATION_READY` | 全部上游依赖 INTEGRATED（高风险 Approval 在批次 PROMOTABLE 之后，D79） |
+| `VERIFIED → INTEGRATION_READY` | 有生效候选、它最近一次（不属于批次的）验证是 PASS、全部上游依赖 INTEGRATED；由 Scheduler 的一轮在重算就绪之后写入，同一事务入队 `integration.apply`（M4-2b；高风险 Approval 在批次 PROMOTABLE 之后，D79） |
 | `INTEGRATION_READY → INTEGRATED` | 所属 IntegrationBatch PROMOTED |
 | `INTEGRATION_READY → NEEDS_FIX` | 批次 CONFLICT 或 FAILED（D79）；候选 SUPERSEDED；修复 Attempt 的基线为 `integration_merge` |
 | `RUNNING → NEEDS_FIX / BLOCKED` | Attempt FAILED/STOPPED/ABANDONED：重试预算未耗尽 → NEEDS_FIX；耗尽 → BLOCKED，待处理项给人三个选项：经 Approval 加预算、取消、重新规划（D70 修订、D8 修订） |
@@ -421,7 +421,7 @@ ContextPackage 是可寻址（`id = sha256(manifest)`）、可复现、最小充
 - 目标分支与集成基线都是受保护分支：Worker Attempt 永不直接合入。
 
 ### 12.2 批次流程（V1：每批一个候选，D5）
-1. `INTEGRATION_READY` 候选按验证通过的先后排队；队列是 outbox 里的 `integration.apply`，同一 Mission 一次一个，单一 IntegrationController 串行处理，批次的记录在它动手时写入（`APPLYING`）；
+1. `INTEGRATION_READY` 候选按验证通过的先后排队（M4-2b：Scheduler 每一轮在重算就绪之后调用 `requestIntegrations`，按 Task 最近一次进入 `VERIFIED` 的审计序号发请求；回到 `INTEGRATION_READY` 而请求已经结束的 Task 重新入队，`pending` / `running` 的请求不动）；队列是 outbox 里的 `integration.apply`，同一 Mission 一次一个，单一 IntegrationController 串行处理，批次的记录在它动手时写入（`APPLYING`）；
 2. `APPLYING`：内核从当前基线建临时工作树（分支 `axiom/integrating/<batchId>`），合并在游离 HEAD 上做（`merge --no-ff <candidate>`）：临时分支留在基线上，随工作树由内核删除；合并 commit 固定到 `refs/axiom/batches/<batchId>/merged`。git 无法自动合并 → `CONFLICT`：候选 SUPERSEDED，原 Task → `NEEDS_FIX`；修复 Attempt 的分支由 Control Plane 从当前集成基线建，`merge --no-commit` 旧候选并留下冲突标记，ContextPackage 携带冲突证据（D79）；
 3. `TESTING`：同一次执行接着在合并 commit 上跑合并树回归（D92 b）——`setupCommands`、该 Task 自己的验收命令、`integrationGates`（缺省取最高一档门），差异门与防篡改门不再跑——记成属于这个批次的 VerificationRun（`batch_id`），不进人工处置；没有结论（环境问题，或临时工作树已不在合并 commit 上）时批次留在 `TESTING`，有界重试，仍不行按 §6.7 末段处理；失败 → `FAILED`：候选 SUPERSEDED，原 Task → `NEEDS_FIX`，修复 Attempt 从失败批次的合并 commit（`refs/axiom/batches/<batchId>/merged`）继续、带失败的回归证据；需要动 Task scope 之外的文件时只在当前 PlanRevision 已授权的范围内扩大（`scope_extended`），否则问人（D79）；
 4. `PROMOTABLE`：风险分级（迁移、权限/安全敏感路径、依赖变更等由 policy 规则判定）；分级记下来，交付批准时给人看；V1 不在批次上等批准（D92 a）；
