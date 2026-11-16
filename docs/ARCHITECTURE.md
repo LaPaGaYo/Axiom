@@ -269,6 +269,8 @@ INCONCLUSIVE → HUMAN_REVIEW → PASS | FAIL（V1；SPECIALIST_REVIEW 保留给
 
 Review（V1 只有人，D82）只能收敛 `INCONCLUSIVE`，**不能**推翻 deterministic `FAIL`。
 
+属于批次的 run（合并树回归，§12.2 第 3 步）不进 `HUMAN_REVIEW`：`INCONCLUSIVE` 就是它的终点，由合并执行器重试；重试、中断或批次作废时，还没结束的 run → `CANCELED`。
+
 ### 6.7 IntegrationBatch
 
 ```text
@@ -281,7 +283,7 @@ PROMOTABLE → AWAITING_APPROVAL → PROMOTED | REJECTED
 
 `PROMOTED` = 集成基线 ref `axiom/integration/<missionId>` 前进到本批次的合并 commit。
 
-V1 的合入自动进行，批次上不等批准，唯一的 Approval 在交付前（D92 a）；`AWAITING_APPROVAL` 与 `REJECTED` 留在枚举里，V1 不用。批次级失败回原 Task 修复；FIX_TASK 只用于没有肇事候选的 Mission 级失败（§12.3）。合并没法尝试（环境问题）时有界重试，仍不行则批次 `SUPERSEDED`、Task `BLOCKED`（原因 `integration_unavailable`，不计入重试、不送修）；Mission 级的待处理项（M4-4）建成后取代这一做法。
+V1 的合入自动进行，批次上不等批准，唯一的 Approval 在交付前（D92 a）；`AWAITING_APPROVAL` 与 `REJECTED` 留在枚举里，V1 不用。批次级失败回原 Task 修复；FIX_TASK 只用于没有肇事候选的 Mission 级失败（§12.3）。合并没法尝试、或合并树回归没有结论（环境问题）时有界重试，仍不行则批次 `SUPERSEDED`、Task `BLOCKED`（原因 `integration_unavailable`，不计入重试、不送修）；Mission 级的待处理项（M4-4）建成后取代这一做法。
 
 ### 6.8 Approval、Decision、Question
 
@@ -421,7 +423,7 @@ ContextPackage 是可寻址（`id = sha256(manifest)`）、可复现、最小充
 ### 12.2 批次流程（V1：每批一个候选，D5）
 1. `INTEGRATION_READY` 候选按验证通过的先后排队；队列是 outbox 里的 `integration.apply`，同一 Mission 一次一个，单一 IntegrationController 串行处理，批次的记录在它动手时写入（`APPLYING`）；
 2. `APPLYING`：内核从当前基线建临时工作树（分支 `axiom/integrating/<batchId>`），合并在游离 HEAD 上做（`merge --no-ff <candidate>`）：临时分支留在基线上，随工作树由内核删除；合并 commit 固定到 `refs/axiom/batches/<batchId>/merged`。git 无法自动合并 → `CONFLICT`：候选 SUPERSEDED，原 Task → `NEEDS_FIX`；修复 Attempt 的分支由 Control Plane 从当前集成基线建，`merge --no-commit` 旧候选并留下冲突标记，ContextPackage 携带冲突证据（D79）；
-3. `TESTING`：在合并后的树上运行仓库全量回归与 Task 要求的检查；失败 → `FAILED`：候选 SUPERSEDED，原 Task → `NEEDS_FIX`，修复 Attempt 从失败批次的合并 commit（`refs/axiom/batches/<batchId>/merged`）继续、带失败的回归证据；需要动 Task scope 之外的文件时只在当前 PlanRevision 已授权的范围内扩大（`scope_extended`），否则问人（D79）；
+3. `TESTING`：同一次执行接着在合并 commit 上跑合并树回归（D92 b）——`setupCommands`、该 Task 自己的验收命令、`integrationGates`（缺省取最高一档门），差异门与防篡改门不再跑——记成属于这个批次的 VerificationRun（`batch_id`），不进人工处置；没有结论（环境问题，或临时工作树已不在合并 commit 上）时批次留在 `TESTING`，有界重试，仍不行按 §6.7 末段处理；失败 → `FAILED`：候选 SUPERSEDED，原 Task → `NEEDS_FIX`，修复 Attempt 从失败批次的合并 commit（`refs/axiom/batches/<batchId>/merged`）继续、带失败的回归证据；需要动 Task scope 之外的文件时只在当前 PlanRevision 已授权的范围内扩大（`scope_extended`），否则问人（D79）；
 4. `PROMOTABLE`：风险分级（迁移、权限/安全敏感路径、依赖变更等由 policy 规则判定）；分级记下来，交付批准时给人看；V1 不在批次上等批准（D92 a）；
 5. `PROMOTED`：集成基线 fast-forward 到合并 commit；Task → `INTEGRATED`；触发下游 readiness 重算。
 6. 候选 commit 固定到 `refs/axiom/candidates/<id>`；集成基线的期望 SHA 记库，每个批次开始前核对，不一致即停（D79）。

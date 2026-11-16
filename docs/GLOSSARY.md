@@ -292,6 +292,8 @@ APPLYING / TESTING → QUEUED（应用重启时由 RecoveryService 丢弃临时�
 
 **批次的执行**（M4-1b）：批次的记录在合并执行器动手时写入，直接是 `APPLYING`，排队的是 outbox 里的 `integration.apply`。临时工作树由内核建在集成基线上，分支 `axiom/integrating/<batchId>`；合并在游离 HEAD 上做，分支留在基线上，随工作树由内核删除（被中断的一次留下的同名分支会被下一次重用，内核不删它重用的分支，留给 M4-4 清扫）。合并 commit 固定在 `refs/axiom/batches/<batchId>/merged`（create-only，不运行仓库 hooks；日期取批次的创建时间，同一批次重做得到同一个 commit）。中断的 `APPLYING` 由同一条副作用原地重做；回到 `QUEUED` 的那条边留给完整的重启恢复（M4-4）。三次都没法尝试时批次 `SUPERSEDED`，Task `BLOCKED`（`integration_unavailable`）。
 
+**合并树回归**（M4-2a-2）：批次到 `TESTING` 后，同一次执行在临时工作树的合并 commit 上跑回归——`setupCommands`、该 Task 的命令型验收项、`integrationGates`（缺省取最高一档已配置的门）——记成一条属于这个批次的 VerificationRun（`batchId`；verifier 为 `IntegrationController`；`verdictDetail.baseline.kind` 为 `integration_merge`，带批次的 base 与合并 commit）。这样的 run 不进人工处置；读取候选验证的地方都看不到它，指明批次才列出。`PASS` → `PROMOTABLE`（没有任何命令可跑也是 `PASS`，detail 记 `no_commands`）；`FAIL` → `FAILED`，候选 `SUPERSEDED`，Task 经 `NEEDS_FIX` 回 `READY`，重试用尽则 `BLOCKED`；`INCONCLUSIVE`（包括跑完后临时工作树已不在合并 commit 上：`environment` / `scratch_changed`）→ 批次留在 `TESTING`，这一次执行算失败，三次后同上面的 `integration_unavailable`。中断的 `TESTING` 由同一条副作用原地接着做：不重新合并，取消旧的 run、新开一条。outbox 停止时回归被叫停，不算一次尝试；回归期间请求不再成立（Task 被人阻塞或取消、候选作废、Mission 结束）时，它取消自己的 run 并让出。每次执行先关掉本 Mission 再也做不完的开放批次（原因 `request_stale`）。集成基线到 `PROMOTED` 才动（M4-2a-3）。
+
 ### 4.10 Approval
 
 `PENDING → GRANTED | DENIED | EXPIRED | REVOKED`；`GRANTED → CONSUMED`（单次使用，执行后即消费）。
