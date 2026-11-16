@@ -61,6 +61,49 @@ function register(
 }
 
 describe('effect outbox execution', () => {
+  it('hands a running executor a signal that stop aborts and a later start renews', async () => {
+    const contexts: ({ signal: AbortSignal } | undefined)[] = []
+    const entered = [Promise.withResolvers<void>(), Promise.withResolvers<void>()]
+    const released = [Promise.withResolvers<void>(), Promise.withResolvers<void>()]
+    outbox.register('verification.enqueue', {
+      maxAttempts: 3,
+      backoffMs: [1000, 5000],
+      onOrphan: () => 'retry',
+      execute: async (_effect, context?: { signal: AbortSignal }) => {
+        const index = contexts.length
+        contexts.push(context)
+        entered[index].resolve()
+        await released[index].promise
+        return index === 0 ? { later: new Date().toISOString() } : 'done'
+      }
+    })
+    enqueue()
+    try {
+      outbox.start()
+      await entered[0].promise
+      expect(contexts[0]).toEqual({ signal: expect.any(AbortSignal) })
+      expect(contexts[0]!.signal.aborted).toBe(false)
+      const stopped = outbox.stop()
+      expect(contexts[0]!.signal.aborted).toBe(true)
+      expect(store.getEffect('verification.enqueue', 'run')?.status).toBe('running')
+      released[0].resolve()
+      await stopped
+      expect(store.getEffect('verification.enqueue', 'run')).toMatchObject({
+        status: 'pending',
+        attempts: 0
+      })
+      outbox.start()
+      await entered[1].promise
+      expect(contexts[1]).toEqual({ signal: expect.any(AbortSignal) })
+      expect(contexts[1]!.signal).not.toBe(contexts[0]!.signal)
+      expect(contexts[1]!.signal.aborted).toBe(false)
+      released[1].resolve()
+      await outbox.kick()
+    } finally {
+      released.forEach((gate) => gate.resolve())
+      await outbox.stop()
+    }
+  })
   it('requires caller transactions and never executes rolled-back work', async () => {
     const execute = vi.fn(() => 'done' as const)
     register(execute)

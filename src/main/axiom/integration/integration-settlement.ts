@@ -22,7 +22,8 @@ export function auditIntegration(
 /** Called inside the batch settlement transaction, including candidate and both Task moves. */
 export function settleIntegrationConflict(
   ctx: { store: AxiomStore; missions: MissionController },
-  input: { taskId: string; candidateId: string }
+  input: { taskId: string; candidateId: string },
+  reason: 'integration_conflict' | 'integration_regression_failed' = 'integration_conflict'
 ): void {
   const { store, missions } = ctx
   const task = store.getTaskStage(input.taskId)
@@ -43,13 +44,13 @@ export function settleIntegrationConflict(
     objectId: candidate.id,
     event: 'candidate.superseded',
     before: { status: 'ACTIVE' },
-    after: { status: 'SUPERSEDED', supersededBy: null, reason: 'integration_conflict' }
+    after: { status: 'SUPERSEDED', supersededBy: null, reason }
   })
   missions.transitionTaskStage({
     taskId: task.taskId,
     to: 'NEEDS_FIX',
     actor: 'IntegrationController',
-    reason: 'integration_conflict'
+    reason
   })
   const retry = task.attemptCount < task.retryPolicy.maxAttempts
   missions.transitionTaskStage({

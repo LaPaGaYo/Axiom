@@ -61,7 +61,7 @@ it('merges a clean candidate without fast-forward and pins the merge commit', as
   expect(f.batches()).toHaveLength(1)
   const batch = f.batches()[0]
   expect(batch).toMatchObject({
-    status: 'TESTING',
+    status: 'PROMOTABLE',
     baseCommit: f.baseSha,
     candidateIds: [f.candidate.id]
   })
@@ -93,6 +93,21 @@ it('merges a clean candidate without fast-forward and pins the merge commit', as
       before: null,
       event: 'integration.batch_merged',
       after: { status: 'TESTING', mergeCommit: batch.mergeCommit, ref }
+    }),
+    expect.objectContaining({
+      event: 'integration.regression_started',
+      objectId: batch.id,
+      after: {
+        status: 'TESTING',
+        runId: expect.any(String),
+        mergeCommit: batch.mergeCommit,
+        commandCount: 1
+      }
+    }),
+    expect.objectContaining({
+      event: 'integration.batch_promotable',
+      objectId: batch.id,
+      after: { status: 'PROMOTABLE', runId: expect.any(String), mergeCommit: batch.mergeCommit }
     })
   ])
 })
@@ -190,7 +205,7 @@ it('takes the head itself as the merge commit when it already contains the candi
   expect(f.effect()?.status).toBe('done')
   expect(f.batches()).toHaveLength(1)
   const batch = f.batches()[0]
-  expect(batch).toMatchObject({ status: 'TESTING', baseCommit: head, mergeCommit: head })
+  expect(batch).toMatchObject({ status: 'PROMOTABLE', baseCommit: head, mergeCommit: head })
   expect(await f.git('rev-parse', `refs/axiom/batches/${batch.id}/merged`)).toBe(head)
   await returned(f, before)
 })

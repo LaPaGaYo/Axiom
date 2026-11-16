@@ -16,6 +16,16 @@ export const gitAt = async (cwd: string, ...args: string[]) =>
 
 export async function integrationFixture(root: string) {
   const f = await verificationGitFixture(root)
+  f.db.db.prepare('UPDATE task_stages SET spec = ? WHERE task_id = ?').run(
+    JSON.stringify({
+      ...f.task.spec,
+      requiredEvidence: undefined,
+      acceptanceCriteria: [
+        { text: 'Offline check', check: { kind: 'command', command: 'node -e ""' } }
+      ]
+    }),
+    f.task.taskId
+  )
   const runtime = verificationRuntime()
   runtime.showRepo.mockImplementation(() => f.runtime.showRepo())
   const makeRecord = runtime.createManagedWorktree.getMockImplementation()!
@@ -77,7 +87,13 @@ export async function integrationFixture(root: string) {
     })
   }
   const effects = new EffectOutbox({ db: f.db, store: f.store, epoch: 'current' })
-  registerIntegrationApply({ store: f.store, missions: f.controller, runtime, effects })
+  registerIntegrationApply({
+    store: f.store,
+    missions: f.controller,
+    runtime,
+    effects,
+    artifacts: f.artifacts
+  })
   const enqueue = () =>
     f.store.transaction('test_integration', () =>
       effects.enqueue({

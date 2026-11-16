@@ -25,6 +25,7 @@ const Insert = VerificationRunSchema.omit({
 })
 const Claim = z.object({
   id: AxiomIdSchema,
+  verifier: z.string().min(1).default('VerificationService'),
   runtimeEpoch: z.string().min(1),
   startedAt: z.string().min(1)
 })
@@ -81,9 +82,9 @@ export function verificationRunsStore(db: OrchestrationDb) {
       const result = db.db
         .prepare(`UPDATE verification_runs SET status = 'RUNNING',
         runtime_epoch = ?, claim_count = claim_count + 1, started_at = ?, finished_at = NULL,
-        verifier = 'VerificationService', verdict_detail = json_object('phase', 'claimed', 'claim', claim_count + 1),
+        verifier = ?, verdict_detail = json_object('phase', 'claimed', 'claim', claim_count + 1),
         updated_at = datetime('now') WHERE id = ? AND status = 'QUEUED'`)
-        .run(p.runtimeEpoch, p.startedAt, p.id)
+        .run(p.runtimeEpoch, p.startedAt, p.verifier, p.id)
       if (result.changes !== 1) {
         return undefined
       }
@@ -142,10 +143,11 @@ export function verificationRunsStore(db: OrchestrationDb) {
         VerificationRunRowCodec,
         db.db
           .prepare(
-            `SELECT ${columns} FROM verification_runs WHERE mission_id = ? AND (? IS NULL OR status = ?) AND (? IS NULL OR task_id = ?) AND (? IS NULL OR candidate_id = ?) ORDER BY created_at, rowid`
+            `SELECT ${columns} FROM verification_runs WHERE mission_id = ? AND batch_id IS ? AND (? IS NULL OR status = ?) AND (? IS NULL OR task_id = ?) AND (? IS NULL OR candidate_id = ?) ORDER BY created_at, rowid`
           )
           .all(
             p.missionId,
+            p.batchId ?? null,
             p.status ?? null,
             p.status ?? null,
             p.taskId ?? null,
