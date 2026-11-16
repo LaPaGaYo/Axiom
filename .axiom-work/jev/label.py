@@ -52,6 +52,39 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M4-2a-3', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'After a passed regression the same try returns the scratch, looks at the request once more, '
+        'and advances the integration branch from the base of the batch to its merge commit with an expected old '
+        'value, hooks off, never under a checkout and never through a symbolic ref; one transaction records '
+        'PROMOTED, the Task INTEGRATED and integration.batch_promoted; a new batch starts only from the head the '
+        'audit events recorded (integration_head_unexpected otherwise); a PROMOTABLE batch whose merge commit is '
+        'the head is recorded as promoted by the next try or by exhaustion and is never abandoned; a PROMOTABLE '
+        'batch is promoted without a second merge or regression; a Task unblocked after the promotion is '
+        'integrated by its next request; the two git helpers of the integration directory set '
+        'GIT_CEILING_DIRECTORIES; five existing product files change and two modules are new; with main '
+        'integration-apply.ts, integration-merge.ts, integration-request.ts and integration-scratch.ts written '
+        'into the tree, titles 2 to 9 each fail at one assertion and title 1, which tests the new function of '
+        'execution/integration-base.ts alone, passes; every Mission spec passes on the first host run; both '
+        'runners green; the union script failed 0; no verifier change; no other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'nothing enqueues integration.apply yet: M4-2b',
+            'the checkout check and the update are two git calls; a rebase or bisect of the branch in a worktree '
+            'is not seen',
+            'the recorded head is read from all audit events of the Mission at every batch start',
+            'a moved head blocks every Task of the Mission at integration until the ref is put back: a '
+            'Mission-level pending item is M4-4',
+            'the hooks-off git write now exists in six places: the structure-only Task after M4-2b (D93)',
+            'verifier details that Henry can overturn: a moved head stops the integrations of the Mission; a '
+            'checked-out branch is left alone; a Task blocked or cancelled after the ref moved keeps its stage; '
+            'a symbolic integration ref is never written',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M4-2a-2', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'The merged-tree regression runs in the same try as the merge, on the merge commit, and is '
