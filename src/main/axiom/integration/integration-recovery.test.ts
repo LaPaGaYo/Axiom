@@ -50,7 +50,7 @@ function orphan(f: IntegrationFixture) {
 async function finished(f: IntegrationFixture) {
   expect(f.effect()?.status).toBe('done')
   expect(f.batches()).toHaveLength(1)
-  expect(f.batches()[0].status).toBe('TESTING')
+  expect(f.batches()[0].status).toBe('PROMOTABLE')
   expect(await f.git('for-each-ref', '--format=%(refname)', 'refs/axiom/batches/')).toBe(
     `refs/axiom/batches/${f.batches()[0].id}/merged`
   )
@@ -101,6 +101,16 @@ it('ends a stale request and defers one that is not due', async () => {
       })
     }
     if (state === 'busy') {
+      const other = f.store
+        .listTaskStages({ missionId: f.missionId })
+        .find((task) => task.taskId !== f.task.taskId)!
+      f.store.updateTaskStage({ taskId: other.taskId, from: other.stage, to: 'INTEGRATION_READY' })
+      f.store.insertCandidate({
+        ...f.candidate,
+        id: 'other-candidate',
+        taskId: other.taskId,
+        attemptId: 'other-attempt'
+      })
       f.store.insertIntegrationBatch({
         id: 'other',
         missionId: f.missionId,

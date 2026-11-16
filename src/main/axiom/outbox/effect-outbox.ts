@@ -29,6 +29,7 @@ export class EffectOutbox {
   private flight?: Flight
   private recovery?: Promise<void>
   private timer?: ReturnType<typeof setTimeout>
+  private controller = new AbortController()
 
   constructor(private readonly deps: OutboxDependencies) {
     z.string().min(1).parse(deps.epoch)
@@ -49,12 +50,16 @@ export class EffectOutbox {
   }
 
   start(): void {
+    if (this.controller.signal.aborted) {
+      this.controller = new AbortController()
+    }
     this.enabled = true
     this.wake()
   }
 
   async stop(): Promise<void> {
     this.enabled = false
+    this.controller.abort()
     this.clearTimer()
     // A scan paused for recovery may own a flight with no active execution to wake it.
     this.scheduleScan()
@@ -173,7 +178,7 @@ export class EffectOutbox {
       }
       this.activeLanes.add(lane)
       // Each lane's completion schedules another scan; no all-lane barrier can hold new work.
-      void executeEffect(store, effect, executor)
+      void executeEffect(store, effect, executor, { signal: this.controller.signal })
         .catch((error: unknown) => {
           if (this.flight) {
             this.flight.failure = { error }

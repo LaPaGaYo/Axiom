@@ -88,7 +88,7 @@ it('stores the batch of a verification run and leaves a candidate run without th
   const batch = runs.insertVerificationRun({ ...input, id: 'batch-run', batchId: 'batch' })
   expect(runs.getVerificationRun(batch.id)?.batchId).toBe('batch')
   expect(runs.listVerificationRunsByStatus('QUEUED')).toEqual([batch])
-  expect(runs.listVerificationRuns({ missionId: 'm' })).toEqual([batch])
+  expect(runs.listVerificationRuns({ missionId: 'm', batchId: 'batch' })).toEqual([batch])
   expect(
     db.db.prepare('SELECT batch_id FROM verification_runs WHERE id = ?').get(batch.id)
   ).toEqual({ batch_id: 'batch' })
@@ -118,4 +118,89 @@ it('stores the batch of a verification run and leaves a candidate run without th
   expect(db.db.prepare('SELECT COUNT(*) AS count FROM verification_runs').get()).toEqual({
     count: 3
   })
+})
+
+it('claims a run under the verifier it is given and under VerificationService by default', () => {
+  const input = {
+    missionId: 'm',
+    taskId: 't',
+    candidateId: 'c',
+    status: 'QUEUED' as const,
+    verdictDetail: {},
+    commands: [],
+    toolVersions: {},
+    verifier: 'IntegrationController'
+  }
+  for (const id of ['explicit', 'default', 'empty']) {
+    store.insertVerificationRun({ ...input, id })
+  }
+  store.claimVerificationRun({
+    id: 'explicit',
+    runtimeEpoch: 'epoch',
+    startedAt: 'now',
+    verifier: 'IntegrationController'
+  })
+  expect(store.getVerificationRun('explicit')).toMatchObject({
+    verifier: 'IntegrationController',
+    status: 'RUNNING',
+    claimCount: 1,
+    runtimeEpoch: 'epoch'
+  })
+  store.claimVerificationRun({ id: 'default', runtimeEpoch: 'epoch', startedAt: 'now' })
+  expect(store.getVerificationRun('default')?.verifier).toBe('VerificationService')
+  expect(() =>
+    store.claimVerificationRun({
+      id: 'empty',
+      runtimeEpoch: 'epoch',
+      startedAt: 'now',
+      verifier: ''
+    })
+  ).toThrow()
+  expect(store.getVerificationRun('empty')?.status).toBe('QUEUED')
+})
+
+it('lists the runs of a batch only when the batch is named', () => {
+  const input = {
+    missionId: 'm',
+    taskId: 't',
+    candidateId: 'c',
+    status: 'QUEUED' as const,
+    verdictDetail: {},
+    commands: [],
+    toolVersions: {},
+    verifier: 'IntegrationController'
+  }
+  const candidate1 = store.insertVerificationRun({ ...input, id: 'candidate-1' })
+  const batch1 = store.insertVerificationRun({ ...input, id: 'z-first', batchId: 'A' })
+  const candidate2 = store.insertVerificationRun({
+    ...input,
+    id: 'candidate-2',
+    taskId: 't2',
+    candidateId: 'c2',
+    status: 'PASS'
+  })
+  const batch2 = store.insertVerificationRun({
+    ...input,
+    id: 'a-second',
+    batchId: 'A',
+    taskId: 't2',
+    candidateId: 'c2',
+    status: 'PASS'
+  })
+  const batch3 = store.insertVerificationRun({ ...input, id: 'third', batchId: 'B' })
+  expect(store.listVerificationRuns({ missionId: 'm' })).toEqual([candidate1, candidate2])
+  expect(store.listVerificationRuns({ missionId: 'm', batchId: 'A' })).toEqual([batch1, batch2])
+  expect(store.listVerificationRuns({ missionId: 'm', batchId: 'B' })).toEqual([batch3])
+  expect(store.listVerificationRuns({ missionId: 'm', batchId: 'absent' })).toEqual([])
+  for (const filter of [{ taskId: 't2' }, { candidateId: 'c2' }, { status: 'PASS' as const }]) {
+    expect(store.listVerificationRuns({ missionId: 'm', ...filter })).toEqual([candidate2])
+    expect(store.listVerificationRuns({ missionId: 'm', batchId: 'A', ...filter })).toEqual([
+      batch2
+    ])
+    expect(store.listVerificationRuns({ missionId: 'm', batchId: 'B', ...filter })).toEqual([])
+  }
+  expect(store.listVerificationRunsByStatus('QUEUED')).toHaveLength(3)
+  expect(store.listVerificationRunsByStatus('QUEUED')).toEqual(
+    expect.arrayContaining([candidate1, batch1, batch3])
+  )
 })

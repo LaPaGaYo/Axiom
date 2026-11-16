@@ -48,6 +48,7 @@ export type VerificationRun = z.infer<typeof VerificationRunSchema>
 export const VerificationShowParams = z.object({ runId: AxiomIdSchema })
 export const VerificationListParams = z.object({
   missionId: AxiomIdSchema,
+  batchId: AxiomIdSchema.optional(),
   taskId: AxiomIdSchema.optional(),
   candidateId: AxiomIdSchema.optional(),
   status: VerificationRunStatusSchema.optional()

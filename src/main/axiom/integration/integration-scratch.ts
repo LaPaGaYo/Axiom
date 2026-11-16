@@ -115,7 +115,8 @@ export async function createIntegrationScratch(
 
 export async function detachIntegrationScratch(
   scratch: IntegrationScratch,
-  baseCommit: string
+  baseCommit: string,
+  mergeCommit?: string
 ): Promise<void> {
   let head: string
   try {
@@ -130,9 +131,9 @@ export async function detachIntegrationScratch(
     throw new Error('integration_head_moved')
   }
   try {
-    await writeIntegrationGit(scratch.cwd, ['checkout', '--detach', baseCommit])
+    await writeIntegrationGit(scratch.cwd, ['checkout', '--detach', mergeCommit ?? baseCommit])
   } catch {
-    throw new Error('scratch_worktree_unavailable')
+    throw new Error(mergeCommit ? 'merged_commit_unavailable' : 'scratch_worktree_unavailable')
   }
 }
 

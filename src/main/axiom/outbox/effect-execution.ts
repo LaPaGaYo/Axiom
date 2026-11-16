@@ -20,7 +20,10 @@ const OrphanResult = z.union([
 export type EffectExecutionResult = z.infer<typeof ExecutionResult>
 export type EffectOrphanResult = z.infer<typeof OrphanResult>
 export type EffectExecutor<K extends EffectKind> = {
-  execute: (effect: EffectOf<K>) => EffectExecutionResult | Promise<EffectExecutionResult>
+  execute: (
+    effect: EffectOf<K>,
+    context: { signal: AbortSignal }
+  ) => EffectExecutionResult | Promise<EffectExecutionResult>
   maxAttempts: number
   backoffMs: readonly number[]
   onExhausted?: (effect: EffectOf<K>) => void | Promise<void>
@@ -53,7 +56,7 @@ export function bindEffectExecutor<K extends EffectKind>(
   }
   return {
     ...policy,
-    execute: (effect) => executor.execute(typed(effect)),
+    execute: (effect, context) => executor.execute(typed(effect), context),
     onOrphan: (effect) => executor.onOrphan(typed(effect)),
     onExhausted: (effect) => executor.onExhausted?.(typed(effect))
   }
@@ -88,11 +91,12 @@ export function appendEffectAudit(
 export async function executeEffect(
   store: AxiomStore,
   effect: Effect,
-  executor: EffectExecutor<EffectKind>
+  executor: EffectExecutor<EffectKind>,
+  context: { signal: AbortSignal }
 ): Promise<void> {
   let result: EffectExecutionResult
   try {
-    result = ExecutionResult.parse(await executor.execute(effect))
+    result = ExecutionResult.parse(await executor.execute(effect, context))
   } catch (error) {
     const lastError = redactContext(
       error instanceof Error ? error.message : String(error)
