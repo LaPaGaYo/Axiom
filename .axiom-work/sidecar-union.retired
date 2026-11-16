@@ -1,0 +1,23 @@
+# Pins of earlier Tasks that a later, approved Task replaced (planner-owned; read by
+# .axiom-work/scripts/union-sidecar-check.py). One line per pin, three tab-separated fields: the Task that retires
+# it, the Task whose sidecar holds it first, and the assertion exactly as that sidecar has it. A retired assertion is
+# not run. A line that names the wrong Task or retires nothing counts as a failed assertion, so this file never
+# holds a stale entry. Lines starting with # say why and what replaced the pins that follow.
+
+# STRUCT-1 (D93 item 1a): the hooks-off git write moved into src/main/axiom/execution/hookless-git.ts, so the
+# spellings below no longer stand in the files these pins name. Replaced in STRUCT-1's sidecar by: core.hooksPath= and
+# GIT_CEILING_DIRECTORIES in exactly one product file; withHooklessGit in each of the six files; "confine: true" and
+# confinedGitEnv in integration-merge.ts and verification-worktree.ts; the candidate-pin triple with withHooklessGit.
+STRUCT-1	M4-1a	test "$(git grep -l "refs/axiom/candidates/" -- src/main/axiom/execution ':(exclude)*.test.ts' ':(exclude)*.test-support.ts' | xargs grep -l "hooksPath" | xargs grep -l "for-each-ref" | wc -l | tr -d ' ')" -ge 1
+STRUCT-1	M4-1b	git grep -q "hooksPath" -- src/main/axiom/integration ':(exclude)*.test.ts' ':(exclude)*.test-support.ts'
+STRUCT-1	M4-2a-3	git grep -q "hooksPath" -- src/main/axiom/execution/integration-base.ts
+STRUCT-1	M4-2a-3	git grep -q "GIT_CEILING_DIRECTORIES" -- src/main/axiom/integration/integration-merge.ts
+STRUCT-1	M4-1c	git grep -q "GIT_CEILING_DIRECTORIES" -- src/main/axiom/verification/verification-worktree.ts
+
+# STRUCT-1 (D93 item 1b): redactContext and detectSecretPatterns moved from context-builder/redaction.ts to
+# src/main/axiom/redaction/redaction.ts. Replaced in STRUCT-1's sidecar by the same greps at the new path, the
+# secret-patterns count at the new path, and "no file under src imports context-builder/redaction".
+STRUCT-1	M3-03	grep -q "detectSecretPatterns" src/main/axiom/context-builder/redaction.ts
+STRUCT-1	M3-09-4b-1	git grep -q "export function redactContext" -- src/main/axiom/context-builder/redaction.ts
+STRUCT-1	M3-09-4b-1	git grep -q "export function detectSecretPatterns" -- src/main/axiom/context-builder/redaction.ts
+STRUCT-1	M3-09-4b-1	test "$(git grep -l "secret-patterns" -- src/shared/axiom-contract/plan-proposal.ts src/main/axiom/context-builder/redaction.ts | wc -l | tr -d ' ')" -eq 2

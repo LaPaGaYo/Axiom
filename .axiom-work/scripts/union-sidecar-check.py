@@ -17,8 +17,17 @@ is command text again. A name counts only as a whole word (`config/tsconfig.node
 rule, when the scanner cannot read it (an unclosed quote) or when it calls something whose quoted argument is a
 program (awk, sed, xargs, find, a shell).
 
-Prints one line per failed assertion and a last line `ran N skipped N failed N unique N`.
-Exit code: 0 when nothing failed, 1 otherwise, 2 when the list or a listed sidecar is missing.
+A pin that a later, approved Task replaced is retired in .axiom-work/sidecar-union.retired (planner-owned): one line
+per pin, three tab-separated fields - the Task that retires it, the Task whose sidecar holds it, and the assertion
+exactly as that sidecar has it; lines starting with # say why and what replaced it. A retired assertion is not run.
+A line that names a Task other than the first one whose sidecar holds that assertion, or that retires nothing,
+counts as a failed assertion (`FAIL [retired] ...`), so the file never holds a stale entry; a malformed line stops
+the script before anything runs.
+
+Prints one line per failed assertion, a line `retired N` when the retired file has entries, and a last line
+`ran N skipped N failed N unique N` (unique counts the retired ones too).
+Exit code: 0 when nothing failed, 1 otherwise, 2 when the list or a listed sidecar is missing or a line of the
+retired file is malformed.
 
 A Task's own sidecar carries only that Task's assertions and one call of this script, written so that it does
 nothing on main: `test "$(git branch --show-current)" = main || python3 -I .axiom-work/scripts/union-sidecar-check.py "$PWD"`.
@@ -40,6 +49,18 @@ if not listing.is_file():
     sys.exit(2)
 ids = [line.strip() for line in listing.read_text(encoding='utf-8').splitlines() if line.strip() and not line.startswith('#')]
 ids += [i for i in args if i not in ids]
+# assertion text -> [the Task whose sidecar holds it, met]
+retired = {}
+retired_file = root / '.axiom-work/sidecar-union.retired'
+if retired_file.is_file():
+    for number, line in enumerate(retired_file.read_text(encoding='utf-8').splitlines(), 1):
+        if not line.strip() or line.startswith('#'):
+            continue
+        fields = [field.strip() for field in line.split('\t')]
+        if len(fields) != 3 or not all(fields) or fields[2] in retired:
+            print('bad line %d in %s' % (number, retired_file))
+            sys.exit(2)
+        retired[fields[2]] = [fields[1], False]
 SAFE = re.compile(r'^(!\s*)?(grep|test|ls|\[|git (grep|ls-files|diff))\b')
 WHOLE = re.compile(r'\b(pnpm|node|npx|python3?|rm|mv|cp|tee|git (switch|checkout|reset|commit|merge|stash|clean|branch|update-ref|add|push|fetch))\b|union-sidecar-check|>')
 WORD = r'(?<![\w./-])(%s)(?![\w./-])'
@@ -122,6 +143,12 @@ for i in ids:
         if not a or a in seen:
             continue
         seen.add(a)
+        if a in retired:
+            if retired[a][0] != i:
+                print('FAIL [retired] names %s but %s holds it first: %s' % (retired[a][0], i, a[:300]))
+                failed += 1
+            retired[a][1] = True
+            continue
         if not SAFE.match(a) or blocked(a) or MAIN_DIFF.search(a):
             skipped += 1
             continue
@@ -130,5 +157,11 @@ for i in ids:
         if r.returncode != 0:
             failed += 1
             print('FAIL [' + i + '] ' + a[:400])
+for a, (holder, met) in retired.items():
+    if not met:
+        print('FAIL [retired] retires nothing (%s): %s' % (holder, a[:300]))
+        failed += 1
+if retired:
+    print('retired %d' % len(retired))
 print('ran %d skipped %d failed %d unique %d' % (ran, skipped, failed, len(seen)))
 sys.exit(2 if missing else (1 if failed else 0))
