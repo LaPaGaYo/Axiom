@@ -226,6 +226,8 @@ M3-06-3-2b 的 `attempt.supervision_reconciled` 按 observationSequence 恰好�
 
 `ACTIVE → SUPERSEDED`。
 
+**Candidate 的引用**（M4-1a）：`refs/axiom/candidates/<candidateId>` 指向 Candidate 的 commit。提交事务之前以 create-only 的 `update-ref` 建立，不运行仓库 hooks；重放的提交不再建。建不上不拒绝提交，同一事务记审计 `candidate.pin_failed`，`after` 为 `{ ref, reason }`，reason 只有 `ref_conflict`（引用已存在且指向别的 commit）与 `unavailable`（其余情况）两种。提交随后被拒绝时引用留下，它不是 Candidate。没有任何路径移动或删除这个引用；M4-1a 之前的 Candidate 没有它，合并执行器动手前补建。
+
 ### 4.8 VerificationRun
 
 ```text
