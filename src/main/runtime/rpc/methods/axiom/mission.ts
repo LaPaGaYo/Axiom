@@ -1,4 +1,6 @@
 import { ensureIntegrationBase } from '../../../../axiom/execution/integration-base'
+import { MissionControllerError } from '../../../../axiom/mission-controller/controller-context'
+import { isLocalVerificationRepository } from '../../../../axiom/verification/verification-checks'
 import { defineMethod } from '../../core'
 import {
   MissionCreateParams,
@@ -97,7 +99,15 @@ export const AXIOM_MISSION_METHODS = [
     params: MissionStartParams,
     handler: async (p, { runtime }) => {
       const { missions, store } = getAxiomControlPlane(runtime)
-      const mission = missions.getMission(p.missionId)
+      const mission = missions.assertStartable(p.missionId)
+      const repo = await runtime.showRepo(`id:${mission.repoId}`)
+      if (!isLocalVerificationRepository(repo)) {
+        throw new MissionControllerError('repository_not_local', {
+          missionId: mission.id,
+          repoId: mission.repoId,
+          reason: 'The Mission repository must be on this machine before it can start.'
+        })
+      }
       const base = await ensureIntegrationBase({
         repoPath: mission.repoPath,
         targetBranch: mission.targetBranch,

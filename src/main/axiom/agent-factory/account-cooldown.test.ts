@@ -71,7 +71,9 @@ function enqueue(
 it('reads the latest wait across Missions and resolves each candidate provider once', async () => {
   enqueue()
   enqueue(1, {}, '2026-11-10T12:02:00.000Z')
-  const other = planned({ ...f, controller: new MissionController(f.db, f.store) })
+  const other = planned({ ...f, controller: new MissionController(f.db, f.store) }, undefined, {
+    targetBranch: 'other'
+  })
   other.controller.startExecution(other.missionId)
   const original = f
   f = other

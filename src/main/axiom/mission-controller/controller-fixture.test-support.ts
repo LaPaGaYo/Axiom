@@ -39,8 +39,12 @@ export function propose(
   })
 }
 
-export function planned(f = fixture(), proposal: PlanProposal = makeProposal()) {
-  const { mission, goalRevision } = f.controller.createMission(createInput)
+export function planned(
+  f = fixture(),
+  proposal: PlanProposal = makeProposal(),
+  overrides: Partial<typeof createInput> = {}
+) {
+  const { mission, goalRevision } = f.controller.createMission({ ...createInput, ...overrides })
   const plan = propose(f.controller, mission.id, goalRevision.id, proposal)
   f.controller.approvePlan({ planRevisionId: plan.id, resolver: actor, provenance })
   return { ...f, missionId: mission.id, planId: plan.id }

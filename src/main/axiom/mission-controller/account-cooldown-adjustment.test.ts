@@ -9,10 +9,14 @@ const triggered = vi.fn()
 beforeEach(() => {
   f = planned(fixture())
   f.controller.startExecution(f.missionId)
-  const other = planned({ ...f, controller: new MissionController(f.db, f.store) })
+  const other = planned({ ...f, controller: new MissionController(f.db, f.store) }, undefined, {
+    targetBranch: 'other'
+  })
   other.controller.startExecution(other.missionId)
   otherId = other.missionId
-  const paused = planned({ ...f, controller: new MissionController(f.db, f.store) })
+  const paused = planned({ ...f, controller: new MissionController(f.db, f.store) }, undefined, {
+    targetBranch: 'paused'
+  })
   paused.controller.startExecution(paused.missionId)
   paused.controller.pauseMission(paused.missionId)
   taskId = f.store.listTaskStages({ missionId: f.missionId, stage: 'READY' })[0].taskId

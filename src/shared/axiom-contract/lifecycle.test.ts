@@ -90,8 +90,8 @@ describe('transition tables', () => {
     PLANNED: ['EXECUTING'],
     EXECUTING: ['REPLANNING', 'FINALIZING'],
     REPLANNING: ['EXECUTING'],
-    FINALIZING: ['READY_FOR_APPROVAL'],
-    READY_FOR_APPROVAL: ['COMPLETED']
+    FINALIZING: ['READY_FOR_APPROVAL', 'EXECUTING'],
+    READY_FOR_APPROVAL: ['COMPLETED', 'FINALIZING']
   }
   const taskRows: Record<string, string[]> = {
     DEFINED: ['READY'],
@@ -117,6 +117,13 @@ describe('transition tables', () => {
       }
       expect(isLegalMissionTransition(from, from)).toBe(false)
     }
+  })
+  it('admits the two finalization back-edges and nothing else new', () => {
+    expect(isLegalMissionTransition('FINALIZING', 'EXECUTING')).toBe(true)
+    expect(isLegalMissionTransition('READY_FOR_APPROVAL', 'FINALIZING')).toBe(true)
+    expect(isLegalMissionTransition('READY_FOR_APPROVAL', 'EXECUTING')).toBe(false)
+    expect(isLegalMissionTransition('FINALIZING', 'PLANNED')).toBe(false)
+    expect(isLegalMissionTransition('COMPLETED', 'FINALIZING')).toBe(false)
   })
   it('allows a BLOCKED Mission to return to EXECUTING but never directly to COMPLETED', () => {
     expect(isLegalMissionTransition('BLOCKED', 'EXECUTING')).toBe(true)

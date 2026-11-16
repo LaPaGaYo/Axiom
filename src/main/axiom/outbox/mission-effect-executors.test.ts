@@ -231,11 +231,11 @@ it.each([true, false])(
 )
 
 it('lets another Mission dispatch while the first Mission launch is awaiting the host', async () => {
-  const second = planned({
-    db: f.db,
-    store: f.store,
-    controller: new MissionController(f.db, f.store)
-  })
+  const second = planned(
+    { db: f.db, store: f.store, controller: new MissionController(f.db, f.store) },
+    undefined,
+    { targetBranch: 'second' }
+  )
   second.controller.startExecution(second.missionId)
   const task = second.store.listTaskStages({ missionId: second.missionId, stage: 'READY' })[0]
   const release = Promise.withResolvers<void>()

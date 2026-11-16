@@ -17,7 +17,9 @@ export const MISSION_CONTROLLER_ERROR_CODES = [
   'replan_not_supported',
   'mission_not_executing',
   'retry_budget_exhausted',
-  'synthetic_session_id_invalid'
+  'synthetic_session_id_invalid',
+  'mission_target_busy',
+  'repository_not_local'
 ] as const
 
 export class MissionControllerError extends Error {

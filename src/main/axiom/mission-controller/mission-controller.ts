@@ -1,5 +1,6 @@
 import type { ScheduleTrigger } from '../scheduler/scheduler'
 import { createTask } from './task-creation'
+import { assertMissionStartable } from './mission-start-guard'
 import { adjustTask, resolveBlockedMessages } from './task-adjustment'
 import { redactContext } from '../context-builder/redaction'
 import { OrchestrationError } from '../../runtime/orchestration/orchestration-error'
@@ -13,7 +14,6 @@ import type { OrchestrationDb } from '../../runtime/orchestration/db/orchestrati
 import { runLifecycleWriteTransaction } from '../../runtime/orchestration/db/lifecycle-write-transaction-runner'
 import type { AxiomStore } from '../db/axiom-store'
 import {
-  MissionControllerError,
   requireMission,
   requirePlan,
   requireTask,
@@ -162,16 +162,12 @@ export class MissionController {
     this.scheduleAfterWrite(task.missionId, 'stage_change', retiredUsageLimit)
     return task
   }
+  assertStartable(missionId: string) {
+    return assertMissionStartable(this.ctx, missionId)
+  }
   startExecution(missionId: string) {
     const result = this.write('start_execution', () => {
-      const mission = requireMission(this.ctx, missionId)
-      if (mission.status !== 'PLANNED' && mission.status !== 'EXECUTING') {
-        throw new MissionControllerError('illegal_transition', {
-          missionId,
-          from: mission.status,
-          to: 'EXECUTING'
-        })
-      }
+      assertMissionStartable(this.ctx, missionId)
       // Replayed/concurrent starts retain the expected PLANNED source for the CAS.
       moveMission(this.ctx, missionId, 'PLANNED', 'EXECUTING')
       recomputeReadiness(this.ctx, missionId)
