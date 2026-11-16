@@ -40,7 +40,7 @@ it('stops the regression at shutdown without spending a try or settling the batc
     ).toEqual([])
     regressionCommands(f, [], { integrationGates: ['node -e ""'] })
     await f.run()
-    expect(f.batches()[0].status).toBe('PROMOTABLE')
+    expect(f.batches()[0].status).toBe('PROMOTED')
     expect(batchRuns(f).map((run) => run.status)).toEqual(['CANCELED', 'PASS'])
     expect(f.audits()).toContainEqual(
       expect.objectContaining({
@@ -98,7 +98,7 @@ it('ends a regression that is no longer current without spending a try', async (
     })
     await dueAgain(f)
     await f.run()
-    expect(f.batches()[0].status).toBe('PROMOTABLE')
+    expect(f.batches()[0].status).toBe('PROMOTED')
     expect(batchRuns(f).map((run) => run.status)).toEqual(['CANCELED', 'PASS'])
   } finally {
     await f.effects.stop()

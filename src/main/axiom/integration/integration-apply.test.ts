@@ -5,6 +5,7 @@ import path from 'node:path'
 import {
   integrationFixture,
   conflictHead,
+  recordIntegrationBase,
   gitAt,
   type IntegrationFixture
 } from './integration-fixture.test-support'
@@ -61,7 +62,7 @@ it('merges a clean candidate without fast-forward and pins the merge commit', as
   expect(f.batches()).toHaveLength(1)
   const batch = f.batches()[0]
   expect(batch).toMatchObject({
-    status: 'PROMOTABLE',
+    status: 'PROMOTED',
     baseCommit: f.baseSha,
     candidateIds: [f.candidate.id]
   })
@@ -73,11 +74,13 @@ it('merges a clean candidate without fast-forward and pins the merge commit', as
   expect(await f.git('rev-parse', `refs/axiom/candidates/${f.candidate.id}`)).toBe(
     f.candidate.commitSha
   )
-  expect(await f.git('rev-parse', f.integrationRef)).toBe(f.baseSha)
-  expect(f.store.getTaskStage(f.task.taskId)?.stage).toBe('INTEGRATION_READY')
+  expect(await f.git('rev-parse', f.integrationRef)).toBe(batch.mergeCommit)
+  expect(f.store.getTaskStage(f.task.taskId)?.stage).toBe('INTEGRATED')
   expect(await readFile(log, 'utf8')).toBe('checkout\n')
   await returned(f, before)
-  expect(f.audits().filter((e) => e.event.startsWith('integration.'))).toEqual([
+  expect(
+    f.audits().filter((e) => e.objectId === batch.id && e.event.startsWith('integration.'))
+  ).toEqual([
     expect.objectContaining({
       actor: 'IntegrationController',
       objectKind: 'integration_batch',
@@ -108,6 +111,17 @@ it('merges a clean candidate without fast-forward and pins the merge commit', as
       event: 'integration.batch_promotable',
       objectId: batch.id,
       after: { status: 'PROMOTABLE', runId: expect.any(String), mergeCommit: batch.mergeCommit }
+    }),
+    expect.objectContaining({
+      event: 'integration.batch_promoted',
+      objectId: batch.id,
+      after: {
+        status: 'PROMOTED',
+        baseCommit: batch.baseCommit,
+        mergeCommit: batch.mergeCommit,
+        taskIntegrated: true,
+        caughtUp: false
+      }
     })
   ])
 })
@@ -199,13 +213,14 @@ it('takes the head itself as the merge commit when it already contains the candi
   await f.git('commit', '--allow-empty', '--no-gpg-sign', '-qm', 'descendant')
   const head = await f.git('rev-parse', 'HEAD')
   await f.git('update-ref', f.integrationRef, head)
+  recordIntegrationBase(f, head)
   const before = await f.git('worktree', 'list', '--porcelain')
   f.enqueue()
   await f.run()
   expect(f.effect()?.status).toBe('done')
   expect(f.batches()).toHaveLength(1)
   const batch = f.batches()[0]
-  expect(batch).toMatchObject({ status: 'PROMOTABLE', baseCommit: head, mergeCommit: head })
+  expect(batch).toMatchObject({ status: 'PROMOTED', baseCommit: head, mergeCommit: head })
   expect(await f.git('rev-parse', `refs/axiom/batches/${batch.id}/merged`)).toBe(head)
   await returned(f, before)
 })

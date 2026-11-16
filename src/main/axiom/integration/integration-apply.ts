@@ -15,6 +15,11 @@ import {
 } from './integration-request'
 import { runIntegrationRegression } from './integration-regression'
 import {
+  catchUpIntegrationPromotions,
+  finishPromotedRequest,
+  promoteIntegration
+} from './integration-promotion'
+import {
   readIntegrationHead,
   createIntegrationScratch,
   detachIntegrationScratch,
@@ -38,7 +43,11 @@ async function applyIntegration(
   signal: AbortSignal
 ) {
   const { store, runtime } = deps
+  const recoveredHead = await catchUpIntegrationPromotions(deps, effect.missionId)
   await closeStaleIntegrationBatches(deps, effect.missionId)
+  if (finishPromotedRequest(deps, effect)) {
+    return 'done' as const
+  }
   const initial = eligibility(store, effect)
   if (initial.kind === 'done') {
     return 'done' as const
@@ -46,7 +55,7 @@ async function applyIntegration(
   if (initial.kind === 'later') {
     return { later: initial.later }
   }
-  const head = await readIntegrationHead(runtime, initial.mission)
+  const head = recoveredHead ?? (await readIntegrationHead(runtime, initial.mission))
   const state = beginBatch(store, effect, head)
   if (state.kind === 'done') {
     return 'done' as const
@@ -56,6 +65,9 @@ async function applyIntegration(
   }
   const { batch, mission, candidate, task } = state
   await removeIntegrationLeftovers(runtime, batch)
+  if (batch.status === 'PROMOTABLE') {
+    return promoteIntegration(deps, effect, batch)
+  }
   const scratch = await createIntegrationScratch(runtime, mission, batch, task.taskId)
   let failure: { error: unknown } | undefined
   let regression: 'done' | 'stopped' | 'interrupted' = 'done'
@@ -139,7 +151,19 @@ async function applyIntegration(
   if (failure) {
     throw failure.error
   }
-  return regression === 'interrupted' ? { later: new Date().toISOString() } : ('done' as const)
+  if (regression === 'interrupted') {
+    return { later: new Date().toISOString() }
+  }
+  let passed = false
+  try {
+    passed = Boolean(testing && store.getIntegrationBatch(batch.id)?.status === 'PROMOTABLE')
+  } catch {
+    throw new Error('integration_batch_stale')
+  }
+  if (passed) {
+    return promoteIntegration(deps, effect, batch)
+  }
+  return 'done' as const
 }
 
 export function registerIntegrationApply(deps: IntegrationDependencies): void {

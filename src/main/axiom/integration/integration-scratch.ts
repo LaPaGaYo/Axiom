@@ -1,12 +1,12 @@
 import path from 'node:path'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { isRepoOnCatalogHost } from '../../../shared/execution-host'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import type { Mission } from '../../../shared/axiom-contract/mission-objects'
 import type { IntegrationBatch } from '../../../shared/axiom-contract/integration-batch'
 import type { AxiomStore } from '../db/axiom-store'
 import { readIntegrationGit, writeIntegrationGit } from './integration-merge'
 import { auditIntegration } from './integration-settlement'
+import { integrationRepository } from './integration-head'
 
 export type IntegrationRuntime = Pick<
   OrcaRuntimeService,
@@ -19,22 +19,14 @@ export async function readIntegrationHead(
   runtime: IntegrationRuntime,
   mission: Mission
 ): Promise<string> {
-  let repo: Awaited<ReturnType<IntegrationRuntime['showRepo']>>
-  try {
-    repo = await runtime.showRepo(`id:${mission.repoId}`)
-  } catch {
-    throw new Error('integration_head_unavailable')
-  }
-  if (!isRepoOnCatalogHost(repo)) {
-    throw new Error('repository_not_local')
-  }
+  const repoPath = await integrationRepository(runtime, mission)
   try {
     return (
-      await readIntegrationGit(repo.path, [
-        'rev-parse',
-        '--verify',
-        `${integrationHeadRef(mission.id)}^{commit}`
-      ])
+      await readIntegrationGit(
+        repoPath,
+        ['rev-parse', '--verify', `${integrationHeadRef(mission.id)}^{commit}`],
+        true
+      )
     ).trim()
   } catch {
     throw new Error('integration_head_unavailable')

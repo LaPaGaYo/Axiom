@@ -6,6 +6,8 @@ import type { ApplyEffect, IntegrationDependencies } from './integration-apply'
 import { auditIntegration } from './integration-settlement'
 import { removeIntegrationLeftovers } from './integration-scratch'
 import { cancelIntegrationRegressions } from './integration-regression-state'
+import { assertRecordedIntegrationHead } from './integration-head'
+import { catchUpIntegrationPromotions } from './integration-promotion'
 
 export function eligibility(store: AxiomStore, effect: ApplyEffect) {
   const mission = store.getMission(effect.missionId)
@@ -27,7 +29,11 @@ export function eligibility(store: AxiomStore, effect: ApplyEffect) {
     return { kind: 'done' } as const
   }
   const batches = store.listIntegrationBatches({ missionId: mission.id, candidateId: candidate.id })
-  if (batches.some((b) => !['QUEUED', 'APPLYING', 'TESTING', 'SUPERSEDED'].includes(b.status))) {
+  if (
+    batches.some(
+      (b) => !['QUEUED', 'APPLYING', 'TESTING', 'PROMOTABLE', 'SUPERSEDED'].includes(b.status)
+    )
+  ) {
     return { kind: 'done' } as const
   }
   if (
@@ -37,8 +43,8 @@ export function eligibility(store: AxiomStore, effect: ApplyEffect) {
   ) {
     return { kind: 'later', later: new Date(Date.now() + 30_000).toISOString() } as const
   }
-  const open = batches.filter(
-    (b) => b.status === 'QUEUED' || b.status === 'APPLYING' || b.status === 'TESTING'
+  const open = batches.filter((b) =>
+    ['QUEUED', 'APPLYING', 'TESTING', 'PROMOTABLE'].includes(b.status)
   )
   if (open.length > 1) {
     throw new Error('integration_batch_stale')
@@ -54,13 +60,18 @@ export function beginBatch(store: AxiomStore, effect: ApplyEffect, baseCommit: s
     }
     let batch = state.batch
     if (
-      (batch?.status === 'APPLYING' || batch?.status === 'TESTING') &&
+      (batch?.status === 'APPLYING' ||
+        batch?.status === 'TESTING' ||
+        batch?.status === 'PROMOTABLE') &&
       batch.baseCommit !== baseCommit
     ) {
       throw new Error('integration_head_moved')
     }
-    if (batch?.status === 'TESTING') {
+    if (batch?.status === 'TESTING' || batch?.status === 'PROMOTABLE') {
       return { ...state, batch }
+    }
+    if (!batch || batch.status === 'QUEUED') {
+      assertRecordedIntegrationHead(store, effect.missionId, baseCommit)
     }
     if (batch?.status === 'QUEUED') {
       if (
@@ -163,11 +174,19 @@ export async function abandonIntegration(
 ): Promise<void> {
   const { store, missions } = deps
   let batches: IntegrationBatch[] = []
+  let retainPromotable = false
+  try {
+    await catchUpIntegrationPromotions(deps, effect.missionId, effect.payload.candidateId)
+  } catch {
+    // An unreadable head or refused settlement must never discard a possibly advanced ref.
+    retainPromotable = true
+  }
   try {
     store.transaction('integration_abandoned', () => {
       batches = store
         .listOpenIntegrationBatches(effect.missionId)
         .filter((b) => b.candidateIds[0] === effect.payload.candidateId)
+        .filter((b) => !retainPromotable || b.status !== 'PROMOTABLE')
       abandonBatches(store, batches, 'integration_unavailable')
       const task = store.getTaskStage(effect.payload.taskId)
       if (task?.missionId === effect.missionId && task.stage === 'INTEGRATION_READY') {
