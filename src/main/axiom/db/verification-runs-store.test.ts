@@ -1,6 +1,7 @@
 import { afterAll, afterEach, expect, it } from 'vitest'
 import { OrchestrationDb } from '../../runtime/orchestration/db'
 import { AxiomStore } from './axiom-store'
+import { verificationRunsStore } from './verification-runs-store'
 import {
   VERIFICATION_RUN_STATUSES,
   isLegalVerificationRunTransition
@@ -70,4 +71,51 @@ it('writes commands and versions only under the exact claim fence', () => {
   expect(store.getVerificationRun('v')?.commands).toEqual([])
   expect(store.updateVerificationRun({ ...fence, ...fields })).toBe(true)
   expect(store.getVerificationRun('v')).toMatchObject(fields)
+})
+
+it('stores the batch of a verification run and leaves a candidate run without the key', () => {
+  const runs = verificationRunsStore(db)
+  const input = {
+    missionId: 'm',
+    taskId: 't',
+    candidateId: 'c',
+    status: 'QUEUED' as const,
+    verdictDetail: {},
+    commands: [],
+    toolVersions: {},
+    verifier: 'IntegrationController'
+  }
+  const batch = runs.insertVerificationRun({ ...input, id: 'batch-run', batchId: 'batch' })
+  expect(runs.getVerificationRun(batch.id)?.batchId).toBe('batch')
+  expect(runs.listVerificationRunsByStatus('QUEUED')).toEqual([batch])
+  expect(runs.listVerificationRuns({ missionId: 'm' })).toEqual([batch])
+  expect(
+    db.db.prepare('SELECT batch_id FROM verification_runs WHERE id = ?').get(batch.id)
+  ).toEqual({ batch_id: 'batch' })
+
+  runs.insertVerificationRun({ ...input, id: 'candidate-run', verifier: 'VerificationService' })
+  const candidate = runs.getVerificationRun('candidate-run')
+  expect(candidate && 'batchId' in candidate).toBe(false)
+  expect(
+    db.db.prepare('SELECT batch_id FROM verification_runs WHERE id = ?').get('candidate-run')
+  ).toEqual({ batch_id: null })
+  expect(
+    runs.updateVerificationRun({ id: batch.id, expectedStatus: 'QUEUED', status: 'RUNNING' })
+  ).toBe(true)
+  expect(runs.getVerificationRun(batch.id)?.batchId).toBe('batch')
+
+  runs.insertVerificationRun({ ...input, id: 'claimed-batch-run', batchId: 'second-batch' })
+  expect(
+    runs.claimVerificationRun({ id: 'claimed-batch-run', runtimeEpoch: 'epoch', startedAt: 'now' })
+  ).toMatchObject({ status: 'RUNNING', batchId: 'second-batch', claimCount: 1 })
+  expect(runs.getVerificationRun('claimed-batch-run')?.batchId).toBe('second-batch')
+
+  const before = runs.listVerificationRuns({ missionId: 'm' })
+  expect(() =>
+    runs.insertVerificationRun({ ...input, id: 'invalid-batch-run', batchId: '' })
+  ).toThrow()
+  expect(runs.listVerificationRuns({ missionId: 'm' })).toEqual(before)
+  expect(db.db.prepare('SELECT COUNT(*) AS count FROM verification_runs').get()).toEqual({
+    count: 3
+  })
 })

@@ -34,7 +34,7 @@ const TABLE_COLUMNS: Record<string, string> = {
   decisions:
     'id mission_id status title options resolution authority provenance supersedes_id created_at updated_at',
   verification_runs:
-    'id mission_id candidate_id task_id status verdict_detail commands tool_versions verifier created_at updated_at runtime_epoch claim_count worktree_id started_at finished_at',
+    'id mission_id candidate_id task_id status verdict_detail commands tool_versions verifier created_at updated_at runtime_epoch claim_count worktree_id started_at finished_at batch_id',
   integration_batches:
     'id mission_id base_commit candidate_ids status merge_commit conflicts approval_id created_at updated_at',
   approvals:

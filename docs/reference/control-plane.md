@@ -58,14 +58,14 @@ Execution Kernel 继续拥有 Run、Orca Task、dispatch、PTY、进程、worktr
 | `candidates`          | M2-07 store 已接入：Control Plane 固定 commit/tree；ACTIVE → SUPERSEDED + superseded_by；Task/commit 唯一                                    |
 | `artifacts`           | M2-02 已写/读：Mission、kind、sha256、size、media type、related ids、createdBy；内容只存 `<userData>/axiom/artifacts/<sha256>`               |
 | `decisions`           | M2-02 `listDecisions({ missionId, status })` 只读；ContextBuilder 包含 ACCEPTED 的 title/resolution；Decision service/RPC 写入者仍待后续     |
-| `verification_runs`   | M2-07 入 QUEUED；M3-01 事务领取、独立 worktree 准备与重启重排队；v45 保存 runtime_epoch、claim_count、worktree_id、started_at、finished_at   |
+| `verification_runs`   | M2-07 入 QUEUED；M3-01 事务领取、独立 worktree 准备与重启重排队；v45 保存 runtime_epoch、claim_count、worktree_id、started_at、finished_at；自 M4-2a-1 起可带可空的 `batch_id`，仅 IntegrationBatch 的合并树回归使用，验证服务的 claim 与 recovery 都跳过这样的行；目前没有产品写入方 |
 | `integration_batches` | M4-1a 的合同 `integration-batch.ts` 与 `integration-batches-store.ts`：单候选、十个状态、带预期状态守卫的迁移与有序查询；IntegrationController 的 `integration.apply` 执行器写 APPLYING、TESTING、CONFLICT 或耗尽后的 SUPERSEDED，目前没有产品入队方 |
 | `approvals`           | 表已建；M4 ApprovalGateway 使用，不复用 decision gate                                                                                        |
 | `axiom_effects`       | M3-06 admission / VerificationRun 同事务入队；按 kind / Mission 串行执行 dispatch 或验证唤醒，保存 due_at、失败次数、lease epoch 与结果 |
 
 Milestone 存在 Plan JSON 内，没有独立表/状态机。Attempt 身份仍等于 Orca dispatch id，不存在 Axiom Attempt 表。M2-02 启用 Artifact/ContextPackage 写入和 Decision 读取；M2-03 启用 AgentSpec 写入和 policy routing 更新；M2-04 启用 attempt_bindings 写入与阻塞 Approval/Question 读取；M2-07 接入 Candidate/Submission/VerificationRun store 与结算写入；其余后续表目前只有建表和清理支持，不能把表存在当成产品能力已完成。
 
-`create-tables.ts` 每次打开执行幂等 DDL，当前 `SCHEMA_VERSION=46`（UPSTREAM-3 后编号）；12 个查询索引、4 个删除触发器沿用 additive 模式。M3-06 不加版本或 migrate 文件，以新 Mission 删除触发器清理 effects，兼容已经存在的 Run 删除触发器。Task 删除清理 stage/边/binding，dispatch 删除仅清空 binding 的 dispatch 引用，Run 删除清理所属 Mission side rows。没有声明外键；v44 仅为 agent_specs.spec 与 mission_policies.routing 加列（TEXT NOT NULL DEFAULT '{}'），hasColumn 防止重复 ALTER，版本化探针从 v44 起检查这两列，v43 与更高版本降级路径保持透明。详细列见映射 §6。
+`create-tables.ts` 每次打开执行幂等 DDL，当前 `SCHEMA_VERSION=46`（UPSTREAM-3 后编号）；12 个查询索引、4 个删除触发器沿用 additive 模式。M3-06 不加版本或 migrate 文件，以新 Mission 删除触发器清理 effects，兼容已经存在的 Run 删除触发器。Task 删除清理 stage/边/binding，dispatch 删除仅清空 binding 的 dispatch 引用，Run 删除清理所属 Mission side rows。没有声明外键；v44 仅为 agent_specs.spec 与 mission_policies.routing 加列（TEXT NOT NULL DEFAULT '{}'），hasColumn 防止重复 ALTER，版本化探针从 v44 起检查这两列，v43 与更高版本降级路径保持透明。详细列见映射 §6。 `verification_runs.batch_id TEXT` 在新库由 DDL 放在末列，已有库由 DDL 后紧接的 `ensure-axiom-columns.ts` 补齐：先用 `hasColumn` 探测，缺列才 `BEGIN IMMEDIATE`，锁内再探测并 `ALTER TABLE … ADD COLUMN`，成功 `COMMIT`，失败 `ROLLBACK` 后重抛；列已存在时不取写锁、不写入。该步在编号迁移之前独立提交，不改 `user_version`、不占版本号：上游自己的 44–46 已被使用，避免下次同步再次挪号；可空增列不影响旧版按列名读写。
 
 所有 store 读取先用 zod 解析，不把 SQLite 行强制断言为领域对象。写入由 `runLifecycleWriteTransaction` 包裹，嵌套 savepoint 使 Run 创建和 Mission 创建能一起回滚；审计与状态同事务提交。
 
@@ -828,6 +828,7 @@ phase 词汇为 `claimed | prepared | checking | verdict | prepare_failed | requ
 | 策略键                | 默认值 / 含义                                                                                                                                                                                       |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | repositoryGates       | `{}`；low / medium / high 的可选命令数组                                                                                                                                                            |
+| integrationGates | 默认不设置；缺省时按 high → medium → low 取 `repositoryGates` 第一个已定义档（`[]` 也算已定义，会遮住低档），都未定义则无门；显式 `[]` 表示合并树不跑门禁；可设置非空命令数组，目前无产品调用方 |
 | timeBudgetMinutes     | 30，正整数；一次运行共用的 deadline                                                                                                                                                                 |
 | inconclusiveRouting   | specialist；可选 human                                                                                                                                                                              |
 | nonCodeTasks          | human_confirm；可选 artifact_only                                                                                                                                                                   |
@@ -841,6 +842,10 @@ phase 词汇为 `claimed | prepared | checking | verdict | prepare_failed | requ
 | knownFlaky            | `[]`；人工维护的失败名模式，只有 `*` 是通配符                                                                                                                                                       |
 
 策略中的命令去首尾空白且不得为空。`resolveVerificationPlan(taskSpec, rules)` 同时供 ContextBuilder 和运行器使用：setupCommands 原顺序（不去重），接着 `resolveAcceptance` / `acceptanceCommands` 解析并去重后的 criterion commands，最后追加 task.risk 对应的 repositoryGates（去掉已经列出的命令）。每项为 `{source,command,criteria}`，source=setup/evidence/gate；evidence step 的 criteria 列出共用该命令的全部 criterion indexes，setup / gate 为 `[]`。legacy 命令仍去首尾空白、跳过空项并保留顺序，旧行的命令计划不变。Worker 的 `Required verification commands` 节继续列出同一计划。Worker 的 checksRun 从不参与验证判定；报告声称全绿也不能抵消实际失败。
+
+`resolveIntegrationPlan(taskSpec, rules)` 与上面的函数共用命令计划构造：setup 原顺序且不去重，接着同一组去重的 criterion commands 与 criteria 索引，再追加未列出的 integration gates。门禁取显式 `integrationGates`，否则按表中的最高已配置档；与 Task 的 risk 无关，输出仍是 `{source,command,criteria}`。当前没有产品调用方，也没有产品路径写 `batchId`；`integrationGates` 中的程序尚不加入允许的 evidence programs（除非 setup 或风险档命令也使用它）。
+
+旧构建仍能按列名读写带 `batch_id` 的数据库，但其严格规则 schema 不认识 `integrationGates`：存储策略只要带这个键，该 Mission 的每次验证都会以 `INCONCLUSIVE`（`policy_invalid`）交人。
 
 运行后 `verification-acceptance.ts` 逐条生成 `verdictDetail.acceptance[]`：`{index,text,check,result,checkIndexes,artifactIds}`，result 为 pass / fail / inconclusive / skipped / human。command 采用关联 step 的结果，environmental / plan_invalid 为 inconclusive；artifact 要求至少一个符合种类且有效的提交引用，以 artifactIds 指向证明；human 永远记录 human。文本和命令在持久化验证证据前脱敏。没有 command check 的 Task 继续走 M3-03b 非代码路径；artifact criterion 的确定性通过不自动让该路径 PASS。
 

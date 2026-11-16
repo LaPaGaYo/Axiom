@@ -3,6 +3,7 @@ import {
   VerificationRulesSchema,
   matchesRetryOnce,
   matchesKnownFlaky,
+  resolveIntegrationPlan,
   resolveVerificationPlan
 } from './verification-rules'
 
@@ -205,4 +206,100 @@ it('links shared commands to every criterion while preserving criterion order', 
     { source: 'evidence', command: 'pnpm tc', criteria: [4] },
     { source: 'gate', command: 'gate', criteria: [] }
   ])
+})
+
+it('keeps an absent integrationGates apart from an empty list and rejects a bad command', () => {
+  expect('integrationGates' in VerificationRulesSchema.parse({})).toBe(false)
+  expect(VerificationRulesSchema.safeParse({ integrationGates: [] }).success).toBe(true)
+  expect(VerificationRulesSchema.parse({ integrationGates: [] }).integrationGates).toEqual([])
+  expect(
+    VerificationRulesSchema.parse({ integrationGates: [' pnpm test '] }).integrationGates
+  ).toEqual(['pnpm test'])
+  for (const integrationGates of [[''], [' '], 'pnpm test', [1]]) {
+    expect(VerificationRulesSchema.safeParse({ integrationGates }).success).toBe(false)
+  }
+  expect(VerificationRulesSchema.safeParse({ integrationGates: [], unknown: [] }).success).toBe(
+    false
+  )
+})
+
+it('resolves the integration plan as setup, criterion commands and integration gates', () => {
+  const task = {
+    risk: 'low' as const,
+    acceptanceCriteria: [
+      { text: 'One', check: { kind: 'command' as const, command: 'pnpm test' } },
+      { text: 'Two', check: { kind: 'command' as const, command: 'pnpm test' } },
+      { text: 'Types', check: { kind: 'command' as const, command: 'pnpm tc' } }
+    ]
+  }
+  const rules = VerificationRulesSchema.parse({
+    setupCommands: ['pnpm setup', 'pnpm test'],
+    integrationGates: ['pnpm test', 'pnpm lint', 'pnpm build', 'pnpm lint', 'pnpm setup'],
+    repositoryGates: { low: ['pnpm other'], high: ['pnpm full'] }
+  })
+  const common = [
+    { source: 'setup', command: 'pnpm setup', criteria: [] },
+    { source: 'setup', command: 'pnpm test', criteria: [] },
+    { source: 'evidence', command: 'pnpm test', criteria: [0, 1] },
+    { source: 'evidence', command: 'pnpm tc', criteria: [2] }
+  ]
+  expect(resolveIntegrationPlan(task, rules)).toEqual([
+    ...common,
+    { source: 'gate', command: 'pnpm lint', criteria: [] },
+    { source: 'gate', command: 'pnpm build', criteria: [] }
+  ])
+  expect(resolveIntegrationPlan(task, rules).filter((step) => step.source === 'evidence')).toEqual(
+    resolveVerificationPlan(task, rules).filter((step) => step.source === 'evidence')
+  )
+  expect(resolveIntegrationPlan(task, { ...rules, integrationGates: [] })).toEqual(common)
+})
+
+it('takes the highest configured risk tier when integrationGates is absent', () => {
+  for (const [repositoryGates, gates] of [
+    [{ high: ['high gate'], low: ['low gate'] }, ['high gate']],
+    [{ medium: ['medium gate'], low: ['low gate'] }, ['medium gate']],
+    [{ low: ['low gate'] }, ['low gate']],
+    [{ high: [], low: ['low gate'] }, []],
+    [{}, []]
+  ] as const) {
+    for (const risk of ['low', 'high'] as const) {
+      expect(
+        resolveIntegrationPlan(
+          { risk, acceptanceCriteria: [] },
+          VerificationRulesSchema.parse({ repositoryGates })
+        )
+      ).toEqual(gates.map((command) => ({ source: 'gate', command, criteria: [] })))
+    }
+  }
+})
+
+it('keeps the verification plan of every risk unchanged when integrationGates is set', () => {
+  const rules = VerificationRulesSchema.parse({
+    setupCommands: ['setup', 'setup'],
+    repositoryGates: {
+      low: ['test', 'low gate', 'setup'],
+      medium: ['test', 'medium gate', 'setup'],
+      high: ['test', 'high gate', 'setup']
+    }
+  })
+  const common = [
+    { source: 'setup', command: 'setup', criteria: [] },
+    { source: 'setup', command: 'setup', criteria: [] },
+    { source: 'evidence', command: 'test', criteria: [0] },
+    { source: 'evidence', command: 'check', criteria: [1] }
+  ]
+  const expected = {
+    low: [...common, { source: 'gate', command: 'low gate', criteria: [] }],
+    medium: [...common, { source: 'gate', command: 'medium gate', criteria: [] }],
+    high: [...common, { source: 'gate', command: 'high gate', criteria: [] }]
+  }
+  for (const risk of ['low', 'medium', 'high'] as const) {
+    const task = { risk, acceptanceCriteria: [], requiredEvidence: [' test ', 'test', 'check'] }
+    expect(resolveVerificationPlan(task, rules)).toEqual(expected[risk])
+    for (const integrationGates of [[], ['integration gate']]) {
+      expect(
+        resolveVerificationPlan(task, VerificationRulesSchema.parse({ ...rules, integrationGates }))
+      ).toEqual(expected[risk])
+    }
+  }
 })

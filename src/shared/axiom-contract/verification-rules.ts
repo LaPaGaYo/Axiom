@@ -55,6 +55,7 @@ export const VerificationRulesSchema = z.strictObject({
       high: Commands.optional()
     })
     .default({}),
+  integrationGates: Commands.optional(),
   timeBudgetMinutes: z.number().int().positive().default(30),
   inconclusiveRouting: z.enum(['specialist', 'human']).default('specialist'),
   nonCodeTasks: z.enum(['artifact_only', 'human_confirm']).default('human_confirm'),
@@ -155,7 +156,28 @@ export function resolveVerificationPlan(
   task: Pick<TaskSpec, 'acceptanceCriteria' | 'requiredEvidence' | 'risk'>,
   rules: VerificationRules
 ): VerificationCommand[] {
-  const plan: VerificationCommand[] = rules.setupCommands.map((command) => ({
+  return resolveCommandPlan(task, rules.setupCommands, rules.repositoryGates[task.risk] ?? [])
+}
+
+export function resolveIntegrationPlan(
+  task: Pick<TaskSpec, 'acceptanceCriteria' | 'requiredEvidence' | 'risk'>,
+  rules: VerificationRules
+): VerificationCommand[] {
+  const gates =
+    rules.integrationGates ??
+    rules.repositoryGates.high ??
+    rules.repositoryGates.medium ??
+    rules.repositoryGates.low ??
+    []
+  return resolveCommandPlan(task, rules.setupCommands, gates)
+}
+
+function resolveCommandPlan(
+  task: Pick<TaskSpec, 'acceptanceCriteria' | 'requiredEvidence'>,
+  setupCommands: string[],
+  gates: string[]
+): VerificationCommand[] {
+  const plan: VerificationCommand[] = setupCommands.map((command) => ({
     source: 'setup',
     command,
     criteria: []
@@ -173,7 +195,7 @@ export function resolveVerificationPlan(
     })
   }
   const listed = new Set(plan.map(({ command }) => command))
-  for (const command of rules.repositoryGates[task.risk] ?? []) {
+  for (const command of gates) {
     if (!listed.has(command)) {
       plan.push({ source: 'gate', command, criteria: [] })
       listed.add(command)
