@@ -98,6 +98,7 @@ export async function withFixtureMission(
     holdWorkers?: boolean
     restart?: boolean
     runVerification?: boolean
+    runIntegration?: boolean
     releaseTerminals?: boolean
     concurrencyLimit?: number
     noCodexAccount?: boolean
@@ -144,6 +145,7 @@ process.exit(require('node:child_process').spawnSync(process.execPath, [${JSON.s
     ...(options.holdExitSubmission ? { AXIOM_E2E_HOLD_EXIT_SUBMISSION: '1' } : {}),
     ...(options.holdAttemptDispatch ? { AXIOM_E2E_HOLD_ATTEMPT_DISPATCH: '1' } : {}),
     ...(options.runVerification ? {} : { AXIOM_E2E_HOLD_VERIFICATION: '1' }),
+    ...(options.runIntegration ? {} : { AXIOM_E2E_HOLD_INTEGRATION: '1' }),
     ...(options.releaseTerminals ? {} : { AXIOM_E2E_HOLD_WORKER_RELEASE: '1' }),
     ORCA_E2E_CLI_ENTRY: cliEntry
   })

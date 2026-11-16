@@ -15,6 +15,7 @@ import { AgentFactoryError } from '../agent-factory/provider-selection'
 import { blockingQuestionOrApproval, interruptionBackoff } from './admission-blockers'
 import { orderByCriticalPath } from './critical-path'
 import type { EffectOutbox } from '../outbox/effect-outbox'
+import { requestIntegrations } from '../integration/integration-admission'
 
 export type ScheduleTrigger = 'mission_start' | 'stage_change' | 'resume' | 'manual' | 'policy'
 export type AdmittedAttempt = {
@@ -171,6 +172,7 @@ export class Scheduler {
       return result
     }
     this.missions.recomputeReadiness(missionId)
+    requestIntegrations(this.store, this.missions, this.deps.effects, missionId)
     const candidates = orderByCriticalPath(
       this.store,
       this.store.listTaskStages({ missionId, stage: 'READY' })
