@@ -135,7 +135,9 @@ it('exhausts throwing rounds after 1s and 5s and leaves the Task READY', async (
 })
 
 function otherMission() {
-  const other = planned({ ...f, controller: new MissionController(f.db, f.store) })
+  const other = planned({ ...f, controller: new MissionController(f.db, f.store) }, undefined, {
+    targetBranch: `other-${f.store.listMissions({}).length}`
+  })
   other.controller.startExecution(other.missionId)
   return other
 }

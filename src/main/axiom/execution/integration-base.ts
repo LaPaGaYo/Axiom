@@ -9,12 +9,13 @@ export async function ensureIntegrationBase(input: {
 }) {
   const options = gitOptionsForWorktree(input.repoPath)
   const branch = `axiom/integration/${input.missionId}`
+  let existingSha: string | undefined
   try {
     const { stdout } = await gitExecFileAsync(
       ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`],
       options
     )
-    return { sha: stdout.trim(), created: false }
+    existingSha = stdout.trim()
   } catch (error) {
     // Quiet rev-parse exits 1 for an absent ref; host/repository failures must not create one.
     if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 1)) {
@@ -31,6 +32,24 @@ export async function ensureIntegrationBase(input: {
     ).stdout.trim()
   } catch {
     throw new OrchestrationError('target_branch_not_found', 'Mission target branch was not found.')
+  }
+  if (existingSha !== undefined) {
+    try {
+      await gitExecFileAsync(
+        ['merge-base', '--is-ancestor', existingSha, `refs/heads/${input.targetBranch}`],
+        options
+      )
+    } catch (error) {
+      const notAncestor =
+        typeof error === 'object' && error !== null && 'code' in error && error.code === 1
+      throw new OrchestrationError(
+        'integration_base_unavailable',
+        notAncestor
+          ? 'The integration base is not an ancestor of the target branch.'
+          : 'Cannot read the integration base.'
+      )
+    }
+    return { sha: existingSha, created: false }
   }
   try {
     await gitExecFileAsync(['branch', branch, sha], options)
