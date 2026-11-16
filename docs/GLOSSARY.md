@@ -290,6 +290,8 @@ APPLYING / TESTING → QUEUED（应用重启时由 RecoveryService 丢弃临时�
 `PROMOTED` = 集成基线 ref 前进到该批次的合并 commit；Delivery（集成基线合入目标分支）是 Mission 级动作，见 §4.1。
 `AWAITING_APPROVAL` 与 `REJECTED` 留在枚举里，V1 不用：合入自动进行，唯一的 Approval 在交付前（D92 a）。
 
+**批次的执行**（M4-1b）：批次的记录在合并执行器动手时写入，直接是 `APPLYING`，排队的是 outbox 里的 `integration.apply`。临时工作树由内核建在集成基线上，分支 `axiom/integrating/<batchId>`；合并在游离 HEAD 上做，分支留在基线上，随工作树由内核删除（被中断的一次留下的同名分支会被下一次重用，内核不删它重用的分支，留给 M4-4 清扫）。合并 commit 固定在 `refs/axiom/batches/<batchId>/merged`（create-only，不运行仓库 hooks；日期取批次的创建时间，同一批次重做得到同一个 commit）。中断的 `APPLYING` 由同一条副作用原地重做；回到 `QUEUED` 的那条边留给完整的重启恢复（M4-4）。三次都没法尝试时批次 `SUPERSEDED`，Task `BLOCKED`（`integration_unavailable`）。
+
 ### 4.10 Approval
 
 `PENDING → GRANTED | DENIED | EXPIRED | REVOKED`；`GRANTED → CONSUMED`（单次使用，执行后即消费）。
@@ -387,7 +389,7 @@ M3-04b-3：报告中的 **typed QUESTION item** 是绑定 Task 的 `messages.pay
 
 - **Effect / 副作用**：与命令的权威状态在同一事务写入 `axiom_effects` 的持久化执行请求；执行器仅在提交后、事务外执行。不是新的 Task / Attempt 生命周期。
 - **Effect outbox / 副作用发件箱**：Control Plane 的持久化副作用出口；v0 每个 `(kind, missionId)` 同时最多执行一个条目，不同 lane 独立。单进程持有数据库，租约按进程 epoch 识别，无时间过期。
-- **Effect kinds**：`attempt.dispatch`（key = `<taskId>/<seq>`，一个 Attempt 恰有一个 dispatch）；`verification.enqueue`（key = VerificationRun id，只唤醒既有验证队列）；`attempt.continue`（key = 被中断的 `<taskId>/<seq>`，严格 payload `{taskId,seq,chain,failureClass,resetsAt?,account?:{provider,key}}`，请求该 Mission 的 Scheduler round；usage_limit 还唤醒其它所有 EXECUTING Mission）。
+- **Effect kinds**：`attempt.dispatch`（key = `<taskId>/<seq>`，一个 Attempt 恰有一个 dispatch）；`verification.enqueue`（key = VerificationRun id，只唤醒既有验证队列）；`attempt.continue`（key = 被中断的 `<taskId>/<seq>`，严格 payload `{taskId,seq,chain,failureClass,resetsAt?,account?:{provider,key}}`，请求该 Mission 的 Scheduler round；usage_limit 还唤醒其它所有 EXECUTING Mission）；`integration.apply`（key = Candidate id，严格 payload `{taskId,candidateId}`，合并执行器，M4-1b；M4-2b 之前没有入队方）。
 - **Continuation**：chain 从 1 起，前一个 seq 的 effect 无论状态均计入；第三次直接 BLOCKED，无 effect。有效 reset 为 `now < resetsAt ≤ now + 8 days`，dueAt = reset + 60 s；否则用 1 / 5 / 15 min ladder（第三档仅留给未来提高连续次数上限）。重启保留等待；执行器检查 EXECUTING / READY / 无更新 Attempt，失败重试 1 s / 5 s、最多三次，旧租约 retry。task.adjust 同事务 retire pending continuation，审计 `effect.retired {reason: superseded_by_task_adjust}`；retired 前驱仍计入 chain。
 - **Effect status**：`pending`（等待 dueAt）→ `running`（已租用）→ `done`（执行器完成）、`pending`（延后 / 有界重试）、`failed`（失败次数耗尽）或 `retired`（重启后无法安全重放，或人工调整取代 continuation）。`attempts` 只计抛出的执行失败，`later` 和 boot retry 不增加它。
 - **`effect.failed`**：`EffectOutbox` 对 `effect` 记录 `{ kind, key, attempts, lastError }`；错误通过 `redactContext` 脱敏且最多 2,000 字符。

@@ -257,7 +257,7 @@ Attempt 不新建状态表，由 Orca `dispatch_contexts` × `worker_dispatches`
 ### 6.5 Candidate、Submission
 
 - Submission 不可变；一个 Attempt 至多一个 Submission（`submissions.dispatch_id UNIQUE`）。被拒绝的提交（stale、duplicate、mismatched、unauthorized）只写 AuditEvent，不改任何状态。
-- Candidate：`ACTIVE → SUPERSEDED`。同一 Task 任一时刻至多一个 ACTIVE Candidate；新 Submission 使前一候选 SUPERSEDED，并 CANCELED 其未完成的 VerificationRun。
+- Candidate：`ACTIVE → SUPERSEDED`。同一 Task 任一时刻至多一个 ACTIVE Candidate；新 Submission 使前一候选 SUPERSEDED，并 CANCELED 其未完成的 VerificationRun。合入时冲突的候选也 SUPERSEDED，这时没有继任者（§12.2）。
 
 ### 6.6 VerificationRun
 
@@ -281,7 +281,7 @@ PROMOTABLE → AWAITING_APPROVAL → PROMOTED | REJECTED
 
 `PROMOTED` = 集成基线 ref `axiom/integration/<missionId>` 前进到本批次的合并 commit。
 
-V1 的合入自动进行，批次上不等批准，唯一的 Approval 在交付前（D92 a）；`AWAITING_APPROVAL` 与 `REJECTED` 留在枚举里，V1 不用。批次级失败回原 Task 修复；FIX_TASK 只用于没有肇事候选的 Mission 级失败（§12.3）。
+V1 的合入自动进行，批次上不等批准，唯一的 Approval 在交付前（D92 a）；`AWAITING_APPROVAL` 与 `REJECTED` 留在枚举里，V1 不用。批次级失败回原 Task 修复；FIX_TASK 只用于没有肇事候选的 Mission 级失败（§12.3）。合并没法尝试（环境问题）时有界重试，仍不行则批次 `SUPERSEDED`、Task `BLOCKED`（原因 `integration_unavailable`，不计入重试、不送修）；Mission 级的待处理项（M4-4）建成后取代这一做法。
 
 ### 6.8 Approval、Decision、Question
 
@@ -419,13 +419,13 @@ ContextPackage 是可寻址（`id = sha256(manifest)`）、可复现、最小充
 - 目标分支与集成基线都是受保护分支：Worker Attempt 永不直接合入。
 
 ### 12.2 批次流程（V1：每批一个候选，D5）
-1. `INTEGRATION_READY` 候选按队列顺序入 `QUEUED`；单一 IntegrationController 串行处理；
-2. `APPLYING`：在临时分支 `axiom/integrating/<batchId>`（从当前基线创建）上 `merge --no-ff <candidate>`；git 无法自动合并 → `CONFLICT`：候选 SUPERSEDED，原 Task → `NEEDS_FIX`；修复 Attempt 的分支由 Control Plane 从当前集成基线建，`merge --no-commit` 旧候选并留下冲突标记，ContextPackage 携带冲突证据（D79）；
+1. `INTEGRATION_READY` 候选按验证通过的先后排队；队列是 outbox 里的 `integration.apply`，同一 Mission 一次一个，单一 IntegrationController 串行处理，批次的记录在它动手时写入（`APPLYING`）；
+2. `APPLYING`：内核从当前基线建临时工作树（分支 `axiom/integrating/<batchId>`），合并在游离 HEAD 上做（`merge --no-ff <candidate>`）：临时分支留在基线上，随工作树由内核删除；合并 commit 固定到 `refs/axiom/batches/<batchId>/merged`。git 无法自动合并 → `CONFLICT`：候选 SUPERSEDED，原 Task → `NEEDS_FIX`；修复 Attempt 的分支由 Control Plane 从当前集成基线建，`merge --no-commit` 旧候选并留下冲突标记，ContextPackage 携带冲突证据（D79）；
 3. `TESTING`：在合并后的树上运行仓库全量回归与 Task 要求的检查；失败 → `FAILED`：候选 SUPERSEDED，原 Task → `NEEDS_FIX`，修复 Attempt 从失败批次的合并 commit（`refs/axiom/batches/<batchId>/merged`）继续、带失败的回归证据；需要动 Task scope 之外的文件时只在当前 PlanRevision 已授权的范围内扩大（`scope_extended`），否则问人（D79）；
 4. `PROMOTABLE`：风险分级（迁移、权限/安全敏感路径、依赖变更等由 policy 规则判定）；分级记下来，交付批准时给人看；V1 不在批次上等批准（D92 a）；
 5. `PROMOTED`：集成基线 fast-forward 到合并 commit；Task → `INTEGRATED`；触发下游 readiness 重算。
 6. 候选 commit 固定到 `refs/axiom/candidates/<id>`；集成基线的期望 SHA 记库，每个批次开始前核对，不一致即停（D79）。
-不做 `git reset --hard`：失败批次只留临时分支，不回退基线。
+不做 `git reset --hard`：失败批次只留下它固定的合并 commit（`refs/axiom/batches/<batchId>/merged`），不回退基线。
 
 ### 12.3 目标分支漂移
 用户在 Mission 期间可能继续提交到目标分支。`FINALIZING` 时把目标分支 HEAD 作为特殊候选合入集成基线并跑回归，只对齐这一次，执行过程中不追（D92 e）；冲突或回归失败时没有肇事候选，由 Control Plane 建 FIX_TASK，Mission `FINALIZING → EXECUTING`（D70、D79）。
