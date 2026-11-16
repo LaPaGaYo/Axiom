@@ -11,6 +11,7 @@ import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
 import { RunMailboxConsumer } from '../mission-controller/run-mailbox-consumer'
 import { ORCHESTRATION_WORKER_LIST_METHOD } from '../../runtime/rpc/methods/orchestration/worker/worker-list-method'
 import * as snapshots from '../execution/candidate-snapshot'
+import * as pins from '../execution/commit-pin'
 import { report } from '../execution/submission-fixture.test-support'
 import { getAxiomControlPlane } from '../control-plane'
 import { AttemptListResponseSchema } from '../../../shared/axiom-contract/attempt-params'
@@ -145,6 +146,10 @@ describe('Attempt recovery', () => {
     expect(audits()).toEqual(before)
   })
   it('re-reads Submission authority after the shell-foreground probe awaits host IO', async () => {
+    vi.spyOn(pins, 'pinCandidateRef').mockImplementation(async (_worktree, id) => ({
+      pinned: true,
+      ref: `refs/axiom/candidates/${id}`
+    }))
     vi.spyOn(snapshots, 'snapshotCandidate').mockResolvedValue({
       commitSha: 'a'.repeat(40),
       treeSha: 'b'.repeat(40),
@@ -541,6 +546,10 @@ describe('Attempt recovery', () => {
     }
   )
   it('releases a submitted terminal after verification claims and a lost release timer', async () => {
+    vi.spyOn(pins, 'pinCandidateRef').mockImplementation(async (_worktree, id) => ({
+      pinned: true,
+      ref: `refs/axiom/candidates/${id}`
+    }))
     vi.spyOn(snapshots, 'snapshotCandidate').mockResolvedValue({
       commitSha: 'a'.repeat(40),
       treeSha: 'b'.repeat(40),

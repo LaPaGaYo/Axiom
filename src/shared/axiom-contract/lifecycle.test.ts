@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { INTEGRATION_BATCH_STATUSES } from './integration-batch'
 import {
   AXIOM_MESSAGE_TYPES,
   GOAL_REVISION_STATUSES,
@@ -45,6 +46,9 @@ function equalVocabulary(actual: readonly string[], documented: string[]): void 
 }
 
 describe('glossary parity', () => {
+  it('matches IntegrationBatch §4.9', () => {
+    equalVocabulary(INTEGRATION_BATCH_STATUSES, fencedStates('### 4.9 IntegrationBatch'))
+  })
   it('matches Mission §4.1, including interruption states after the parenthesis', () => {
     equalVocabulary(MISSION_STATUSES, fencedStates('### 4.1 Mission'))
   })
