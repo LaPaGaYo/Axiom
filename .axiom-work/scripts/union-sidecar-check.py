@@ -10,6 +10,13 @@ plain grep / test / ls / [ / git grep / git ls-files / git diff check. It is ski
 writes or moves anything, redirects output, or diffs against main or the protected base (such a diff describes the
 Task that wrote it, not the tree). A diff against any other ref does run. Each distinct assertion runs once.
 
+"Calls" and "redirects" are judged on the command text only: what stands inside quotes is a pattern or a path, not a
+command, so `git grep -E "reset --hard|git clean"` and `grep -q "<title>" file` do run; a `$( )` inside double quotes
+is command text again. A name counts only as a whole word (`config/tsconfig.node.json` is not a call of node), and
+`2>/dev/null` is not a redirect that writes. An assertion is judged whole, quotes included, as it was before this
+rule, when the scanner cannot read it (an unclosed quote) or when it calls something whose quoted argument is a
+program (awk, sed, xargs, find, a shell).
+
 Prints one line per failed assertion and a last line `ran N skipped N failed N unique N`.
 Exit code: 0 when nothing failed, 1 otherwise, 2 when the list or a listed sidecar is missing.
 
@@ -34,7 +41,69 @@ if not listing.is_file():
 ids = [line.strip() for line in listing.read_text(encoding='utf-8').splitlines() if line.strip() and not line.startswith('#')]
 ids += [i for i in args if i not in ids]
 SAFE = re.compile(r'^(!\s*)?(grep|test|ls|\[|git (grep|ls-files|diff))\b')
-BLOCK = re.compile(r'\b(pnpm|node|npx|python3?|rm|mv|cp|tee|git (switch|checkout|reset|commit|merge|stash|clean|branch|update-ref|add|push|fetch))\b|union-sidecar-check|>')
+WHOLE = re.compile(r'\b(pnpm|node|npx|python3?|rm|mv|cp|tee|git (switch|checkout|reset|commit|merge|stash|clean|branch|update-ref|add|push|fetch))\b|union-sidecar-check|>')
+WORD = r'(?<![\w./-])(%s)(?![\w./-])'
+CALL = re.compile(
+    WORD % r'pnpm|node|npx|python3?|rm|mv|cp|tee|git\s+(switch|checkout|reset|commit|merge|stash|clean|branch|update-ref|add|push|fetch)'
+    + r'|union-sidecar-check|>'
+)
+# For these a quoted argument is a program, not a pattern.
+PROGRAM = re.compile(WORD % r'awk|sed|perl|ruby|sh|bash|zsh|eval|exec|find|xargs|env|source')
+
+
+def command_text(a):
+    """The assertion without what stands inside quotes. Single quotes are literal. Double quotes are literal except
+    for `$( )`, which is command text again and may hold quotes of its own. Returns None when a quote or a `$( )`
+    is not closed."""
+    out = []
+    stack = ['code']
+    i = 0
+    while i < len(a):
+        c = a[i]
+        top = stack[-1]
+        if top == 'single':
+            if c == "'":
+                stack.pop()
+                out.append(c)
+        elif top == 'double':
+            if c == chr(92):
+                i += 1
+            elif c == '"':
+                stack.pop()
+                out.append(c)
+            elif a.startswith('$(', i):
+                stack.append('subst')
+                out.append('$(')
+                i += 1
+        else:
+            if c == chr(92):
+                i += 1
+            elif c == "'":
+                stack.append('single')
+                out.append(c)
+            elif c == '"':
+                stack.append('double')
+                out.append(c)
+            elif a.startswith('$(', i) or c == '(':
+                stack.append('subst')
+                out.append('$(' if c == '$' else c)
+                i += 1 if c == '$' else 0
+            elif c == ')' and top == 'subst':
+                stack.pop()
+                out.append(c)
+            else:
+                out.append(c)
+        i += 1
+    return ''.join(out) if stack == ['code'] else None
+
+
+def blocked(a):
+    text = command_text(a)
+    if text is None or PROGRAM.search(text):
+        return WHOLE.search(a)
+    return CALL.search(text.replace('2>/dev/null', ' '))
+
+
 # Only the revision arguments count (before ` -- `): a path such as src/main/... is not the ref main.
 MAIN_DIFF = re.compile(r'git diff\b(?:(?! -- )[^|;)])*?\s(main|axiom/upstream-3/protected-base)(?=\s|$)')
 seen = set()
@@ -53,7 +122,7 @@ for i in ids:
         if not a or a in seen:
             continue
         seen.add(a)
-        if not SAFE.match(a) or BLOCK.search(a) or MAIN_DIFF.search(a):
+        if not SAFE.match(a) or blocked(a) or MAIN_DIFF.search(a):
             skipped += 1
             continue
         ran += 1
