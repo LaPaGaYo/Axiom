@@ -125,6 +125,9 @@ export class MissionController {
     return this.write('approve_plan', () => approvePlan(this.ctx, input))
   }
   rejectPlan(input: { planRevisionId: string; reason: string; resolver: string }) {
+    if (redactContext(input.reason).redacted) {
+      throw new OrchestrationError('invalid_argument', 'secret_in_rationale')
+    }
     return this.write('reject_plan', () => rejectPlan(this.ctx, input))
   }
   getPlan(planRevisionId: string) {

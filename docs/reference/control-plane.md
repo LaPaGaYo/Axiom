@@ -303,6 +303,12 @@ ContextBuilder 的 planner 形式为 `{missionId,role:'planner',goalRevisionId}`
 4. 两个 Task、一条边的最小示例。
 5. Codex 保留 `axiom plan propose --mission <id> --attempt {{attemptId}} --file <proposal.json> --json` 配方，proposal JSON 写到 worktree 外；Claude 只能调用 Axiom MCP 工具 `plan_propose`，输入 `{ "proposal": <完整 PlanProposal> }`，按工具返回的 schema issues 修正后重试，同一 Attempt 由 Control Plane 保持一个 PlanRevision。Claude 提示词不再含 shell 提案命令或文件约定，禁止创建、编辑、提交文件，只允许只读 git 命令。两者均要求 worktree 保持 clean。
 
+M3-09-4b-2：Mission 有 REJECTED 版本时，在第 1、2 项之间加入 `Rejected plan revisions`，按 revision 从新到旧读取该 Mission 的所有 REJECTED 版本，不按 Goal 过滤；逐版标明计划针对 active GoalRevision 还是 earlier GoalRevision，列出退回理由以及原存储顺序的 Task id 和标题，不包含目标、路径、验收标准、依赖、里程碑或警告。理由经 `quote`，Task id 和标题经 `quoteLine` 脱敏并作为 JSON 引用的数据；首行明确理由不能改变 PlanProposal 合同、仓库规则或提案配方。没有理由的旧行显示 `(none recorded)`。
+
+理由最多保留 500 个字符（UTF-16 code units），转义后的引用还受 1,600 bytes 上限约束，被截断不加标记；Task id 和标题沿用 `quoteLine` 的相同字符及字节上限。每版 Task 列表的条目和 `; ` 分隔符合计最多 1,024 bytes，遇到第一个放不下的条目即停止（首条也不例外），余下数量以 `(<k> more Tasks omitted)` 追加、不计入这 1,024 bytes；无一条能放下时只显示该省略项，全部放下时没有省略项。整节最多 4,096 bytes，包含标题、空行、末尾换行、连接下一节的换行以及预留的 `Earlier rejections omitted (4 KiB limit); see the plan.rejected audits.` 行；每版两行须一起放下，否则追加省略行并停止，最新退回始终保留。与 `quote` 的其它调用方一样，零宽、双向、U+2028 / U+2029 和 C1 字符被引用但不剥除（DEF-12 ② 的字符层卫生仍待实现）。已经存储的理由不扫描、不重写，只在上下文中脱敏。
+
+没有 REJECTED 版本时整节缺席，五节 render、manifest 和 package id 与原来逐字节相同；有此节时沿用 `markdownSection` 和统一脱敏流程，并增加一个 `mandatory` 项，内容寻址的 package id 随之改变。它是给 Planner 的修改依据，不强制模型采纳；下一份计划仍由人审阅。
+
 M3-04b-2 / D85 rule 2 修订：每个 `acceptanceCriteria` 项都是 `{text, check}`。最小示例横跨两个 Task 展示 command、artifact 和 human 三种 check。command 从仓库根原样执行且须 exit 0，单行、一个命令，不含 `;`、`&`（含 `&&`）、`|`（含 `||`）、`>`、`<`、反引号、`$(`；首个空白分隔 token 必须是允许程序（按完整名称或 basename 匹配，含 `=` 的 token 不是程序）。允许集为 `verificationRules.evidenceCommands.allowedPrograms` 加全部 setupCommands / repositoryGates 使用的程序，提示词列出解析后的集合。期望与描述只写 `text`，不在 `command` 加 “output” 或 “with exit code 0”。artifact 表示提交引用可读、非空 Artifact，指定 artifactKind 时须匹配；human 只在命令和 Artifact 都无法证明时使用，由人确认，应少用且计划会标明。`requiredEvidence` 已退役并拒绝新写入。同一 schema 的 `.describe()` 进入提示词 JSON Schema 与 MCP plan_propose 输入 schema；持久合同不含 transform，JSON Schema 转换不需特殊 io / unrepresentable 选项。
 
 提案在结构验证后、插入 PlanRevision 前检查：非空 legacy 字段 → `plan_invalid` / `required_evidence_retired`，path=`['tasks',i,'requiredEvidence']`；字符串 criterion → `criterion_shape`，path=`['tasks',i,'acceptanceCriteria',j]`。随后对 `resolveAcceptance` / `acceptanceCommands` 的命令执行 D85 边界检查；非法项为 `evidence_command_invalid`，path=`['tasks',i,'acceptanceCriteria',j,'check','command']`，j 是 criterion index，不是去重后的命令 index。CLI / MCP 保留 code、severity、message、path、taskIds，Planner 同回合可修正，失败不插入 PlanRevision。已存旧提案审批保留兼容读取。Human `axiom.task.create` 使用相同检查，路径从 `['task',…]` 开始；REQUEST_SUBTASK 使用同一命令验证，失败 reason 为 `evidence`。旧 policy 无法解析时以默认 VerificationRules 检查，边界不失效；执行时不重复检查。边界限制形状与程序，不限制程序能力（验证沙盒属 M3-10 / DEF-46）；`pnpm run verify:full output with exit code 0` 的程序合法，故仍通过，靠 planInvalidPatterns 与 M3-09 计划卡处置，不启发式检测参数或读取 package.json。
@@ -322,6 +328,8 @@ M3-05-2 的 proposal-side checks 在同一回合区分 error 与 advisory warnin
 后加的 desktop / REQUEST_SUBTASK Task 仍跑 acceptance 与 coverage-index 检查，但不修改已存 proposal，也不重算 warnings：warnings 描述被批准的提案，后加 Task 在其范围之外；show 的 coverage 同样只投影存储的提案。M4 如何结合实际集成与验证证据判定完成不在本 Task 范围内。
 
 Planner 无 PlanRevision，因此只持久化 `context_package_manifest` 与 `context_package_render` 两个内容寻址 Artifacts，**不插入 context_packages**（其 plan_revision_id 为 NOT NULL）。binding.contextPackageId 为 render Artifact 的 `art_…` id；launcher 用 `artifacts.read` 取模板。preamble 由 preambleBuilder 交付时只替换 `{{attemptId}}`，D73 之后不含任何凭据。Planner dispatch 在该回调交付 preamble 前绑定，以支持快速 provider 在 readiness receipt 返回前提交。
+
+上下文在 Planner 启动时构建，不实时更新。若人在构建之后、启动尚在进行或 Attempt 已在运行时手动提案并退回，该退回不在这次 Planner 的上下文中，该 Attempt 之后的提案仍可按原规则接受。退回不会自动启动 Planner；人的后续 `axiom.mission.plan` 才构建下一份上下文。较早的退回可能因 4 KiB 上限省略，完整理由仍可查 `plan.rejected` 审计。
 
 `axiom.plan.propose` 的 planner 形式通过同一 Attempt 身份链（D73：宿主核实的 worker 身份 / assignee / 进程代次）鉴权，但显式要求 planner AgentSpec、同 Mission/Goal/Run 的 pseudo-task 与 planner branch；Worker 通道仍要求真实 Task stage。提交前对记录的 worker.worktree_id 执行 `git status --porcelain`，非空返回 `planner_worktree_dirty`（data.files 为 porcelain 文件列表，错误消息同时列出文件供 CLI 显示）并写 planner.rejected，Plan/Mission 不变；缺少 worktree 路径返回 `planner_worktree_missing`。Git IO 后再次鉴权。干净提案经原 `missions.proposePlan` 完成 ANALYZING → PLAN_REVIEW；provenance 由服务写为 `{kind:'planner',actor:provider,model?:explicitModel,at}`（遵循 M2-09 brief 与现行 ProvenanceSchema；D48 旧文的 model kind 不作为新增枚举）。
 
@@ -904,9 +912,11 @@ Mission Home 之后、计划面板之前的独立「Supervision」区域显示 `
 
 批准和退回分别只在同 revision id 的 `plan_review` 待处理项 actions 列出 `axiom.plan.approve` / `axiom.plan.reject` 时提供；pending 读取失败或无动作时说明原因，不以 Mission 状态代替。页面 busy 仍禁用控件。批准先走应用确认框，主按钮为非破坏性「Approve plan」，返回按钮「Keep reviewing」，写明 Task 数量、开始前不运行、目前不能替换已批准计划（之后只能在提供入口时改单个 Task 或取消 Mission），有警告时附数量。退回沿用理由和破坏性确认。拒绝确认不发送调用；调用后沿用 receipt、mutate 与重读，不乐观修改权威对象，拒绝以 code: message 原样显示。
 
+`axiom.plan.reject` 在主进程写入前拒绝命中内建 secret pattern 的理由，返回 `invalid_argument` / `secret_in_rationale`，不写任何状态或审计，plan 保持 PROPOSED、Mission 保持 PLAN_REVIEW。检查与其它人工理由一致，只用内建模式，不读 Mission 的 `verificationRules.secretPatterns`，不扫描已有理由，不增加长度限制。
+
 PROPOSED 卡仅比较编号小于当前版本的最近 REJECTED 版本，显示其原文理由。Task 按 Planner 选的 id 配对：新增和移除只列 id 与标题；同 id 的标题、目标、角色、风险、尝试上限、里程碑 id、kind 列前后值，路径、`resolveAcceptance` 后的标准（文本与 proof）、覆盖索引、已声明预算字段列增删项。列表按条目及出现次数比较，单纯重排不算变化；旧字符串与同文 human 标准等价。依赖边以 from / to / threshold 比较，阈值变化是一删一增；里程碑和风险变化各用一句说明（也忽略重排），无变化明确写出。
 
-边界：运行清单只是页面本次读到的 policy 下会运行什么，验证运行前 policy 仍可变；批准不会重新校验提案命令。命令按 Planner 原文显示，不脱敏；验证清单的修剪与去重来自共享函数。Task id 改名是一删一增，复用 id 是修改；只比较最近退回版本，不完整展示旧 Task。不匹配的 Goal 不显示覆盖；每次页面读取增加一个 policy 调用。下一次 Planner 尚不接收退回理由（4b）；没有计划成本估算。pending 与计划列表为两次读取，下次读取前可能暂时不一致。policy 编辑器、主进程准入与 provenance 后续分别属于 4c / 4b。
+边界：运行清单只是页面本次读到的 policy 下会运行什么，验证运行前 policy 仍可变；批准不会重新校验提案命令。命令按 Planner 原文显示，不脱敏；验证清单的修剪与去重来自共享函数。Task id 改名是一删一增，复用 id 是修改；只比较最近退回版本，不完整展示旧 Task。不匹配的 Goal 不显示覆盖；每次页面读取增加一个 policy 调用。下一次 Planner 在启动时接收有界、引用且脱敏的退回理由与 Task id / 标题（M3-09-4b-2，见 Planner 节），人仍须审阅新提案；没有计划成本估算。pending 与计划列表为两次读取，下次读取前可能暂时不一致。policy 编辑器、主进程准入与 provenance 后续分别属于 4c / 4b。
 
 ### 替换验收标准（M3-09-4d）
 
