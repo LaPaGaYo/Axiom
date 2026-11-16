@@ -16,7 +16,7 @@ import { blockingQuestionOrApproval, interruptionBackoff } from './admission-blo
 import { orderByCriticalPath } from './critical-path'
 import type { EffectOutbox } from '../outbox/effect-outbox'
 
-export type ScheduleTrigger = 'mission_start' | 'stage_change' | 'resume' | 'manual'
+export type ScheduleTrigger = 'mission_start' | 'stage_change' | 'resume' | 'manual' | 'policy'
 export type AdmittedAttempt = {
   missionId: string
   taskId: string
@@ -80,7 +80,12 @@ export class Scheduler {
           let next: ScheduleTrigger | undefined = trigger
           while (next) {
             flight.pending = undefined
-            const round = await this.runRound(missionId, next)
+            const round = await this.runRound(missionId, next).catch((error: unknown) => {
+              if (!flight.pending) {
+                throw error
+              }
+              return { admitted: [], skipped: [], blocked: undefined }
+            })
             result.admitted.push(...round.admitted)
             result.skipped.push(...round.skipped)
             if (round.blocked) {

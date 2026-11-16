@@ -592,3 +592,73 @@ describe('real admission blockers', () => {
     expect((await round()).admitted).toHaveLength(3)
   })
 })
+it('runs the round of a trigger that arrived while a round was failing', async () => {
+  let pending: ReturnType<Scheduler['scheduleRound']> | undefined
+  vi.spyOn(context, 'build').mockImplementationOnce(async () => {
+    pending = scheduler.scheduleRound(f.missionId, 'policy')
+    throw new Error('context unavailable')
+  })
+  const readiness = vi.spyOn(f.controller, 'recomputeReadiness')
+  const first = scheduler.scheduleRound(f.missionId, 'manual')
+  await expect(first).resolves.toMatchObject({ admitted: expect.any(Array) })
+  expect(pending).toBe(first)
+  const result = await first
+  await expect(pending).resolves.toEqual(result)
+  expect(readiness).toHaveBeenCalledTimes(2)
+  expect(result.admitted).toHaveLength(3)
+  expect(events('scheduler.round').map((event) => event.after)).toEqual([
+    { trigger: 'policy', admitted: result.admitted, skipped: [] }
+  ])
+  effects.start()
+  await effects.kick()
+  expect(launched).toEqual(result.admitted)
+})
+
+it('still rejects a failing round when no trigger arrived meanwhile', async () => {
+  const error = new Error('context unavailable')
+  vi.spyOn(context, 'build').mockRejectedValueOnce(error)
+  const readiness = vi.spyOn(f.controller, 'recomputeReadiness')
+  await expect(scheduler.scheduleRound(f.missionId, 'manual')).rejects.toBe(error)
+  expect(readiness).toHaveBeenCalledTimes(1)
+  expect(f.store.listAttemptBindings({ missionId: f.missionId })).toEqual([])
+  expect(events('scheduler.round')).toEqual([])
+})
+
+it('admits under the new routing when it changes while a round builds the contracts', async () => {
+  const oldProvider = await factory.selectWorkerProvider({
+    missionId: f.missionId,
+    taskId: task('T01').taskId
+  })
+  const newProvider = installed.find((provider) => provider !== oldProvider)
+  const entered = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  const build = context.build.bind(context)
+  const builds = vi.spyOn(context, 'build').mockImplementationOnce(async (input) => {
+    const result = await build(input)
+    entered.resolve()
+    await release.promise
+    return result
+  })
+  const readiness = vi.spyOn(f.controller, 'recomputeReadiness')
+  const first = scheduler.scheduleRound(f.missionId, 'manual')
+  await entered.promise
+  policy({ routing: RoutingPolicySchema.parse({ disallowedProviders: [oldProvider] }) })
+  const second = scheduler.scheduleRound(f.missionId, 'policy')
+  release.resolve()
+  await expect(first).resolves.toMatchObject({ admitted: expect.any(Array) })
+  expect(second).toBe(first)
+  const result = await first
+  await expect(second).resolves.toEqual(result)
+  expect(readiness).toHaveBeenCalledTimes(2)
+  expect(builds.mock.calls[0]?.[0].provider).toBe(oldProvider)
+  expect(result.admitted).toHaveLength(3)
+  expect(
+    result.admitted.map((attempt) => f.store.getAgentSpec(attempt.agentSpecId)?.spec.provider)
+  ).toEqual([newProvider, newProvider, newProvider])
+  expect(events('scheduler.round').map((event) => event.after)).toEqual([
+    { trigger: 'policy', admitted: result.admitted, skipped: [] }
+  ])
+  effects.start()
+  await effects.kick()
+  expect(launched).toEqual(result.admitted)
+})
