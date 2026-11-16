@@ -1,6 +1,6 @@
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { getAxiomControlPlane } from '../control-plane'
-import { redactContext } from '../context-builder/redaction'
+import { redactContext } from '../redaction/redaction'
 import { resolveHostAttempt } from './attempt-authority'
 import { settleAttemptWithoutSubmission } from './attempt-settlement'
 import { settleInterruptedAttempt } from './attempt-interruption'

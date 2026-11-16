@@ -3,7 +3,7 @@ import type { AxiomStore } from '../db/axiom-store'
 import type { ArtifactStore } from '../artifacts/artifact-store'
 import type { AttemptBaseline } from '../execution/attempt-baseline'
 import { findSubmissionTranscriptArtifactId } from '../execution/attempt-projection'
-import { redactContext } from './redaction'
+import { redactContext } from '../redaction/redaction'
 import { preservedAttemptSection } from './previous-preserved-attempt'
 import {
   acceptanceLines,

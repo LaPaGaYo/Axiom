@@ -1,11 +1,11 @@
-import { lstat, mkdtemp, rmdir } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { lstat } from 'node:fs/promises'
 import path from 'node:path'
 import { gitExecFileAsync } from '../../git/runner'
 import { gitOptionsForWorktree } from '../../git/git-runtime-options'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import type { Candidate } from '../../../shared/axiom-contract/submission-params'
 import type { VerificationDependencies } from './verification-service'
+import { confinedGitEnv, withHooklessGit } from '../execution/hookless-git'
 
 export class VerificationPreparationError extends Error {
   constructor(
@@ -38,16 +38,14 @@ export async function pinVerificationCandidate(
     )
   }
   // Checkout must not run repository-controlled post-checkout hooks during verification preparation.
-  const hooksPath = await mkdtemp(path.join(tmpdir(), 'axiom-verification-hooks-'))
-  try {
-    await gitExecFileAsync(
-      ['-c', `core.hooksPath=${hooksPath}`, 'checkout', '--detach', candidate.commitSha],
-      options
-    )
-    await gitExecFileAsync(['branch', '-f', branch, candidate.commitSha], options)
-  } finally {
-    await rmdir(hooksPath)
-  }
+  await withHooklessGit(
+    split.worktreePath,
+    { timeout: undefined, confine: false },
+    async ({ hooks, options }) => {
+      await gitExecFileAsync([...hooks, 'checkout', '--detach', candidate.commitSha], options)
+      await gitExecFileAsync(['branch', '-f', branch, candidate.commitSha], options)
+    }
+  )
   const commit = (await gitExecFileAsync(['rev-parse', 'HEAD'], options)).stdout.trim()
   const tree = (await gitExecFileAsync(['rev-parse', 'HEAD^{tree}'], options)).stdout.trim()
   const ref = (await gitExecFileAsync(['rev-parse', `refs/heads/${branch}`], options)).stdout.trim()
@@ -82,7 +80,7 @@ export async function removeVerificationWorktree(
       await lstat(path.join(cwd, '.git'))
       const options = {
         ...gitOptionsForWorktree(cwd),
-        env: { ...process.env, GIT_CEILING_DIRECTORIES: path.dirname(cwd) }
+        env: confinedGitEnv(cwd)
       }
       const ref = `refs/heads/${branch}`
       const [name, tip, occupied] = (
@@ -95,15 +93,13 @@ export async function removeVerificationWorktree(
         .split('\0')
       const head = (await gitExecFileAsync(['rev-parse', 'HEAD'], options)).stdout.trim()
       if (name === ref && tip === head && !occupied) {
-        const hooksPath = await mkdtemp(path.join(tmpdir(), 'axiom-verification-hooks-'))
-        try {
-          await gitExecFileAsync(
-            ['-c', `core.hooksPath=${hooksPath}`, 'symbolic-ref', 'HEAD', ref],
-            options
-          )
-        } finally {
-          await rmdir(hooksPath)
-        }
+        await withHooklessGit(
+          cwd,
+          { timeout: undefined, confine: true },
+          async ({ hooks, options }) => {
+            await gitExecFileAsync([...hooks, 'symbolic-ref', 'HEAD', ref], options)
+          }
+        )
       }
     }
   } catch {

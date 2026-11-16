@@ -1,10 +1,8 @@
-import { mkdtemp, rmdir } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import path from 'node:path'
 import { GitObjectIdSchema } from '../../../shared/axiom-contract/submission-params'
 import { gitExecFileAsync } from '../../git/runner'
 import { gitOptionsForWorktree } from '../../git/git-runtime-options'
 import { OrchestrationError } from '../../runtime/orchestration/orchestration-error'
+import { withHooklessGit } from './hookless-git'
 
 export async function ensureIntegrationBase(input: {
   repoPath: string
@@ -110,24 +108,22 @@ export async function advanceIntegrationHead(input: {
     if (before.checkout) {
       return { advanced: false, reason: 'checked_out' }
     }
-    const hooksPath = await mkdtemp(path.join(tmpdir(), 'axiom-integration-head-hooks-'))
-    try {
-      try {
-        await gitExecFileAsync(
-          ['-c', `core.hooksPath=${hooksPath}`, 'update-ref', ref, to, from],
-          options
-        )
-      } catch {
-        // The readback decides, including a refused or interrupted write.
+    return await withHooklessGit(
+      input.repoPath,
+      { timeout: 30_000, confine: false },
+      async ({ hooks, options }) => {
+        try {
+          await gitExecFileAsync([...hooks, 'update-ref', ref, to, from], options)
+        } catch {
+          // The readback decides, including a refused or interrupted write.
+        }
+        const after = await read()
+        if (after?.commit === to) {
+          return advanced
+        }
+        return !after || after.commit === from ? unavailable : moved
       }
-      const after = await read()
-      if (after?.commit === to) {
-        return advanced
-      }
-      return !after || after.commit === from ? unavailable : moved
-    } finally {
-      await rmdir(hooksPath).catch(() => {})
-    }
+    )
   } catch {
     return unavailable
   }

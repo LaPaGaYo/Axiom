@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { gitExecFileAsync } from '../../git/runner'
 import { gitOptionsForWorktree } from '../../git/git-runtime-options'
-import { redactContext } from './redaction'
+import { redactContext } from '../redaction/redaction'
 
 export async function readRepositoryRules(repoPath: string, targetBranch: string): Promise<string> {
   const rules: string[] = []

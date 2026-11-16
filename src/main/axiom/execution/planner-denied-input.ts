@@ -1,4 +1,4 @@
-import { redactContext } from '../context-builder/redaction'
+import { redactContext } from '../redaction/redaction'
 
 /** Only a short diagnostic survives. Environment maps and assignments are never evidence. */
 export function plannerDeniedInput(toolName: string, input: unknown): string {

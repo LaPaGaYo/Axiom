@@ -1,7 +1,7 @@
 import { stripVTControlCharacters } from 'node:util'
 import { StringDecoder } from 'node:string_decoder'
 import { MAX_ARTIFACT_BYTES } from '../../../shared/axiom-contract/artifact-params'
-import { redactContext } from '../context-builder/redaction'
+import { redactContext } from '../redaction/redaction'
 
 const HEAD_BYTES = 1024 * 1024
 

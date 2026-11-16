@@ -6,7 +6,7 @@ import { CLAUDE_SESSION_OPTION_CATALOG } from '../../../shared/agent-session-opt
 import { certifiedCombo } from '../agent-factory/certified-providers'
 import { claudeManagedSettingsSha256 } from './claude-launch-policy'
 import type { AxiomStore } from '../db/axiom-store'
-import { redactContext } from '../context-builder/redaction'
+import { redactContext } from '../redaction/redaction'
 import { claudeWorkerVersion } from './claude-worker-version'
 import type { prepareClaudeAttemptFiles } from './headless-attempt-files'
 import type { ClaudeInit } from './claude-worker-events'

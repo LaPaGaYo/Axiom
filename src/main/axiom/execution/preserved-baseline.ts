@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { matchesPathPattern } from '../../../shared/axiom-contract/path-patterns'
 import { AttemptFailureSchema } from '../../../shared/axiom-contract/attempt-failure'
-import { redactContext } from '../context-builder/redaction'
+import { redactContext } from '../redaction/redaction'
 import { AttemptPreservedAuditSchema, type PreservedSnapshot } from './preserved-snapshot-contract'
 import type { LegacyAttemptBaseline, SkippedAttempt } from './attempt-baseline'
 

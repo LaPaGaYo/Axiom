@@ -18,7 +18,7 @@ import { MissionController } from '../mission-controller/mission-controller'
 import { ArtifactStore, sha256 } from '../artifacts/artifact-store'
 import { ContextBuilder } from './context-builder'
 import { readRepositoryRules } from './repository-rules'
-import { redactContext } from './redaction'
+import { redactContext } from '../redaction/redaction'
 
 let root: string
 let db: OrchestrationDb

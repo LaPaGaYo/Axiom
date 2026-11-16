@@ -5,7 +5,7 @@ import {
   VerificationRulesSchema,
   resolveIntegrationPlan
 } from '../../../shared/axiom-contract/verification-rules'
-import { redactContext } from '../context-builder/redaction'
+import { redactContext } from '../redaction/redaction'
 import { executeVerificationPlan } from '../verification/verification-plan-runner'
 import {
   decideVerificationVerdict,

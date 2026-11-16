@@ -1,12 +1,10 @@
-import { mkdtemp, rmdir } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import path from 'node:path'
 import { gitExecFileAsync } from '../../git/runner'
 import { gitOptionsForWorktree } from '../../git/git-runtime-options'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { GitObjectIdSchema } from '../../../shared/axiom-contract/submission-params'
 import { OrchestrationError } from '../../runtime/orchestration/orchestration-error'
 import { assertAttemptBranch, withWorktreeSnapshot } from './worktree-snapshot'
+import { withHooklessGit } from './hookless-git'
 
 export async function snapshotCandidate(input: {
   attemptId: string
@@ -43,28 +41,28 @@ export async function snapshotCandidate(input: {
   if (snapshotCommitted) {
     // --no-verify alone still runs prepare-commit-msg/post-commit. A per-call empty
     // hooks directory suppresses every hook without changing repository configuration.
-    const hooksPath = await mkdtemp(path.join(tmpdir(), 'axiom-snapshot-hooks-'))
-    const hooks = ['-c', `core.hooksPath=${hooksPath}`]
-    try {
-      await gitExecFileAsync([...hooks, 'add', '-A'], options)
-      await gitExecFileAsync(
-        [
-          '-c',
-          'user.name=Axiom Control Plane',
-          '-c',
-          'user.email=axiom@localhost',
-          ...hooks,
-          'commit',
-          '--no-verify',
-          '-q',
-          '-m',
-          `axiom: candidate snapshot ${input.attemptId}`
-        ],
-        options
-      )
-    } finally {
-      await rmdir(hooksPath)
-    }
+    await withHooklessGit(
+      worktree.worktreePath,
+      { timeout: undefined, confine: false },
+      async ({ hooks, options }) => {
+        await gitExecFileAsync([...hooks, 'add', '-A'], options)
+        await gitExecFileAsync(
+          [
+            '-c',
+            'user.name=Axiom Control Plane',
+            '-c',
+            'user.email=axiom@localhost',
+            ...hooks,
+            'commit',
+            '--no-verify',
+            '-q',
+            '-m',
+            `axiom: candidate snapshot ${input.attemptId}`
+          ],
+          options
+        )
+      }
+    )
   }
   const commitSha = GitObjectIdSchema.parse(
     (await gitExecFileAsync(['rev-parse', 'HEAD'], options)).stdout.trim()

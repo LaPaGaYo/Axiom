@@ -1,10 +1,8 @@
-import { mkdtemp, rmdir } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import path from 'node:path'
 import { gitExecFileAsync } from '../../git/runner'
 import { gitOptionsForWorktree } from '../../git/git-runtime-options'
 import type { IntegrationBatch } from '../../../shared/axiom-contract/integration-batch'
-import { redactContext } from '../context-builder/redaction'
+import { redactContext } from '../redaction/redaction'
+import { confinedGitEnv, withHooklessGit } from '../execution/hookless-git'
 
 export async function readIntegrationGit(
   cwd: string,
@@ -15,9 +13,7 @@ export async function readIntegrationGit(
     await gitExecFileAsync(args, {
       ...gitOptionsForWorktree(cwd),
       timeout: 30_000,
-      ...(!allowParentRepository
-        ? { env: { ...process.env, GIT_CEILING_DIRECTORIES: path.dirname(cwd) } }
-        : {})
+      ...(!allowParentRepository ? { env: confinedGitEnv(cwd) } : {})
     })
   ).stdout
 }
@@ -27,16 +23,13 @@ export async function writeIntegrationGit(
   args: string[],
   env?: NodeJS.ProcessEnv
 ): Promise<void> {
-  const hooksPath = await mkdtemp(path.join(tmpdir(), 'axiom-integration-hooks-'))
-  try {
-    await gitExecFileAsync(['-c', `core.hooksPath=${hooksPath}`, ...args], {
-      ...gitOptionsForWorktree(cwd),
-      timeout: 120_000,
-      env: { ...(env ?? process.env), GIT_CEILING_DIRECTORIES: path.dirname(cwd) }
-    })
-  } finally {
-    await rmdir(hooksPath)
-  }
+  await withHooklessGit(
+    cwd,
+    { timeout: 120_000, confine: true, env },
+    async ({ hooks, options }) => {
+      await gitExecFileAsync([...hooks, ...args], options)
+    }
+  )
 }
 
 export type IntegrationMerge =

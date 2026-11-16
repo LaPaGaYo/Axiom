@@ -14,7 +14,7 @@ import { activeCandidateVerification } from '../verification/verification-candid
 import { validateTaskAcceptance } from '../../../shared/axiom-contract/plan-proposal'
 import { VerificationRulesSchema } from '../../../shared/axiom-contract/verification-rules'
 import { validateTaskCommands } from './plan-validation'
-import { redactContext } from '../context-builder/redaction'
+import { redactContext } from '../redaction/redaction'
 import { retireTaskContinuation } from '../outbox/attempt-continuation'
 
 function acceptanceForAudit(criteria: TaskSpec['acceptanceCriteria']) {

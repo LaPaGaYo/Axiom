@@ -6,7 +6,7 @@ import type {
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { gitExecFileAsync } from '../../git/runner'
 import { getAxiomControlPlane } from '../control-plane'
-import { redactContext } from '../context-builder/redaction'
+import { redactContext } from '../redaction/redaction'
 import { routeWorkerMessage } from '../messaging/message-router'
 import { resolveHostAttempt } from './attempt-authority'
 import { settleDeclaredAttempt } from './attempt-settlement'

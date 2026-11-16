@@ -1,11 +1,10 @@
-import { mkdtemp, rmdir, stat } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { stat } from 'node:fs/promises'
 import path from 'node:path'
 import { GitObjectIdSchema } from '../../../shared/axiom-contract/submission-params'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { gitExecFileAsync } from '../../git/runner'
-import { gitOptionsForWorktree } from '../../git/git-runtime-options'
 import type { AxiomStore } from '../db/axiom-store'
+import { withHooklessGit } from './hookless-git'
 
 export type CommitPin =
   | { pinned: true; ref: string }
@@ -27,38 +26,33 @@ export async function pinCommit(input: {
       return unavailable
     }
     const commitSha = GitObjectIdSchema.parse(input.commitSha)
-    const options = { ...gitOptionsForWorktree(cwd), timeout: 30_000 }
-    const hooksPath = await mkdtemp(path.join(tmpdir(), 'axiom-pin-hooks-'))
-    try {
-      await gitExecFileAsync(
-        [
-          '-c',
-          `core.hooksPath=${hooksPath}`,
-          'update-ref',
-          ref,
-          commitSha,
-          '0'.repeat(commitSha.length)
-        ],
-        options
-      )
-      return { pinned: true, ref }
-    } catch {
-      const { stdout } = await gitExecFileAsync(
-        ['for-each-ref', '--format=%(refname) %(objectname)', ref],
-        options
-      )
-      // A literal pattern also lists descendants; only the exact ref can be this pin.
-      const entry = stdout.split('\n').find((line) => line.startsWith(`${ref} `))
-      if (!entry) {
-        return unavailable
+    return await withHooklessGit<CommitPin>(
+      cwd,
+      { timeout: 30_000, confine: false },
+      async ({ hooks, options }) => {
+        try {
+          await gitExecFileAsync(
+            [...hooks, 'update-ref', ref, commitSha, '0'.repeat(commitSha.length)],
+            options
+          )
+          return { pinned: true, ref }
+        } catch {
+          const { stdout } = await gitExecFileAsync(
+            ['for-each-ref', '--format=%(refname) %(objectname)', ref],
+            options
+          )
+          // A literal pattern also lists descendants; only the exact ref can be this pin.
+          const entry = stdout.split('\n').find((line) => line.startsWith(`${ref} `))
+          if (!entry) {
+            return unavailable
+          }
+          const existing = GitObjectIdSchema.parse(entry.slice(ref.length + 1))
+          return existing === commitSha
+            ? { pinned: true, ref }
+            : { pinned: false, ref, reason: 'ref_conflict' }
+        }
       }
-      const existing = GitObjectIdSchema.parse(entry.slice(ref.length + 1))
-      return existing === commitSha
-        ? { pinned: true, ref }
-        : { pinned: false, ref, reason: 'ref_conflict' }
-    } finally {
-      await rmdir(hooksPath)
-    }
+    )
   } catch {
     return unavailable
   }

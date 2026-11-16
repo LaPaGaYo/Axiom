@@ -4,7 +4,7 @@ import {
   parseAxiomMessagePayload
 } from '../../../shared/axiom-contract/message-params'
 import { OrchestrationError } from '../../runtime/orchestration/orchestration-error'
-import { redactContext } from '../context-builder/redaction'
+import { redactContext } from '../redaction/redaction'
 import { resolveSubtask } from './subtask-resolution'
 
 export function resolveMissionMessage(

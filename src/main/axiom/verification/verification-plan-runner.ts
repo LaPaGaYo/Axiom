@@ -6,7 +6,7 @@ import {
   type VerificationCommand,
   type VerificationRules
 } from '../../../shared/axiom-contract/verification-rules'
-import { redactContext } from '../context-builder/redaction'
+import { redactContext } from '../redaction/redaction'
 import type { spawnLocalShellCommand } from '../../automations/precheck-runner'
 import { runVerificationCommand, skippedVerificationCommand } from './verification-command'
 import { recordCommandEvidence, type CheckAttempt } from './verification-evidence'
