@@ -197,6 +197,59 @@
               {
                 "regex": "^electron(?:/.*)?$",
                 "message": "The Control Plane (src/main/axiom) must run without Electron. Reach the kernel through its services and ports (D87)."
+              },
+              {
+                "regex": "(?:^|/)control-plane$",
+                "importNames": ["getAxiomControlPlane"],
+                "allowTypeImports": true,
+                "message": "Take the store, the controller or the service you need as a parameter. Only the RPC methods, the boot entry and the modules listed in the next override still take the whole Control Plane (D93)."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "src/main/axiom/**/*.test.ts",
+        "src/main/axiom/**/*.test-support.ts",
+        "src/main/axiom/admission/mission-managed-run-guard.ts",
+        "src/main/axiom/authority/caller-authority.ts",
+        "src/main/axiom/control-plane-boot.ts",
+        "src/main/axiom/execution/attempt-ask.ts",
+        "src/main/axiom/execution/attempt-exit-declared.ts",
+        "src/main/axiom/execution/attempt-exit-failure.ts",
+        "src/main/axiom/execution/attempt-exit-submission.ts",
+        "src/main/axiom/execution/attempt-request-authority.ts",
+        "src/main/axiom/execution/attempt-submission.ts",
+        "src/main/axiom/execution/attempt-transcript.ts",
+        "src/main/axiom/execution/attempt-worker-release.ts",
+        "src/main/axiom/execution/planner-proposal.ts",
+        "src/main/axiom/messaging/question-answer.ts",
+        "src/main/axiom/read-models/mission-pending.ts",
+        "src/main/axiom/read-models/task-reads.ts",
+        "src/main/axiom/recovery/attempt-daemon-loss.ts",
+        "src/main/axiom/recovery/attempt-recovery-endings.ts"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@linear/sdk",
+                "allowTypeImports": true,
+                "message": "Value-importing @linear/sdk hoists its ~2.6MB CJS bundle into the eager top-level require block and defeats the lazy loader. Use `import type` plus loadLinearSdk() from src/main/linear/linear-sdk.ts."
+              }
+            ],
+            "patterns": [
+              {
+                "regex": "(?i)(?:^|[/\\\\])(?:web-session-tabs-sync-test-harness|web-runtime-browser-creation-placement-test-rig)(?:\\.[cm]?[jt]sx?)?(?:[?#].*)?$",
+                "message": "This module is unit-test support. Import the production web-session owner instead."
+              },
+              {
+                "regex": "^electron(?:/.*)?$",
+                "message": "The Control Plane (src/main/axiom) must run without Electron. Reach the kernel through its services and ports (D87)."
               }
             ]
           }
