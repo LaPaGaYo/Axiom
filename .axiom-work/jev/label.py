@@ -52,6 +52,31 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M4-2a-1', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'What the merged-tree regression will stand on is in place and unused: verification_runs has the '
+        'nullable column batch_id, from the DDL in a new file and added at open in an existing one without a '
+        'version number (probe, write lock only when missing, second probe, add, commit); a run can carry a '
+        'batchId and a candidate run has no such key; the claim and the recovery of the verification service '
+        'skip a run of a batch before they touch anything; the rules accept integrationGates and '
+        'resolveIntegrationPlan answers setup, criterion commands and gates while resolveVerificationPlan answers '
+        'as before; eight product files change and one module is new; title 1 fails at an assertion on main '
+        'create-tables.ts, title 2 on main verification-runs-store.ts, titles 3 and 4 on main claim and recovery; '
+        'every Mission spec passes on the first host run; both runners green; the union script failed 0; no '
+        'verifier change; no other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'the column reaches an existing database without a version number, which is the verifier reading of '
+            'the AGENTS.md rule on migrations: Henry decides (pending item 7); AGENTS.md is not edited until then',
+            'listVerificationRuns answers runs of a batch among the others and six readers take them as candidate '
+            'verifications: M4-2a-2 decides in the listing',
+            'when ALTER fails and ROLLBACK fails too the second error replaces the first, as in the numbered runner',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M4-1b', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'The effect kind integration.apply and its executor do what the brief asks, up to TESTING: the '
