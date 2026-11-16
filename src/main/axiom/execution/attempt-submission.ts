@@ -17,6 +17,7 @@ import { getAxiomControlPlane } from '../control-plane'
 import { routeWorkerMessage } from '../messaging/message-router'
 import { resolveAttemptSender } from './attempt-authority'
 import { snapshotCandidate } from './candidate-snapshot'
+import { pinCandidateRef, recordCandidatePin } from './commit-pin'
 import { archiveAttemptTranscript } from './attempt-transcript'
 import { scheduleSubmittedWorkerRelease } from './attempt-worker-release'
 import { routeSubmissionItems } from './submission-items'
@@ -155,6 +156,9 @@ export async function settleSubmission(
     branch: binding.branch,
     ...(options.headless ? { headless: true } : {})
   })
+  const candidateId = `cand_${sha256(`${task.taskId}:${snapshot.commitSha}`)}`
+  // Readers must see either the pin or its failure audit as soon as the candidate row is visible.
+  const pin = await pinCandidateRef(worker.worktree_id, candidateId, snapshot.commitSha)
   if (options.finalizeReport) {
     report = SubmissionReportSchema.parse(await options.finalizeReport(snapshot))
   }
@@ -174,7 +178,7 @@ export async function settleSubmission(
       throw new OrchestrationError('invalid_argument', 'candidate_unchanged')
     }
     const candidate = store.insertCandidate({
-      id: `cand_${sha256(`${task.taskId}:${snapshot.commitSha}`)}`,
+      id: candidateId,
       missionId: mission.id,
       attemptId,
       taskId: task.taskId,
@@ -183,6 +187,7 @@ export async function settleSubmission(
       status: 'ACTIVE',
       supersededBy: null
     })
+    recordCandidatePin(store, candidate, pin)
     const superseded = store.supersedeActiveCandidates(task.taskId, candidate.id)
     const submission = store.insertSubmission({
       id: `submission_${randomUUID()}`,

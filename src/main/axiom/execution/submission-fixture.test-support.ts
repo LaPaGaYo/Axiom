@@ -2,6 +2,7 @@ import { vi } from 'vitest'
 import { getAxiomControlPlane } from '../control-plane'
 import { z } from 'zod'
 import * as snapshots from './candidate-snapshot'
+import * as pins from './commit-pin'
 import { channelFixture } from './attempt-channel-fixture.test-support'
 import type { SubmissionReport } from '../../../shared/axiom-contract/submission-params'
 import * as output from '../../runtime/orchestration/worker-output-archive'
@@ -34,6 +35,10 @@ export function submissionFixture() {
     treeSha: 'b'.repeat(40),
     snapshotCommitted: true
   })
+  const pin = vi.spyOn(pins, 'pinCandidateRef').mockImplementation(async (_worktree, id) => ({
+    pinned: true,
+    ref: `refs/axiom/candidates/${id}`
+  }))
   const capture = vi.spyOn(output, 'captureWorkerOutputArchive').mockResolvedValue({
     kind: 'terminal_tail',
     status: 'captured',
@@ -77,5 +82,5 @@ export function submissionFixture() {
       name,
       rows: f.db.db.prepare(`SELECT * FROM "${name}"`).all()
     }))
-  return { ...f, kick, snapshotGit, capture, put, releaseWorker, params, submit, snapshot }
+  return { ...f, kick, snapshotGit, pin, capture, put, releaseWorker, params, submit, snapshot }
 }

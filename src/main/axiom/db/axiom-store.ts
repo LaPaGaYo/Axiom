@@ -10,6 +10,7 @@ import { agentSpecsStore } from './agent-specs-store'
 import { policyAuditStore } from './policy-audit-store'
 import { messagesStore } from './messages-store'
 import { candidatesStore } from './candidates-store'
+import { integrationBatchesStore } from './integration-batches-store'
 import { submissionsStore } from './submissions-store'
 import { verificationRunsStore } from './verification-runs-store'
 import { effectsStore } from './effects-store'
@@ -28,6 +29,7 @@ type AgentSpecs = ReturnType<typeof agentSpecsStore>
 type Artifacts = ReturnType<typeof artifactsStore>
 type PolicyAudit = ReturnType<typeof policyAuditStore>
 type Candidates = ReturnType<typeof candidatesStore>
+type Batches = ReturnType<typeof integrationBatchesStore>
 type Submissions = ReturnType<typeof submissionsStore>
 type VerificationRuns = ReturnType<typeof verificationRunsStore>
 type Effects = ReturnType<typeof effectsStore>
@@ -72,6 +74,11 @@ export class AxiomStore {
   readonly getCandidate: Candidates['getCandidate']
   readonly listCandidates: Candidates['listCandidates']
   readonly supersedeActiveCandidates: Candidates['supersedeActiveCandidates']
+  readonly insertIntegrationBatch: Batches['insertIntegrationBatch']
+  readonly getIntegrationBatch: Batches['getIntegrationBatch']
+  readonly listIntegrationBatches: Batches['listIntegrationBatches']
+  readonly listOpenIntegrationBatches: Batches['listOpenIntegrationBatches']
+  readonly transitionIntegrationBatch: Batches['transitionIntegrationBatch']
   readonly insertSubmission: Submissions['insertSubmission']
   readonly getSubmissionByDispatch: Submissions['getSubmissionByDispatch']
   readonly listSubmissions: Submissions['listSubmissions']
@@ -181,6 +188,12 @@ export class AxiomStore {
     this.getCandidate = candidates.getCandidate
     this.listCandidates = candidates.listCandidates
     this.supersedeActiveCandidates = candidates.supersedeActiveCandidates
+    const batches = integrationBatchesStore(db)
+    this.insertIntegrationBatch = batches.insertIntegrationBatch
+    this.getIntegrationBatch = batches.getIntegrationBatch
+    this.listIntegrationBatches = batches.listIntegrationBatches
+    this.listOpenIntegrationBatches = batches.listOpenIntegrationBatches
+    this.transitionIntegrationBatch = batches.transitionIntegrationBatch
     const submissions = submissionsStore(db)
     this.insertSubmission = submissions.insertSubmission
     this.getSubmissionByDispatch = submissions.getSubmissionByDispatch

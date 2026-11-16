@@ -160,6 +160,15 @@ test('M2 exit: Planner, parallel Workers, crash retry and immutable submission f
           git(['-C', clone, 'rev-parse', `refs/heads/${binding.branch}`])
         )
         expect(candidate.commitSha).not.toBe(base)
+        expect(
+          git([
+            '-C',
+            clone,
+            'for-each-ref',
+            '--format=%(objectname)',
+            `refs/axiom/candidates/${candidate.id}`
+          ])
+        ).toBe(candidate.commitSha)
         expect(candidate.treeSha).toBe(
           git(['-C', clone, 'rev-parse', `${candidate.commitSha}^{tree}`])
         )
