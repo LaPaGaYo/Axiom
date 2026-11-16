@@ -194,7 +194,7 @@ EXECUTING ↔ REPLANNING
 | `REPLANNING → EXECUTING` | 新 PlanRevision APPROVED，旧 revision SUPERSEDED，Task 继承/取消/重绑完成 |
 | `EXECUTING → FINALIZING` | 所有 required Task ∈ {`INTEGRATED`, `CANCELED`}，无活跃 Attempt |
 | `FINALIZING → READY_FOR_APPROVAL` | 目标分支漂移已合入集成基线并通过最终全量回归；completion gate 全部通过；CompletionReport 生成 |
-| `READY_FOR_APPROVAL → COMPLETED` | 交付 Approval GRANTED（或 policy 不要求）；集成基线合入目标分支（Delivery）成功 |
+| `READY_FOR_APPROVAL → COMPLETED` | 交付 Approval GRANTED（V1 总是要求，D92 a）；Delivery 成功：没有远程时本地快进合入目标分支（D92 h）；有远程时开 PR，PR 合并之后才 COMPLETED（D92 d；开 PR 到合并之间的状态名在做 PR 交付时定） |
 | `FINALIZING → EXECUTING` | 目标分支漂移合并冲突或最终全量回归失败：没有肇事候选，Control Plane 建 FIX_TASK（D79），审计 `mission.finalizing_reopened{reason}`；required Task 再次全部 INTEGRATED 后重新进入 FINALIZING（D70） |
 | `READY_FOR_APPROVAL → FINALIZING` | 交付前目标分支 HEAD 不等于 FINALIZING 时合入的 HEAD；交付 Approval 随之失效（D70） |
 | `* → BLOCKED` | Mission 级阻塞：未解决的 blocking Question / Decision / Approval，或预算耗尽；交付 Approval DENIED → `BLOCKED(delivery_denied)`（D70） |
@@ -263,11 +263,11 @@ Attempt 不新建状态表，由 Orca `dispatch_contexts` × `worker_dispatches`
 
 ```text
 QUEUED → RUNNING → PASS | FAIL | INCONCLUSIVE
-INCONCLUSIVE → SPECIALIST_REVIEW | HUMAN_REVIEW → PASS | FAIL
+INCONCLUSIVE → HUMAN_REVIEW → PASS | FAIL（V1；SPECIALIST_REVIEW 保留给 DEF-40）
 任一非终态 → CANCELED（候选 SUPERSEDED）
 ```
 
-Review（Reviewer LLM 或人类）只能收敛 `INCONCLUSIVE`，**不能**推翻 deterministic `FAIL`。
+Review（V1 只有人，D82）只能收敛 `INCONCLUSIVE`，**不能**推翻 deterministic `FAIL`。
 
 ### 6.7 IntegrationBatch
 
@@ -281,7 +281,7 @@ PROMOTABLE → AWAITING_APPROVAL → PROMOTED | REJECTED
 
 `PROMOTED` = 集成基线 ref `axiom/integration/<missionId>` 前进到本批次的合并 commit。
 
-`AWAITING_APPROVAL` 是唯一的高风险 Approval 点（D79）：等待期间让出队头；GRANTED 后基线已动则重新合并、重跑回归再晋升；`REJECTED` → 候选 SUPERSEDED、Task `BLOCKED(approval_denied)`。批次级失败回原 Task 修复；FIX_TASK 只用于没有肇事候选的 Mission 级失败（§12.3）。
+V1 的合入自动进行，批次上不等批准，唯一的 Approval 在交付前（D92 a）；`AWAITING_APPROVAL` 与 `REJECTED` 留在枚举里，V1 不用。批次级失败回原 Task 修复；FIX_TASK 只用于没有肇事候选的 Mission 级失败（§12.3）。
 
 ### 6.8 Approval、Decision、Question
 
@@ -302,18 +302,18 @@ flowchart TD
   G --> H["attempt-launcher：worktree axiom/attempt/<taskId>/<seq> + workerStart（system principal）"]
   H --> I["Worker 执行；axiom attempt inform/ask/blocked/handoff/request-subtask"]
   I --> J["axiom attempt submit → Candidate 快照 → Submission → Orca 结算 → SUBMITTED"]
-  J --> K["VerificationService：验证 worktree @ candidate；deterministic → acceptance → diff/Artifact → Reviewer"]
+  J --> K["VerificationService：验证 worktree @ candidate；deterministic → acceptance → diff/Artifact；INCONCLUSIVE 交人"]
   K -->|FAIL| L["NEEDS_FIX：新 Attempt 携带失败证据"]
   L --> F
   K -->|PASS| M["VERIFIED → 依赖满足 → INTEGRATION_READY → Integration Queue"]
   M --> N["IntegrationController：临时分支合并 → 集成树全量回归"]
   N -->|CONFLICT| L
   N -->|TESTING FAILED| L
-  N -->|PASS| P["PROMOTABLE →（Approval）→ PROMOTED；Task INTEGRATED"]
+  N -->|PASS| P["PROMOTABLE → PROMOTED；Task INTEGRATED"]
   P --> Q["重新计算 readiness / replan 分级"]
   Q -->|更多工作| F
   Q -->|required Task 全部 INTEGRATED| R["FINALIZING：合入目标分支漂移 · 最终回归 · completion gates · CompletionReport"]
-  R --> S["READY_FOR_APPROVAL →（交付 Approval + Delivery 动作）→ COMPLETED"]
+  R --> S["READY_FOR_APPROVAL →（交付 Approval + Delivery；开了 PR 的等合并）→ COMPLETED"]
 ```
 
 ## 8. Scheduler、AgentFactory 与 Attempt 启动
@@ -401,8 +401,8 @@ ContextPackage 是可寻址（`id = sha256(manifest)`）、可复现、最小充
 2. **Acceptance checks**：逐条核对 acceptance criteria，每条给出证据引用；
 3. **Diff inspection**：scope 越界（写入未授权路径 → FAIL，这是 V1 权限执行的主要手段，G2）、危险改动、遗漏测试、生成文件；
 4. **Artifact inspection**：契约、截图、报告是否齐全且符合 schema；
-5. **Reviewer（LLM，advisory）**：语义与开放式审查；只能对 INCONCLUSIVE 给出收敛建议；
-6. **Escalation**：不一致或低置信度 → SPECIALIST_REVIEW / HUMAN_REVIEW。
+5. **Reviewer（LLM，advisory）**：V1 不启用（D82、DEF-40）；启用后做语义与开放式审查，只能对 INCONCLUSIVE 给出收敛建议；
+6. **Escalation**：不一致或低置信度 → HUMAN_REVIEW（V1，D82；SPECIALIST_REVIEW 保留给 DEF-40）。
 
 ### 11.3 规则
 - 不采信 Worker 自述；deterministic FAIL 不可被任何 LLM 语句推翻。
@@ -415,23 +415,23 @@ ContextPackage 是可寻址（`id = sha256(manifest)`）、可复现、最小充
 ### 12.1 分支模型（D6，含 §8.4 修正）
 - 集成基线：`axiom/integration/<missionId>`，创建自目标分支，IntegrationController 独占写入；
 - Attempt 分支：`axiom/attempt/<taskId>/<seq>`，从当前集成基线创建；
-- 目标分支：用户指定（默认仓库默认分支）；Delivery = 集成基线合入目标分支；
+- 目标分支：用户指定（默认仓库默认分支）；Delivery = 把集成基线交到目标分支：有远程时开 PR，没有远程时本地快进合入（D92 d、h）；
 - 目标分支与集成基线都是受保护分支：Worker Attempt 永不直接合入。
 
 ### 12.2 批次流程（V1：每批一个候选，D5）
 1. `INTEGRATION_READY` 候选按队列顺序入 `QUEUED`；单一 IntegrationController 串行处理；
 2. `APPLYING`：在临时分支 `axiom/integrating/<batchId>`（从当前基线创建）上 `merge --no-ff <candidate>`；git 无法自动合并 → `CONFLICT`：候选 SUPERSEDED，原 Task → `NEEDS_FIX`；修复 Attempt 的分支由 Control Plane 从当前集成基线建，`merge --no-commit` 旧候选并留下冲突标记，ContextPackage 携带冲突证据（D79）；
 3. `TESTING`：在合并后的树上运行仓库全量回归与 Task 要求的检查；失败 → `FAILED`：候选 SUPERSEDED，原 Task → `NEEDS_FIX`，修复 Attempt 从失败批次的合并 commit（`refs/axiom/batches/<batchId>/merged`）继续、带失败的回归证据；需要动 Task scope 之外的文件时只在当前 PlanRevision 已授权的范围内扩大（`scope_extended`），否则问人（D79）；
-4. `PROMOTABLE`：风险分级（迁移、权限/安全敏感路径、依赖变更等由 policy 规则判定）；`high` → `AWAITING_APPROVAL`（唯一的高风险 Approval 点，等待期间让出队头，D79）；
+4. `PROMOTABLE`：风险分级（迁移、权限/安全敏感路径、依赖变更等由 policy 规则判定）；分级记下来，交付批准时给人看；V1 不在批次上等批准（D92 a）；
 5. `PROMOTED`：集成基线 fast-forward 到合并 commit；Task → `INTEGRATED`；触发下游 readiness 重算。
 6. 候选 commit 固定到 `refs/axiom/candidates/<id>`；集成基线的期望 SHA 记库，每个批次开始前核对，不一致即停（D79）。
 不做 `git reset --hard`：失败批次只留临时分支，不回退基线。
 
 ### 12.3 目标分支漂移
-用户在 Mission 期间可能继续提交到目标分支。`FINALIZING` 时（policy 可设为周期性）把目标分支 HEAD 作为特殊候选合入集成基线并跑回归；冲突或回归失败时没有肇事候选，由 Control Plane 建 FIX_TASK，Mission `FINALIZING → EXECUTING`（D70、D79）。
+用户在 Mission 期间可能继续提交到目标分支。`FINALIZING` 时把目标分支 HEAD 作为特殊候选合入集成基线并跑回归，只对齐这一次，执行过程中不追（D92 e）；冲突或回归失败时没有肇事候选，由 Control Plane 建 FIX_TASK，Mission `FINALIZING → EXECUTING`（D70、D79）。
 
 ### 12.4 交付
-`axiom.mission.deliver`：集成基线合入目标分支（可 fast-forward 则 fast-forward），按 policy 需交付 Approval；成功后 Mission `COMPLETED`，CompletionReport 记录 promoted commits。只有 PROMOTED 的候选计入完成度。
+`axiom.mission.deliver`：在交付 Approval 之后执行。有远程时推集成分支并开 PR，Mission 进入“已交付、等合并”，只读地把 CI 与评审状态读回来当证据；PR 合并才 `COMPLETED`；CI 失败、要求修改、冲突或被关闭成为待处理项，由人决定（D92 d；这个状态的名字在做 PR 交付时定）。没有远程时只在能快进、且目标分支没被任何工作树检出时本地合入，成功后 `COMPLETED`，否则停下问人（D92 h）。CompletionReport 记录 promoted commits。只有 PROMOTED 的候选计入完成度。
 
 ## 13. Replanning
 
@@ -447,7 +447,7 @@ V1 只实现人发起的 `MAJOR_REPLAN` 闭环（D8 修订 2026-10-25）：人�
 
 ## 14. Human Governance
 
-人工参与集中在少数高价值节点：PlanRevision 接受（可按 policy 自动）；需求歧义与产品选择（Question/Decision）；权限或预算提升；数据迁移、删除与不可逆操作；安全敏感改动；批次 promotion（高风险）与最终交付；多次自动修复仍失败；系统无法给出高置信度判断。
+人工参与集中在少数高价值节点：PlanRevision 接受（可按 policy 自动）；需求歧义与产品选择（Question/Decision）；权限或预算提升；数据迁移、删除与不可逆操作；安全敏感改动；最终交付（V1 唯一的批准点，D92 a）；多次自动修复仍失败；系统无法给出高置信度判断。
 
 Approval（D7）：
 - 独立存储于 `approvals`：`action_kind`、`inputs_hash`（精确输入摘要）、风险、`requested_by`、`expires_at`、resolver、resolution、`outcome`（执行结果）、`executed_at`；
@@ -552,7 +552,7 @@ Mission UI / axiom CLI
 |---|---|---|
 | **M0 · Fork 与隔离** | 新身份（app id、bundle id、scheme、可执行名、`axiom` CLI）；updater/telemetry/feedback/changelog/nudge/kill-list/marketplace/skills 源/star 处置；login/relay/push 置 flag；artifact 分享禁用；LICENSE 与 Third-Party Notices；`package.json` license 字段；`mobile/`、`cloud/` 移出默认构建；空的 `axiom.*` 命名空间与 CLI 命令名注册；Controlled Acceptance Fixture 资格测试（许可确认、Node 22 + pnpm 10 固定工具链下的离线可复现检查、规模与时限门槛、预置场景 manifest，D18） | 打包产物冷启动 + 一次完整会话对 `onorca.dev` / `stablyai` / `posthog` / `api.github.com` 的请求数为 0（代理日志存档）；`verify:egress-allowlist` 通过；上游 CI 门（tc/test/lint）全绿；无 RPC/CLI 重名；fixture 候选通过全部硬门槛（否则切换到自有参考应用）并冻结 fixture manifest v1 |
 | **M1 · Mission Facade** | 迁移 v43 side tables；`axiom.mission/goal/plan/task` 的 CRUD 与状态机；Mission ↔ Run（system principal）；admission 守卫；run mailbox 消费者骨架；RecoveryService 对 Mission/Goal/Plan/Task 的重启恢复；Mission Home + Task 列表 | 重启后 Mission/Goal/PlanRevision/Task/stage 不丢失；对 Mission Run 的直接 `taskUpdate`/`workerStart`/`reset` 被拒绝；`orca-mapping.md` §4b 全部拦截点有测试 |
-| **M2 · Planning 与 Agent Factory** | Planner proposal contract 与 DAG 校验；plan 审批流；AgentSpec、ContextPackage、`attempt_bindings`；Scheduler 与预算；attempt-launcher；`axiom attempt *` 与 submit 结算路径；Candidate 快照 | 从 Goal 到 ≥3 个 Task 在 3 种 provider 上并行 RUNNING → SUBMITTED；伪造/过期/重复 SUBMISSION 被拒且不改状态 |
+| **M2 · Planning 与 Agent Factory** | Planner proposal contract 与 DAG 校验；plan 审批流；AgentSpec、ContextPackage、`attempt_bindings`；Scheduler 与预算；attempt-launcher；`axiom attempt *` 与 submit 结算路径；Candidate 快照 | 从 Goal 到 ≥3 个 Task 在 3 种 provider 上并行 RUNNING → SUBMITTED（M2 出口时的口径；D82 之后 V1 只保留两种 provider）；伪造/过期/重复 SUBMISSION 被拒且不改状态 |
 | **M3 · Independent Verification** | 验证 worktree；deterministic checks；acceptance 评估；diff scope 检查；INCONCLUSIVE 交人处置（V1 无 LLM Reviewer，D82）；NEEDS_FIX 循环与证据注入 | 故意注入的测试失败被 FAIL 拒绝并自动生成修复 Attempt；FAIL 不能被 review 推翻（测试） |
 | **M4 · Controlled Integration 与完成** | 串行合入队列（单候选，合到最新集成头）；集成树回归；CONFLICT / FAILED → 原 Task NEEDS_FIX（D79）；一次交付批准（绑定 commit）与 PR 交付（经 Orca hosted-review：用户自己的 `gh` / `glab` / REST，`gh` 不在时浏览器 compare 页；D82 2026-10-26 修订行），没有远程仓库时本地合入；PR 正文与提交契约带 Testing / Risk / How to revert（借鉴 Claude Code 团队审查流程，D82 2026-10-26 修订行）；交付前在最新目标分支上重放并回归（D82）；completion gates 与 CompletionReport（每个论断带证据 id，引用经确定性检查核对，DEF-10 ④）；全对象重启恢复；M4 基本完成后独立选定 Blind External Validation Fixture（D18） | 两个各自通过、合并后失败的候选：后集成的那个回到原 Task 修复并最终集成（D79）；未经批准不会交付；CompletionReport 能解释「为什么完成」；Controlled fixture 的全部 manifest 场景可复现 |
 | **M5 · Replanning 与 DecisionEngine（V1 部分）** | 人发起的 MAJOR_REPLAN → 新 PlanRevision → 继承/取消/重绑（D8 修订；自动分级在 V2）；每次重新规划开新的 Planner 会话，只带目标、当前计划与证据摘要（D82 ②）；DecisionEngine 可替换性（接口与 RulesEngine 已在 M2 建成，M3 的 Supervisor 也用它） | Goal 变更触发新 PlanRevision，旧版本与理由保留；DecisionEngine 可被替换实现替代而核心状态机不变（测试） |

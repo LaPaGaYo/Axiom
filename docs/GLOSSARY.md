@@ -91,9 +91,9 @@ READY_FOR_APPROVAL → FINALIZING（交付前目标分支 HEAD 已变，D70）
 
 - `PLAN_REVIEW`：PlanRevision 已 PROPOSED，等待人工或 policy 自动批准。
 - `FINALIZING`：所有 required Task 已 `INTEGRATED` 或经授权 `CANCELED`，运行最终全量回归与 completion gate 评估。
-- Delivery 是动作不是状态：`READY_FOR_APPROVAL →（Delivery）→ COMPLETED`。
+- Delivery 是动作不是状态：`READY_FOR_APPROVAL →（Delivery）→ COMPLETED`。没有远程时本地快进合入后直接 `COMPLETED`（D92 h）；有远程时开 PR，PR 合并才 `COMPLETED`，其间 Mission 处于“已交付、等合并”，这个状态的名字在做 PR 交付时定（D92 d）。
 - `READY_FOR_APPROVAL`：等待最终交付 Approval（若 policy 要求）。
-- **Delivery / 交付**：把集成基线合入目标分支的最终动作；成功后进入 `COMPLETED`。
+- **Delivery / 交付**：把集成基线交到目标分支的最终动作，在交付 Approval 之后：有远程时开 PR（合并后进入 `COMPLETED`，D92 d），没有远程时本地快进合入（D92 h）。
 - `BLOCKED`：阻塞解除（Approval GRANTED / DENIED、Question ANSWERED、预算经 Approval 上调或 replan）后回到进入前的状态；进入前的状态持久化在 `missions.previous_status`（与 `PAUSED` 相同）。
 - `BLOCKED(delivery_denied)`：交付 Approval 被 DENIED；人选择修改后重交（回 `EXECUTING`，走 Goal / plan 调整）或 `CANCELED`；EXPIRED 则重新请求，不自动交付（D70）。
 - `PAUSED`：停止新 admission 与新 VerificationRun 领取；运行中的 Attempt 按 policy `pauseMode: drain | stop`（默认 `drain`）；集成不开新批次、进行中的批次跑完；wall-clock 预算与 Approval 过期停表；恢复回 `previous_status`（D70）。
@@ -286,7 +286,7 @@ APPLYING / TESTING → QUEUED（应用重启时由 RecoveryService 丢弃临时�
 ```
 
 `PROMOTED` = 集成基线 ref 前进到该批次的合并 commit；Delivery（集成基线合入目标分支）是 Mission 级动作，见 §4.1。
-`AWAITING_APPROVAL` 是唯一的高风险 Approval 点（D79）：合并树回归通过后才进入；等待期间让出队头，GRANTED 时基线已动则重新合并并重跑回归再晋升；`REJECTED`（DENIED）→ 候选 SUPERSEDED、Task `BLOCKED(approval_denied)`。
+`AWAITING_APPROVAL` 与 `REJECTED` 留在枚举里，V1 不用：合入自动进行，唯一的 Approval 在交付前（D92 a）。
 
 ### 4.10 Approval
 

@@ -85,7 +85,7 @@ Before creating new infrastructure, search for an existing implementation that c
 
 ## Axiom Control Plane Code Placement and RPC Conventions
 
-- Control Plane services live in `src/main/axiom/`; zod schemas and types shared by main, CLI, and renderer live in `src/shared/axiom-contract/`. Axiom code reaches the runtime only through RPC method registration and existing service boundaries (D12).
+- Control Plane services live in `src/main/axiom/`; zod schemas and types shared by main, CLI, and renderer live in `src/shared/axiom-contract/`. Axiom code reaches the runtime only through RPC method registration and existing service boundaries (D12). No file under `src/main/axiom` imports `electron` or `electron/<sub>`: the Control Plane must run without it, and `pnpm lint` refuses such an import (D87).
 - Never add logic to a `@ts-nocheck` file. 137 of the ~150 non-test `orca-runtime-*.ts` modules are listed in `config/ts-nocheck-baseline.txt`, including `orca-runtime-core.ts` and `orca-runtime-automation-operations.ts`; add a typed adapter beside them instead, and do not grow the baseline (D12).
 - The RPC namespace is `axiom.*` only: `axiom.mission.*`, `axiom.goal.*`, `axiom.plan.*`, `axiom.task.*`, `axiom.attempt.*`, `axiom.verification.*`, `axiom.integration.*`, `axiom.approval.*`, `axiom.decision.*`, `axiom.artifact.*`, `axiom.message.*`, `axiom.policy.*`. Never `project.*`: it collides with the existing `project.list` / `project.update`, `projectHostSetup.*`, `projectGroup.*`, `automation.*`, and CLI `orca project`, and `buildRegistry()` throws `duplicate_rpc_method` at startup (D1).
 - Register a method in five steps: (1) zod params in `src/shared/axiom-contract/<ns>-params.ts`; (2) `defineMethod({ name: 'axiom.<ns>.<verb>', params, handler })` in `src/main/runtime/rpc/methods/axiom/<ns>.ts`, aggregated into `AXIOM_METHODS` (`src/main/runtime/rpc/methods/axiom.ts`); (3) spread `AXIOM_METHODS` into `ALL_RPC_METHODS` in `src/main/runtime/rpc/methods/index.ts`; (4) regenerate `src/shared/rpc-contract/rpc-params-catalog.generated.ts` with `config/scripts/generate-rpc-params-catalog.mjs` (`verify:rpc-params-catalog` runs inside `pnpm lint`); (5) for CLI exposure, add the spec in `src/cli/specs/`, the handler in `src/cli/handlers/`, and the command name in `src/main/startup/cli-command-names.ts`. The product CLI binary is `axiom`.
@@ -135,7 +135,7 @@ They may not directly:
 - create unbounded recursive work;
 - reinterpret a failed deterministic check as passed.
 
-Every model-produced proposal must be schema validated, policy checked, attributed, and persisted through a Control Plane command. Reviewer output is advisory: it can resolve an `INCONCLUSIVE` verification, never overturn a deterministic `FAIL`.
+Every model-produced proposal must be schema validated, policy checked, attributed, and persisted through a Control Plane command. Reviewer output is advisory: it can resolve an `INCONCLUSIVE` verification, never overturn a deterministic `FAIL`. V1 has no Reviewer (D82): a person resolves every `INCONCLUSIVE`.
 
 ## Decision Engine Boundary
 
@@ -287,7 +287,7 @@ Record in `verification_runs` (evidence as content-addressed Artifacts; `artifac
 - reviewer or verifier identity;
 - unresolved risks.
 
-Do not infer success from a Worker summary. A failed deterministic check cannot be overruled by an LLM statement. `INCONCLUSIVE` escalates to `SPECIALIST_REVIEW` or `HUMAN_REVIEW` per policy; review may only resolve `INCONCLUSIVE` to `PASS` or `FAIL` and can never overturn a deterministic `FAIL`. Non-code Tasks are verified on Artifact existence, schema validity, acceptance review, and optional human review.
+Do not infer success from a Worker summary. A failed deterministic check cannot be overruled by an LLM statement. In V1 every `INCONCLUSIVE` goes to `HUMAN_REVIEW` (there is no Reviewer, D82; `SPECIALIST_REVIEW` is kept for DEF-40); review may only resolve `INCONCLUSIVE` to `PASS` or `FAIL` and can never overturn a deterministic `FAIL`. Non-code Tasks are verified on Artifact existence, schema validity, acceptance review, and optional human review.
 
 Known limitation: write scope cannot be enforced at runtime for CLI agents. V1 enforcement is verification-time diff inspection (out-of-scope changes → `FAIL`) plus best-effort provider configuration. State this in the Task's risk when relevant.
 
@@ -317,7 +317,7 @@ Branch model (D6):
 
 - integration base `axiom/integration/<missionId>`, written only by IntegrationController;
 - Attempt branch `axiom/attempt/<taskId>/<seq>` (seq = the Task's Attempt sequence number assigned by the Control Plane; the dispatch id that is the attemptId is minted after the worktree exists, so it cannot be in the branch name — D6a; `attempt_bindings` maps `dispatch_id ↔ seq ↔ branch`), created from the current integration base in the Attempt's child worktree; integration scratch branches are `axiom/integrating/<batchId>`;
-- promotion (`PROMOTED`) = advancing the integration base to the batch's merge commit; Delivery = merging the integration base into the user's target branch (default: the repository's default branch) via `axiom.mission.deliver`, with Approval when policy requires it;
+- promotion (`PROMOTED`) = advancing the integration base to the batch's merge commit; Delivery = bringing the integration base into the user's target branch (default: the repository's default branch) via `axiom.mission.deliver`, after the one delivery Approval (D92 a): with a remote, a pull request, and the Mission is `COMPLETED` only when that pull request is merged (D92 d); without a remote, a local merge only when it is a fast-forward and no worktree has the target branch checked out (D92 h);
 - both the integration base and the target branch are protected: a Worker Attempt never merges into them directly.
 
 In V1 each IntegrationBatch contains exactly one candidate, applied in queue order (D5). Each batch must record:
@@ -330,7 +330,7 @@ In V1 each IntegrationBatch contains exactly one candidate, applied in queue ord
 - required Approval;
 - promotion result.
 
-Passing checks in isolated worktrees does not prove that combined changes pass. Run required regression checks on the integrated tree (`APPLYING → TESTING → PROMOTABLE`, then `AWAITING_APPROVAL` when policy requires it, then `PROMOTED`). High-risk Approval happens only at this batch step (D79): a batch awaiting Approval yields the head of the queue, and if the base moved before the grant it is re-merged and re-tested on the current base before promotion.
+Passing checks in isolated worktrees does not prove that combined changes pass. Run required regression checks on the integrated tree (`APPLYING → TESTING → PROMOTABLE → PROMOTED`). V1 puts no Approval on a batch: integration proceeds by itself and the only Approval is the one before Delivery (D92 a); `AWAITING_APPROVAL` stays in the enum, unused.
 
 Integration failure follows D79: a batch holds one candidate (D5), so both a textual conflict (`CONFLICT`) and a merged tree that fails regression (`FAILED`) return the original Task to `NEEDS_FIX`. The Control Plane prepares the fix Attempt's branch — for `CONFLICT`, the current integration base with the old candidate merged and the conflict markers left in place; for `FAILED`, the failed batch's merge commit — and the ContextPackage carries the conflict or regression evidence. The original Candidate becomes `SUPERSEDED`; the new candidate is verified and queued like any other. A `FIX_TASK` is created only for Mission-level failures with no culprit candidate (target-branch drift, the final full regression; D70). Do not silently resolve semantic conflicts; request a Decision when the correct resolution is not deterministic.
 
@@ -354,7 +354,7 @@ Stop and request explicit Approval for policy-defined high-risk actions, includi
 - permission, credential, or network-scope expansion;
 - irreversible data migrations;
 - security-sensitive policy changes;
-- release, deployment, production promotion, high-risk batch promotion, or Delivery into the target branch when policy requires it;
+- release, deployment, production promotion, or Delivery into the target branch (in V1 always: the one delivery Approval, D92 a);
 - budget increases beyond the approved limit;
 - decisions with material product ambiguity;
 - repeated automated failure with no safe bounded recovery.
