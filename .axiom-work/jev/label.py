@@ -52,6 +52,33 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M4-1b', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'The effect kind integration.apply and its executor do what the brief asks, up to TESTING: the '
+        'batch row is written before any git call, the scratch worktree comes from the kernel on the full ref of '
+        'the integration head, the candidate is pinned from inside it, the merge runs on a detached HEAD with '
+        'repository hooks off and fixed dates, the merge commit is pinned before the batch moves to TESTING, a '
+        'conflict is recorded with its paths and sends the Task back, three failed tries supersede the batch and '
+        'block the Task; on real repositories with the kernel git functions the temporary branch is gone after '
+        'every run and no remote is reached; five product files gain wiring; title 10 fails at an assertion on '
+        'main control-plane.ts and titles 1 to 3 on main effect files; 38 of 39 Mission specs pass on the first host '
+        'run and the one restart that timed out passes three times on rerun; both runners green; the union script '
+        'failed 0; no verifier change; no other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'a request that has become stale ends done and leaves an open batch of its candidate open, which '
+            'defers every other candidate of the Mission: M4-2a-2 must close it before M4-2b enqueues',
+            'the executor lists the three terminal Mission statuses instead of TERMINAL_MISSION_STATUSES',
+            'a failed removal of the empty hooks directory after a successful git write fails the try',
+            'on the full runtime a temporary branch that an interrupted merge left is reused and then kept '
+            '(preserveBranchOnDelete); the fixture stops below the runtime and shows it gone: M4-4 sweeps it',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+        'failures': {'20261116T105751': [('flaky', 'verification_record:M4-1b-1: the unchanged spec mission-headless-worker (restart after the durable exit code) timed out once in the restart helper (orca-restart.ts:190, 30 s) waiting for the relaunched window to expose its store, before any assertion about the Mission; the candidate changes no renderer, preload or start-up code and only registers an executor that has no row to run; the helper line appears in no earlier host-check or verify-main log; passed three times on the same candidate (rerun by the integrate launcher before the record was committed); first occurrence, cause not established')]},
+    },
     ('M4-1a', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'IntegrationBatch has a contract and a store and every new candidate is pinned by a ref of its '
