@@ -108,7 +108,7 @@ it.each(['worktree_removal', 'branch_preserved', 'checkout'] as const)(
     f.enqueue()
     await f.run()
     expect(f.effect()).toMatchObject({ status: 'done', attempts: 0 })
-    expect(f.batches()[0].status).toBe('PROMOTABLE')
+    expect(f.batches()[0].status).toBe('PROMOTED')
     expect(f.runtime.removeManagedWorktree).toHaveBeenCalled()
     expect(f.audits().filter((e) => e.event === 'integration.cleanup_failed')).toEqual([
       expect.objectContaining({
@@ -160,6 +160,6 @@ it('refreshes a queued base and permits a new batch after an abandoned batch', a
   expect(f.effect()?.status).toBe('done')
   expect(f.batches()).toMatchObject([
     { id: abandoned.id, status: 'SUPERSEDED' },
-    { id: queued.id, status: 'PROMOTABLE', baseCommit: f.baseSha }
+    { id: queued.id, status: 'PROMOTED', baseCommit: f.baseSha }
   ])
 })

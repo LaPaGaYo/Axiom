@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest'
 import { writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { recordIntegrationBase } from './integration-fixture.test-support'
 import { resolveAttemptBaseline } from '../execution/attempt-baseline'
 import {
   regressionFixtures,
@@ -21,13 +22,14 @@ it('runs the regression on the merge commit and makes the batch promotable', asy
   await f.git('commit', '--no-gpg-sign', '-qm', 'integration advance')
   const head = await f.git('rev-parse', 'HEAD')
   await f.git('update-ref', f.integrationRef, head)
+  recordIntegrationBase(f, head)
   const setup = 'node -e ""'
   const criterion = `node -e "const fs=require('node:fs'); if(!fs.existsSync('integration.txt') || !fs.existsSync('${f.scopePath}')) process.exit(1)"`
   const gate = 'git rev-parse HEAD'
   regressionCommands(f, [criterion], { setupCommands: [setup], integrationGates: [gate] })
   f.enqueue()
   await f.run()
-  expect(f.batches()[0].status).toBe('PROMOTABLE')
+  expect(f.batches()[0].status).toBe('PROMOTED')
   expect(f.effect()).toMatchObject({ status: 'done', attempts: 0 })
   const batch = f.batches()[0]
   const runs = batchRuns(f)
@@ -93,8 +95,8 @@ it('runs the regression on the merge commit and makes the batch promotable', asy
     toolVersions: run.toolVersions,
     tools: expect.any(Array)
   })
-  expect(await f.git('rev-parse', f.integrationRef)).toBe(head)
-  expect(f.store.getTaskStage(f.task.taskId)?.stage).toBe('INTEGRATION_READY')
+  expect(await f.git('rev-parse', f.integrationRef)).toBe(batch.mergeCommit)
+  expect(f.store.getTaskStage(f.task.taskId)?.stage).toBe('INTEGRATED')
   expect(f.store.getCandidate(f.candidate.id)?.status).toBe('ACTIVE')
   await scratchReturned(f)
   const events = f
@@ -104,7 +106,8 @@ it('runs the regression on the merge commit and makes the batch promotable', asy
     'integration.batch_started',
     'integration.batch_merged',
     'integration.regression_started',
-    'integration.batch_promotable'
+    'integration.batch_promotable',
+    'integration.batch_promoted'
   ])
   expect(events[2].after).toEqual({
     status: 'TESTING',
@@ -135,7 +138,7 @@ it('runs the regression on the merge commit and makes the batch promotable', asy
   regressionCommands(empty, [])
   empty.enqueue()
   await empty.run()
-  expect(empty.batches()[0].status).toBe('PROMOTABLE')
+  expect(empty.batches()[0].status).toBe('PROMOTED')
   expect(batchRuns(empty)[0]).toMatchObject({
     status: 'PASS',
     commands: [],

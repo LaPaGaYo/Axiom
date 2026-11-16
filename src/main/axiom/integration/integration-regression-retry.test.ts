@@ -105,7 +105,7 @@ it('resumes a batch found in testing with a fresh regression run', async () => {
   const first = { batch: f.batches()[0], effect: f.effect(), runs: batchRuns(f) }
   await dueAgain(f)
   await f.run()
-  expect(f.batches()[0].status).toBe('PROMOTABLE')
+  expect(f.batches()[0].status).toBe('PROMOTED')
   expect(first.effect).toMatchObject({
     status: 'pending',
     attempts: 1,
@@ -141,7 +141,7 @@ it('resumes a batch found in testing with a fresh regression run', async () => {
     })
   )
   expect(batchRuns(orphan).map((run) => run.status)).toEqual(['CANCELED', 'PASS'])
-  expect(orphan.batches()[0].status).toBe('PROMOTABLE')
+  expect(orphan.batches()[0].status).toBe('PROMOTED')
 
   const moved = await fixture()
   vi.spyOn(moved.store, 'insertVerificationRun').mockImplementationOnce(() => {

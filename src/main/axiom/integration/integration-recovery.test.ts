@@ -50,13 +50,13 @@ function orphan(f: IntegrationFixture) {
 async function finished(f: IntegrationFixture) {
   expect(f.effect()?.status).toBe('done')
   expect(f.batches()).toHaveLength(1)
-  expect(f.batches()[0].status).toBe('PROMOTABLE')
+  expect(f.batches()[0].status).toBe('PROMOTED')
   expect(await f.git('for-each-ref', '--format=%(refname)', 'refs/axiom/batches/')).toBe(
     `refs/axiom/batches/${f.batches()[0].id}/merged`
   )
   expect((await f.runtime.listManagedWorktrees()).worktrees).toEqual([])
   expect(await f.git('for-each-ref', 'refs/heads/axiom/integrating')).toBe('')
-  expect(await f.git('rev-parse', f.integrationRef)).toBe(f.baseSha)
+  expect(await f.git('rev-parse', f.integrationRef)).toBe(f.batches()[0].mergeCommit)
   expect(f.audits().filter((e) => e.event === 'integration.cleanup_failed')).toEqual([])
 }
 

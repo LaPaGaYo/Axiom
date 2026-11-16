@@ -75,6 +75,6 @@ it('closes its own open batch when the request has become stale', async () => {
       after: { status: 'SUPERSEDED', reason: 'request_stale' }
     })
   )
-  expect(f.batches()[0].status).toBe('PROMOTABLE')
+  expect(f.batches()[0].status).toBe('PROMOTED')
   expect(f.effect()).toMatchObject({ status: 'done', attempts: 0 })
 })

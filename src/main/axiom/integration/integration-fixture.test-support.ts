@@ -16,6 +16,15 @@ export const gitAt = async (cwd: string, ...args: string[]) =>
 
 export async function integrationFixture(root: string) {
   const f = await verificationGitFixture(root)
+  f.store.appendAuditEvent({
+    missionId: f.missionId,
+    actor: 'MissionController',
+    objectKind: 'mission',
+    objectId: f.missionId,
+    event: 'integration.base_created',
+    before: null,
+    after: { sha: f.baseSha }
+  })
   f.db.db.prepare('UPDATE task_stages SET spec = ? WHERE task_id = ?').run(
     JSON.stringify({
       ...f.task.spec,
@@ -125,6 +134,18 @@ export async function integrationFixture(root: string) {
 
 export type IntegrationFixture = Awaited<ReturnType<typeof integrationFixture>>
 
+export function recordIntegrationBase(f: IntegrationFixture, sha: string) {
+  f.store.appendAuditEvent({
+    missionId: f.missionId,
+    actor: 'MissionController',
+    objectKind: 'mission',
+    objectId: f.missionId,
+    event: 'integration.base_reused',
+    before: null,
+    after: { sha }
+  })
+}
+
 export async function conflictHead(f: IntegrationFixture) {
   const paths = [f.scopePath, 'file with space.txt'].sort()
   await f.git('checkout', '--detach', f.candidate.commitSha)
@@ -151,6 +172,7 @@ export async function conflictHead(f: IntegrationFixture) {
   await f.git('commit', '--no-gpg-sign', '-qm', 'conflicting integration head')
   const head = await f.git('rev-parse', 'HEAD')
   await f.git('update-ref', f.integrationRef, head)
+  recordIntegrationBase(f, head)
   await f.git('checkout', '--detach', f.candidate.commitSha)
   return { paths, head }
 }

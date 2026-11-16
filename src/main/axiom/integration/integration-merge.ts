@@ -6,8 +6,20 @@ import { gitOptionsForWorktree } from '../../git/git-runtime-options'
 import type { IntegrationBatch } from '../../../shared/axiom-contract/integration-batch'
 import { redactContext } from '../context-builder/redaction'
 
-export async function readIntegrationGit(cwd: string, args: string[]): Promise<string> {
-  return (await gitExecFileAsync(args, { ...gitOptionsForWorktree(cwd), timeout: 30_000 })).stdout
+export async function readIntegrationGit(
+  cwd: string,
+  args: string[],
+  allowParentRepository = false
+): Promise<string> {
+  return (
+    await gitExecFileAsync(args, {
+      ...gitOptionsForWorktree(cwd),
+      timeout: 30_000,
+      ...(!allowParentRepository
+        ? { env: { ...process.env, GIT_CEILING_DIRECTORIES: path.dirname(cwd) } }
+        : {})
+    })
+  ).stdout
 }
 
 export async function writeIntegrationGit(
@@ -20,7 +32,7 @@ export async function writeIntegrationGit(
     await gitExecFileAsync(['-c', `core.hooksPath=${hooksPath}`, ...args], {
       ...gitOptionsForWorktree(cwd),
       timeout: 120_000,
-      ...(env ? { env } : {})
+      env: { ...(env ?? process.env), GIT_CEILING_DIRECTORIES: path.dirname(cwd) }
     })
   } finally {
     await rmdir(hooksPath)
