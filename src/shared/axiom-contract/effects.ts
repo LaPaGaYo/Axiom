@@ -5,7 +5,8 @@ import { FailureClassSchema } from './attempt-failure'
 export const EFFECT_KINDS = [
   'attempt.dispatch',
   'verification.enqueue',
-  'attempt.continue'
+  'attempt.continue',
+  'integration.apply'
 ] as const
 export const EffectKindSchema = z.enum(EFFECT_KINDS)
 export const EffectStatusSchema = z.enum(['pending', 'running', 'done', 'failed', 'retired'])
@@ -18,6 +19,10 @@ export const AttemptDispatchPayloadSchema = z.strictObject({
   contextPackageId: AxiomIdSchema
 })
 export const VerificationEnqueuePayloadSchema = z.strictObject({ runId: AxiomIdSchema })
+export const IntegrationApplyPayloadSchema = z.strictObject({
+  taskId: AxiomIdSchema,
+  candidateId: AxiomIdSchema
+})
 export const AttemptContinuePayloadSchema = z.strictObject({
   taskId: AxiomIdSchema,
   seq: z.number().int().positive(),
@@ -34,6 +39,7 @@ const verification = {
   payload: VerificationEnqueuePayloadSchema
 }
 const continuation = { kind: z.literal('attempt.continue'), payload: AttemptContinuePayloadSchema }
+const integration = { kind: z.literal('integration.apply'), payload: IntegrationApplyPayloadSchema }
 const state = {
   ...identity,
   id: AxiomIdSchema,
@@ -48,12 +54,14 @@ const state = {
 export const EffectSchema = z.discriminatedUnion('kind', [
   z.strictObject({ ...state, ...dispatch }),
   z.strictObject({ ...state, ...verification }),
-  z.strictObject({ ...state, ...continuation })
+  z.strictObject({ ...state, ...continuation }),
+  z.strictObject({ ...state, ...integration })
 ])
 export const EnqueueEffectSchema = z.discriminatedUnion('kind', [
   z.strictObject({ ...identity, ...dispatch, dueAt: EffectTimestampSchema.optional() }),
   z.strictObject({ ...identity, ...verification, dueAt: EffectTimestampSchema.optional() }),
-  z.strictObject({ ...identity, ...continuation, dueAt: EffectTimestampSchema.optional() })
+  z.strictObject({ ...identity, ...continuation, dueAt: EffectTimestampSchema.optional() }),
+  z.strictObject({ ...identity, ...integration, dueAt: EffectTimestampSchema.optional() })
 ])
 export const EffectListParams = z.strictObject({
   missionId: AxiomIdSchema,

@@ -74,6 +74,7 @@ export class AxiomStore {
   readonly getCandidate: Candidates['getCandidate']
   readonly listCandidates: Candidates['listCandidates']
   readonly supersedeActiveCandidates: Candidates['supersedeActiveCandidates']
+  readonly supersedeActiveCandidate: Candidates['supersedeActiveCandidate']
   readonly insertIntegrationBatch: Batches['insertIntegrationBatch']
   readonly getIntegrationBatch: Batches['getIntegrationBatch']
   readonly listIntegrationBatches: Batches['listIntegrationBatches']
@@ -188,6 +189,7 @@ export class AxiomStore {
     this.getCandidate = candidates.getCandidate
     this.listCandidates = candidates.listCandidates
     this.supersedeActiveCandidates = candidates.supersedeActiveCandidates
+    this.supersedeActiveCandidate = candidates.supersedeActiveCandidate
     const batches = integrationBatchesStore(db)
     this.insertIntegrationBatch = batches.insertIntegrationBatch
     this.getIntegrationBatch = batches.getIntegrationBatch

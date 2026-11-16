@@ -47,3 +47,28 @@ it('reports corrupt JSON without exposing its contents', () => {
     expect(String(error)).not.toContain('hidden')
   }
 })
+
+it('decodes a stored integration.apply effect', () => {
+  const payload = { taskId: 'task', candidateId: 'candidate' }
+  const decoded = EffectRowCodec.safeParse({
+    ...row,
+    kind: 'integration.apply',
+    effect_key: 'candidate',
+    payload: JSON.stringify(payload)
+  })
+  expect(decoded.success).toBe(true)
+  expect(decoded.data).toEqual({
+    id: row.id,
+    missionId: row.mission_id,
+    kind: 'integration.apply',
+    key: 'candidate',
+    payload,
+    status: row.status,
+    dueAt: row.due_at,
+    attempts: 0,
+    leaseEpoch: null,
+    lastError: null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  })
+})

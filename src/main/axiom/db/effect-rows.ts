@@ -7,6 +7,7 @@ import {
   EffectSchema,
   EffectStatusSchema,
   EffectTimestampSchema,
+  IntegrationApplyPayloadSchema,
   VerificationEnqueuePayloadSchema
 } from '../../../shared/axiom-contract/effects'
 import { readJson } from './row-codec'
@@ -36,13 +37,21 @@ export const EffectRowCodec = EffectRowSchema.transform((row) =>
         ? readJson(AttemptDispatchPayloadSchema, row.payload, 'axiom_effects', row.id, 'payload')
         : row.kind === 'attempt.continue'
           ? readJson(AttemptContinuePayloadSchema, row.payload, 'axiom_effects', row.id, 'payload')
-          : readJson(
-              VerificationEnqueuePayloadSchema,
-              row.payload,
-              'axiom_effects',
-              row.id,
-              'payload'
-            ),
+          : row.kind === 'integration.apply'
+            ? readJson(
+                IntegrationApplyPayloadSchema,
+                row.payload,
+                'axiom_effects',
+                row.id,
+                'payload'
+              )
+            : readJson(
+                VerificationEnqueuePayloadSchema,
+                row.payload,
+                'axiom_effects',
+                row.id,
+                'payload'
+              ),
     status: row.status,
     dueAt: row.due_at,
     attempts: row.attempts,

@@ -51,6 +51,14 @@ export function candidatesStore(db: OrchestrationDb) {
           .all(AxiomIdSchema.parse(missionId))
       )
     },
+    supersedeActiveCandidate(id: string): boolean {
+      return (
+        db.db
+          .prepare(`UPDATE candidates SET status = 'SUPERSEDED', superseded_by = NULL,
+          updated_at = datetime('now') WHERE id = ? AND status = 'ACTIVE'`)
+          .run(AxiomIdSchema.parse(id)).changes === 1
+      )
+    },
     supersedeActiveCandidates(taskId: string, supersededBy: string) {
       const previous = readRows(
         CandidateRowCodec,
