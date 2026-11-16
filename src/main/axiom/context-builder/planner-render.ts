@@ -8,6 +8,7 @@ import { readRepositoryRules } from './repository-rules'
 import { redactContext } from './redaction'
 import { VerificationRulesSchema } from '../../../shared/axiom-contract/verification-rules'
 import { allowedEvidencePrograms } from '../../../shared/axiom-contract/evidence-commands'
+import { rejectedPlanRevisions, REJECTED_PLAN_REVISIONS_SECTION } from './rejected-plan-revisions'
 
 /** The Codex terminal-channel proposal recipe. */
 export function plannerProposalCommandPrefix(missionId: string, attemptId: string): string {
@@ -71,6 +72,7 @@ export async function buildPlannerContext(
     edges: [{ fromTaskId: 'T1', toTaskId: 'T2' }],
     risks: []
   })
+  const rejections = rejectedPlanRevisions(store.listPlanRevisions(mission.id), goal.id)
   const sections = [
     [
       'Active GoalRevision',
@@ -85,6 +87,7 @@ export async function buildPlannerContext(
         2
       )
     ],
+    ...(rejections === undefined ? [] : [[REJECTED_PLAN_REVISIONS_SECTION, rejections]]),
     [
       'Repository rules',
       await readRepositoryRules(mission.repoPath, p.repositoryRef ?? mission.targetBranch)
