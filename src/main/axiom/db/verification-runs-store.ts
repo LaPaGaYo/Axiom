@@ -50,8 +50,8 @@ export function verificationRunsStore(db: OrchestrationDb) {
       const p = Insert.parse(input)
       db.db
         .prepare(`INSERT INTO verification_runs
-        (id, mission_id, candidate_id, task_id, status, verdict_detail, commands, tool_versions, verifier)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        (id, mission_id, candidate_id, task_id, status, verdict_detail, commands, tool_versions, verifier, batch_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
         .run(
           p.id,
           p.missionId,
@@ -61,7 +61,8 @@ export function verificationRunsStore(db: OrchestrationDb) {
           JSON.stringify(p.verdictDetail),
           JSON.stringify(p.commands),
           JSON.stringify(p.toolVersions),
-          p.verifier
+          p.verifier,
+          p.batchId ?? null
         )
       return VerificationRunRowCodec.parse(
         db.db.prepare(`SELECT ${columns} FROM verification_runs WHERE id = ?`).get(p.id)

@@ -29,6 +29,7 @@ export const VerificationRunSchema = z.object({
   id: AxiomIdSchema,
   missionId: AxiomIdSchema,
   candidateId: AxiomIdSchema,
+  batchId: AxiomIdSchema.optional(),
   taskId: AxiomIdSchema,
   status: VerificationRunStatusSchema,
   verdictDetail: z.record(z.string(), z.unknown()),

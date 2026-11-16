@@ -29,6 +29,9 @@ export function claimVerification(
       ? store.listVerificationRuns({ missionId, status: 'QUEUED' })
       : store.listVerificationRunsByStatus('QUEUED')
     for (const run of queued) {
+      if (run.batchId !== undefined) {
+        continue
+      }
       const candidate = store.getCandidate(run.candidateId)
       const task = store.getTaskStage(run.taskId)
       // Restart requeues and human reruns resume VERIFYING without admitting another Attempt.

@@ -66,6 +66,9 @@ export async function recoverVerifications(
     )
   ]
   for (const run of pending) {
+    if (run.batchId !== undefined) {
+      continue
+    }
     if (run.worktreeId) {
       handledWorktrees.add(run.worktreeId)
       try {

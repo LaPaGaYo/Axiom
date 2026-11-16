@@ -171,7 +171,8 @@ CREATE TABLE IF NOT EXISTS verification_runs (
   claim_count INTEGER NOT NULL DEFAULT 0,
   worktree_id TEXT,
   started_at TEXT,
-  finished_at TEXT
+  finished_at TEXT,
+  batch_id TEXT
 );
 CREATE TABLE IF NOT EXISTS integration_batches (
   id TEXT PRIMARY KEY,

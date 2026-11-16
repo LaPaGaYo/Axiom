@@ -83,6 +83,7 @@ export const SubmissionRowCodec = SubmissionRowSchema.transform((r) =>
 export const VerificationRunRowSchema = z.object({
   ...identity,
   candidate_id: AxiomIdSchema,
+  batch_id: AxiomIdSchema.nullable(),
   status: VerificationRunStatusSchema,
   verdict_detail: z.string(),
   commands: z.string(),
@@ -101,6 +102,7 @@ export const VerificationRunRowCodec = VerificationRunRowSchema.transform((r) =>
     missionId: r.mission_id,
     taskId: r.task_id,
     candidateId: r.candidate_id,
+    ...(r.batch_id === null ? {} : { batchId: r.batch_id }),
     status: r.status,
     verifier: r.verifier,
     runtimeEpoch: r.runtime_epoch,
