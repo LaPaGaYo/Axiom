@@ -39,7 +39,10 @@ export async function withWorktreeSnapshot<T>(
     { timeout: input.timeout, confine: false },
     async ({ hooks, options, directory }) => {
       // A private index tolerates a sandbox-left index.lock without touching that lock.
-      const isolated = { ...options, env: { ...process.env, GIT_INDEX_FILE: path.join(directory, 'index') } }
+      const isolated = {
+        ...options,
+        env: { ...process.env, GIT_INDEX_FILE: path.join(directory, 'index') }
+      }
       const parent = GitObjectIdSchema.parse(
         (await gitExecFileAsync(['rev-parse', 'HEAD'], options)).stdout.trim()
       )
