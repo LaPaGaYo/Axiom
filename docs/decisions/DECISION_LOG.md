@@ -328,6 +328,9 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **保留的风险/后续**：`CFBundleShortVersionString` 仍沿用上游版本线 1.4.214（首个 Axiom 发布版本需 Decision）；asar 内仍有 2 处 `stablyai` 字符串——`NOTICE.md` 归属（必须保留）与 mobile `ProtocolBlockScreen` 指向上游 releases / App Store 的用户可点链接（hygiene）；`orca-keyboard-layout` / `orca-notification-status` 可执行文件名、NSIS 文案、`package.json.name` 待 hygiene 决定；Windows/Linux 未在此打包；签名/公证不在 M0 范围。流水线教训（已记入 workflow 手册）：任何驱动真实 `afterPack` 的测试必须进 sidecar targets；`attempt.sh` 对 seq>1 现在尊重显式 `--base`（`fb4fbff0f`）；运行中的流水线脚本不能被改写（bash 边读边执行；全部脚本体已包进 `main()`，`5fa35dc7d`）；宿主装了 `mobile/node_modules` 之后全量 suite 还需要 Playwright 的 chromium + webkit（`launchers/playwright-install.command`）。
 
 **同期的 fixture 进展**（D39 的 FT-01）：`LaPaGaYo/flowtask-fixture` 两个 Attempt 后验收（`.axiom-work/verifications/FT-01-2.md`）：219 个受跟踪文件、61 个测试文件、214 + 17 个测试，`verify:fast` ≈ 2.5 s、`verify:full` ≈ 4 s、第二次 `verify:fast` 字节一致，每个导出都有直接测试并由契约测试机械保证；fixture `main` = `60f3824` 已推送。冻结为 v1 等 FT-02。
+
+**修订（2026-11-15，D90，已批准）**：开口项"首个 Axiom 发布版本需 Decision"由 D90 关闭——软件版本从 0.1.0 起，`CFBundleShortVersionString` 随 `package.json` 的 `version`；其余开口项不变（DEF-3）。
+
 ## D41 · 托管 CI（GitHub Actions）在 fork 里的职责与裁剪 — ACCEPTED（Henry 2026-10-16：选项 A；B/C 延期到 M1 控制平面代码合入后复审）
 
 **背景**：A-lite 流水线的门禁在 Mac 上本地执行（`verify.sh` / `verify-merged.sh` / 全量 suite / 打包检查），推送 main 从不经过 PR。上游工作流清单（`.github/workflows/`，38 个）按触发方式分：
@@ -819,6 +822,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **后果**：M3-10 / M4 / M5 的出口 e2e 只在 macOS 宿主 + Linux CI 上要求证据；`docs/PROJECT_CHARTER.md` §9 与 `docs/ARCHITECTURE.md` §20 在 V1 出口 Decision 时一并修订（本条先以 Decision 记录，不单独改章程）。
 **取代规则**：V1.x 计划的 Decision 取代第 2 条的触发点。
 
+**修订（2026-11-15，D89 第 4 条，已批准）**：0.x 只保证 macOS；Linux 的 e2e 证据在 1.0 之前补。V1 = macOS 与 Linux、Windows 为 V1.x 不变。
+
 ## D68 · 环境性失败与工作性失败分离：Attempt 的 `interrupted` 结算类别、验证的 `environmental` 分类、flaky 重跑规则 — ACCEPTED（Henry 2026-10-23："批准D68，可以按照计划继续"；验证者 2026-10-21 提出，端到端流程复审缺口 1）
 
 **背景**：现在 Attempt 没有 Submission 就退出一律 FAILED / STOPPED → NEEDS_FIX（消耗 `retryPolicy.maxAttempts`，耗尽 → BLOCKED + replan 分级）；验证里任何非零 exit 都是 `fail` → `FAIL` → NEEDS_FIX。真实世界里相当一部分失败与候选无关：订阅配额窗口耗尽（lane B 的 app-server 推送 `account/rateLimits/updated`）、登录过期、应用退出 / 机器休眠带走子进程、harness 在首轮之前崩溃、`axiom` CLI socket 不可达、验证工具缺失、flaky 测试。流水线自己用 `.axiom-work/jev/known-environmental.txt` 处理的就是这类问题，产品里没有对应物。
@@ -1127,6 +1132,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 
 **修订（2026-11-14，已批准：Henry 2026-11-14："LobeHub 那两件我同意"；验证者同日提议，依据 `claude/lobehub-review-v1.md` §5）**：评估了 LobeHub（lobehub/lobehub，LobeHub Community License，83.6k star、15,481 次提交；Agent Tasks 2026-05 GA、Delivery checks 2026-06 上线、Agent Goals 仍只有开发文档）。它的 Agent Goals + Tasks + Verify 与 Axiom 的控制平面是同一副骨架（目标 → 带依赖的任务图 → 一次次尝试 → 验收 → 人的闸口；服务端校验模型提交的窄 schema 计划、行锁回执、服务端强制预算），所以本条"背景"里四层护城河的第一层（对象模型）对它不成立，证据工件、无人值守的可靠性与累积的数据三层它也都在做。差别在信任模型：它的三种验证者（`program | agent | llm`）今天都落在模型或人身上，`program` 没有原生运行器，证据由干活的一方采集，终点是人在 GitHub 上合并 PR，没有集成队列与合并树回归。**决定**：① 护城河的核心表述改为三样，按此顺序：**verdict 不经模型**（验证由 Control Plane 在不可变候选上重跑命令得出，任何模型推不翻确定性 FAIL；D82 ⑤，不变量 4、7）、**agent 的 merge queue**（第 1 条，M4）、**本地优先**（仓库内容、证据与审计不出本机，自带订阅，没有服务端）；对象模型是前提，不再单列为壁垒。② 第 2 条 ① "验证可复现"从 M3-10 的一项登记升为核心表述——Axiom 的证据是"任何人拿同一个候选和环境重跑会得到同一个 verdict"；验证记录里的工具版本、环境描述哈希、候选哈希与 `axiom verification replay` 仍在 M3-10 落地，不得从 V1 拿掉。③ 定位句加"本地优先"（PROJECT_CHARTER §1 护城河段）。④ 节奏改为 M3-09-3b-1 → 3b-2 → 3c → M3-09-4 → M3-09-5 → M3-10 → M4 → M3-09-6（对话外壳，D71）→ M3-09-7（只读记分卡，D80）：后两段不是闭环所需，编号不变，挪到 M4 之后（与 M5 的先后在 M4 计划定稿时定）；M3 的出口不含这两段，D71 的 V1 形态与 D80 的只读记分卡仍在 V1 之内。**不做**不变：不比广度（渠道、市场、provider 数量），模型评审不进 verdict（DEF-40 的意见只能收敛 `INCONCLUSIVE`）；LobeHub 的许可证规定分发衍生作品须另取商业许可，只借规则，不取代码与提示词。可借鉴的十三条及其落点见评估文档 §3，其中的登记建议（新 DEF-51 等）另行确认。**后果**：PROJECT_CHARTER §1 护城河段补一句并更新日期；`docs/plans/M3.md` 的 M3-09 行与顺序行按 ④ 改；DEF-9 的状态栏注明记分卡随 M3-09-7 排到 M4 之后。
 
+**修订（2026-11-15，D89，已批准；Henry："1，2都同意，之前的六件事也批准"）**：2026-11-14 修订行 ④ 定的节奏由 D89 取代——M3 功能冻结，只放行 M3-09-4b-2 与 M3-09-4c-1，然后 M4-0 → M4-1 → M4-2 → 0.1.0 所需的最小集合；0.1 之后的顺序由上手的发现决定。同一修订行里"验证可复现不得从 V1 拿掉"与"D71 的 V1 形态、D80 的只读记分卡仍在 V1 之内"不变。
+
 ## D87 · 依赖方向与端口：Control Plane 是以权威核为主干的端口—适配器结构；副作用只经持久化 outbox，harness 能力旗是适配器的入口合同，边界由 lint 与契约测试守住 — ACCEPTED（Henry 2026-11-05："我同意，可以写入 DEFERRED / DECISION_LOG"；验证者同日提议，`claude/def-48-architecture-v1.md`）
 
 **背景**：T3 Code 评估（D86 背景）之后，Henry 提出把 DEF-48（执行层工程纪律）做成"以护城河为中心的模块化，围绕中心向外开发，以后有新功能可以随时添加"。验证者的修正有三点：圆心是**权威核**（对象模型 + 生命周期状态机 + 策略 + 证据模型），不是验证与集成这两个功能——它们是核里最值钱的两个服务，当圆心反而让调度、上下文、消息、恢复都得"围绕验证"组织；模块化靠合同、端口、单一副作用出口与机械守卫，不靠目录或插件系统（T3 自己的设计文档也写着"除非有文档化的需求，不要加通用事件总线"）；"随时加功能"的保障是改动不碰权威规则——新功能是核里的新服务 + 新的 effect 种类，或一个新适配器；状态机与合同形状的改动永远是 Decision + 迁移 + 兼容读取。
@@ -1177,3 +1184,61 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 **修订（2026-11-12，Henry 在 M3-06-3 合入后的两次选择：停滞档位"全局默认 + 每个 Mission 的覆盖"、升档门槛"20 条、90%"、token 预算"整个 Task、只算新 token"；token 部分依据 `claude/token-budget-research-v1.md`）**：① **停滞规则的档位 = 全局默认 + 每个 Mission 的覆盖**（第 9 条 (a)）：Mission 有覆盖时用覆盖，否则用全局默认。② **升档门槛**（第 9 条 (b)）：至少 **20** 条结果已知的观察、其中至少 **90%** 是真停滞（后来仍超时或失败，没有通过验证）时，系统提议把全局默认升一档；人批准才升（DEF-35）。③ **token 预算**（第 10 条，M3-06-3-3）：`maxTokens` 是整个 Task（跨所有 Attempt）的上限，`policy.budget.maxTokens` 是整个 Mission 的总量、在调度准入时执行（同 `maxWallClockMinutes`）；单位只算新 token——未命中缓存的输入 + 缓存写入 + 输出（Codex：`input − cached_input + output`）；每次 Attempt 只记增量（Codex 读 rollout 的 `token_count.last_token_usage`、按事件去重——`exec --json` 的 `turn.completed.usage` 是整个会话的累计；Claude 读每条 assistant 消息的 usage、按消息 id 去重取最大）；到达 Task 上限：停、保全，Attempt FAILED `budget_exhausted`（计入），Task 进 `BLOCKED(budget)` 直到人用 `task.adjust` 提高上限；每次启动的提示里写明剩余预算。由此 Codex 也能中途拦住，第 10 条"Codex 只能事后记账、由运行时长兜底"作废；rollout 的写入时机由 M3-06-3-3 的 brief 在 stub 与真实 rollout 上核实。**验证者的细则（随 M3-06-3-2 brief）**：档位为 `observe`（只记"本来会怎样"）、`notify`（一条待处理项，不动状态）、`stop`（与 `timeout` 同一条停止路径，原因 `stalled`，计入 `maxAttempts`，后继从快照接着做）；全局默认起始为 `observe`（第 9 条 (a)：系统猜的阈值先观察）；两者都只能由人在 Axiom 应用里改，每次改动留一条修订；存进 Axiom 自己的新表，不给 `mission_policies` 加列、不改内核 schema 版本——上游 Orca 自上次全量合并后已用掉自己的 v44–v46（与 Axiom 的 v44–v46 同号不同内容），再加 Axiom 的版本号只会让下一次全量合并的改号更大；升档提议与人的回答同样是 Axiom 自己的表与桌面专用方法（Approval 服务在 M4）。**后果**：M3-06-3-2 再拆成 **M3-06-3-2**（档位与 `notify` / `stop`）与 **M3-06-3-2b**（对账、证据表、升档提议与人的回答）；M3-06-3-3 按 ③ 写。
 
 **修订（2026-11-14，Henry："1和2我同意"；验证者同日提议，`claude/daemon-lost-root-cause-v1.md`）**：修订 ③ 的适用不以 Attempt 目录里有没有退出码文件为条件——内核对无头、非 Planner 的 Attempt 判了旧 runtime 的 `terminal_missing`，就按外因打断结算并保全；退出码文件里的整数只作为证据记进 `attempt.failed`（`exitMarker`），不算第 ① 条原地续所要求的进程退出硬证据，守护进程丢失之后的原地续仍按 ③ 不开。退出码为 0、报告完整的情形在 V1 同样按打断处理：不在恢复里收下提交，保全后由下一次 Attempt 接手；直接收下提交留到以后。起因：M3-06-2b-3 的 brief 把 ③ 收窄成"没有可接受的退出码文件才算"，有退出码文件的 Attempt 因此落到普通放弃——不写 `attempt.failed`、不保全、占一次重试（当时在参考文档里记为限制；2026-11-14 在宿主上定向复现）。落在 M3-06-2b-4。
+
+## D89 · 先合上闭环：M3 功能冻结，M4 提前，第一个上手版本 0.1.0 的切线 — ACCEPTED（Henry 2026-11-15："1，2都同意，之前的六件事也批准"；验证者同日提议，`claude/v1-remaining-and-realignment-2026-11-15-v1.md` §3 与 §6 第 1、4、5、6 条）
+
+**背景**：2026-10-26 以来合入 42 次，M3 从最初计划的 11 个任务涨到 50 个，V1 的 12 条成功标准只动了一条。没有任何代码能把 Task 推到 `INTEGRATED`，所以带依赖的 Task 起不来（12 个 Task 的 fixture 只能跑 3 个根 Task）。四个只读子代理加验证者逐条核实的结论：架构 14 项检查没有不变量被破坏，偏的是顺序与范围管理。
+
+**决定**：
+1. **M3 功能冻结。** 只放行已备好的 M3-09-4b-2 与 M3-09-4c-1。M3-09-5a 与 M3-10 名下的加固、打磨条目挪到 0.1 之后，按上手的发现排序。M3 的正式出口（出口 e2e、出口 10 的 DEFERRED 核对、出口 Decision）与 M4 并行做，不挡 M4。
+2. **M4 提前，按合上闭环的顺序**：M4-0 → M4-1 → M4-2（到这里带依赖的 Mission 能整个跑下去）→ 收尾与完成判定、交付前的一次批准、本地合入、CompletionReport 最小版、界面上的集成状态与批准卡片 → M3-09-4c-2（policy 编辑，带 `integrationGates`）→ 调度兜底巡检 → 版本号（D90）。这就是 **0.1.0**：一个带依赖的 Mission 在用户自己的本地仓库上从目标走到合入，并给出完成报告。M4-1 与 M4-2 的副作用写成可重入的，应用在合入过程中重启不留半截的批次。
+3. **0.1 之后的顺序由上手的发现决定**（Henry 排序）：冲突后的修复回路、重启恢复的完整版、PR 交付与状态读回、M5、M3-09-5a、M3-09-6 / M3-09-7、验证可复现、M3-10 的加固清单、Linux 证据、验收运行。哪些留在 V1、哪些挪到 V1.5，到那时凭结果定，现在不删。
+4. **0.x 只保证 macOS**；Linux 的 e2e 证据在 1.0 之前补。D67 不变。
+5. **允许在开发机上安装 Playwright 对应版本的 headless 浏览器**，消掉 verify-main 里 25 个同一原因失败的测试文件；其余已知失败的文件逐个写明原因，名单进仓库。
+6. origin 上随 fork 带来的上游标签暂不处理，发布脚本用到时再定；删除是远程操作，要 Henry 批准。
+7. **不放松的**：12 条不变量；验证独立于实现者并绑定不可变候选；确定性 FAIL 不能被推翻；完成必须有证据；交付必须有人批准。0.1 是"窄"，不是"松"。
+8. **验证者的细则（Henry 可推翻）**：估计以"合入的任务"为单位并写明拆分余量，每个里程碑给任务数预算，超出三成即停下来报告；计划文件不当日志，`docs/plans/M4.md` 起每个任务的状态至多三行加验证记录的链接；0.1 之前不从外部项目评审往 DEFERRED 与任务行登记新条目；里程碑汇报带三个数（12 条标准的记分、本期合入按主题的分布、登记与关闭的条数）。
+
+**后果**：D86 的 2026-11-14 修订行 ④ 定的节奏由本条取代（见该条修订行）；`docs/plans/M3.md` 加冻结说明，M3-10 行补回"验证可复现"（D86 ① 及其 2026-11-14 修订要求留在 V1，改写该行时漏掉）；新建 `docs/plans/M4.md`；D67 加修订行。
+
+## D90 · 软件版本用语义化版本，从 0.1.0 起；V1、V1.5、V2、V3 只是路线阶段的名字 — ACCEPTED（Henry 2026-11-15 提出："v1，v1.5，v2，v3应该是我们计划的版本，而不是软件项目的版本号"；同日批准做法："之前的六件事也批准"；`claude/v1-remaining-and-realignment-2026-11-15-v1.md` §4）
+
+**背景**：`package.json` 的 `version` 仍是上游带来的 `1.4.214`，D40 留着开口项"首个 Axiom 发布版本需 Decision"。这个数既不是 Axiom 的版本，也不是准确的内核版本。0.1.0 小于 1.4.214，会让三处运行时判断反过来（远程与 WSL 主机的降级拒绝 `orcad-host-version-admission.ts`、SQLite 档案的版本下限 `profile-state-build-compatibility.ts`、插件的 `engines.orca`），发布与 dev 通道脚本会被仓库里最高的 `v*` 标签拉回 1.4.x，上游合并脚本对两边都改过的键取上游的值。
+
+**决定**：
+1. 软件版本用语义化版本。**0.1.0** = 闭环第一次走通（D89 第 2 条）；0.x 按上手的发现迭代；**1.0.0** = V1 的验收标准全部通过。V1、V1.5、V2、V3 是路线阶段的名字，到达时对应 1.0、1.5、2.0、3.0。
+2. `package.json` 的 `version` 就是 Axiom 的版本；另记一个 **Orca 基线**（版本与提交），给需要内核版本的地方用；关于页与 `axiom --version` 显示"0.1.0（Orca 基线 …）"。不采用"`version` 留作内核版本、另加一个 Axiom 版本字段"的做法：安装包、更新器、发布脚本认的都是 `package.json`。
+3. 三个小任务，在出 0.1.0 之前、与 M4 并行：① 运行时三处判断，加测试；② `package.json` 与发布、dev 通道脚本（`package.json` 由验证者在宿主上改）；③ 上游合并规则（`version` 取我们的，Orca 基线跟上游）、版本显示，并把写着"V1 supports only…"的用户与模型可见文字改掉（`plan-proposal.ts`、`policy-readiness.ts`、`planner-render.ts`）。
+4. 标签用 `v0.1.0`，只推这一个引用。
+
+**后果**：D40 的开口项"首个 Axiom 发布版本"关闭，`CFBundleShortVersionString` 随 `version`；DEF-3 的其余项（`package.json.name`、helper 可执行文件名、NSIS 文案、窗口标题、默认目录）不变，仍在首个发布之前处理；GLOSSARY 随第 ③ 个任务加"路线阶段、软件版本、Orca 基线"三个词。
+
+## D91 · 知识模块：agent 学到的东西全部留下，按"谁说了算"分四类；六条分散的延后项收成一个模块 — ACCEPTED（Henry 2026-11-15："所有的知识不应该随着项目的结束而被抛弃，那有没有可能会有一个知识库的一个module在"；批准设计与分期："1，2都同意"；`claude/knowledge-module-design-v1.md`，检索方法依据 `claude/sag-review-v1.md`）
+
+**背景**：2026-10-21 的讨论（`claude/memory-rsi-review-v1.md`）登记了 DEF-17，相关的 DEF-5、DEF-10 ②④、DEF-19 ②、DEF-32、DEF-38 分散在 V1.5 到 V3，从未当成一个模块设计。今天记录不会被删，但四样"学到的东西"留不下来：Planner 对仓库的理解（提案里没有字段）、Worker 的发现（报告里没有这一栏）、同一个 Mission 内各 Attempt 的重复摸索、人为某个仓库设过的设置（按 Mission 设）。
+
+**决定**：
+1. **四类，按权威分**：**记录**（发生过什么，Control Plane 已在写）；**仓库画像**（代码算出来的结构事实按提交缓存、可重算，人确认的设置是权威）；**见闻**（agent 在提案或报告里提出的带证据的说法，没有权威，标"未证实"）；**规则**（即 DEF-17 的 Lesson，人确认，低于 Decision、Task 合同与仓库自己的规则）。agent 说的话本身永远不是权威。
+2. **写入只有三条路，都经 Control Plane 校验**：agent 提出见闻（证据锚 = 文件、内容哈希、范围与当时的原文，或检查名与输出哈希；锚对不上的不收，含密钥的拒绝）；人确认设置与规则（只许桌面调用）；整合运行提出规则（DEF-17 的 ConsolidationRun，确定性校验后人批）。
+3. **读取四个用处**：给 Planner 与 Worker 的上下文里的可选节（带来源与新鲜度，作为引用的资料，有预算，记入 ContextPackage）；同一仓库跨 Mission 的记录检索；带引用地问一个 Mission（M3-09-6 的后端，引用的编号必须来自实际返回的结果，可离线复核）；CompletionReport 用同一种锚。
+4. **存储与检索**：不建第二个状态库；索引从记录派生、可重建；给原件建全文索引，查询时取证，先按范围缩小再排序，基线是 BM25。**不做 L0 / L1 / L2 分层摘要与 Mission 记忆图**（DEF-17 与 DEF-10 ② 的这两部分取消）。见闻的锚在使用前重新核对（在原处、挪了位置、被改过、没了），过期的不进上下文。
+5. **Jev 是判断者，只给建议**，经 `DecisionEngine`：证据判断、重复与矛盾、提成规则的四条筛子、规则与 Task 的相关性；每一项都有不用 Jev 的基线。
+6. **安全**：见闻与检索到的段落进上下文时一律是引用的资料，带固定声明并转义；知识不碰就绪、权限、必需检查、批准与合入顺序；默认只在本机、只在同一仓库内；用 Jev 要显式打开、自带密钥、走出站名单，内容先脱敏且有上限；每次使用留记录、可对上结果，没用的规则退休。2026-10-21 的八条原则不变。
+7. **分期**：**K0 不丢**（随 M4，不加任务：Mission 完成或取消不删记录、证据与对话存档；CompletionReport 的引用用同一种锚）；**K1 记下来**（0.1 之后第一批：报告加"发现"、提案加"对仓库的认识"，校验后保存并在 Task 页与计划卡可见；policy 编辑里"这个仓库以后都这样"）；**K2 找得到**（V1，随 M3-09-6）；**K3 用得上**（V1.5：进上下文、整合运行、知识页、Jev；先在低风险 Task 上开关对照，凭通过率、Attempt 次数与 token 的数据才默认打开）；**K4**（V2 以后：跨仓库、低风险自动采纳、规则提成 skill、定时整合）。
+
+**后果**：DEF-17、DEF-5、DEF-10、DEF-19、DEF-32、DEF-38 各加状态注指向本条；DEF-5 的 CodeGraph 不预设为首选，作为仓库画像里"算出来的部分"的一个可选实现，先做对照。skills（DEF-4）不在本模块。**`DecisionEngine` 的合同今天只容得下同步、确定性的引擎**：接口同步；`AgentFactory.build` 在 `agent_spec` 事务里调用 `engine.rank`；`buildWorkerContracts` 把同一个决定算两遍互相核对；`DecisionRecord.engine` 写死 `'rules'`。随 M5 的可替换性测试改成异步合同：决定在事务外做一次并落成记录，事务里只校验该选择是否仍然合规；记录加引擎标识、请求哈希、实际模型版本、用量与费用（可为空）。
+
+## D92 · M4 的九条设计决定 — ACCEPTED（Henry 2026-11-15："之前的六件事也批准"，其中第 2 件是"M4 的九个决定"按验证者的建议；`claude/m4-design-draft-v1.md` §5，第 i 条按 D89 改）
+
+**决定**：
+- a. **批准点**只有交付前一次（D82 ⑥、D79 的 D82 修订）。`AWAITING_APPROVAL` 留在枚举里，V1 不用。ARCHITECTURE、GLOSSARY、AGENTS 里按批次批准的旧文字随 M4-0 改。
+- b. **合并树回归** = 该 Task 自己的验收命令，加新的 policy 键 `integrationGates`（默认取已配置的最高一档门）。D82 ⑥ 的"全量回归"读作仓库自己的全套门，不是所有已合入 Task 的命令之和。
+- c. **集成分支上的历史**不压缩：`--no-ff` 合并提交，保留候选原有的提交。DEF-22 ⑨ 的"每个 Task 压成一个提交"不做。
+- d. **PR 之后分两步**：开 PR 后 Mission 进入"已交付、等合并"，只读地把 CI 与评审状态读回来当证据；PR 合并才 `COMPLETED`；CI 失败、要求修改、冲突或被关闭成为待处理项，由人决定。DEF-34 的自动唤醒修复放在 M4 出口之后。
+- e. **目标分支漂移**只在收尾时对齐一次，执行过程中不追。
+- f. **预算上调**：人在桌面上调预算这个动作本身就是批准，同一事务里记一条已批准并已使用的 Approval。
+- g. **同一仓库同一目标分支**同时只允许一个执行中的 Mission，开始时拒绝第二个（DEF-20 ⑧）。
+- h. **没有远程时的本地合入**只在能快进、且目标分支没被任何工作树检出时做，否则停下问人。
+- i. **M4 之后的顺序**按 D89 第 3 条，由上手的发现决定；原建议"M3-09-6 → M3-09-7 → M5"不再预设。
+
+**后果**：`docs/plans/M4.md` 按此写任务；DEF-20、DEF-22、DEF-34 各加状态注；M4-0 改掉文档里与 a、d、e 冲突的旧文字。
