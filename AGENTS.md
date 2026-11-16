@@ -23,7 +23,7 @@ Before making product or architecture changes, read:
 - `docs/reference/control-plane.md` for anything touching the Control Plane (Missions, plans, Tasks, admission, recovery);
 - `docs/STYLEGUIDE.md` for UI work;
 - `docs/decisions/DECISION_LOG.md` (path per D13);
-- the relevant document under `docs/reference/` for any subsystem being changed (for example `docs/reference/ssh-execution-boundary.md`, `docs/reference/git-compatibility.md`).
+- the relevant document under `docs/reference/` for any subsystem being changed (for example `docs/reference/cross-platform-support.md`, `docs/reference/git-workflow.md`).
 
 Upstream orchestration documentation lives in `skill-guides/orchestration.md`, `skill-guides/orchestration/references/`, and `docs/site/content/docs/cli/orchestration.mdx`. Treat it as Execution Kernel reference: it describes the retired LLM-coordinator workflow, which Axiom does not use.
 
@@ -387,13 +387,13 @@ Never use destructive commands against a home directory, filesystem root, reposi
 - Do not force-push, rewrite shared history, or delete branches/worktrees without authorization.
 - Use explicit paths and refs for Git operations.
 - Prefer `rg` for checked-out source searches; keep history and ref scans bounded.
-- Treat Git 2.25 as the core-workflow baseline (`docs/reference/git-compatibility.md`); gate newer features through `GitCapabilityCache` (`src/shared/git-capability-cache.ts`) unless a recorded Decision changes the baseline.
+- Treat Git 2.25 as the core-workflow baseline; gate newer features through `GitCapabilityCache` (`src/shared/git-capability-cache.ts`) unless a recorded Decision changes the baseline.
 - Support GitLab and other providers alongside GitHub; be careful with `gh` rate limits.
 - Support folder workspaces where the underlying feature is not inherently Git-specific.
 
 ## Remote Execution and Process State
 
-The execution host owns execution truth. Preserve the verdict vocabulary of `PtyLivenessVerdict` (`src/shared/pty-liveness-verdict.ts`, `docs/reference/ssh-execution-boundary.md`):
+The execution host owns execution truth. Preserve the verdict vocabulary of `PtyLivenessVerdict` (`src/shared/pty-liveness-verdict.ts`):
 
 - `live`;
 - `unverifiable`;
