@@ -281,7 +281,7 @@ PROMOTABLE → AWAITING_APPROVAL → PROMOTED | REJECTED
 任一非终态 → SUPERSEDED
 ```
 
-`PROMOTED` = 集成基线 ref `axiom/integration/<missionId>` 前进到本批次的合并 commit。
+`PROMOTED` = 集成基线 ref `axiom/integration/<missionId>` 前进到本批次的合并 commit。只有合并执行器动这个 ref（M4-2a-3）：新批次开始前核对它正是库里记的那个 commit——最近一次 `integration.batch_promoted` 的合并 commit，还没晋升过则是 Mission 启动时记下的基线——不是就不开始（`integration_head_unexpected`）；回归通过后确认它不是符号引用、没有工作树检出它，再以"旧值必须等于批次的 base"的方式前进，不运行仓库 hooks。ref 已经在某个批次的合并 commit 上而库里还是 `PROMOTABLE` 时以 ref 为准，补记 `PROMOTED`；这样的批次不会被作废。
 
 V1 的合入自动进行，批次上不等批准，唯一的 Approval 在交付前（D92 a）；`AWAITING_APPROVAL` 与 `REJECTED` 留在枚举里，V1 不用。批次级失败回原 Task 修复；FIX_TASK 只用于没有肇事候选的 Mission 级失败（§12.3）。合并没法尝试、或合并树回归没有结论（环境问题）时有界重试，仍不行则批次 `SUPERSEDED`、Task `BLOCKED`（原因 `integration_unavailable`，不计入重试、不送修）；Mission 级的待处理项（M4-4）建成后取代这一做法。
 
@@ -425,8 +425,8 @@ ContextPackage 是可寻址（`id = sha256(manifest)`）、可复现、最小充
 2. `APPLYING`：内核从当前基线建临时工作树（分支 `axiom/integrating/<batchId>`），合并在游离 HEAD 上做（`merge --no-ff <candidate>`）：临时分支留在基线上，随工作树由内核删除；合并 commit 固定到 `refs/axiom/batches/<batchId>/merged`。git 无法自动合并 → `CONFLICT`：候选 SUPERSEDED，原 Task → `NEEDS_FIX`；修复 Attempt 的分支由 Control Plane 从当前集成基线建，`merge --no-commit` 旧候选并留下冲突标记，ContextPackage 携带冲突证据（D79）；
 3. `TESTING`：同一次执行接着在合并 commit 上跑合并树回归（D92 b）——`setupCommands`、该 Task 自己的验收命令、`integrationGates`（缺省取最高一档门），差异门与防篡改门不再跑——记成属于这个批次的 VerificationRun（`batch_id`），不进人工处置；没有结论（环境问题，或临时工作树已不在合并 commit 上）时批次留在 `TESTING`，有界重试，仍不行按 §6.7 末段处理；失败 → `FAILED`：候选 SUPERSEDED，原 Task → `NEEDS_FIX`，修复 Attempt 从失败批次的合并 commit（`refs/axiom/batches/<batchId>/merged`）继续、带失败的回归证据；需要动 Task scope 之外的文件时只在当前 PlanRevision 已授权的范围内扩大（`scope_extended`），否则问人（D79）；
 4. `PROMOTABLE`：风险分级（迁移、权限/安全敏感路径、依赖变更等由 policy 规则判定）；分级记下来，交付批准时给人看；V1 不在批次上等批准（D92 a）；
-5. `PROMOTED`：集成基线 fast-forward 到合并 commit；Task → `INTEGRATED`；触发下游 readiness 重算。
-6. 候选 commit 固定到 `refs/axiom/candidates/<id>`；集成基线的期望 SHA 记库，每个批次开始前核对，不一致即停（D79）。
+5. `PROMOTED`：临时工作树还回去之后，执行器再看一眼请求（Mission `EXECUTING`、Task `INTEGRATION_READY`、候选 `ACTIVE`；否则不动，稍后再来），确认没有工作树检出集成分支，把集成基线 fast-forward 到合并 commit（`update-ref <合并 commit> <批次的 base>`，不运行仓库 hooks），然后在一个事务里记批次 `PROMOTED`、Task → `INTEGRATED`、审计 `integration.batch_promoted`；触发下游 readiness 重算。分支被检出（`integration_branch_checked_out`）、不在批次的 base 上（`integration_head_moved`）或读不到时这一次执行失败，批次留在 `PROMOTABLE`，下一次从这里接着做，不重新合并、不重跑回归；ref 已动而事务没记上时，下一次执行或重试用尽时按 ref 补记（§6.7）。
+6. 候选 commit 固定到 `refs/axiom/candidates/<id>`；集成基线的期望 SHA 记库——Mission 启动时的审计事件 `integration.base_created` / `integration.base_reused`，之后是最近一次 `integration.batch_promoted`——每个批次开始前核对，不一致即停（`integration_head_unexpected`，D79）。
 不做 `git reset --hard`：失败批次只留下它固定的合并 commit（`refs/axiom/batches/<batchId>/merged`），不回退基线。
 
 ### 12.3 目标分支漂移
