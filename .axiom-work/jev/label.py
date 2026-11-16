@@ -52,6 +52,27 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M4-0', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'the start of a Mission is checked before git and the audit, a repository that is not on this '
+        'machine and a second Mission on an occupied repository and target branch are refused, a reused integration '
+        'base must be an ancestor of the target, and the contract has the two finalization back-edges, as briefed: '
+        'one guard module, the call as the first statement of the start transaction, the checks in the handler, the '
+        'ancestor check, two table entries and two error codes; no other product change; titles 1 to 5 and the two '
+        'changed existing titles fail at an assertion on main product files, titles 6 and 7 pass there; every '
+        'Mission spec passes on the host; both runners green; the union script failed 0; no verifier change; no '
+        'other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'the pending view still offers Start for a PLANNED Mission whose target is occupied',
+            'a status for delivered, waiting for the merge (D92 d) has to join the occupying set',
+            'integration_base_unavailable has two meanings told apart only by its message',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M3-09-4c-1', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'a committed policy update requests one admission round for its Mission and a trigger that arrives '
