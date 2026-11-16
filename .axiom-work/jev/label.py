@@ -52,6 +52,28 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M4-1a', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'IntegrationBatch has a contract and a store and every new candidate is pinned by a ref of its '
+        'own before its submission is committed, as briefed: the ten statuses and the table of legal moves, a '
+        'store whose moves are refused without a write when they are not legal or the row is not in the expected '
+        'status, a create-only pin with hooks off that never throws, the pin awaited before the submission '
+        'transaction and a failed pin recorded inside it; two product files gain wiring, nothing that runs today '
+        'changes; titles 8, 12 and 13 fail at an assertion on main product files and are the only failures of the '
+        'whole Axiom step there, title 14 passes; the e2e spec fails at the new expectation on main code; every '
+        'Mission spec passes on the host; both runners green; the union script failed 0; no verifier change; no '
+        'other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'a pin whose submission is then refused stays behind and nothing removes a pin',
+            'pinCommit answers unavailable when its empty hooks directory cannot be removed after a successful write',
+            'AGENTS.md names two reference documents that no longer exist',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M4-0', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'the start of a Mission is checked before git and the audit, a repository that is not on this '
