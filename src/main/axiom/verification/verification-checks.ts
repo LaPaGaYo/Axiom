@@ -35,7 +35,11 @@ async function cleanupVerification(
   }
   let cleanupPending = false
   try {
-    await removeVerificationWorktree(deps.runtime, run.worktreeId)
+    await removeVerificationWorktree(
+      deps.runtime,
+      run.worktreeId,
+      `axiom/verify/${run.id}/${run.claimCount}`
+    )
   } catch {
     cleanupPending = true
   }

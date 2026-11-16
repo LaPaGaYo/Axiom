@@ -1,4 +1,4 @@
-import { mkdtemp, rmdir } from 'node:fs/promises'
+import { lstat, mkdtemp, rmdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { gitExecFileAsync } from '../../git/runner'
@@ -73,8 +73,42 @@ export async function pinVerificationCandidate(
 
 export async function removeVerificationWorktree(
   runtime: VerificationDependencies['runtime'],
-  worktreeId: string
+  worktreeId: string,
+  branch?: string
 ): Promise<void> {
+  try {
+    const cwd = splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
+    if (branch && cwd) {
+      await lstat(path.join(cwd, '.git'))
+      const options = {
+        ...gitOptionsForWorktree(cwd),
+        env: { ...process.env, GIT_CEILING_DIRECTORIES: path.dirname(cwd) }
+      }
+      const ref = `refs/heads/${branch}`
+      const [name, tip, occupied] = (
+        await gitExecFileAsync(
+          ['for-each-ref', '--format=%(refname)%00%(objectname)%00%(worktreepath)', ref],
+          options
+        )
+      ).stdout
+        .trim()
+        .split('\0')
+      const head = (await gitExecFileAsync(['rev-parse', 'HEAD'], options)).stdout.trim()
+      if (name === ref && tip === head && !occupied) {
+        const hooksPath = await mkdtemp(path.join(tmpdir(), 'axiom-verification-hooks-'))
+        try {
+          await gitExecFileAsync(
+            ['-c', `core.hooksPath=${hooksPath}`, 'symbolic-ref', 'HEAD', ref],
+            options
+          )
+        } finally {
+          await rmdir(hooksPath)
+        }
+      }
+    }
+  } catch {
+    // Best effort: leave branch deletion to the kernel even when restoring HEAD is unavailable.
+  }
   try {
     await runtime.removeManagedWorktree(`id:${worktreeId}`, { force: true })
   } catch (error) {
