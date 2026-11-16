@@ -52,6 +52,34 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M4-2b', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'requestIntegrations in a new file of the integration directory, called by every Scheduler round '
+        'right after readiness is recomputed (two added lines in scheduler.ts): Tasks back in INTEGRATION_READY '
+        'whose request is missing or ended are enqueued again, then VERIFIED Tasks with an active candidate, a '
+        'passing latest run and all upstream Tasks INTEGRATED move to INTEGRATION_READY with the effect and the '
+        'audit event in one transaction per Task, in the order they were verified; a failed Task transaction rolls '
+        'back alone and the function never throws; the e2e fixture holds the step unless a spec asks; one new '
+        'product file, no existing test file changed; with main scheduler.ts titles 7 and 8 fail at an assertion '
+        'and titles 1 to 6 pass; with main scheduler.ts built into the app the new e2e spec fails; every Mission spec passes on the first host run and the new spec three times; both '
+        'runners green; the union script failed 0; no verifier change; no other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'a request that ended failed while its Task stayed INTEGRATION_READY is enqueued again by every later '
+            'round, three tries each, with nothing that bounds it',
+            'a verified Task that fails a rule is not requested and nothing says why',
+            'there is no periodic round: a request is made only when something schedules one',
+            'scheduler.ts is at 300 counted lines: the next change to the round needs an extraction first',
+            'only the new spec runs integration end to end; every other Mission spec holds the step',
+            'verifier details that Henry can overturn: the request is made by the round and not inside the '
+            'verdict transaction; nothing is written about a verified Task that is not requested; asking again '
+            'looks at the request and not at the runs; the e2e default holds integration',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M4-1c', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'Before a verification worktree is handed back, removeVerificationWorktree points its HEAD at '
