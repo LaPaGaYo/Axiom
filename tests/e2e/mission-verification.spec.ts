@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { z } from 'zod'
 import { test, expect } from './helpers/orca-app'
-import { cli, withFixtureMission, FIXTURE_COMMIT } from './helpers/axiom-fixture-mission'
+import { cli, git, withFixtureMission, FIXTURE_COMMIT } from './helpers/axiom-fixture-mission'
 import { fixtureLedger, inspectFixtureMission } from './helpers/axiom-fixture-inspection'
 import {
   VerificationListResponseSchema,
@@ -194,7 +194,7 @@ test('M3-02: independent checks reject both broken fixture candidates and verify
   await withFixtureMission(
     testInfo,
     source,
-    async ({ page, mission, userData, ledgerPath, temp, releaseWorkers }) => {
+    async ({ page, mission, userData, ledgerPath, temp, clone, releaseWorkers }) => {
       const inspect = () => inspectFixtureMission(userData, mission.id)
       const list = () =>
         VerificationListResponseSchema.parse(
@@ -251,6 +251,11 @@ test('M3-02: independent checks reject both broken fixture candidates and verify
         })
         .toBe(3)
       await expect.poll(() => list().filter((run) => run.worktreeId === null).length).toBe(3)
+      await expect
+        .poll(() => git(['-C', clone, 'for-each-ref', 'refs/heads/axiom/verify/']), {
+          timeout: 60_000
+        })
+        .toBe('')
       const runs = list()
       expect(runs).toHaveLength(3)
       const tasks = TaskListResponseSchema.parse(

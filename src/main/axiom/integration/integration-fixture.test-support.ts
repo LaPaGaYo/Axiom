@@ -14,27 +14,10 @@ import { registerIntegrationApply } from './integration-apply'
 export const gitAt = async (cwd: string, ...args: string[]) =>
   (await gitExecFileAsync(args, { cwd, timeout: 30_000 })).stdout.trim()
 
-export async function integrationFixture(root: string) {
-  const f = await verificationGitFixture(root)
-  f.store.appendAuditEvent({
-    missionId: f.missionId,
-    actor: 'MissionController',
-    objectKind: 'mission',
-    objectId: f.missionId,
-    event: 'integration.base_created',
-    before: null,
-    after: { sha: f.baseSha }
-  })
-  f.db.db.prepare('UPDATE task_stages SET spec = ? WHERE task_id = ?').run(
-    JSON.stringify({
-      ...f.task.spec,
-      requiredEvidence: undefined,
-      acceptanceCriteria: [
-        { text: 'Offline check', check: { kind: 'command', command: 'node -e ""' } }
-      ]
-    }),
-    f.task.taskId
-  )
+export function kernelWorktreeRuntime(
+  f: Awaited<ReturnType<typeof verificationGitFixture>>,
+  root: string
+) {
   const runtime = verificationRuntime()
   runtime.showRepo.mockImplementation(() => f.runtime.showRepo())
   const makeRecord = runtime.createManagedWorktree.getMockImplementation()!
@@ -87,6 +70,31 @@ export async function integrationFixture(root: string) {
     await removeRecord(selector)
     return result
   })
+  return runtime
+}
+
+export async function integrationFixture(root: string) {
+  const f = await verificationGitFixture(root)
+  f.store.appendAuditEvent({
+    missionId: f.missionId,
+    actor: 'MissionController',
+    objectKind: 'mission',
+    objectId: f.missionId,
+    event: 'integration.base_created',
+    before: null,
+    after: { sha: f.baseSha }
+  })
+  f.db.db.prepare('UPDATE task_stages SET spec = ? WHERE task_id = ?').run(
+    JSON.stringify({
+      ...f.task.spec,
+      requiredEvidence: undefined,
+      acceptanceCriteria: [
+        { text: 'Offline check', check: { kind: 'command', command: 'node -e ""' } }
+      ]
+    }),
+    f.task.taskId
+  )
+  const runtime = kernelWorktreeRuntime(f, root)
   for (const to of ['VERIFYING', 'VERIFIED', 'INTEGRATION_READY'] as const) {
     f.controller.transitionTaskStage({
       taskId: f.task.taskId,

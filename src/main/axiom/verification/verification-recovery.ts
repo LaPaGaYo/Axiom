@@ -72,7 +72,11 @@ export async function recoverVerifications(
     if (run.worktreeId) {
       handledWorktrees.add(run.worktreeId)
       try {
-        await removeVerificationWorktree(runtime, run.worktreeId)
+        await removeVerificationWorktree(
+          runtime,
+          run.worktreeId,
+          `axiom/verify/${run.id}/${run.claimCount}`
+        )
       } catch {
         report.failed += 1
         recordRemovalFailure(deps, run, run.worktreeId, reportedFailures)
@@ -133,12 +137,15 @@ export async function recoverVerifications(
     return report
   }
   for (const worktree of listed.worktrees) {
-    if (!worktree.branch.startsWith('axiom/verify/') || handledWorktrees.has(worktree.id)) {
+    const branch = worktree.branch.startsWith('refs/heads/')
+      ? worktree.branch.slice('refs/heads/'.length)
+      : worktree.branch
+    if (!branch.startsWith('axiom/verify/') || handledWorktrees.has(worktree.id)) {
       continue
     }
     let run: VerificationRun | undefined
     try {
-      const runId = worktree.branch.split('/')[2]
+      const runId = branch.split('/')[2]
       run = runId ? store.getVerificationRun(runId) : undefined
       if (
         run?.status === 'RUNNING' &&

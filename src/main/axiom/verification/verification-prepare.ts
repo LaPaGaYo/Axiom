@@ -21,6 +21,7 @@ export async function prepareVerification(
     expectedClaimCount: run.claimCount
   }
   let worktreeId: string | null = null
+  const branch = `axiom/verify/${run.id}/${run.claimCount}`
   try {
     const candidate = store.getCandidate(run.candidateId)
     if (!candidate) {
@@ -41,7 +42,6 @@ export async function prepareVerification(
         'Candidate Attempt binding is unavailable.'
       )
     }
-    const branch = `axiom/verify/${run.id}/${run.claimCount}`
     const created = await runtime.createManagedWorktree({
       repoSelector: `id:${mission.repoId}`,
       name: `verify-${run.taskId}-${run.claimCount}`,
@@ -60,7 +60,7 @@ export async function prepareVerification(
     worktreeId = created.worktree.id
     // Persist ownership before detaching: runtime listings may then show only detached HEAD.
     if (!store.updateVerificationRun({ ...fence, worktreeId })) {
-      await removeVerificationWorktree(runtime, worktreeId)
+      await removeVerificationWorktree(runtime, worktreeId, branch)
       return
     }
     await pinVerificationCandidate(worktreeId, branch, candidate)
@@ -96,7 +96,7 @@ export async function prepareVerification(
       return true
     })
     if (!saved) {
-      await removeVerificationWorktree(runtime, worktreeId)
+      await removeVerificationWorktree(runtime, worktreeId, branch)
     } else {
       return store.getVerificationRun(run.id)
     }
@@ -104,7 +104,7 @@ export async function prepareVerification(
     let cleanupFailed = false
     if (worktreeId) {
       try {
-        await removeVerificationWorktree(runtime, worktreeId)
+        await removeVerificationWorktree(runtime, worktreeId, branch)
         worktreeId = null
       } catch {
         cleanupFailed = true
