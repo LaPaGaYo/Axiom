@@ -52,6 +52,32 @@ BACKFILL = {
 }
 
 FULL = {
+    ('STRUCT-1', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'structure only: one scope for hooks-off git writes in a new file, used by the seven places '
+        'with the argument arrays, options, order of calls, results and errors they had; the redaction module '
+        'moved unchanged and 34 import lines follow; the only differences are the two the brief accepted (one '
+        'directory prefix, best-effort recursive removal); no existing test changed apart from two import lines; '
+        'five new tests, one with real hooks and a control; both runners green; every Mission spec passes on the '
+        'first host run; the union script failed 0 with nine pins retired by the planner; one verifier change, '
+        'whitespace in a statement the brief itself had asked for unformatted and one name in the doc; no '
+        'other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'five of the seven places have no ceiling and three writes have no deadline; the report lists them '
+            'for Henry to decide',
+            'git writes that still run repository hooks: branch creation of the integration base, branch -f '
+            'in verification, the three calls of the continuation take-over, the private-index calls',
+            'a removal that fails leaves a directory in the OS temp folder and nothing sweeps those',
+            'the shared function has no comment that says why removal is best effort',
+            'a brief must not quote a statement the formatter would lay out differently and ask for it exactly',
+            'STRUCT-2 (audit event names) is not started',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M4-2b', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'requestIntegrations in a new file of the integration directory, called by every Scheduler round '
