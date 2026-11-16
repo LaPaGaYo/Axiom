@@ -52,6 +52,34 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M4-2a-2', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'The merged-tree regression runs in the same try as the merge, on the merge commit, and is '
+        'recorded as a verification run of the batch: PASS makes the batch PROMOTABLE, FAIL makes it FAILED and '
+        'sends the Task back through the settlement the conflict uses, INCONCLUSIVE keeps TESTING and fails the '
+        'try (three tries, then the existing exhaustion); a batch found in TESTING is taken up again without a '
+        'second merge; the outbox hands every executor a signal that stop aborts, and a stopped regression spends '
+        'no try; a regression that is no longer current cancels its own run and yields; every try first closes '
+        'the dead open batches of its Mission; the listing of verification runs answers candidate runs only '
+        'unless a batch is named, so no reader file changes; eight existing product files change and three '
+        'modules are new; title 1 fails at an assertion on main outbox files, titles 2 and 3 on main '
+        'verification-runs-store.ts, titles 4 to 10 on main integration-apply.ts; every Mission spec passes on the '
+        'first host run; both runners green; the union script failed 0; no verifier change; no other model CLI '
+        'called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'a stop between the last command and the verdict transaction discards that regression and the next '
+            'try repeats it',
+            'the integration head does not move and a PROMOTABLE batch stays open: M4-2a-3',
+            'three reads of mergeCommit of a TESTING batch rely on the store rule and are not checked in place',
+            'verifier details that Henry can overturn: an empty plan passes (no_commands); a verdict counts only '
+            'while the scratch stands at the merge commit; a regression never goes to a person',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M4-2a-1', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'What the merged-tree regression will stand on is in place and unused: verification_runs has the '
