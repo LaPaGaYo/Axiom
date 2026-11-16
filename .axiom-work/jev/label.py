@@ -52,6 +52,33 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M4-1c', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'Before a verification worktree is handed back, removeVerificationWorktree points its HEAD at '
+        'its own branch again with one symbolic-ref, hooks off, only when the directory has its own .git, the '
+        'branch stands at the commit HEAD stands at and no worktree has it checked out, every git call of the '
+        'step under a ceiling at the parent directory; the removal follows as before and the kernel deletes the '
+        'branch by its own rule; the five callers pass the branch; the boot sweep compares short names and accepts '
+        'full refs; four existing product files change and none is new; the kernel-backed runtime stub is '
+        'extracted in place for reuse; titles 1 to 3 fail at an assertion on main verification-worktree.ts and '
+        'titles 3 and 4 on main verification-recovery.ts, the controls pass; with main verification-worktree.ts '
+        'built into the app the e2e spec fails at its new expectation; every Mission spec passes on the first '
+        'host run; both runners green; the union script failed 0; no verifier change; no other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'with a git older than 2.38 the kernel cannot prove a verification branch merged and keeps it',
+            'the removal is not waited for and a preserved branch is not recorded',
+            'the sweep still sees only worktrees on a branch',
+            'the step takes the git runner default deadlines, as the pin does: the shared git writer is D93',
+            'the hooks-off git write now exists in seven places: the structure-only Task after M4-2b (D93)',
+            'verifier details that Henry can overturn: nothing waits for the kernel removal; the minimum git '
+            'version stays 2.25 for now',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M4-2a-3', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'After a passed regression the same try returns the scratch, looks at the request once more, '
