@@ -11,7 +11,7 @@ import {
   resolveWorkerStartReadinessTimeoutMs
 } from '../../../shared/orchestration-timing-budgets'
 import type { AdmittedAttempt, AttemptLaunch } from '../scheduler/scheduler'
-import { redactContext } from '../context-builder/redaction'
+import { redactContext } from '../redaction/redaction'
 import { missionCaller } from './mission-caller'
 import { resolveAttemptBaseline } from './attempt-baseline'
 import {

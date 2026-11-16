@@ -10,7 +10,7 @@ import {
   validateAcceptanceCommands
 } from '../../../shared/axiom-contract/evidence-commands'
 import { resolveAcceptance } from '../../../shared/axiom-contract/acceptance'
-import { redactContext } from '../context-builder/redaction'
+import { redactContext } from '../redaction/redaction'
 import { MissionControllerError } from './controller-context'
 
 export function validatedProposal(input: unknown, persisted = false) {

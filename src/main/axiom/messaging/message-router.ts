@@ -9,7 +9,7 @@ import {
   type AxiomMessagePayload
 } from '../../../shared/axiom-contract/message-params'
 import type { AxiomStore } from '../db/axiom-store'
-import { redactContext } from '../context-builder/redaction'
+import { redactContext } from '../redaction/redaction'
 
 export function routeWorkerMessage(
   ctx: {

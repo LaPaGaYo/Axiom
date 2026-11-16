@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { detectBuiltInSecretPatterns } from './secret-patterns'
-import { detectSecretPatterns, redactContext } from '../../main/axiom/context-builder/redaction'
+import { detectSecretPatterns, redactContext } from '../../main/axiom/redaction/redaction'
 
 it('uses one list of patterns to redact and to refuse', () => {
   const values = [

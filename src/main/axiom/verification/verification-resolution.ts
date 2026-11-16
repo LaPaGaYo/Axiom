@@ -4,7 +4,7 @@ import { VerificationAcceptanceSchema } from '../../../shared/axiom-contract/ver
 import { allowedVerificationDispositions } from '../../../shared/axiom-contract/verification-disposition'
 import { OrchestrationError } from '../../runtime/orchestration/orchestration-error'
 import { MissionControllerError } from '../mission-controller/controller-context'
-import { redactContext } from '../context-builder/redaction'
+import { redactContext } from '../redaction/redaction'
 import { settleVerificationFailure } from '../execution/attempt-settlement'
 import { auditVerification } from './verification-claim'
 import type { VerificationDependencies } from './verification-service'

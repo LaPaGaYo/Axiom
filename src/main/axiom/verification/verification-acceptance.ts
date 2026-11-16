@@ -1,6 +1,6 @@
 import type { AcceptanceCriterion } from '../../../shared/axiom-contract/mission-objects'
 import type { VerificationAcceptance } from '../../../shared/axiom-contract/verification-acceptance'
-import { redactContext } from '../context-builder/redaction'
+import { redactContext } from '../redaction/redaction'
 import type { VerificationCheck } from './verification-plan-runner'
 import type { WorkerArtifactChecks } from './worker-artifacts'
 

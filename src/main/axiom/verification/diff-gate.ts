@@ -4,7 +4,7 @@ import {
   normalizePathPattern
 } from '../../../shared/axiom-contract/path-patterns'
 import type { VerificationRules } from '../../../shared/axiom-contract/verification-rules'
-import { detectSecretPatterns } from '../context-builder/redaction'
+import { detectSecretPatterns } from '../redaction/redaction'
 import type { CandidateDiff } from './candidate-diff'
 import { detectTestTampering, type TestTamperingFinding } from './test-tampering'
 

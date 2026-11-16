@@ -16,7 +16,7 @@ import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { captureWorkerOutputArchive } from '../../runtime/orchestration/worker-output-archive'
 import { orchestrationTimestampToMs } from '../../runtime/rpc/methods/orchestration/worker/worker-output'
 import { resolveStructuredWorkerForDispatch } from '../../runtime/rpc/methods/orchestration-structured-worker-lifecycle'
-import { redactContext } from '../context-builder/redaction'
+import { redactContext } from '../redaction/redaction'
 import { getAxiomControlPlane } from '../control-plane'
 
 export type SubmittedAttempt = Pick<

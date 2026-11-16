@@ -8,7 +8,7 @@ import {
   resolveVerificationPlan
 } from '../../../shared/axiom-contract/verification-rules'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
-import { redactContext } from '../context-builder/redaction'
+import { redactContext } from '../redaction/redaction'
 import type { VerificationDependencies } from './verification-service'
 import { executeVerificationPlan } from './verification-plan-runner'
 import { decideVerificationVerdict, type VerificationVerdict } from './verification-verdict'

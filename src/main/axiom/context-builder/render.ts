@@ -6,7 +6,7 @@ import {
 import type { AxiomStore } from '../db/axiom-store'
 import { resolveAcceptance } from '../../../shared/axiom-contract/acceptance'
 import { readRepositoryRules } from './repository-rules'
-import { redactContext } from './redaction'
+import { redactContext } from '../redaction/redaction'
 import { z } from 'zod'
 import { HeadlessSubmissionReportSchema } from '../../../shared/axiom-contract/submission-params'
 import { answeredQuestions } from './answered-questions'

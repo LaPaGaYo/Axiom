@@ -379,6 +379,26 @@ INTEGRATION_READY 且仍有 ACTIVE Candidate 时，effect 不存在或状态为 
 
 限制与风险：没有周期性 round，只在 stage change、adjustment、policy update、start、resume、unblock 或 boot 等既有触发时请求；升级后 EXECUTING Mission 的第一轮会请求所有遗留 VERIFIED 中满足条件的 Task。重请求只看 effect 状态：failed 而 Task 仍在 INTEGRATION_READY（耗尽结算失败或进程先停）时，后续每轮可重新给三次尝试，直到 Task 离开该 stage；执行器正常情况下不应留下 done、同 ACTIVE Candidate、Task 仍 INTEGRATION_READY 的组合。Mission 暂停或 Task 阻塞时，已有执行器每 30 s 轮询，本模块不改变暂停语义。集成头前进后，没有保全快照、原本会在旧 worktree 继续的中断 Attempt 改为重新启动；已经运行的 Worker 在自己的合并时遇到新头。scheduler.ts 已到 300 counted lines 上限。所有旧 e2e 按住集成，新增用例的宿主执行由 verifier 负责。所有 Task 都 INTEGRATED 后 Mission 仍为 EXECUTING；修复基线、完整恢复、展示、收尾、Approval 与交付仍归后续 M4。
 
+### Hooks-off git writes（STRUCT-1）
+
+`execution/hookless-git.ts` owns the temporary scope for Control Plane git writes that must not run repository hooks. `withHooklessGit(cwd, settings, use)` creates one empty directory under the OS temporary directory and calls `use` once with `{ hooks, options, directory }`. `hooks` is the argument fragment `['-c', 'core.hooksPath=<directory>']`; each caller keeps its own argument order and calls the kernel runner itself. `options` starts with `gitOptionsForWorktree(cwd)`, adds `timeout` only when defined, and adds `env` only when supplied or confinement is requested. `timeout` and `confine` are required settings. The private snapshot index shares `directory` with the hooks scope.
+
+Every Control Plane git write that must suppress repository hooks uses this scope. No other product file under `src/main/axiom` spells `core.hooksPath=` or `GIT_CEILING_DIRECTORIES`. `confinedGitEnv(cwd, env = process.env)` copies the chosen environment and sets the ceiling to `path.dirname(cwd)`; `readIntegrationGit` uses it too, except for its existing `allowParentRepository` case. The scope runs no git commands, logs nothing, and preserves the callback result or rejection without translating errors.
+
+| Place | `timeout` | `confine` | Existing directory policy |
+|---|---|---|---|
+| `execution/candidate-snapshot.ts` · `snapshotCandidate` (non-headless) | `undefined` | `false` | The recorded Attempt worktree path is normally its root; root identity is not enforced here, so adding a ceiling would change existing discovery behavior. |
+| `execution/commit-pin.ts` · `pinCommit` | `30_000` | `false` | Current callers supply Attempt or integration scratch roots, but the function accepts any absolute directory, including a repository subdirectory; a ceiling would narrow that contract. |
+| `execution/worktree-snapshot.ts` · `withWorktreeSnapshot` | `input.timeout` | `false` | Callers supply recorded Attempt roots; this function checks the branch, not that the directory is a root. Confinement remains a separate behavior decision. |
+| `execution/integration-base.ts` · `advanceIntegrationHead` | `30_000` | `false` | The catalog repository path may be a subdirectory; a ceiling would prevent valid parent-repository discovery. |
+| `integration/integration-merge.ts` · `writeIntegrationGit` | `120_000` | `true` | Keeps scratch confinement and passes its optional `env` through; undefined still falls back to `process.env`. |
+| `verification/verification-worktree.ts` · `pinVerificationCandidate` | `undefined` | `false` | The kernel supplies the verification root, but the function does not enforce root identity; preserve discovery behavior. Its following `branch -f` still has hooks enabled. |
+| `verification/verification-worktree.ts` · `removeVerificationWorktree` | `undefined` | `true` | The two reads retain their ceiling; the scope opens only after the exact ref, matching tip and unoccupied branch checks pass. |
+
+The only accepted differences are the shared temporary directory prefix (`axiom-hookless-git-`) and recursive, forced, best-effort cleanup in all seven places. Cleanup now removes private index contents too and cannot replace a callback result or error, or turn a successful pin into `unavailable`. Previously cleanup failures propagated from places 1, 3, 5 and 6, became `unavailable` in place 2, and were already swallowed in places 4 and 7. Command arguments, ordering, environments, deadlines, readbacks and error handling otherwise stay unchanged; no additional writes have hooks disabled.
+
+The unchanged `redactContext` and `detectSecretPatterns` functions and their test now live in `src/main/axiom/redaction/redaction.ts` and `redaction/redaction.test.ts`. All consumers import that module directly; `context-builder` has no re-export. The pattern definitions remain in `src/shared/axiom-contract/secret-patterns.ts`.
+
 ### Attempt launch（M2-05）
 
 `axiom.mission.start` RPC 在同步 `startExecution` 事务前，按 M4-0 的顺序执行：先调用 `MissionController.assertStartable`（只读、不启事务，共用 `mission-start-guard.ts` 的 `assertMissionStartable`）检查状态与目标占用，再以 `runtime.showRepo`（参数为 `id:${mission.repoId}`）读取仓库并用验证侧已有的 `isLocalVerificationRepository` 检查本机归属，然后 await `ensureIntegrationBase`，写 `integration.base_created` / `integration.base_reused`（`after: { sha }`），最后调用 `startExecution`。`startExecution` 在写事务的第一步重做同一检查，再移动状态、重算 readiness，并在提交后触发一次 `mission_start` 调度；同一目标只能有一个开始成功。

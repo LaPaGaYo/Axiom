@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { redactContext } from '../context-builder/redaction'
+import { redactContext } from '../redaction/redaction'
 import { PreservedChangeSchema } from './preserved-snapshot-contract'
 import {
   HANDOFF_MESSAGE_LIMIT,

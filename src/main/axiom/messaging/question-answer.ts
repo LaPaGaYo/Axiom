@@ -4,7 +4,7 @@ import type { RpcContext } from '../../runtime/rpc/core'
 import { OrchestrationError } from '../../runtime/orchestration/orchestration-error'
 import { getAxiomControlPlane } from '../control-plane'
 import { parseAxiomMessagePayload } from '../../../shared/axiom-contract/message-params'
-import { redactContext } from '../context-builder/redaction'
+import { redactContext } from '../redaction/redaction'
 
 export function answerMissionQuestion(p: z.infer<typeof MessageAnswerParams>, ctx: RpcContext) {
   const { runtime, recordMutationReceipt } = ctx

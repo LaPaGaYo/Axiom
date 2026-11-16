@@ -1,4 +1,4 @@
-import { redactContext } from './redaction'
+import { redactContext } from '../redaction/redaction'
 
 const omittedEvidence =
   'Further evidence omitted (8 KiB total limit); see the verification Artifact.'

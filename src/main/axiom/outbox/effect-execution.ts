@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { AxiomStore } from '../db/axiom-store'
-import { redactContext } from '../context-builder/redaction'
+import { redactContext } from '../redaction/redaction'
 import {
   EffectTimestampSchema,
   type Effect,
