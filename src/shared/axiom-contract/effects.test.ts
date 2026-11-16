@@ -29,9 +29,35 @@ const dispatch = {
 }
 
 describe('effect contract', () => {
-  it('pins the three kinds and five lifecycle states', () => {
-    expect(EFFECT_KINDS).toEqual(['attempt.dispatch', 'verification.enqueue', 'attempt.continue'])
+  it('pins the four kinds and five lifecycle states', () => {
+    expect(EFFECT_KINDS).toEqual([
+      'attempt.dispatch',
+      'verification.enqueue',
+      'attempt.continue',
+      'integration.apply'
+    ])
     expect(EffectStatusSchema.options).toEqual(['pending', 'running', 'done', 'failed', 'retired'])
+  })
+  it('validates the strict integration.apply payload', () => {
+    const input = {
+      missionId: 'mission',
+      kind: 'integration.apply',
+      key: 'candidate',
+      payload: { taskId: 'task', candidateId: 'candidate' }
+    }
+    expect(EnqueueEffectSchema.safeParse(input).success).toBe(true)
+    expect(EffectSchema.safeParse({ ...base, ...input }).success).toBe(true)
+    for (const payload of [
+      {},
+      { taskId: 'task' },
+      { candidateId: 'candidate' },
+      { taskId: '', candidateId: 'candidate' },
+      { taskId: 'task', candidateId: '' },
+      { ...input.payload, extra: true }
+    ]) {
+      expect(EnqueueEffectSchema.safeParse({ ...input, payload }).success).toBe(false)
+      expect(EffectSchema.safeParse({ ...base, ...input, payload }).success).toBe(false)
+    }
   })
   it('validates each strict payload according to kind', () => {
     for (const effect of [

@@ -148,6 +148,22 @@ it('queues verification with valid empty evidence and filters by Mission/status'
   expect(store.listVerificationRuns({ missionId: 'other' })).toEqual([])
   expect(store.getVerificationRun('missing')).toBeUndefined()
 })
+it('supersedes one active candidate without naming a successor', () => {
+  store.insertCandidate(candidate)
+  expect(store.supersedeActiveCandidate).toBeTypeOf('function')
+  expect(store.supersedeActiveCandidate(candidate.id)).toBe(true)
+  const saved = store.getCandidate(candidate.id)
+  expect(saved).toMatchObject({ status: 'SUPERSEDED', supersededBy: null })
+  expect(store.supersedeActiveCandidate(candidate.id)).toBe(false)
+  expect(store.supersedeActiveCandidate('unknown')).toBe(false)
+  expect(store.getCandidate(candidate.id)).toEqual(saved)
+  store.insertCandidate({ ...candidate, id: 'older', taskId: 'second-task' })
+  store.supersedeActiveCandidates('second-task', 'successor')
+  const older = store.getCandidate('older')
+  expect(store.supersedeActiveCandidate('older')).toBe(false)
+  expect(store.getCandidate('older')).toEqual(older)
+  expect(older?.supersededBy).toBe('successor')
+})
 it('rejects corrupt JSON without echoing its content', () => {
   store.insertSubmission({
     id: 's',
