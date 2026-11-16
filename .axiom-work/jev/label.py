@@ -52,6 +52,26 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M3-09-4b-2', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'the Planner context gains one bounded section with the rejected plan revisions, as briefed: one '
+        'new pure module, three lines of wiring in planner-render.ts and the refusal of a secret-looking reason '
+        'before the write in MissionController.rejectPlan; no other product file changes; the section text, order, '
+        'marking, quoting and the two bounds match the brief line by line and the size arithmetic was re-derived '
+        'separately (40,000 random cases never pass 4,096 bytes and never drop the newest rejection); titles 1 to 6 '
+        'fail at an assertion on main product files and titles 7 and 8 pass there; both runners green; all Mission '
+        'specs pass on the host; the union script failed 0; no verifier change; no other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'no spec runs a rejection followed by a real Planner launch in the app; whether a real model takes the reason into account is for the hands-on run of 0.1',
+            'quoteLine leaves backticks and angle brackets of Task titles as written (DEF-12 item 2)',
+            'a reason cut at 500 UTF-16 units carries no mark that it was cut',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M3-06-2b-4', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'an Attempt lost with its daemon is preserved and settled as an interruption whether or not its '
