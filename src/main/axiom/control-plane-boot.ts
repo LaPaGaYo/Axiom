@@ -2,6 +2,7 @@ import { getAxiomControlPlane } from './control-plane'
 import { stopHeadlessAttemptWatchers } from './execution/headless-attempt-watcher'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { ATTEMPT_RECONCILE_INTERVAL_MS, type RecoveryReport } from './recovery/recovery-service'
+import { sweepExecutingMissions } from './scheduler/mission-sweep'
 
 export async function startAxiomControlPlane(
   runtime: OrcaRuntimeService
@@ -54,7 +55,10 @@ export async function startAxiomControlPlane(
     })
   }
   reconcile()
-  plane.attemptReconcileTimer = setInterval(reconcile, ATTEMPT_RECONCILE_INTERVAL_MS)
+  plane.attemptReconcileTimer = setInterval(() => {
+    reconcile()
+    sweepExecutingMissions(plane.store, plane.scheduler)
+  }, ATTEMPT_RECONCILE_INTERVAL_MS)
   plane.attemptReconcileTimer.unref()
   for (const mission of report.missions) {
     plane.syncConsumer(mission.id)

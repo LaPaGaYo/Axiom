@@ -139,7 +139,7 @@ AgentSpec 的预算只含本次 Attempt 的 maxRuntimeMinutes（Task → Mission
 
 axiom.policy.show/update 及 CLI `axiom mission policy show --mission <id> --json` / `update --mission <id> [--routing-file <json>] [--concurrency <n>] --json` 已注册。M2 patch 仅应用 routing（整体替换，省略字段使用默认值）与 concurrencyLimit；budget 键在 handler 的写入前检查中一律返回 approval_required（M4），其他未知键返回 invalid_argument。更新经现有 mutation fence/receipts，policy 与 policy.updated（before/after）同一事务持久化。M3-09-4c-1：每次提交成功后，经 MissionController 请求本 Mission 的一轮 `policy` 准入；未改变任何值的更新也请求，非 EXECUTING Mission 也请求但该轮立即返回。拒绝或回滚的更新不请求；已完成回执的重放不再运行 handler，也不再请求。
 
-策略更新只重看本 Mission，不唤醒其它 Mission，也不启动 Planner。仍然没有可用 provider 的 Task，每轮各追加一条 task.admission_refused，不去重；budget、attempts、Question 或 Approval 的阻塞不会因更新策略而解除。该请求只在处理更新的进程里发出，不持久化；若提交后、准入轮之前崩溃，READY Task 留待 boot pass 重看。
+策略更新只重看本 Mission，不唤醒其它 Mission，也不启动 Planner。仍然没有可用 provider 的 Task，由真实事件触发的每轮仍各追加一条 task.admission_refused；SWEEP-1 的 sweep 轮仅在当前有效拒绝不存在或内容变化时追加（见 Scheduler sweep）；budget、attempts、Question 或 Approval 的阻塞不会因更新策略而解除。该请求只在处理更新的进程里发出，不持久化；若提交后、准入轮之前崩溃，READY Task 由 boot pass 重看；进程仍在但请求丢失或失败时，由下一次 sweep 补看。
 
 M2 之后：落实 D58 的执行通道与权限映射后补真实组合认证；M3 使用独立验证证据，不把 provisional 等同已认证。
 
@@ -185,7 +185,7 @@ M2 仍仅允许首个 Plan 批准；替代计划批准属于 M5。`plan-material
 
 ### Scheduler admission 与预算（M2-04）
 
-`Scheduler.scheduleRound(missionId, trigger)` 只处理 EXECUTING Mission，先重算 readiness，紧接着同步调用 requestIntegrations 请求集成（见 Integration requests），再按最长下游链长度降序、Task id 升序遍历 READY Tasks。每轮从数据库读取状态；同实例/同 Mission 的重叠调用只保留一个待执行 trigger，当前轮结束后再跑一轮，无 polling/timer。当前轮抛错时，若已有待执行 trigger，仍执行该 trigger 对应的下一轮；没有待执行 trigger 则照旧拒绝 flight。后续轮接手时不再报告前一轮的错误，后续轮按自己的结果处理；flight 返回值也不包含失败轮已经准入的 Task（持久的 admission 不撤销，目前没有调用方读取该返回值）。进程重启只需重新实例化 Scheduler；序号、计数、provider 占用均从数据库恢复。
+`Scheduler.scheduleRound(missionId, trigger)` 只处理 EXECUTING Mission，先重算 readiness，紧接着同步调用 requestIntegrations 请求集成（见 Integration requests），再按最长下游链长度降序、Task id 升序遍历 READY Tasks。每轮从数据库读取状态；同实例/同 Mission 的重叠调用只保留一个待执行 trigger，当前轮结束后再跑一轮；真实事件覆盖待执行 trigger，sweep 只在没有待执行 trigger 时占位。Scheduler 自身不设 timer，周期请求来自既有的 reconcile tick（见 Scheduler sweep）。当前轮抛错时，若已有待执行 trigger，仍执行该 trigger 对应的下一轮；没有待执行 trigger 则照旧拒绝 flight。后续轮接手时不再报告前一轮的错误，后续轮按自己的结果处理；flight 返回值也不包含失败轮已经准入的 Task（持久的 admission 不撤销，目前没有调用方读取该返回值）。进程重启只需重新实例化 Scheduler；序号、计数、provider 占用均从数据库恢复。
 
 ContextBuilder/AgentFactory 的异步构建在 admission 事务之前完成。事务内重新校验 Mission/Task、APPROVED Plan 与依赖、Question/Approval、预算/并发、构建前后的 Task/policy 一致性，以及 package/spec 存在且归属匹配；分配 `seq = max(seq) + 1`，写 `attempt_bindings(dispatch_id = NULL, branch = axiom/attempt/<taskId>/<seq>)`，CAS `READY → RUNNING` 并 `attempt_count += 1`，追加 `task.stage` / `attempt.admitted`。RUNNING 转换必须带 `actor: Scheduler` 与 `attemptCountDelta: 1`，否则 `illegal_transition(reason: admission_required)`。
 
@@ -207,7 +207,7 @@ Task cap 检查在 Mission 预算之后、Task 次数检查之前，分别在 `s
 
 Mission 总 Attempts/wall-clock/new-token 耗尽通过既有 `blockMission(missionId, budget_exhausted)` 保留 `previous_status = EXECUTING`，同事务追加 `budget.exhausted {dimension, limit, used}`；Approval 请求对象留给 M4。并发满额、无可选 provider 与 Question/Approval 不视为预算耗尽。
 
-每轮返回 admitted（有序身份）与 skipped（taskId/reason）；skip reason 为 concurrency、provider_concurrency、task_attempts、task_tokens、question、approval、backoff、no_eligible_provider 或 stale。只有本轮 admitted 非空或 Mission 被预算阻塞才写一条 `scheduler.round {trigger, admitted, skipped}`（trigger 为 mission_start、stage_change、resume、manual 或 policy）；空轮和全部跳过的轮不写此事件。构建合同可留下可复用的内容寻址行，这不等于 admission。M2-12 / D59 在 boot recover 与消费者同步后，对每个 EXECUTING 且未因 Run 绑定丢失而 blocked 的 Mission 显式请求一轮 resume，覆盖已持久化 READY、readiness 没有变化的情形；没有 READY 时仍不写 scheduler.round。M3-06 的 pending dispatch effect 在重启后继续启动同一 seq；无 effect 的旧 binding 和已退役 effect 仍由 M2-08 orphan 规则结算。
+每轮返回 admitted（有序身份）与 skipped（taskId/reason）；skip reason 为 concurrency、provider_concurrency、task_attempts、task_tokens、question、approval、backoff、no_eligible_provider 或 stale。只有本轮 admitted 非空或 Mission 被预算阻塞才写一条 `scheduler.round {trigger, admitted, skipped}`（trigger 为 mission_start、stage_change、resume、manual、policy 或 sweep）；空轮和全部跳过的轮不写此事件。构建合同可留下可复用的内容寻址行，这不等于 admission。M2-12 / D59 在 boot recover 与消费者同步后，对每个 EXECUTING 且未因 Run 绑定丢失而 blocked 的 Mission 显式请求一轮 resume，覆盖已持久化 READY、readiness 没有变化的情形；没有 READY 时仍不写 scheduler.round。M3-06 的 pending dispatch effect 在重启后继续启动同一 seq；无 effect 的旧 binding 和已退役 effect 仍由 M2-08 orphan 规则结算。
 
 M2 之后：M3 的验证结算接入既有调度触发；M4 接预算 Approval，token/成本总预算仍未 enforce。
 
@@ -373,11 +373,35 @@ INTEGRATION_READY 且仍有 ACTIVE Candidate 时，effect 不存在或状态为 
 
 一项事务出错只回滚该 Task，console.warn 仅含 `[axiom] Integration request failed` 与 `{missionId,taskId}`，继续后续 Task；外层读取出错仅带 missionId，返回此前已写的 id。错误内容不打印、不存储，整个调用不抛错，不妨碍本轮准入其它工作。旧的 M4-2a-3 晋升事务写 INTEGRATED 后触发 stage_change round，下一轮重算依赖，将满足条件的下游置 READY，并按通常准入路径写 attempt.dispatch；新的 Attempt 从已前进的集成头开始。
 
-重启：若 verdict 已提交但 round 尚未运行，boot 对 EXECUTING 且恢复未阻塞的 Mission 请求 resume round，读到 VERIFIED 后补请求；若请求事务已提交但执行器未运行，启动的 effects.recoverAtBoot / effects.start 消费 pending 行，round 不改它。旧 epoch 的 running integration.apply 依既有 onOrphan=retry 继续；无需在 verdict 内入队，也没有新增定时 round。
+重启：若 verdict 已提交但 round 尚未运行，boot 对 EXECUTING 且恢复未阻塞的 Mission 请求 resume round，读到 VERIFIED 后补请求；若请求事务已提交但执行器未运行，启动的 effects.recoverAtBoot / effects.start 消费 pending 行，round 不改它。旧 epoch 的 running integration.apply 依既有 onOrphan=retry 继续；无需在 verdict 内入队。SWEEP-1 复用既有 60 s tick 请求 sweep round，补上进程仍在时丢失的请求。
 
 `shouldHoldIntegration()` 是 `getMainE2EConfig().enabled && process.env.AXIOM_E2E_HOLD_INTEGRATION === '1'`。withFixtureMission 默认传入 AXIOM_E2E_HOLD_INTEGRATION=1，只有 `runIntegration: true` 才放开；现有 Mission e2e 的断言不改，只有新增 mission-integration.spec.ts 端到端跑 T01 → T04 的验证、合并、回归、晋升和依赖准入。
 
-限制与风险：没有周期性 round，只在 stage change、adjustment、policy update、start、resume、unblock 或 boot 等既有触发时请求；升级后 EXECUTING Mission 的第一轮会请求所有遗留 VERIFIED 中满足条件的 Task。重请求只看 effect 状态：failed 而 Task 仍在 INTEGRATION_READY（耗尽结算失败或进程先停）时，后续每轮可重新给三次尝试，直到 Task 离开该 stage；执行器正常情况下不应留下 done、同 ACTIVE Candidate、Task 仍 INTEGRATION_READY 的组合。Mission 暂停或 Task 阻塞时，已有执行器每 30 s 轮询，本模块不改变暂停语义。集成头前进后，没有保全快照、原本会在旧 worktree 继续的中断 Attempt 改为重新启动；已经运行的 Worker 在自己的合并时遇到新头。scheduler.ts 已到 300 counted lines 上限。所有旧 e2e 按住集成，新增用例的宿主执行由 verifier 负责。所有 Task 都 INTEGRATED 后 Mission 仍为 EXECUTING；修复基线、完整恢复、展示、收尾、Approval 与交付仍归后续 M4。
+限制与风险：除 stage change、adjustment、policy update、start、resume、unblock、backoff / cooldown 到期或 boot 等既有触发外，SWEEP-1 每 60 s 请求一轮 sweep；升级后 EXECUTING Mission 的第一轮会请求所有遗留 VERIFIED 中满足条件的 Task。重请求只看 effect 状态：failed 而 Task 仍在 INTEGRATION_READY（耗尽结算失败或进程先停）时，后续每轮可重新给三次尝试，SWEEP-1 使其在没有其它事件时也每分钟重新请求，每次尝试都有合并与回归，直到 Task 离开该 stage；执行器正常情况下不应留下 done、同 ACTIVE Candidate、Task 仍 INTEGRATION_READY 的组合。Mission 暂停或 Task 阻塞时，已有执行器每 30 s 轮询，本模块不改变暂停语义。集成头前进后，没有保全快照、原本会在旧 worktree 继续的中断 Attempt 改为重新启动；已经运行的 Worker 在自己的合并时遇到新头。SWEEP-1 将四个导出类型移至 scheduler/scheduler-contract.ts，由 scheduler.ts 重新导出以保留原 import 路径。所有旧 e2e 按住集成，新增用例的宿主执行由 verifier 负责。所有 Task 都 INTEGRATED 后 Mission 仍为 EXECUTING；修复基线、完整恢复、展示、收尾、Approval 与交付仍归后续 M4。
+
+### Scheduler sweep（SWEEP-1）
+
+`control-plane-boot.ts` 复用既有 60 秒（60,000 ms）reconcile interval：每次周期回调先调用 `reconcile()`，再调用 `sweepExecutingMissions(plane.store, plane.scheduler)`；不等待 reconcile 的异步工作完成，也不增加第二个 timer。启动时单独的 `reconcile()` 不附带 sweep，boot 自有的 `resume` rounds 保留；stop 仍清除同一个 unref timer。`sweepExecutingMissions` 每次通过 `listMissions({ status: 'EXECUTING' })` 读取数据库，为每个执行中的 Mission 请求一次 `scheduleRound(missionId, 'sweep')`，其它状态（包括恢复时因 Run 绑定丢失而 BLOCKED）不请求。它不等待 round；列举失败只警告 `[axiom] Scheduler sweep failed`，round 拒绝只警告 `[axiom] Scheduler round failed` 与 `{missionId,trigger:'sweep'}`，不带原始错误，失败不会逃出 tick。
+
+`shouldHoldSweep()` 仅按 `getMainE2EConfig().enabled` 判断是否处于 e2e；在 e2e 中默认停用，只有 `AXIOM_E2E_RUN_SWEEP=1` 才放开，非 e2e 不受该变量影响。不依赖 fixture helper，独立启动与 restart 的 Mission specs 也默认按住 sweep；没有改动任何 e2e 文件。
+
+`sweep` 是第六个 ScheduleTrigger。每轮仍重新读取持久状态，依次 recomputeReadiness、requestIntegrations、READY Task 准入。`scheduler.round` 仍只在准入非空或 Mission 被预算阻塞时写入；其中 `trigger: sweep` 表明兜底轮发现了可准入工作或耗尽预算，是排查漏触发或外部环境变化的线索，不是每分钟的心跳记录。
+
+`admissionRefusalRecorded(store, missionId, taskId, data)` 是只读检查：用 `getLatestReadModelAudit` 读取同 Mission、objectKind=task、objectId=Task id 的最新 `task.admission_refused` 和最新 `task.stage`；仅当拒绝 sequence 大于 stage sequence（无 stage 时取 0），且 after 与 data 的 JSON 文本相等，才视为已经记录。sweep 遇到该拒绝就不重复写，否则仍由 Scheduler 写原样的 task.admission_refused。真实事件（policy、resume、stage_change 等）请求的轮照旧每次写拒绝。这个有效拒绝边界与读模型相同：waitingOn 取 stage 之后最新的拒绝及其 accountCooldown until，pending 的 since 取 stage 之后最早的拒绝，因此跳过相同拒绝不改变 since / until；Task 离开 READY 再回来后会重新写一条。没有内存去重状态。
+
+未准入任何 Task 的 round 仍可能写入，sweep 不改变这些路径：
+
+- recomputeReadiness 将满足条件的 DEFINED Task 置为 READY，写 stage 与 task.stage。
+- requestIntegrations 为合格 VERIFIED Task 新建请求；对仍为 INTEGRATION_READY 且 effect 缺失或为 failed / retired / done 的 Task，每轮重新入队并写 integration.requested `{again:true}`。
+- check 在 Mission attempts、wall-clock 或 token 预算耗尽时阻塞 Mission，或在 Task 自身 token 预算耗尽时阻塞 Task，保留相应 stage / budget 审计。
+- 无可用 provider 时，首次、stage 之后首次或 data 改变的拒绝仍写 task.admission_refused。
+- 合同内容变化时写新的 ContextPackage（一个 package 行、两个 Artifact 文件及其行）与 AgentSpec（一个 spec 行和 agent_spec.created）。仅被 provider cap 挡住的 Task 每分钟仍重建合同，内容相同则内容寻址插入不写新行、不写审计；token 用量改变了 headless 预算文字、目标分支的仓库规则变动或另一个 provider 的 cooldown 开始 / 到期改变了 selection.filtered 时，内容变化就会再次写入。每次到达合同构建都会读取两次仓库规则。默认策略无 provider cap、无 token budget 时，等待并发名额的 Task 在构建前就被 concurrencyLimit 挡住。随机 id、时间戳与耗时不进入合同 hash。
+
+同一 Mission 有正在执行的 round 时仍只保留一个 pending trigger：sweep 不覆盖已经等待的任何 trigger（包括真实事件），没有 pending 时才等待自己的轮；其它 trigger 仍按最后一个覆盖。当前轮即使失败，已有 pending 仍会执行下一轮。这个 coalescing 规则保留真实事件的名字和每次写拒绝的语义，不增加 round 数量上限。
+
+因此即使其它事件没有到来，等待中的 READY Task 也会在下一 tick 重查预算、已结束的 backoff / account cooldown 和新安装或已登录的 provider；满足条件的 VERIFIED Task 会补请求集成。原有 continuation outbox 到期唤醒仍在；sweep 是补失去的 round，不改任何门禁，也不解除需要人的阻塞。
+
+限制：兜底最多等到下一 tick（约 60 秒）才请求，round 本身的排队与运行时间另计，不保证立即准入。每个等待 Task 的 precheck 事务以及上述合同重建都有成本，空轮不是免费；仓库不可读等导致的 round 失败现在会每分钟再失败、再警告。INTEGRATION_READY 的 failed 请求仍可能每分钟重新获得三次尝试，每次合并与回归，直到 Task 离开该 stage，没有额外次数上限。拒绝 data 来回变化时每次变化都写；不符合集成条件的 VERIFIED Task 仍没有未请求原因。暂停语义、集成执行器的 30 秒 poll、已经运行的 Worker、预算与 Approval 门禁均沿用原路径；e2e 未显式放开时完全不 sweep。
 
 ### Hooks-off git writes（STRUCT-1）
 
@@ -724,7 +748,7 @@ This overlay governs the harness process. The separate layer for commands run by
 
 `RecoveryService.recover()` 保留同步 Mission report；独立的 `async reconcileAttempts({missionId?})` 处理 Attempt。每次重新读取 binding、Task stage、worker/dispatch 与执行宿主观测；重叠调用通过进行中的 Promise 等待前一轮后重读持久状态；非权威 cadence 采样见下节 Supervision rules。扫描非终态 Task 的 bindings，加上仍活跃的 kernel worker 对应 binding；CANCELED Task 的已结算资源也重查，补齐 kernel commit 与 release/audit 之间的崩溃窗口。旧 seq 不得结算最新 RUNNING admission。
 
-启动时在 recover 后执行一次，每 60,000ms 执行一次（unref timer，stop 时清除）；消费者成功处理并 ack 含同 Mission bound dispatchId 的 kernel escalation 批次后再触发一轮。正常无变化的 tick 不写 audit。失败只记录身份到 console.warn，其他 Attempt 仍继续对账，报告 action=reconcile_failed，不能当作成功结算。
+启动时在 recover 后执行一次，每 60,000ms 执行一次（unref timer，stop 时清除）；消费者成功处理并 ack 含同 Mission bound dispatchId 的 kernel escalation 批次后再触发一轮。既有 tick 负责 effect recovery / outbox kick、Attempt 对账和 verification kick；SWEEP-1 在每次周期回调调用 reconcile() 后，再为 EXECUTING Mission 请求 sweep round，启动时那次 reconcile() 不请求 sweep。Attempt 对账正常无变化时不写 audit；整个 tick 的 Scheduler 写入边界见 Scheduler sweep，不能把所有未准入的轮都视为无写入。失败只记录身份到 console.warn，其他 Attempt 仍继续对账，报告 action=reconcile_failed，不能当作成功结算。
 
 | 规则                                    | 读取与 kernel 操作                                                                                                                                                                                                                                                                                                                                                                                                                                                                | 审计 / Axiom stage                                                                                                                                                                                                                                                                                                                                                       |
 | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -757,7 +781,7 @@ M3-09-2b-4：`axiom.task.cancel` 也在取消提交后 await `recovery.reconcile
 
 **stop_unknown 的内核边界（M2-08 Attempt 2）**：beginWorkerStop 拒绝第二次 stop，受支持的退出路径是 abandon；这与 verifier 核对的上游 Orca `ce2d60834c` 一致，不需要改内核或增加生命周期边。取消时下一 tick 直接 abandon（无 evidence Artifact），记录 priorStop、放弃时的宿主 liveness 与 release 收据；RUNNING 时无论宿主观测如何，按 e 等待 tolerance 后带 evidence abandon。abandon 只结束执行权威，不宣称进程退出；possibly-live 资源仍由内核保留，通常 release 为 retained / identity_unproven。旧 runtime stranded stopping 归一化后遵守同一规则；同 runtime 正在 stopping 的调用仍拥有结果，恢复不抢占。后续 tick 不重复 attempt.stop_unknown，取消审计重放保留最初的 priorStop/liveness，不因宿主观测变化重复记录。`.axiom-work/reports/M2-08-1.md` 保留为历史证据，其 scope-gap 判断由本规则取代；修复与验证记录见 `.axiom-work/reports/M2-08-2.md`。
 
-M3-01 的 VerificationService 在 Mission recovery 后、首次 kick 前尝试验证队列重驱，逐项失败不阻止启动（见 Verification 节）；既有 60 s reconcile 同时触发 verification.kick，重试未完成的清理。M3-02/04 接检查与失败证据；M4-2b 的 boot resume round 补请求，既有 outbox 启动恢复继续驱动集成，完整 Integration/Approval 恢复仍归 M4-4。D58 的新通道必须保持相同 liveness 语义。
+M3-01 的 VerificationService 在 Mission recovery 后、首次 kick 前尝试验证队列重驱，逐项失败不阻止启动（见 Verification 节）；既有 60 s reconcile 同时触发 verification.kick，重试未完成的清理。M3-02/04 接检查与失败证据；M4-2b 的 boot resume round 与 SWEEP-1 周期 sweep round 补请求，既有 outbox 启动恢复继续驱动集成，完整 Integration/Approval 恢复仍归 M4-4。D58 的新通道必须保持相同 liveness 语义。
 
 ### Supervision rules（M3-06-3 / M3-06-3-2；D88 9–10 及 2026-11-12 修订、D60 / D68 修订）
 
@@ -1351,7 +1375,7 @@ M3-08e / D83 ③④（Codex；Claude 见 §4「Claude channels and invocation pi
 
 M2-05 启动审计：`attempt.started` / `attempt.launch_failed` / `attempt.start_unknown` 的 objectKind 为 attempt，绑定后 objectId = dispatchId，after 含 taskId/seq/branch/worktreeId/provider；绑定前失败的 objectId = taskId/seq，after 含脱敏 message。`integration.base_created` / `integration.base_reused` 的 objectKind 为 mission，after 含 sha。这些事件不代表 Submission、验证或完成。
 
-M2-04：MissionController 在 startExecution 提交后触发 mission_start；axiom.policy.update 的事务提交后调用 policyUpdated，经同一 scheduleAfterWrite 入口触发 policy；resumeMission/unblockMission 提交后触发 resume；transitionTaskStage/cancelTask/recomputeReadiness 实际移动 stage 后触发 stage_change。recomputeReadiness 无变化不触发；M3-04b 的 adjustTask 成功写入即触发 stage_change（包括只改 spec / rationale），由 Scheduler 重算 readiness。嵌套事务（mailbox、RPC、admission）延至当前同步调用栈提交后才触发，并核对持久审计以抑制回滚事务的通知。control-plane.ts 以 fire-and-forget 调用 scheduleRound，拒绝仅 console.warn，不抛回生命周期调用者；manual 可由服务调用者显式请求。现有 RunMailboxConsumer 的 readiness 调用沿用此入口，无新增轮询。
+M2-04：MissionController 在 startExecution 提交后触发 mission_start；axiom.policy.update 的事务提交后调用 policyUpdated，经同一 scheduleAfterWrite 入口触发 policy；resumeMission/unblockMission 提交后触发 resume；transitionTaskStage/cancelTask/recomputeReadiness 实际移动 stage 后触发 stage_change。recomputeReadiness 无变化不触发；M3-04b 的 adjustTask 成功写入即触发 stage_change（包括只改 spec / rationale），由 Scheduler 重算 readiness。嵌套事务（mailbox、RPC、admission）延至当前同步调用栈提交后才触发，并核对持久审计以抑制回滚事务的通知。control-plane.ts 以 fire-and-forget 调用 scheduleRound，拒绝仅 console.warn，不抛回生命周期调用者；manual 可由服务调用者显式请求。SWEEP-1 增加 sweep trigger，由既有 60 s reconcile tick 为每个 EXECUTING Mission 请求；backoff / account cooldown 到期的 attempt.continue 仍 await stage_change round，boot 仍请求 resume。现有 RunMailboxConsumer 的 readiness 调用沿用此入口，不另设 timer。
 
 `RunMailboxConsumer` 先注册 exclusive waiter 再 drain backlog，避免读空到订阅之间丢唤醒；waiter 的独占仅限进程。`getOrCreateRunDelivery` 与 `acknowledgeRunDelivery` 用启动时捕获的 generation 栅栏，不能重读并采用别人的新 generation。
 
@@ -1365,11 +1389,11 @@ M2-06a `MessageRouter` 在 `store.transaction('message_route', …)` 内写 Cont
 
 恢复逐个检查非终态 Mission：Run 必须存在，合成 session id 必须有效且 `runBoundToCoordinator` 成立；否则 BLOCKED，记录一次 `recovery.run_binding_lost`，不悄悄重建 Run。正常恢复重算 readiness，**不会写 recovery 成功事件**；若 readiness 实际移动，仍按正常 Task 转换审计。
 
-`reconcileAttempts()` 的 Attempt 子集由 M2-08 接入启动、周期与退出消息触发（§4 Recovery）。M3-01 的 VerificationService 负责 Verification 队列重驱；Integration 队列由既有 outbox 在启动时恢复并唤醒，M4-2b 的 boot resume round 补 VERIFIED 与已结束请求的 INTEGRATION_READY；完整批次清扫与 Approval 过期仍归后续 M4。`docs/plans/M1.md` 的早期 M1-01 笔记写过先 drain 后注册，实际 M1-08 实现与测试为先注册再 drain，以实现为本节事实来源。
+`reconcileAttempts()` 的 Attempt 子集由 M2-08 接入启动、周期与退出消息触发（§4 Recovery）。M3-01 的 VerificationService 负责 Verification 队列重驱；Integration 队列由既有 outbox 在启动时恢复并唤醒，M4-2b 的 boot resume round 与 SWEEP-1 的周期 sweep round 补 VERIFIED 与已结束请求的 INTEGRATION_READY；完整批次清扫与 Approval 过期仍归后续 M4。`docs/plans/M1.md` 的早期 M1-01 笔记写过先 drain 后注册，实际 M1-08 实现与测试为先注册再 drain，以实现为本节事实来源。
 
 M2-06b 审计：question.created / question.answered 的 objectKind=message、objectId=question message id；前者带 Task/Attempt，后者带 answerMessageId 与 status，不复制回答正文。消费者按 question_threads 识别无 Axiom payload 的 QUESTION，写 message.received。REQUEST_SUBTASK 的 subtask.requested、checks_failed、resolved 与 Task 创建在同批事务内；重放不重复创建。task.created 带 origin/provenance/messageId?；其 plan.minor_adjustment 带 classification=MINOR_ADJUSTMENT、origin=user|request_subtask、Task 与边。M3-04b 调整的 origin=task_adjust，字段和 task.adjusted / blocked.resolved 的事务关系见 §6。人工接受失败在返回 invalid_argument 前保留 checks_failed 审计，仍可修复后重试或拒绝。
 
-M3-01 已由 VerificationService 在启动时回收过期 RUNNING worktree 并重新 QUEUED，保留审计与 Artifact；集成请求已由 outbox 恢复与 M4-2b boot round 重驱，完整 Integration 清扫与 Approval 过期恢复留给后续 M4，不以收件/ACK 代替完成证据。
+M3-01 已由 VerificationService 在启动时回收过期 RUNNING worktree 并重新 QUEUED，保留审计与 Artifact；集成请求已由 outbox 恢复、M4-2b boot round 与 SWEEP-1 周期 round 重驱，完整 Integration 清扫与 Approval 过期恢复留给后续 M4，不以收件/ACK 代替完成证据。
 
 ## 9. M2 出口操作与后续里程碑
 
