@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -75,9 +75,20 @@ describe('Active Server after a saved host is removed', () => {
   it('notifies the running renderer when the CLI atomically replaces the registry', async () => {
     const environment = saveEnvironment()
     const store = preferenceStore(environment.id)
+    const registryPath = getEnvironmentStorePath(userDataPath)
     const stopWatching = watchRuntimeEnvironmentPreference(store, userDataPath)
     try {
       await new Promise<void>((resolve) => setImmediate(resolve))
+      // Why wait: macOS starts a directory watch after watch() returns and never reports a change made
+      // before that, so the removal counts only once the watch has reported a rewrite of the registry.
+      const repairReads = vi.spyOn(store, 'getSettings')
+      await vi.waitFor(
+        () => {
+          writeFileSync(registryPath, readFileSync(registryPath))
+          expect(repairReads).toHaveBeenCalled()
+        },
+        { timeout: 5_000 }
+      )
       removeEnvironment(userDataPath, environment.id)
       await vi.waitFor(() => expect(store.getSettings().activeRuntimeEnvironmentId).toBeNull(), {
         timeout: 5_000
