@@ -52,6 +52,30 @@ BACKFILL = {
 }
 
 FULL = {
+    ('SWEEP-1', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'the safety net of the plan row: the existing 60 s reconcile tick asks every EXECUTING Mission '
+        'for one round with the new trigger sweep, boot keeps its own resume rounds and no timer is added; a sweep '
+        'round does not repeat a refusal that equals the one the read models count, rounds asked for by a real '
+        'event write as before; a sweep does not replace a trigger that is already waiting; the four exported '
+        'types of scheduler.ts moved unchanged and are re-exported, so no importer changed; no existing test '
+        'changed; nine new tests under both runners; on the host titles 1, 2, 6, 7, 8 and 9 fail with the two '
+        'files of main put back and 3, 4 and 5 pass, as the brief predicted; every Mission spec passes on the first host run; the union script failed 0 '
+        'with ten pins retired by the planner; no verifier change; no other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'no Mission spec runs with the sweep on; the first spec that needs it sets AXIOM_E2E_RUN_SWEEP=1',
+            'an integration request that ended failed while its Task stayed INTEGRATION_READY is asked again '
+            'once a minute with no bound; it takes a second fault to get there',
+            'a Task held back only by its provider cap has its contracts built again every minute; not '
+            'measured on a large Mission',
+            'a round that fails for a lasting reason now warns once a minute',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('STRUCT-1', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'structure only: one scope for hooks-off git writes in a new file, used by the seven places '
