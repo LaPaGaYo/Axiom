@@ -65,9 +65,29 @@ Execution Kernel 继续拥有 Run、Orca Task、dispatch、PTY、进程、worktr
 
 Milestone 存在 Plan JSON 内，没有独立表/状态机。Attempt 身份仍等于 Orca dispatch id，不存在 Axiom Attempt 表。M2-02 启用 Artifact/ContextPackage 写入和 Decision 读取；M2-03 启用 AgentSpec 写入和 policy routing 更新；M2-04 启用 attempt_bindings 写入与阻塞 Approval/Question 读取；M2-07 接入 Candidate/Submission/VerificationRun store 与结算写入；其余后续表目前只有建表和清理支持，不能把表存在当成产品能力已完成。
 
-`create-tables.ts` 每次打开执行幂等 DDL，当前 `SCHEMA_VERSION=46`（UPSTREAM-3 后编号）；12 个查询索引、4 个删除触发器沿用 additive 模式。M3-06 不加版本或 migrate 文件，以新 Mission 删除触发器清理 effects，兼容已经存在的 Run 删除触发器。Task 删除清理 stage/边/binding，dispatch 删除仅清空 binding 的 dispatch 引用，Run 删除清理所属 Mission side rows。没有声明外键；v44 仅为 agent_specs.spec 与 mission_policies.routing 加列（TEXT NOT NULL DEFAULT '{}'），hasColumn 防止重复 ALTER，版本化探针从 v44 起检查这两列，v43 与更高版本降级路径保持透明。详细列见映射 §6。 `verification_runs.batch_id TEXT` 在新库由 DDL 放在末列，已有库由 DDL 后紧接的 `ensure-axiom-columns.ts` 补齐：先用 `hasColumn` 探测，缺列才 `BEGIN IMMEDIATE`，锁内再探测并 `ALTER TABLE … ADD COLUMN`，成功 `COMMIT`，失败 `ROLLBACK` 后重抛；列已存在时不取写锁、不写入。该步在编号迁移之前独立提交，不改 `user_version`、不占版本号：上游自己的 44–46 已被使用，避免下次同步再次挪号；可空增列不影响旧版按列名读写。
+`create-tables.ts` 每次打开执行幂等 DDL，当前 `SCHEMA_VERSION=46`（UPSTREAM-3 后编号）；12 个查询索引、4 个删除触发器沿用 additive 模式。M3-06 不加版本或 migrate 文件，以新 Mission 删除触发器清理 effects，兼容已经存在的 Run 删除触发器。Task 删除清理 stage/边/binding，dispatch 删除仅清空 binding 的 dispatch 引用，Run 删除清理所属 Mission side rows。没有声明外键；v44 仅为 agent_specs.spec 与 mission_policies.routing 加列（TEXT NOT NULL DEFAULT '{}'），hasColumn 防止重复 ALTER，版本化探针从 v44 起检查这两列，v43 与更高版本降级路径保持透明。详细列见映射 §6。 `verification_runs.batch_id TEXT` 在新库由 DDL 放在末列，已有库在内核编号迁移之后由 `axiom-schema-steps.ts` 的第 1 步（基线）补齐：Axiom 印记缺失或落后时，在 `BEGIN IMMEDIATE` 内重读版本，逐列探测并对缺列执行 `ALTER TABLE … ADD COLUMN`，与印记一起 `COMMIT`，失败 `ROLLBACK` 后重抛。八列均存在但没有印记的库首次打开仍写入印记；已有当前或更新印记时不再取该链的写锁或探测列。该步使用 Axiom 自己的版本号，不改 `user_version` 或内核的编号链，避免下次上游同步再次挪号；可空增列不影响旧版按列名读写。
 
 所有 store 读取先用 zod 解析，不把 SQLite 行强制断言为领域对象。写入由 `runLifecycleWriteTransaction` 包裹，嵌套 savepoint 使 Run 创建和 Mission 创建能一起回滚；审计与状态同事务提交。
+
+### Axiom schema version（SCHEMA-1）
+
+D93 第 2 条及 2026-11-16 修订：`axiom_schema` 与 Mission side tables 同在 orchestration.db，最多一行，不是 Mission 数据；没有索引、触发器、外键或 mission_id，删除 Run / Mission 不删除它。唯一的建表、读取和写入实现是内核 schema 目录的 `axiom-schema-steps.ts`，不经 AxiomStore 或新的 OrchestrationDb 方法。
+
+| 列 | 定义与含义 |
+|---|---|
+| `id` | `INTEGER PRIMARY KEY CHECK(id = 1)`，固定为 1，保证最多一行 |
+| `version` | `INTEGER NOT NULL`，最后成功运行的 Axiom 步骤号；本版 `AXIOM_SCHEMA_VERSION = 1` |
+| `upstream_version` | `INTEGER NOT NULL`，内核所含上游编号链的末步，本版登记为 `AXIOM_UPSTREAM_SCHEMA_VERSION = 43`；后续同步由内核链的事务维护 |
+| `app_version` | 可空 `TEXT`，最后登记或升级时的应用版本，只供排查；显式参数优先，省略时取已安装 app environment 的版本，无 environment 时为 NULL |
+| `updated_at` | `TEXT NOT NULL DEFAULT (datetime('now'))`，登记或成功升级时间；当前印记重开时不重写 |
+
+打开顺序是 `createTables` 的幂等 DDL → 内核 `migrate` 编号链（`SCHEMA_VERSION = 46`）→ `migrateAxiomSchema(this.db)`。后者每次先执行自己的幂等建表 DDL，`readAxiomSchemaVersion` 读取唯一行的版本；没有行或不是正整数时按 0。版本已达到当前值就返回，否则 `BEGIN IMMEDIATE`，锁内再读，按编号顺序运行比该版本新的步骤，最后写印记并提交；任何步骤失败则回滚重抛。插入时写全部五列；更新已有行只改 version、app_version、updated_at，保留 upstream_version。
+
+第 1 步是基线，按顺序探测并补齐 `agent_specs.spec`、`mission_policies.routing`（均为 `TEXT NOT NULL DEFAULT '{}'`），以及 `verification_runs.runtime_epoch TEXT`、`claim_count INTEGER NOT NULL DEFAULT 0`、`worktree_id TEXT`、`started_at TEXT`、`finished_at TEXT`、`batch_id TEXT`。它覆盖原 v45、v46 和 M4-2a-1 的八列，独立于内核链仍能补齐。当前数据库已有全部列，因此首次只登记一行，不改既有 schema 对象或业务行。表、索引、触发器继续由每次打开的 DDL 补齐，不在基线内。
+
+以后每一步都先探测再改动，丢失印记时才能从第 1 步安全重放；任何步骤都不能删除或重定义旧构建的 DDL 会在缺失时创建的对象，否则旧构建打开库时又会把它放回。新增迁移时写一个步骤函数，在有序步骤列表追加下一个编号，提升 `AXIOM_SCHEMA_VERSION`，并加一项从前一版本升级的测试。通过 DDL 引入的新表也必须占一个 Axiom 步骤号，使印记说明哪个 Axiom 最后运行了登记或升级；印记并不证明全部对象完好，DDL 和列探针只补缺失项，不检查定义是否相同。
+
+更高的 Axiom 印记原样保留；本 Task 不决定应用如何处理它，Control Plane 的启动行为留给 SCHEMA-2。旧构建即使见到更新印记，仍会运行自己的“缺失即创建”DDL。`upstream_version` 首次一律写 43，不从数据库的 `user_version` 推算；Axiom 链不重写已有行的该值，直到同步改变内核链才调整。数据库 `user_version` 高于本构建的 46 时超出本构建支持范围，写下 43 不是兼容性承诺。除本模块与测试外，尚无代码读取印记。
 
 ### Task spec：逐条验收合同（M3-04b-2）
 

@@ -9,6 +9,7 @@ import {
   createRunCoordinatorAddressTriggers,
   rememberCurrentRunCoordinatorHandles
 } from './runs/run-coordinator-mail-routing'
+import { migrateAxiomSchema } from './schema/axiom-schema-steps'
 import { createTables } from './schema/create-tables'
 import { migrate } from './schema/migrate'
 import { backfillStructuredWorkerOrcaSessionIds } from './schema/structured-worker-orca-session-backfill'
@@ -39,6 +40,7 @@ class OrchestrationDbCore {
     this.db.pragma('temp_store = MEMORY')
     createTables.call(this as unknown as OrchestrationDb)
     migrate.call(this as unknown as OrchestrationDb)
+    migrateAxiomSchema(this.db)
     createRunCoordinatorAddressTriggers(this.db)
     backfillFederatedStubHomeRuns(this.db)
     backfillStructuredWorkerOrcaSessionIds(this.db)
