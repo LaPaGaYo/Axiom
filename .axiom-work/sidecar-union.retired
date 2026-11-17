@@ -21,3 +21,8 @@ STRUCT-1	M3-03	grep -q "detectSecretPatterns" src/main/axiom/context-builder/red
 STRUCT-1	M3-09-4b-1	git grep -q "export function redactContext" -- src/main/axiom/context-builder/redaction.ts
 STRUCT-1	M3-09-4b-1	git grep -q "export function detectSecretPatterns" -- src/main/axiom/context-builder/redaction.ts
 STRUCT-1	M3-09-4b-1	test "$(git grep -l "secret-patterns" -- src/shared/axiom-contract/plan-proposal.ts src/main/axiom/context-builder/redaction.ts | wc -l | tr -d ' ')" -eq 2
+
+# SWEEP-1 (the 调度兜底巡检 row): scheduler.ts is at the line limit, so its four exported types, ScheduleTrigger among
+# them, move into src/main/axiom/scheduler/scheduler-contract.ts and are re-exported. Replaced in SWEEP-1's sidecar
+# by: 'policy' and 'sweep' in scheduler-contract.ts, and scheduler.ts naming scheduler-contract.
+SWEEP-1	M3-09-4c-1	git grep -q "'policy'" -- src/main/axiom/scheduler/scheduler.ts
