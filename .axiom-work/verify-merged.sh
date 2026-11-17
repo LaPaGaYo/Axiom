@@ -28,6 +28,12 @@ for e in ${ALL_E[@]+"${ALL_E[@]}"}; do
 done
 EXTRAS=$(IFS=';'; printf '%s' "${UNIQ_E[*]+"${UNIQ_E[*]}"}")
 echo "== extras: ${#UNIQ_E[@]} unique, $DUP_E duplicates dropped"
+# Pins that a later, approved Task replaced (.axiom-work/sidecar-union.retired) are not run here either: the union
+# script skips the same lines, and it is the one that checks each entry names the right Task and still retires
+# something (2026-11-16: after STRUCT-1 merged, the nine pins it retired failed here and the guard refused the push).
+if [ -f .axiom-work/sidecar-union.retired ]; then
+  EXTRAS=$(printf '%s' "$EXTRAS" | python3 -I .axiom-work/scripts/drop-retired-extras.py .axiom-work/sidecar-union.retired) || { echo "cannot apply .axiom-work/sidecar-union.retired"; exit 5; }
+fi
 export VERIFY_EXTRA="$EXTRAS"
 echo "== merged-tree verification on main $(git rev-parse --short HEAD) for: $*"
 bash .axiom-work/verify.sh merged "$(git rev-parse --short HEAD)" ${UNIQ[@]+"${UNIQ[@]}"}
