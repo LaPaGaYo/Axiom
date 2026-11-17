@@ -742,7 +742,7 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 
 
 **当前全文（2026-10-25 整合，已批准：Henry 批准修复方案"按建议"；含上面各修订，修订行留作历史）**：
-- **受支持的键**（未知键被 `axiom.policy.update` 拒绝；存量 JSON 不合 schema → `INCONCLUSIVE(policy_invalid)`，交人）：`repositoryGates`（`{ low | medium | high: string[] }`，按 Task risk 追加在 `requiredEvidence` 之后；fixture 默认空）；`setupCommands: string[]`（`requiredEvidence` 之前的环境准备；失败 = `environmental`）；`timeBudgetMinutes`（默认 30）；`inconclusiveRouting: specialist | human`（默认 specialist）；`nonCodeTasks: artifact_only | human_confirm`（默认 human_confirm）；`dangerousPathPatterns`（默认清单见 M3-03 修订 ③，给出即整体替换）；`secretPatterns: string[]`（只追加，内置 `private_key` / `provider_token` / `aws_access_key_id` 不可移除）；`retryOnce: string[]`（命令前缀，默认覆盖常见测试命令）；`knownFlaky: string[]`（按失败名匹配，`*` 通配）；`testPathPatterns`（默认见 M3-03b 修订 ⑦，给出即整体替换）。
+- **受支持的键**（未知键被 `axiom.policy.update` 拒绝；存量 JSON 不合 schema → `INCONCLUSIVE(policy_invalid)`，交人）：`repositoryGates`（`{ low | medium | high: string[] }`，按 Task risk 追加在 `requiredEvidence` 之后；fixture 默认空）；`setupCommands: string[]`（`requiredEvidence` 之前的环境准备；失败 = `environmental`）；`timeBudgetMinutes`（默认 30）；`inconclusiveRouting: specialist | human`（默认 specialist）；`nonCodeTasks: artifact_only | human_confirm`（默认 human_confirm）；`dangerousPathPatterns`（默认清单见 M3-03 修订 ③，给出即整体替换）；`secretPatterns: string[]`（只追加，内置 `private_key` / `provider_token` / `aws_access_key_id` 不可移除）；`retryOnce: string[]`（命令前缀，默认覆盖常见测试命令）；`knownFlaky: string[]`（按失败名匹配，`*` 通配）；`testPathPatterns`（默认见 M3-03b 修订 ⑦，给出即整体替换）；`integrationGates: string[]`（D92 b，2026-11-16 补记：合并树回归在 setup 与该 Task 的命令型验收项之后追加的门；缺省时按 high → medium → low 取 `repositoryGates` 第一个已定义的档，显式 `[]` 表示合并树不跑门）。
 - **路径模式**：仓库相对 POSIX 路径；条目覆盖匹配的路径及其下全部路径；`*` / `?` 只在一个路径段内，`**` 跨任意多段；其余字符按字面；`.` = 整个仓库；绝对路径或含 `..` 的条目无效；区分大小写。"Task scope 明确包含" = 覆盖该危险路径的条目本身也匹配危险模式。
 - **check 结果**：`pass / fail / environmental / inconclusive / skipped`（skipped 须带策略依据）；`retryOnce` 命中的失败重跑一次，通过记 `flaky`；`knownFlaky` 名单内记 `known_flaky`。
 - **diff 检查**（三点 diff，D64 当前全文第 3 条；不短路确定性命令）：越界 → `FAIL(scope_violation)`；新增行命中密钥 → `FAIL(secret_detected)`（证据只记路径与模式名）；危险路径未被明确包含 → `INCONCLUSIVE(dangerous_change)`；超过扫描上限 → `INCONCLUSIVE(diff_too_large)`；内容型篡改（测试文件删除、跳过 / 聚焦标记净增、断言净减、抑制注释净增）→ `INCONCLUSIVE(test_tampering)`；diff 检查给出的 INCONCLUSIVE 一律直接交人。
@@ -1201,6 +1201,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 
 **后果**：D86 的 2026-11-14 修订行 ④ 定的节奏由本条取代（见该条修订行）；`docs/plans/M3.md` 加冻结说明，M3-10 行补回"验证可复现"（D86 ① 及其 2026-11-14 修订要求留在 V1，改写该行时漏掉）；新建 `docs/plans/M4.md`；D67 加修订行。
 
+**修订（2026-11-16，Henry："1，安装webkit"；待定事项 `claude/decisions-pending-2026-11-16-v1.md` 第 1 项）**：第 5 条同样适用于 Playwright 对应版本的 WebKit（约 90 MB）。verify-main 里已知失败的 12 个测试文件有 7 个只差它；装上后复跑确认，已知失败的名单随之改短。
+
 ## D90 · 软件版本用语义化版本，从 0.1.0 起；V1、V1.5、V2、V3 只是路线阶段的名字 — ACCEPTED（Henry 2026-11-15 提出："v1，v1.5，v2，v3应该是我们计划的版本，而不是软件项目的版本号"；同日批准做法："之前的六件事也批准"；`claude/v1-remaining-and-realignment-2026-11-15-v1.md` §4）
 
 **背景**：`package.json` 的 `version` 仍是上游带来的 `1.4.214`，D40 留着开口项"首个 Axiom 发布版本需 Decision"。这个数既不是 Axiom 的版本，也不是准确的内核版本。0.1.0 小于 1.4.214，会让三处运行时判断反过来（远程与 WSL 主机的降级拒绝 `orcad-host-version-admission.ts`、SQLite 档案的版本下限 `profile-state-build-compatibility.ts`、插件的 `engines.orca`），发布与 dev 通道脚本会被仓库里最高的 `v*` 标签拉回 1.4.x，上游合并脚本对两边都改过的键取上游的值。
@@ -1243,6 +1245,8 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 
 **后果**：`docs/plans/M4.md` 按此写任务；DEF-20、DEF-22、DEF-34 各加状态注；M4-0 改掉文档里与 a、d、e 冲突的旧文字。
 
+**修订（2026-11-16，Henry："5. 先留着，6. a"；待定事项 `claude/decisions-pending-2026-11-16-v1.md` 第 5、6 项）**：① Task 合入之后，它各次 Attempt 的工作树与分支在 0.1 先留着，不随合入清掉；清理策略 0.1 之后凭上手的发现再定。② 合并执行器在临时工作树里做 `merge --no-ff` 时带 `merge.verifySignatures=false`——候选是 Control Plane 做的快照提交，没有签名；只作用于这一次合并，不改用户的 git 配置，交付到目标分支时仍按用户自己的设置。这是 M4-1b 合入时验证者定的细则，Henry 确认。
+
 ## D93 · 结构整理插在 M4-2b 之后；Axiom 的表用自己的 schema 版本号，提前到 M4-5 之前 — ACCEPTED（Henry 2026-11-16："我同意你的建议，并且继续"；验证者同日提议，`claude/architecture-checkpoint-2026-11-16-v1.md`）
 
 **背景**：Henry 问复用性与耦合。验证者在主线 `d1a306bc93` 上做了静态统计：对内核的复用强（Axiom 的主进程产品代码 201 个文件、约 2.2 万行，内核只在 RPC 层与启动入口引用它），大边界干净，12 条不变量没有被破坏；内部有三处在变差。"关掉钩子再写 git"的写法有 5 份，M4-2a-3 与 M4-1c 各再加一份，"git 不许走出自己目录"的保护因此只能逐份添加。16 个较早的模块用 `getAxiomControlPlane()` 取整个 Control Plane，形成一个 25 个文件的导入环。审计事件名是散落的字符串，而 M4-2a-3 与 M4-2b 开始读审计事件来做判断。另有一个共同的根子：Axiom 与上游共用一个 schema 版本号，加列很贵，于是 `verification_runs.batch_id` 用了"开库时补列、不涨版本号"，"集成头应该在哪"从审计事件里读。
@@ -1254,3 +1258,17 @@ cloud/ 与原生 mobile 发布 CI 的移除（D33 经 D33a 修正）由 Codex �
 4. **不变的**：整理不改行为；第 2 条之外不改持久格式；12 条不变量与"独立验证、主机检查、合入后回归"的流程照旧。
 
 **后果**：`docs/plans/M4.md` §3 加两行，任务数预算一段加一句。待定事项（`claude/decisions-pending-2026-11-16-v1.md`）第 8 项已定，第 7 项的 a、b 不再单独定。验证者的细则（Henry 可推翻）：整理放在 M4-2b 之后而不是之前——那时各处的测试都在，改动是机械的，也不耽误打开开关。
+
+**修订（2026-11-16，Henry："需要我定的，按照你的建议来走。1，安装webkit，2. 只承诺 en和zh， 3. 清理，4.权限已经开好，5. 先留着，6. a， 7. a， 8. b，9.b 一张一行的表，10. a"；待定事项 `claude/decisions-pending-2026-11-16-v1.md` 第 7、9、10 项，做法草案 `claude/axiom-schema-version-design-v1.md`）**：① 第 2 条的做法：同一个数据库里一张只有一行的表 `axiom_schema`，记 Axiom 的 schema 版本（`version`）、上游那条编号链在这个库上做到第几步（`upstream_version`，现在是 43，以后由内核那条链的事务来改）、最后一次做登记或升级步骤的应用版本（`app_version`，只为排查）。Axiom 的步骤排在内核那条链之后；第 1 步是基线——Axiom 至今加在已有表上的八个列（v45 的两列、v46 的五列、`batch_id`），先探测再加，盖过章的库打开时只读一行、不再探测；内核的 `SCHEMA_VERSION` 仍是 46，内核那条链不动。把 Axiom 的表搬到另一个文件的做法不采用（触发器与事务不能跨文件）。② 拆成两个任务：**SCHEMA-1** 登记，不改行为；**SCHEMA-2** 打开一个比自己新的 Axiom 写过的库时，Control Plane 不启动并报一句固定的话，终端与编辑器照常——出 0.1.0 之前做。③ 0.1.0 这一组的任务数估计因此到 22–23 个。④ 待定事项第 7 项选 a：M4-2a-1 的"开库时补列、不涨版本号"得到认可；它随 SCHEMA-1 成为基线的一部分，`AGENTS.md` 不开例外。⑤ 第 1 条 (a) 的公共 git 写入函数（STRUCT-1）照"不改行为"没有给原来没有的地方加"不许走出目录"、超时或固定的错误码；STRUCT-1 的报告列出的缺口，0.1 上手之后再定要不要补（待定事项第 10 项选 a）。
+
+## D94 · V1 只承诺 `en` 与 `zh` 两种界面语言；其余五种运行时回落英文，发版前后单独做一次本地化 — ACCEPTED（Henry 2026-11-16："2. 只承诺 en和zh"；待定事项 `claude/decisions-pending-2026-11-16-v1.md` 第 2 项的 a，验证者 2026-11-14 提议）
+
+**背景**：渲染进程有七个语言目录（`en`、`zh`、`es`、`fr`、`ja`、`ko`、`pt`）。到现在每个界面任务都把新键加进全部七个，另外五种多数只是把英文原样填进去——主线 `23435b2d0d` 上英文里带 Mission 字样的 42 条文案，`es`、`fr`、`ja`、`ko` 各有 40 条与英文一字不差。每个界面任务因此多改五个大文件，却没有带来译文。D32 已经接受过"其他五种语言丢失翻译时回退英文"。
+
+**决定**：
+1. V1 只承诺 `en` 与 `zh`。新的界面文案只加进这两个目录。
+2. 另外五种语言的目录保留，已有的内容不删；缺的键运行时回落到英文。
+3. 发版前后单独做一次本地化，把五种语言补齐并校对；那之前不在任务里顺手填。
+4. 本地化检查（`verify:localization-*`）不用改（验证者 2026-11-17 读过）：它们只在别的语言出现 `en` 没有的键、占位符对不上、或通用术语被改回英文时失败；别的语言缺键只统计、不失败。`en` 与 `zh` 两边都加了没有，由每个界面任务的 brief 与 sidecar 来管。
+
+**后果**：界面任务的 brief 从 M4-5 起只要求 `en` 与 `zh`。
