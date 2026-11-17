@@ -148,3 +148,15 @@
 **不取**：`eb3379ff99`（`node-pty` 的 kqueue 描述符泄漏）——本树的 `node-pty` 补丁已与上游分叉（`07b437c9e9` 等六处），要对着我们的补丁重生成，再为 Electron、Node 与 orcad 预编译各重编一次原生模块；守护进程每起一个 PTY 漏一个描述符，V1 的用量离上限很远——等下次动 `node-pty` 或 DEF-7 一起做。body-parser 2.4.0（`18d25591f9`）与 `@hono/node-server` 2.1.5（`f3c65cd556`）——只由 `@modelcontextprotocol/sdk` 为 HTTP 传输引入，桌面端只用它的 stdio（`server/mcp.js`、`server/stdio.js`、`types.js`），随下次 MCP SDK 升级。happy-dom 20.14.6 / 21.0.4——测试环境，不发布。mobile、文档站、审计工具的部分（node-forge、deepmerge 及它们的 minimatch / glob 副本），`config/dependency-security-exceptions.json`（只有 pull_request 的依赖安全工作流读它）。另：D56 第 3 条写的 `verify:egress-allowlist` 早在 M0-08 被出口棘轮取代（`docs/reference/orca-mapping.md` §7）。
 
 **UPSTREAM-4b 已合入（2026-11-11）**：merge `3e6832818c`，候选 `86c0174eb9`，记录 `.axiom-work/verifications/UPSTREAM-4b-1.md`。宿主：12 个 Electron 探针新旧两版全过，main 的弹窗测试在 43.8.6 上先红；门禁、全部 Mission 规格与三栈冷启动出口全过，打包产物出口检查（前台 75 秒）没有厂商端点、也没有任何非回环请求；全量测试与 main 的失败集合相同。上面"已应用"一节以本条为准。
+
+## 2026-11-17 · 本地改了一条上游测试（不是摘取；Henry 2026-11-17："按照建议改这条测试"）
+
+`src/main/ipc/runtime-environments/runtime-environment-preference.test.ts` 的 "notifies the running renderer when the CLI atomically replaces the registry" 自 2026-10-23 随 UPSTREAM-3 进来以后，在 verify-main 的 84 轮完整单测里失败过 6 轮，每次都是那 5 秒的等待用完；最近两次是 2026-11-15 22:05 与 2026-11-16 19:35 开始的两轮。第二次出现在 flaky 台账之后，推送守卫按规则不再放行，验证者停下来查。
+
+**原因**（宿主实验 `launchers/flake-watch-experiment.command`，483 次重复，日志 `.axiom-work/logs/flake-watch-experiment-20261116-200436.log`）：macOS 上对目录的 `fs.watch` 在 `watch()` 返回之后才真正开始，这之前的改动不会有事件；测试只等一个 `setImmediate` 就去改文件。按测试原来的步骤：空闲 15/15；人为负载（12 个忙循环、4 个文件读写循环）24/30；旁边跑着 `src/main/ipc` 与 `src/main/git` 的单测时 119/120。丢掉的 7 次里，监听随后都报到了后来的一次改写——监听是活的，丢的只是装好之后的第一下。先等监听报到一次改写、再删：负载下 144/144。
+
+**上游**：`d10626876e`（2026-10-23，#32410）把这里的目录监听换成只盯这一个文件、另加 30 秒一次的对账；`29fe87e49f`（2026-11-05，#38828）删掉了这条测试。两者都在同步点 `41661e3312` 之后，都不在 D56 的三类之内，没有摘取。
+
+**我们做的**（`26d5e170aa`，验证者直接提交）：只改这一条测试——删除之前先等监听报到一次对注册表的改写。产品代码不动：同一个盲区在产品里的影响是"应用装监听的那一瞬间用 CLI 删掉保存的服务器，界面要到下一次读设置才更新"，而远程服务器在 V1 之外。提交前在同样的人为负载下跑这个测试文件：改前 20 次里失败 1 次，改后 20 次全过；空闲下经 `pnpm test` 3 次全过。
+
+**以后**：这一块下次与上游同步时取上游的版本（监听与测试一起换），本条改动随之消失。这个文件已在 flaky 台账里，再失败不放行。原因与盘点见 `claude/registry-watch-test-root-cause-v1.md`。
