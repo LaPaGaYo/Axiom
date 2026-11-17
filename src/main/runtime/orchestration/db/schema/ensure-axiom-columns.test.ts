@@ -66,6 +66,7 @@ it('adds batch_id to an existing verification_runs table at open and keeps the s
         'updated'
       )
     first.db.exec('ALTER TABLE verification_runs DROP COLUMN batch_id')
+    first.db.exec('DELETE FROM axiom_schema')
     if (version === 45) {
       for (const column of [
         'runtime_epoch',

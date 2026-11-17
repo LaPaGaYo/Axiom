@@ -112,6 +112,7 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
   'src/main/native-chat/agent-session-journal/journal-pi-active-branch.ts': 'pi-branch-import',
   'src/main/native-chat/agent-session-journal/queued-message-schema.ts': 'agent-session-journal',
   'src/main/persistence/profile-state/profile-state-database-schema.ts': 'profile-state',
+  'src/main/runtime/orchestration/db/schema/axiom-schema-steps.ts': 'orchestration',
   'src/main/runtime/orchestration/db/schema/create-axiom-tables-sql.ts': 'orchestration',
   'src/main/runtime/orchestration/db/schema/create-axiom-supervision-sql.ts': 'orchestration',
   'src/main/runtime/orchestration/db/schema/create-core-tables-sql.ts': 'orchestration',
@@ -231,6 +232,11 @@ export const SQLITE_TABLE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> 
       note: 'Holds PersistedState itself.'
     }),
     ...tables('profile-state', ['profile_state_meta'], notApplicableDisposition(62)),
+    ...tables(
+      'orchestration',
+      ['axiom_schema'],
+      notApplicableDisposition(62, 'One bookkeeping row with the schema version and no paths.')
+    ),
     ...tables(
       'profile-state',
       ['${PROFILE_STATE_AUTOMATION_RUNS_TABLE}'],
