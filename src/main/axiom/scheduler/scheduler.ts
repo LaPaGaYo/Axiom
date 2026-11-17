@@ -16,34 +16,15 @@ import { blockingQuestionOrApproval, interruptionBackoff } from './admission-blo
 import { orderByCriticalPath } from './critical-path'
 import type { EffectOutbox } from '../outbox/effect-outbox'
 import { requestIntegrations } from '../integration/integration-admission'
+import { admissionRefusalRecorded } from './admission-refusal'
+import type { AdmittedAttempt, ScheduleRoundResult, ScheduleTrigger } from './scheduler-contract'
 
-export type ScheduleTrigger = 'mission_start' | 'stage_change' | 'resume' | 'manual' | 'policy'
-export type AdmittedAttempt = {
-  missionId: string
-  taskId: string
-  seq: number
-  branch: string
-  agentSpecId: string
-  contextPackageId: string
-}
-export type AttemptLaunch = (attempt: AdmittedAttempt) => Promise<void>
-export type ScheduleRoundResult = {
-  admitted: AdmittedAttempt[]
-  skipped: {
-    taskId: string
-    reason:
-      | 'concurrency'
-      | 'provider_concurrency'
-      | 'task_attempts'
-      | 'task_tokens'
-      | 'question'
-      | 'approval'
-      | 'backoff'
-      | 'no_eligible_provider'
-      | 'stale'
-  }[]
-  blocked?: BudgetExhaustion['dimension']
-}
+export type {
+  ScheduleTrigger,
+  AdmittedAttempt,
+  AttemptLaunch,
+  ScheduleRoundResult
+} from './scheduler-contract'
 type SkipReason = ScheduleRoundResult['skipped'][number]['reason']
 type Check =
   | { reason: SkipReason }
@@ -70,7 +51,7 @@ export class Scheduler {
   scheduleRound(missionId: string, trigger: ScheduleTrigger): Promise<ScheduleRoundResult> {
     const active = this.flights.get(missionId)
     if (active) {
-      active.pending = trigger
+      active.pending = trigger === 'sweep' ? (active.pending ?? trigger) : trigger
       return active.promise
     }
     const flight: Flight = {
@@ -210,7 +191,12 @@ export class Scheduler {
           if (!(error instanceof AgentFactoryError) || error.code !== 'no_eligible_provider') {
             throw error
           }
-          this.audit(missionId, 'task.admission_refused', 'task', candidate.taskId, error.data)
+          if (
+            trigger !== 'sweep' ||
+            !admissionRefusalRecorded(this.store, missionId, candidate.taskId, error.data)
+          ) {
+            this.audit(missionId, 'task.admission_refused', 'task', candidate.taskId, error.data)
+          }
           result.skipped.push({ taskId: candidate.taskId, reason: 'no_eligible_provider' })
           continue
         }
