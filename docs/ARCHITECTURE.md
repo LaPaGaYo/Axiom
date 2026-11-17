@@ -518,7 +518,7 @@ Worker 通过 `axiom` CLI 汇报的协议对所有 provider 一致。
 terminal / PTY / daemon / orcad；Git / worktree / source control；provider adapters / agent hooks；SSH / WSL / relay；Runtime RPC / CLI client；agent status；orchestration 的 Run（容器）、dispatch/worker、messages/deliveries、调用方身份核实（D73）、gates（QUESTION）、federation；editor、diff、terminal、browser 工作台。
 
 ### MODIFY（全部 additive）
-- orchestration schema：迁移 v43 起新增 Axiom side tables（`orca-mapping.md` §6）；**不改既有 CHECK 枚举**；
+- orchestration schema：迁移 v43 起新增 Axiom side tables（`orca-mapping.md` §6）；**不改既有 CHECK 枚举**；SCHEMA-1 起 Axiom 自己的结构变更是 `axiom_schema` 里有编号的步骤（`db/schema/axiom-schema-steps.ts`，D93），排在内核那条链之后，内核的 `SCHEMA_VERSION` 不再为 Axiom 增长；
 - RPC：新增 `axiom.*` 命名空间（`orca-mapping.md` §4c），纳入契约栅栏与幂等收据（D15）；
 - `workerStart` / `startLocalWorker`：system principal 与直供 worktree（D14）；
 - messaging：`payload.axiom` 语义、Worker 禁发类型的拦截；
