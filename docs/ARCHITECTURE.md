@@ -321,7 +321,7 @@ flowchart TD
 ## 8. Scheduler、AgentFactory 与 Attempt 启动
 
 ### 8.1 Readiness 与 admission
-- MissionController 在每次相关事件（stage 变化、Approval 变化、Question 解决、PlanRevision 批准）后重算受影响 Task 的 readiness，写入 `task_stages`；不做全量轮询。
+- MissionController 在每次相关事件（stage 变化、Approval 变化、Question 解决、PlanRevision 批准）后重算受影响 Task 的 readiness，写入 `task_stages`；不以轮询为主要触发——兜底巡检（SWEEP-1）在每 60 秒的对账 tick 之后给每个 `EXECUTING` 的 Mission 再请求一轮调度，只为补上丢失的一轮；情况没变时这一轮不重复写拒绝（细则与限制见 GLOSSARY "调度兜底巡检"）。
 - Scheduler 从 READY Task 中按 policy 选取：并发上限（Mission 级与 provider 级）、剩余预算、优先级（critical path 优先，可由 DecisionEngine 排序）、provider 可用性。
 - Admission 是事务性的：写 `attempt_bindings`（seq、branch、agentSpecId、contextPackageId）后才调用执行内核；重复 admission 由 `orchestrationRequestId` 幂等。
 
