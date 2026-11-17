@@ -52,6 +52,31 @@ BACKFILL = {
 }
 
 FULL = {
+    ('SCHEMA-1', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'Axiom gets a schema version of its own: one row in the new table axiom_schema, a chain of '
+        'numbered steps that runs after the kernel chain, and a first step that is the eight columns Axiom added '
+        'to existing tables; a stamped database is opened with one read and no write, a stamp from a newer Axiom '
+        'is left as it is, a failing step rolls back; the unnumbered column probe is gone and SCHEMA_VERSION '
+        'stays 46; the two shared kernel files change by one import and one call and by two removed lines; '
+        'one statement added to one existing test and no other existing test changed; eight new tests under '
+        'both runners; on the host titles 1, 2, 4, 5 and 6 fail with the four files of main put back; a copy '
+        'of the development database (kernel version 42) opens with the candidate, is upgraded and stamped, '
+        'passes the integrity check and keeps its row counts; every Mission spec passes on the first host '
+        'run; the union script failed 0 '
+        'with ten pins retired by the planner; no verifier change; no other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'nothing reads the stamp yet except tests; what the application does with a newer stamp is SCHEMA-2',
+            'the stamp says which Axiom last ran a step, not that every object is intact',
+            'an older build that opens a database with a newer stamp still runs its own create-when-missing DDL',
+            'upstream_version is a constant until a sync changes the kernel chain',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('SWEEP-1', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'the safety net of the plan row: the existing 60 s reconcile tick asks every EXECUTING Mission '
