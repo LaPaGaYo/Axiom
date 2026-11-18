@@ -10,6 +10,7 @@
 | 2026-10-19 | `ce2d60834c` | 初筛点（已逐条分诊到此；按 D56 只摘取，不整体合并，merge-base 仍为 fork 点） |
 | 2026-10-23 | `41661e3312` | UPSTREAM-3 全量合并（D72；合并提交 `ccfc02a65c`，tag `axiom-base-2`），新的 merge-base；之后回到 D56 只摘取 |
 | 2026-11-11 | `f6b86ecf62` | 初筛点（D56 的每周初筛恢复；分诊见下方 2026-11-11 节；merge-base 仍为 `41661e3312`） |
+| 2026-11-18 | `60d912e153` | 初筛点（每周初筛；分诊见下方 2026-11-18 节；merge-base 仍为 `41661e3312`） |
 
 ## 2026-10-17 · 首次初筛（只读，未应用）
 
@@ -160,3 +161,39 @@
 **我们做的**（`26d5e170aa`，验证者直接提交）：只改这一条测试——删除之前先等监听报到一次对注册表的改写。产品代码不动：同一个盲区在产品里的影响是"应用装监听的那一瞬间用 CLI 删掉保存的服务器，界面要到下一次读设置才更新"，而远程服务器在 V1 之外。提交前在同样的人为负载下跑这个测试文件：改前 20 次里失败 1 次，改后 20 次全过；空闲下经 `pnpm test` 3 次全过。
 
 **以后**：这一块下次与上游同步时取上游的版本（监听与测试一起换），本条改动随之消失。这个文件已在 flaky 台账里，再失败不放行。原因与盘点见 `claude/registry-watch-test-root-cause-v1.md`。
+
+## 2026-11-18 · 每周初筛与 UPSTREAM-5 分诊（只读）
+
+- **范围**：`f6b86ecf62..60d912e153`（upstream 头，2026-11-18），1,580 个非合并提交（fix 603、test 455、feat 137、refactor 114、perf 63、其余 208）。上游这一周在按"归属"重排目录、成批删测试，所以路径大多对不上本树。第一轮按 D56 的路径（97 个提交）与标题关键词（安全、凭据、泄漏、依赖、CVE / GHSA）过滤；另按 Axiom 在 V1 路径上依赖的子系统（478 个提交，其中 fix / perf 163 个）读标题与 PR 说明，逐条对照 main。
+- **分诊**：
+
+| upstream | 实质 | 对 Axiom 的影响 | 类别 | 处置 |
+|---|---|---|---|---|
+| `651f2efaa9`（#43682；之前 `a82468b023` 已到 43.8.7） | Electron 43.8.7 → 43.8.10。Electron 的发布说明只写"回补 ANGLE、Chromium、Dawn、ICU、Skia、V8 的修复"；上游的提交说明写的是：为了 Chromium 的 XML 组件里一个已有在野利用的释放后使用（CVE-2026-125350，Google 2026-11-09 公布，次日进 CISA 的已知被利用目录）。Chromium 仍是 150.0.7871，Node 24.22.1 与原生模块 ABI 不变 | Axiom 是 43.8.6 | 平台 / 安全 | **UPSTREAM-5**（验证者宿主步骤）。43.8.10 发布于 2026-11-12，已过 `minimumReleaseAge`，不加豁免。43.8.11（2026-11-18 发布）在冷静期内，上游也还没取，留到下次初筛 |
+| `5ccdb32d31`（#43835） | Electron 43.8.8 起拒绝开头带空白的 canvas 字体串；xterm 的 WebGL 字形图集拼出的串在非斜体时以空格开头，于是每个字形退回 10px sans-serif。修法是给这个串加 `.trim()` | 随 Electron 升级必然出现：终端里的字全部变小 | 平台 | **UPSTREAM-5** 一并做。上游改的是 `@xterm/addon-webgl` beta.329 的补丁，本树是 beta.300：验证者在容器里用发布包加本树补丁、按 pnpm 自己的 diff 命令重现了现有补丁（逐字节相同），再在源码与两个构建产物上加同一处 `.trim()` 得到新补丁；两个 source map 没有重生成。锁文件的补丁哈希由宿主安装更新 |
+| `19e5992f0f`（#43775），桌面端一半 | picomatch 的 extglob 量词可导致灾难性回溯（GHSA-fc5q-39xc-vjpf）；上游给 2.3.2 / 4.0.4 / 4.0.5 / 4.0.7 各打一个补丁 | 本树的锁文件里是 4.0.4（`@parcel/watcher`——随应用发布——与 `lint-staged`）和 4.0.7（vite、vitest、tinyglobby） | 安全 | **UPSTREAM-5**：两个补丁文件逐字节取自上游，`patchedDependencies` 加两行，补丁测试与 `dependency-security.md` 加对应内容。RubyGems、cloud、文档站、mobile、审计工具的部分与 `config/dependency-security-exceptions.json` 不取 |
+| `a13016fff1`（#42868） | hono 4.13.11 → 4.13.18、`@hono/node-server` 2.1.5 → 2.1.8；react / react-dom 19.2.8 → 19.2.9；`minimumReleaseAgeExclude` 的旧豁免清掉 | hono 只由 `@modelcontextprotocol/sdk` 为 HTTP 传输引入，桌面端只用它的 stdio（UPSTREAM-4b 的同一结论）。React 19.2.9 是修 Server Components 那批（CVE-2026-126187，受影响的是 `react-server-dom-*`）的同号版本，本树的锁文件里没有这些包 | 安全（不适用） | 不取；随下次 MCP SDK 升级 / 下次同步 |
+| `e5ddd18a5e`（#43441） | Claude：要上下文用量时带 `detail: 'summary'`。默认的 `full` 在每个新起的 CLI 进程上按类别各调一次 count_tokens，续一个会话就是 20–31 次 | 本树 `src/main/claude/claude-agent-sdk-control-requests.ts` 仍是不带参数的调用；结构化 Claude 会话（headless Worker 走的路径）每次起进程都会发这一串请求。本树的 SDK 0.3.284 已有这个参数 | provider 适配 | 候选：是产品代码，要走一个很小的 Worker Task（已报 Henry，排在 UPSTREAM-5 之后）；不在宿主步骤里 |
+| `ebb5c64e35`（#43081）、`c120b5bfb3`（#42790） | 在 Orca 面板之外不再跑 Orca 的 hook 脚本（Gemini、Copilot、Antigravity、Grok、Command Code） | V1 的 provider 是 Codex 与 Claude | provider 适配（其他 provider） | 不取 |
+| `085859850b`（#41791）、`6addcb1881`（#41758） | Codex 只报个人消费上限时用量条显示为月窗口；排队的用量刷新 | Axiom 不调用量服务（egress 约束）；Worker 被这种上限拒绝时，rollout 里没有 5h / 7d 窗口，按阶梯退避 | provider 适配（显示侧） | 不取 |
+| `c58ac9cf1c`（#41487）、`b4ca378c61`（#41058）、`ec6d8d134a`（#43700） | Codex 的 hook 审查里显示 hook 名字；hook 状态保留 Claude 的模型；Windows 上 rollout 读取移出主线程 | 显示；Windows 不在 V1 | — | 不取 |
+| 其余 | 新功能、UI、其他 provider、mobile、目录重排、删测试 | — | — | 不取（D56） |
+
+- **D56 三类之外的内核可靠性修复**（逐条报 Henry；验证者的建议都是"现在不取，下次同步一并带上"——V1 的路径上没有观察到对应故障，上游路径已重排，逐条移植的成本不小）：
+
+| upstream | 实质 | 与 Axiom 的关系 |
+|---|---|---|
+| `38a61a1a36`（#43816） | 准备到一半、`.git` 文件丢了的 worktree 能被回收 | Attempt 的 worktree 走同一套准备 / 丢弃逻辑（`src/main/git/worktree-preparation-discard.ts`）；崩在准备中途才会遇到 |
+| `e9060c2039`（#43371） | 删 worktree 时，残留的监听路径已不在授权范围内不再让整个删除中止 | 外部 worktree 才会触发 |
+| `9c6d2ed1e7`（#43809） | 有同名 tag 时读到准确的分支名 | Axiom 的分支名（`axiom/attempt/…`、`axiom/integration/…`）不会与 tag 重名 |
+| `faa759d606`（#42174） | 索引很大的仓库删工作区时不再撑破 10 MiB 的输出上限 | 大仓库 |
+| `12787ce772`（#41862） | fetch 遇到并发的 ref 更新时重试 | V1 的 PR 交付会 fetch；偶发 |
+| `cbc8119ec2`（#43779）、`c6467bbc53`（#40983）、`683db8b4f3`（#42509）、`1afbb01955`（#42112） | 编排：按回合结束时已取走的信件判断 worker 空闲停下；worker 丢失时告诉协调者；关掉聊天 worker 的聊天即结束它的 Dispatch；复用启动在绑定前失败算没启动过 | Axiom 自己判定 Attempt 的结局（监督、`unverifiable`），不依赖协调者侧的这些信号；聊天 worker 与复用启动不在 V1 路径上 |
+| `84a992a28a`（#43560） | 原生聊天的日志在 SQLite 确认回滚后恢复写入 | 修的是本范围内才引入的改动（`88a266e003` 把原生聊天改为以 SQLite 为准），本树没有 |
+
+- **另记**（下次全量同步时必须单独处理，不能照搬）：
+  - `70a3667368`（#43322）、`c5ea44414a`（#43550）：上游开始在 Run 结束一天后把它从 `orchestration.db` 里删掉；`6db9aabbe1`（#42839）清理已结束聊天的输出副本。Axiom 的 Mission 拥有 Run，Completion Report 与审计要引用它们——合并时必须让 Axiom 拥有的 Run 不被清理，或先把需要的证据落到 Axiom 自己的表里。
+  - `2e7e992027`、`b8950a4f66` 等：协调者可以替 worker 批准权限提示（可选功能）。与不变量 7 / 12（批准由确定性策略与人给出）冲突，同步时保持关闭并加测试。
+  - `88a266e003`（#39256）：原生聊天改为以 SQLite 为准——同步时的大块改动，涉及 headless Worker 的会话记录。
+  - 上游的目录重排（"group … by owner"）与成批删除的测试：下次同步的冲突面会很大，`config/e2e-typecheck-baseline.txt` 的陈旧条目届时一并清。
+- **初筛点**推进到 `60d912e153`；下次从 `60d912e153..upstream/main` 接着筛。
