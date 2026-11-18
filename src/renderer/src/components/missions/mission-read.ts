@@ -10,7 +10,7 @@ export async function readMission(missionId: string, taskId: string | null) {
     ([result]) => result
   )
   const [
-    { mission },
+    { mission, integration },
     { tasks },
     { planRevisions },
     { attempts },
@@ -45,6 +45,7 @@ export async function readMission(missionId: string, taskId: string | null) {
     : null
   return {
     mission,
+    integration,
     tasks,
     plans: planRevisions,
     goal,

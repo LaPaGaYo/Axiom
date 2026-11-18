@@ -1,4 +1,4 @@
-import type { Ref } from 'react'
+import type { ReactNode, Ref } from 'react'
 import { translate } from '@/i18n/i18n'
 import type { VerificationRunView } from '../../../../shared/axiom-contract/verification-params'
 import { VerificationRuns } from './VerificationRuns'
@@ -9,13 +9,15 @@ export function VerificationRecord({
   selected,
   onSelect,
   failed,
-  regionRef
+  regionRef,
+  children
 }: {
   runs: readonly VerificationRunView[]
   selected?: VerificationRunView
   onSelect: (id: string) => void
   failed?: boolean
   regionRef: Ref<HTMLElement>
+  children?: ReactNode
 }) {
   return (
     <section
@@ -46,6 +48,7 @@ export function VerificationRecord({
           )}
         </>
       )}
+      {children}
     </section>
   )
 }

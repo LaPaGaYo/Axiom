@@ -3,11 +3,19 @@ import type { VerdictRecord } from '../../../../shared/axiom-contract/verdict-re
 import { CheckOutput } from './CheckOutput'
 import { VerificationStatus, verificationDuration } from './VerificationStatus'
 
-export function VerificationChecks({ record }: { record: VerdictRecord }) {
+export function VerificationChecks({
+  record,
+  label = translate('missions.verificationChecks', 'Checks'),
+  headingId = 'verification-checks-heading'
+}: {
+  record: VerdictRecord
+  label?: string
+  headingId?: string
+}) {
   return (
-    <section aria-labelledby="verification-checks-heading" className="space-y-2">
-      <h4 id="verification-checks-heading" className="text-sm font-medium">
-        {translate('missions.verificationChecks', 'Checks')}
+    <section aria-labelledby={headingId} className="space-y-2">
+      <h4 id={headingId} className="text-sm font-medium">
+        {label}
       </h4>
       {record.checks.length === 0 ? (
         <p className="text-xs text-muted-foreground">
@@ -15,10 +23,7 @@ export function VerificationChecks({ record }: { record: VerdictRecord }) {
         </p>
       ) : (
         <div className="overflow-x-auto scrollbar-sleek">
-          <table
-            className="w-full text-left text-xs"
-            aria-label={translate('missions.verificationChecks', 'Checks')}
-          >
+          <table className="w-full text-left text-xs" aria-label={label}>
             <thead>
               <tr className="border-b border-border">
                 {[

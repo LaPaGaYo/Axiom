@@ -189,6 +189,45 @@ test('M4-2b: a verified Task is integrated and its dependent Task runs from the 
         branch: `axiom/integration/${mission.id}`,
         recordedHead: head2
       })
+      await page.getByRole('button', { name: 'Missions', exact: true }).click()
+      await page
+        .getByRole('navigation', { name: 'Mission list', exact: true })
+        .getByRole('button')
+        .filter({ hasText: mission.id })
+        .click()
+      const integration = page.getByRole('region', { name: 'Integration', exact: true })
+      await expect(integration).toContainText(`axiom/integration/${mission.id}`, {
+        timeout: 30_000
+      })
+      const recordedHead = integration.getByTestId('integration-recorded-head')
+      await expect(recordedHead).toHaveText(head2.slice(0, 7), { timeout: 30_000 })
+      await expect(recordedHead).toHaveAttribute('title', head2, { timeout: 30_000 })
+      for (const [id, head] of [
+        [firstId, head1],
+        [dependentId, head2]
+      ]) {
+        const row = integration.locator(`[data-integration-task-id="${id}"]`)
+        await expect(row).toHaveAttribute('data-integration-status', 'PROMOTED', {
+          timeout: 30_000
+        })
+        await expect(row).toContainText(head.slice(0, 7), { timeout: 30_000 })
+      }
+      await integration.locator(`[data-integration-task-id="${firstId}"]`).click()
+      const detail = page.getByRole('region', { name: 'Task detail', exact: true })
+      await expect(detail).toBeVisible({ timeout: 30_000 })
+      await detail.locator('[data-task-stage="INTEGRATED"]').click()
+      const verification = detail.getByRole('region', { name: 'Verification', exact: true })
+      await expect(verification).toBeFocused({ timeout: 30_000 })
+      const regression = verification.getByRole('region', {
+        name: 'Merged-tree regression',
+        exact: true
+      })
+      await expect(regression).toContainText(head1.slice(0, 7), { timeout: 30_000 })
+      const rows = regression
+        .getByRole('table', { name: 'Regression runs', exact: true })
+        .locator('tbody tr')
+      await expect(rows).toHaveCount(1, { timeout: 30_000 })
+      await expect(rows.first()).toContainText('PASS', { timeout: 30_000 })
     },
     {
       taskIds: ['T01', 'T04'],

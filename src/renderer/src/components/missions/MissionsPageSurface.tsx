@@ -8,6 +8,7 @@ import { MissionSupervision } from './MissionSupervision'
 import { visiblePlanRevisions } from './plan-revision-diff'
 import { PlanReviewPanel } from './PlanReviewPanel'
 import { TaskStageTable } from './TaskStageTable'
+import { MissionIntegration } from './MissionIntegration'
 import { TaskDetail } from './TaskDetail'
 import { activateWorktreeFromSidebar } from '@/lib/sidebar-worktree-activation'
 import type { MissionsPageController } from './use-missions-page-controller'
@@ -80,6 +81,12 @@ export function MissionsPageSurface({ controller: c }: { controller: MissionsPag
                   />
                 )
               )}
+              <MissionIntegration
+                integration={c.detail.integration}
+                tasks={c.detail.tasks}
+                selectedTaskId={c.selectedTaskId}
+                onSelect={c.selectTask}
+              />
               <TaskStageTable
                 tasks={c.detail.tasks}
                 selectedTaskId={c.selectedTaskId}
@@ -93,6 +100,8 @@ export function MissionsPageSurface({ controller: c }: { controller: MissionsPag
                   messages={c.taskDetail.messages}
                   runs={c.taskDetail.runs}
                   verificationError={c.taskDetail.verificationError}
+                  regressionRuns={c.taskDetail.regressionRuns}
+                  regressionError={c.taskDetail.regressionError}
                   usage={c.taskDetail.usage}
                   usageError={c.taskDetail.usageError}
                   pendingItems={c.taskDetail.pendingItems}

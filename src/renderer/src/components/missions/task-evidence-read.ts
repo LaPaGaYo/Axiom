@@ -11,6 +11,8 @@ export type TaskEvidenceReads = {
   taskSpec?: TaskSpec
   runs?: readonly VerificationRunView[]
   verificationError?: boolean
+  regressionRuns?: readonly VerificationRunView[]
+  regressionError?: boolean
   usage?: TaskTokenUsage
   usageError?: boolean
   pendingItems?: readonly MissionPendingItem[]
@@ -28,7 +30,17 @@ export async function readTaskEvidence(
     axiomClient.showTask({ taskId })
   ])
   const pending = await pendingRead
+  const integration = task.status === 'fulfilled' ? task.value.task.integration : undefined
+  const [regression] = integration
+    ? await Promise.allSettled([
+        axiomClient.listVerificationRuns({ missionId, batchId: integration.batchId })
+      ])
+    : []
   return {
+    ...(regression && {
+      regressionRuns: regression.status === 'fulfilled' ? regression.value.runs : [],
+      regressionError: regression.status === 'rejected'
+    }),
     taskSpec: task.status === 'fulfilled' ? task.value.task.spec : undefined,
     pendingItems:
       pending?.status === 'fulfilled'
