@@ -17,7 +17,7 @@ import { describe, expect, it } from 'vitest'
 // blocklist bypasses and malformed-asar handling (electron/electron#54677, #55331, #55179); 43.8.6
 // carries the Chromium, V8, ANGLE, PDFium, Skia and WebRTC security backports; 43.8.8 to 43.8.10
 // carry further ANGLE, Chromium, Dawn, ICU, Skia and V8 backports; upstream took 43.8.10 for a
-// Chromium use-after-free that is exploited in the wild (CVE-2026-125350, stablyai/orca#43682).
+// Chromium use-after-free that is exploited in the wild (CVE-2026-125350, upstream PR 43682).
 const MINIMUM_ELECTRON_VERSION = '43.8.10'
 
 function parseVersion(specifier: string): [number, number, number] {
