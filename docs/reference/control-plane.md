@@ -355,7 +355,7 @@ git/kernel 失败只抛固定码：`integration_head_unavailable`（目录/集�
 
 限制：M4-2b 已由 Scheduler 请求集成；M4-2a-3 已实现 promotion / PROMOTED / INTEGRATED，尚未完成晋升的 PROMOTABLE 仍挡住同 Mission 的下一个候选。死批次只有该 Mission 的某次 try 才关闭。FAIL 后新 Attempt 从集成头开始，不携带回归证据（M4-3）。三次 INCONCLUSIVE 和仓库不可达一样阻塞 Task，退避只有秒级；没有 Mission 级待处理项。无命令计划通过；每次新 worktree 都重跑 setup 并探测三个版本，一次最多持有 integration.apply 的 Mission lane 一个 timeBudgetMinutes。
 
-人可在侧栏删除 scratch，随后命令失败可成为 FAIL（若最后 HEAD 无法读取则按上述 scratch_changed 修正）。命令若改动候选也改过的 tracked 文件，回到临时分支可能失败并留下分支（integration.cleanup_failed）；不先清理 scratch 内容。停止留下的 worktree 等下次 try 回收，真实 runtime 重用的临时分支仍可能留到 M4-4。单测 fixture 在 kernel git 函数之上、完整 runtime 之下，不能证明完整 runtime 的分支保留 / 侧栏 / 终端供应行为。stopAxiomControlPlane 不等待 outbox。暂停语义、更完整的孤儿清扫与环境失败处理留给 M4-4，显示回归留给 M4-5。
+人可在侧栏删除 scratch，随后命令失败可成为 FAIL（若最后 HEAD 无法读取则按上述 scratch_changed 修正）。命令若改动候选也改过的 tracked 文件，回到临时分支可能失败并留下分支（integration.cleanup_failed）；不先清理 scratch 内容。停止留下的 worktree 等下次 try 回收，真实 runtime 重用的临时分支仍可能留到 M4-4。单测 fixture 在 kernel git 函数之上、完整 runtime 之下，不能证明完整 runtime 的分支保留 / 侧栏 / 终端供应行为。stopAxiomControlPlane 不等待 outbox。暂停语义、更完整的孤儿清扫与环境失败处理留给 M4-4，合并树回归现由 M4-5b 的 Task 页展示。
 
 ### Integration promotion（M4-2a-3）
 
@@ -389,7 +389,7 @@ advanceIntegrationHead 先验证 from / to，再用一个 for-each-ref 同时读
 
 限制与风险：检查 checkout 与写引用是两个 git 调用；中间仍可能有人检出，worktree 内的 rebase / bisect 不在 worktreepath 检查范围；手删目录但未 prune 的工作树仍算检出。worktreepath 需要 Git 2.23（在 2.25 基线内）。引用被人移动后，各 Task 集成在秒级三次重试后以 integration_unavailable 阻塞，只能先把引用放回；没有 Mission 级待处理项（M4-4）。检出的分支也会在三次后丢弃已经通过的回归。耗尽时无法判定的 PROMOTABLE 留开放、Task 阻塞，挡住 Mission 队列，直到解除阻塞后由下一轮重新请求并重跑，或 Task 取消后可读取引用的 try 清理；仓库不可读期间，任何开放 PROMOTABLE 都让该 Mission 的每个 try 在清理之前失败，包括已取消的 Mission。
 
-最后一次资格检查与引用更新之间落下的 block、cancel、pause 不阻止晋升；mergeCommit 已是头时任何这些变化都不阻止补记。引用前进后被阻塞或取消的 Task 保持原状态，虽其变化已在集成分支；阻塞者解除后要等请求重跑才 INTEGRATED：M4-2b 的下一轮重排已结束的请求，仍 pending / running 的请求继续沿用；取消者保持 CANCELED。INTEGRATED 是终态，没有反向操作，也未新增写入者守卫。已运行 Worker 从旧头起步，在自己的合并时遇到新头；没有保全快照、原本能在旧 worktree 继续的中断 Attempt 在头移动后重新启动。最后一个 Task 集成后 Mission 仍 EXECUTING（M4-6）。不触碰目标分支，不 push / fetch / 开 PR；不使用 AWAITING_APPROVAL；修复基线仍等 M4-3，完整恢复与孤儿清扫等 M4-4，读数据由 M4-5a 提供、界面展示等 M4-5b，交付等 M4-8。
+最后一次资格检查与引用更新之间落下的 block、cancel、pause 不阻止晋升；mergeCommit 已是头时任何这些变化都不阻止补记。引用前进后被阻塞或取消的 Task 保持原状态，虽其变化已在集成分支；阻塞者解除后要等请求重跑才 INTEGRATED：M4-2b 的下一轮重排已结束的请求，仍 pending / running 的请求继续沿用；取消者保持 CANCELED。INTEGRATED 是终态，没有反向操作，也未新增写入者守卫。已运行 Worker 从旧头起步，在自己的合并时遇到新头；没有保全快照、原本能在旧 worktree 继续的中断 Attempt 在头移动后重新启动。最后一个 Task 集成后 Mission 仍 EXECUTING（M4-6）。不触碰目标分支，不 push / fetch / 开 PR；不使用 AWAITING_APPROVAL；修复基线仍等 M4-3，完整恢复与孤儿清扫等 M4-4，读数据由 M4-5a 提供、界面展示由 M4-5b 提供，交付等 M4-8。
 
 ### Integration requests（M4-2b）
 
@@ -421,7 +421,7 @@ Mission 的 `branch` 是由执行器的 `integrationHeadRef` 去掉 `refs/heads/
 
 `conflicts` 原样返回执行器已脱敏、最多 200 条的路径；恰好 200 条时可能已截断。它随每个携带该 Task 的读取响应送达所有有权调用该读取的调用方，没有额外的路径权限过滤。批次的合并树回归经既有 `axiom.verification.list` 携带 `batchId` 读取；本读模型不带 VerificationRun。
 
-两个 schema 均为普通 `z.object`：旧客户端解析时丢弃未知键，新客户端面对旧主进程缺失的可选字段得到 undefined。CLI 表格列不变，`--json` 输出完整结果，因此会显示新键。当前界面尚不显示这些字段，展示由 M4-5b 实现。
+两个 schema 均为普通 `z.object`：旧客户端解析时丢弃未知键，新客户端面对旧主进程缺失的可选字段得到 undefined。CLI 表格列不变，`--json` 输出完整结果，因此会显示新键。M4-5b 的 Mission 集成块与 Task 合并树回归区展示这些字段。
 
 每次 Task list/show 的集成投影各增加一次 Mission 批次列表与一次全部候选列表读取，不按 Task 重复；原 waiting context 的候选读取保持不变。每次 `axiom.mission.show` 在 `missionSummary` 之后第二次读取该 Mission 的全部审计事件。存储的批次或候选行无法解析会使 Task 读取失败；本模块不捕获异常，也不跨请求缓存。
 
@@ -1076,7 +1076,7 @@ verdict 文档为单个 application/json、kind=evidence Artifact，createdBy=Ve
 
 `src/shared/axiom-contract/verdict-record.ts` 提供 `VerdictRecordSchema` 与 `readVerdictRecord`，以同一个宽容读取器解析 run 的 `verdictDetail` 摘要及证据 Artifact 的 JSON：phase、原始 verdict/reason、逐条 checks（Artifact 中有 excerpt 时保留）、acceptance、diff、resolution/rerun 和证据引用。未知键忽略；缺失或畸形的字段省略、列表回退为空，单个坏条目不遮住其它条目，读取函数不抛异常。acceptance、resolution 与 rerun 复用已有共享 schema。它不改主进程写入器、存储行或 RPC；`verification/verdict-record.test.ts` 通过真实验证路径同时检查行与 Artifact，防止读写形状漂移。
 
-Task 页将 run.status 作为状态及其颜色的权威，同时单独标出检查的原始 verdict/reason 与人工处置，绝不以人工 PASS 改写原始逐条结果。runs 与 Task usage 在选择或刷新时和其它详情一起读取，失败仅落在各自区块，仍受原 generation guard 约束。选中的 run 和展开的摘录仅为组件本地状态；每次展开都经 `axiomClient.readArtifact` 重新读取 verdict Artifact，用浏览器 API 解码后交同一读取器，原样作为文本展示，不打开 stdout/stderr log Artifact。Task 页的 VERIFIED/INTEGRATED 仅在已读的最新 run 为 PASS 时显示成功色，并一键选择该 run、聚焦验证区。批次回归已有记录，但在此候选列表中仍不显示（M4-5）。
+Task 页将 run.status 作为状态及其颜色的权威，同时单独标出检查的原始 verdict/reason 与人工处置，绝不以人工 PASS 改写原始逐条结果。runs 与 Task usage 在选择或刷新时和其它详情一起读取，失败仅落在各自区块，仍受原 generation guard 约束。选中的 run 和展开的摘录仅为组件本地状态；每次展开都经 `axiomClient.readArtifact` 重新读取 verdict Artifact，用浏览器 API 解码后交同一读取器，原样作为文本展示，不打开 stdout/stderr log Artifact。Task 页的 VERIFIED/INTEGRATED 仅在已读的最新 run 为 PASS 时显示成功色，并一键选择该 run、聚焦验证区。候选列表仍排除批次回归；M4-5b 在同一验证区内另设合并树回归区展示它们。
 
 M3-09-2b-1：读取器返回已知的 `resolution.disposition`；遇到未知值只丢该字段，保留其余有效的 resolution。旧记录没有该字段仍可读取，严格写入 schema 不放宽。界面显示和操作属于 M3-09-2b-2。
 
@@ -1167,6 +1167,16 @@ Task 页在头部与 Attempts 之间显示「Current acceptance criteria」：�
 传输层 `AxiomRpcError.data` 保留拒绝详情。页面的 `missionErrorText` 直接导入传输层错误类，以 zod 读 data：message 等于 code 时优先取 errors 中的字符串 message，按首次出现顺序去重并以一个空格连接；无此消息时取字符串 reason，再回退原 message。message 自带说明时保持原说明。错误行与 toast 共用 `code: detail`；拒绝不关闭表单或清空草稿。
 
 限制：预判使用页面读取时的 policy，提交前 policy 仍可改变；非法 rules 下 Control Plane 用默认规则校验调整，但验证运行结束为 policy_invalid。renderer 的 `evidenceCommandMessage` 不经过主进程脱敏，疑似 secret 的命令可能与实际拒绝措辞不同；表单通过同一个 `validateTaskAcceptance` 预判标准文本与命令中的内置 secret 模式并阻止发送，Control Plane 在写入前拒绝 `secret_in_criterion`；rationale 的 secret 拒绝仍不在 renderer 预判，调整审计仍脱敏。不预测 queued / running run 导致的 task_not_adjustable，只显示实际拒绝；不解除旧 requiredEvidence。替换后 review 仍能不经 rerun 而被人工处置；批准卡保留旧标准；草稿不会跟随外部 Task 调整更新；合同消息在所有语言下为英文；Task 页不列 rerun 将运行的命令清单。renderer 不预测其它状态、预算或权限拒绝，Control Plane 仍是最终权威。
+
+### Mission 页的集成块与 Task 页的合并树回归（M4-5b）
+
+`MissionIntegration.tsx` 位于计划卡之后、Task 表之前，显示集成分支与记录的头提交（七位缩写，title 保留完整提交），并按 Task 列表顺序列出有最近批次的 Task、批次状态、合并提交、更新时间及冲突文件数。Mission 没有 integration 且所有 Task 都没有批次时整个块不显示；已有记录头但没有批次时说明尚无 Task 进入集成，因此 Mission 一旦启动，此块就留在页面上。每行可通过点击、Enter 或空格选择 Task，不借用 Task 表的 data 属性，也不使用成功色。
+
+`TaskRegression.tsx` 在 Task 没有 integration 时不显示，否则列出最近批次的基点、合并提交、冲突文件、该批次所有验证记录（最新在前）和最新记录的检查、命令、结果及可展开输出。批次状态原样显示 Control Plane 的词，并经 `integrationStatusLabel` 附短说明，不推断下一步。它是 `VerificationRecord` 的最后一个子区，候选读取失败或没有候选记录时仍在；INTEGRATED 指示器一次点击聚焦的 Verification 记录因此也包含合并树回归。指示器仍选候选的最新 run，成功色仍只取决于该候选 run 的 PASS；回归的提交来自批次 mergeCommit，不是 run 的 candidateCommitSha。
+
+`readMission` 传递 M4-5a 的 Mission integration，Task 列表提供展示的批次；`readTaskEvidence` 仅在 Task show 成功且携带批次时，用该 batchId 额外读取一次 `axiom.verification.list`，独立 settled，失败仅在回归区显示刷新重试句，不影响候选记录、usage、Attempts、消息或整页错误和 toast。没有批次或 Task show 失败时不发该请求，也不设置 regressionRuns / regressionError；无批次字段的旧主进程维持原页面。两区只读 M4-5a 的现有字段及上述现有请求的回答，不增加请求种类。只列与展示批次 batchId 相同的 runs；Task 列表的批次与 Task show 所读批次可能在一轮刷新内不同，此时不显示另一批次的 run，而显示此批次暂无记录。回归没有人工处置通道，resolve 与 rerun 是候选验证的命令，因此这里只读、不提供处置、重验、重试或批准控件；输出沿用 CheckOutput 的证据读取。
+
+边界：只展示每个 Task 的最近批次及该批次的 runs，不列历史批次；Mission 块也只列有最近批次的 Task。recordedHead 是 Control Plane 记录而不是即时分支头，可短暂落后，也不发现手动移动分支。两区沿用页面五秒刷新，选中 Task 有批次时每轮多一次请求；隐藏或忙碌时仍受原刷新规则约束。冲突列表是执行器存储的已脱敏路径，最多 200 条，重复路径按位置保留；恰好 200 条时仅提示可能还有更多，不断言已截断。两个检查表分别名为 Checks 和 Regression checks，heading id 各自独立，但 Show output #N 按钮名可在两表重复。新文案只在 en 与 zh（D94），其余五种语言回落英文。单测构造冲突和失败批次，端到端只观察两个 PROMOTED 批次；没有在真实冲突或失败批次上运行页面的测试。
 
 ### 人工验证处置与同候选重验（M3-05；D82 / D85 / DEF-21 ④）
 

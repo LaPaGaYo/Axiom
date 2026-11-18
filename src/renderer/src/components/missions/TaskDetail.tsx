@@ -11,6 +11,7 @@ import { TaskWaitingLine } from './TaskWaitingLine'
 import { TaskQuietCancel } from './TaskQuietCancel'
 import { TaskCurrentAcceptance } from './TaskCurrentAcceptance'
 import { VerificationRecord } from './VerificationRecord'
+import { TaskRegression } from './TaskRegression'
 import { useTaskVerification } from './use-task-verification'
 import type { TaskEvidenceReads } from './task-evidence-read'
 import {
@@ -25,6 +26,8 @@ export function TaskDetail({
   onOpenWorktree,
   runs,
   verificationError,
+  regressionRuns,
+  regressionError,
   usage,
   usageError,
   tasks,
@@ -117,7 +120,13 @@ export function TaskDetail({
         onSelect={verification.selectRun}
         failed={verificationError}
         regionRef={verification.region}
-      />
+      >
+        <TaskRegression
+          task={task}
+          regressionRuns={regressionRuns}
+          regressionError={regressionError}
+        />
+      </VerificationRecord>
       <SubmissionSummary submission={submission} />
       <MessageTimeline messages={messages} attempts={attempts} {...actions} />
     </section>
