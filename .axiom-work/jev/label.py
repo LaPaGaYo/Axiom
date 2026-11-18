@@ -52,6 +52,32 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M4-5a', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'the read side says what integration did: every Task of axiom.task.list and axiom.task.show '
+        'carries its latest batch, and axiom.mission.show carries the integration branch and the recorded head; '
+        'optional fields on existing responses, no new RPC method; the head lookup of the batch start became a '
+        'function both use, with the same events in the same order; no renderer, CLI or store change; '
+        'no existing unit test changed; six new tests under both runners; on the host titles 2, 3 and 4 fail '
+        'with the two wiring files of main put back and 1, 5 and 6 pass; the integration spec with the added '
+        'desktop reads passes three times and fails against the wiring of main; every Mission spec passes on '
+        'the first host run; the union script failed 0 with ten pins retired by the planner; no verifier '
+        'change; no other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'only the latest batch of a Task is shown; an earlier conflict or failed regression disappears from the '
+            'read once the next batch exists',
+            'recordedHead is the record, not the branch: it can lag after a promotion and does not notice a branch '
+            'moved by hand',
+            'each task read lists the batches and candidates of the Mission, and each mission show reads its audit '
+            'events a second time',
+            'nothing shows the fields yet; the interface is M4-5b',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('SCHEMA-2', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'a database stamped by a newer Axiom gets no Control Plane: getAxiomControlPlane refuses before '
