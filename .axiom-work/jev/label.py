@@ -52,6 +52,30 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M4-5b', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'the Missions page shows what integration did: an Integration block with the branch, the '
+        'recorded head and one row per Task that has a batch, and a Merged-tree regression section inside the '
+        'verification record of a Task with the batch, its commits, its conflict paths and its regression runs; '
+        'renderer only, on the fields of M4-5a, no new RPC method; 27 strings in en and zh; '
+        'no existing unit test changed; seventeen new tests under both runners; on the host titles 12, 13, 15 '
+        'and 17 fail with the four wiring files of main put back and the other thirteen pass; the integration '
+        'spec with the added look at the page passes three times and fails against the wiring of main; every '
+        'Mission spec passes on the first host run; the union script failed 0 with ten pins retired by the '
+        'planner; no verifier change; no other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'only the latest batch of a Task is shown, as the read gives it',
+            'the Integrated indicator still takes its colour from the run of the candidate alone',
+            'the regression is read-only: no control resolves a conflict or reruns a regression',
+            'the texts of refusals stay in English; a Chinese wording waits for a decision after 0.1',
+            'the Chinese label of SUPERSEDED reads both ways; one word in zh.json would settle it',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M4-5a', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'the read side says what integration did: every Task of axiom.task.list and axiom.task.show '
