@@ -60,3 +60,20 @@ export const IntegrationBatchSchema = z.strictObject({
   updatedAt: z.string().min(1)
 })
 export type IntegrationBatch = z.infer<typeof IntegrationBatchSchema>
+
+export const TaskIntegrationSchema = z.object({
+  batchId: AxiomIdSchema,
+  candidateId: AxiomIdSchema,
+  status: IntegrationBatchStatusSchema,
+  baseCommit: GitObjectIdSchema,
+  mergeCommit: GitObjectIdSchema.nullable(),
+  conflicts: z.array(z.string().min(1)),
+  updatedAt: z.string().min(1)
+})
+export type TaskIntegration = z.infer<typeof TaskIntegrationSchema>
+
+export const MissionIntegrationSchema = z.object({
+  branch: z.string().min(1),
+  recordedHead: GitObjectIdSchema
+})
+export type MissionIntegration = z.infer<typeof MissionIntegrationSchema>

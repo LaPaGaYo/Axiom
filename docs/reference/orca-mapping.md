@@ -199,7 +199,7 @@ M1 参数契约位于 `src/shared/axiom-contract/mission-params.ts`、`goal-para
 | 方法 | 参数要点 | 副作用 | M | 当前状态 |
 |---|---|---|---|---|
 | `axiom.mission.create`（M1 已注册） | repo selector、targetBranch、goal、policy | `missions` + `db.createRun`（合成 coordinator）+ `goal_revisions`(ACTIVE) + `mission_policies` + `audit_events` | M | 已注册 / 已实现 |
-| `axiom.mission.show` / `list`（M1 已注册） | missionId / 过滤、cursor | M2-10 MissionSummary 含 runId；reason 为最新同状态 mission.status 审计的 after.reason（无则省略） | — | 已注册 / 已实现 |
+| `axiom.mission.show` / `list`（M1 已注册） | missionId / 过滤、cursor | M2-10 MissionSummary 含 runId；reason 为最新同状态 mission.status 审计的 after.reason（无则省略）；M4-5a 仅 show 的响应可带 integration（集成分支与 recordedHead） | — | 已注册 / 已实现 |
 | `axiom.mission.plan`（M2-09 已注册） | missionId | ANALYZING 启动只读 Planner，pseudo-task/binding/spec/artifacts；响应 attemptId（可空）/seq/branch/worktreeId/provider；transport long-poll + CLI 120 s | M | 已注册 / 已实现 |
 | `axiom.mission.start`（M1 已注册） | missionId | 用户启动：`PLANNED → EXECUTING`，D51 创建/沿用集成基线，重算 readiness 并触发 Scheduler admission/launch | M | 已注册 / 已实现 |
 | `axiom.mission.pause` / `resume` / `cancel`（M1 已注册） | missionId、reason | `missions.status`；pause 停 admission；cancel 持久化 CANCELED 后 await M2-08 reconciliation（stop/abandon/release）；Approval 留 M4 | M | 已注册 / 已实现 |
@@ -209,7 +209,7 @@ M1 参数契约位于 `src/shared/axiom-contract/mission-params.ts`、`goal-para
 | `axiom.plan.propose`（M1 已注册） | missionId、planRevision；人类 provenance 或 Planner attemptId/from + 宿主调用方身份（互斥） | `plan_revisions`(PROPOSED)，Mission → `PLAN_REVIEW`；Planner 强制 clean worktree、写 kind=planner/actor=provider、2 秒 stop grace | M | 已注册 / 已实现 |
 | `axiom.plan.approve` / `reject`（M1 已注册） | planRevisionId、resolver；reject 另需 reason | APPROVED：物化 `tasks`(deps=[]) + `task_stages` + `mission_task_edges`，重算 readiness；旧 Task `inherit/cancel/rebind` 留给 M5 | M | 已注册 / 已实现 |
 | `axiom.plan.list` / `show`（M1 已注册） | missionId / planRevisionId | 无 | — | 已注册 / 已实现 |
-| `axiom.task.list` / `show`（M1 已注册） | missionId、stage / taskId | 联查 `task_stages` × `tasks` 返回 TaskListItem/spec；M3-09-1 附加只读 waitingOn（contract 可选以兼容旧响应），mutation 响应不变；Attempt 与 Submission 详情经 attempt.list/show | — | 已注册 / 已实现 |
+| `axiom.task.list` / `show`（M1 已注册） | missionId、stage / taskId | 联查 `task_stages` × `tasks` 返回 TaskListItem/spec；M3-09-1 附加只读 waitingOn（contract 可选以兼容旧响应），mutation 响应不变；M4-5a list/show 的 Task 可带 integration（最新批次）；Attempt 与 Submission 详情经 attempt.list/show | — | 已注册 / 已实现 |
 | `axiom.mission.pending`（M3-09-1） | strict {missionId} | 无；从既有行/审计投影 {missionId, items}，Task 等待、pending 项 kinds/actions/order 见 Glossary §4.4a | — | 已注册 / 已实现；read class，无 CLI |
 | `axiom.task.create`（M2-06b 已注册） | missionId、task（TaskSpec 无 id）、dependsOn、provenance | MissionController 在 active APPROVED plan 追加 DEFINED Task / edges；D50 检查、task.created + plan.minor_adjustment，重算 readiness、提交后 Scheduler trigger | M | 已注册 / 已实现 |
 | `axiom.task.adjust`（M3-04b；M3-06-3-3b） | taskId、rationale、addAllowedPaths?、maxAttempts?、maxTokens?（正整数，严格大于该 Task 账本合计）、acceptanceCriteria? | desktop_only；MissionController 在原调整/receipt 事务更新 spec.budget.maxTokens（保留其它字段），task.adjusted 与 plan.minor_adjustment 仅显式设置时记录 cap；token-budget BLOCKED 经 previousStage 解锁，次数耗尽需同时提高 maxAttempts；不改 Mission cap，无 CLI --max-tokens | M | 已注册 / 已实现 |

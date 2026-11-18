@@ -1,12 +1,14 @@
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { TaskStage } from '../../../shared/axiom-contract/lifecycle'
 import type { TaskStageRecord } from '../../../shared/axiom-contract/mission-objects'
+import type { TaskIntegration } from '../../../shared/axiom-contract/integration-batch'
 import { getAxiomControlPlane, taskListItem } from '../control-plane'
 import { MissionControllerError } from '../mission-controller/controller-context'
 import { createWaitingContext, type WaitingContext } from './waiting-context'
 import { taskWaitingOn } from './task-waiting-on'
+import { taskIntegrations } from './integration-reads'
 
-function taskView(ctx: WaitingContext, task: TaskStageRecord) {
+function taskView(ctx: WaitingContext, task: TaskStageRecord, integration?: TaskIntegration) {
   const orca = ctx.db.getTask(task.taskId)
   if (!orca || orca.run_id !== ctx.mission.runId) {
     throw new MissionControllerError('task_not_found', {
@@ -20,7 +22,8 @@ function taskView(ctx: WaitingContext, task: TaskStageRecord) {
       orcaStatus: orca.status,
       title: orca.task_title ?? task.spec.title
     }),
-    waitingOn: taskWaitingOn(ctx, task)
+    waitingOn: taskWaitingOn(ctx, task),
+    ...(integration ? { integration } : {})
   }
 }
 
@@ -35,10 +38,11 @@ export function taskList(
     input.missionId,
     clock
   )
+  const integrations = taskIntegrations(ctx.store, input.missionId)
   return {
     tasks: ctx.tasks
       .filter((task) => !input.stage || task.stage === input.stage)
-      .map((task) => taskView(ctx, task))
+      .map((task) => taskView(ctx, task, integrations.get(task.taskId)))
   }
 }
 
@@ -53,5 +57,6 @@ export function taskShow(
     throw new MissionControllerError('task_not_found', { taskId: input.taskId })
   }
   const ctx = createWaitingContext(store, runtime.getOrchestrationDb(), task.missionId, clock)
-  return { task: taskView(ctx, task) }
+  const integration = taskIntegrations(store, task.missionId).get(task.taskId)
+  return { task: taskView(ctx, task, integration) }
 }
