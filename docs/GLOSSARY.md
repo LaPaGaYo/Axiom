@@ -300,6 +300,8 @@ APPLYING / TESTING → QUEUED（应用重启时由 RecoveryService 丢弃临时�
 
 **调度兜底巡检**（SWEEP-1）：每 60 秒的对账 tick 做完对账之后，`sweepExecutingMissions` 给每个 `EXECUTING` 的 Mission 请求一轮调度，触发名 `sweep`；启动时不加（启动自己有 `resume` 那一轮），不是新的定时器。它只补"丢了的一轮"——那一轮失败了，或者变化在 Control Plane 之外（新装或刚登录的 provider）。一轮本来就重读全部持久状态，所以巡检不带任何内存态。`scheduler.round` 审计里的 `sweep` 表示是巡检准入了东西：有一个触发丢了，值得查。巡检的一轮遇到"没有可用 provider"时，只有 `admissionRefusalRecorded` 答"否"才写 `task.admission_refused`——该 Task 最近一条拒绝存在、晚于它最近一次阶段变化、内容相同（按 JSON 文本）就不再写，这正是读模型认"哪条拒绝算数"的规则；事件触发的一轮照旧每次写。一轮正在跑时到来的 `sweep` 不顶替已经在等的触发，没有在等的才自己等。e2e 下默认不巡检，`AXIOM_E2E_RUN_SWEEP=1` 才开。限制：巡检不是免费的——每个等待的 Task 一个事务，只卡在 provider 上限的 Task 每分钟重建一次合同（内容变了才写）；失败的一轮每分钟失败并警告一次；丢失的触发最多晚一个 tick 才补上。
 
+**集成的读数据**（M4-5a）：`axiom.task.list` / `axiom.task.show` 的每个 Task 带可选的 `integration`——它最近一个批次的 `batchId`、`candidateId`、`status`、`baseCommit`、`mergeCommit`、`conflicts`、`updatedAt`（没有批次的 Task 不带这个键，较早的批次不列出）；`axiom.mission.show` 带可选的 `integration`——集成分支名 `branch` 与 `recordedHead`。`recordedHead` 是库里记的集成头（最近一次晋升的合并 commit，否则启动时记下的基线），也就是批次开始时核对分支用的那个值，不是现读分支：晋升之后可能慢一拍，分支被人手动挪动它不知道。只读，不新增 RPC 方法；`axiom.mission.list` 与各 mutation 的响应不带。一个批次的合并树回归用 `axiom.verification.list` 加 `batchId` 读。界面是 M4-5b。
+
 ### 4.10 Approval
 
 `PENDING → GRANTED | DENIED | EXPIRED | REVOKED`；`GRANTED → CONSUMED`（单次使用，执行后即消费）。
