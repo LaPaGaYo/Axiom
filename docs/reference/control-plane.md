@@ -359,9 +359,9 @@ git/kernel 失败只抛固定码：`integration_head_unavailable`（目录/集�
 
 ### Integration promotion（M4-2a-3）
 
-`integration-head.ts` 解析本机仓库并检查记录的头；`integration-promotion.ts` 负责晋升、引用对账和迟到的 Task 结算；`integration-base.ts` 的 `advanceIntegrationHead` 是产品前进集成分支的唯一地方。M4-2b 的 requestIntegrations 由 Scheduler round 调用，推进 VERIFIED → INTEGRATION_READY 并入队 integration.apply；本节继续描述执行器收到请求后的晋升。
+`integration-head.ts` 解析本机仓库、通过 `recordedIntegrationHead` 向读侧返回记录的头，并以同一函数检查批次起点；`integration-promotion.ts` 负责晋升、引用对账和迟到的 Task 结算；`integration-base.ts` 的 `advanceIntegrationHead` 是产品前进集成分支的唯一地方。M4-2b 的 requestIntegrations 由 Scheduler round 调用，推进 VERIFIED → INTEGRATION_READY 并入队 integration.apply；本节继续描述执行器收到请求后的晋升。
 
-每个新批次开始（插入或 QUEUED → APPLYING）在 integration_begin 内读该 Mission 的审计一次，以 sequence 最大的相关事件为准：integration.batch_promoted 的 after.mergeCommit，或 objectKind=mission、objectId=该 Mission 的 integration.base_created / integration.base_reused 的 after.sha。start 失败重试留下多个 base 事件时最后一条生效；不按批次 created_at 排序。不存在记录、最新记录没有合法 GitObjectIdSchema id，或实际头不等于记录，固定 `integration_head_unexpected`，无批次写入。这里的 ponytail 简化会读 Mission 全部事件；规模增长时改为带过滤的 store 查询。APPLYING / TESTING 继续只核对已有 baseCommit。
+每个新批次开始（插入或 QUEUED → APPLYING）在 integration_begin 内读该 Mission 的审计一次，以 sequence 最大的相关事件为准：integration.batch_promoted 的 after.mergeCommit，或 objectKind=mission、objectId=该 Mission 的 integration.base_created / integration.base_reused 的 after.sha。start 失败重试留下多个 base 事件时最后一条生效；不按批次 created_at 排序。不存在记录、最新记录没有合法 GitObjectIdSchema id，或实际头不等于记录，固定 `integration_head_unexpected`，无批次写入。这里的 ponytail 简化在每次批次开始及每次 `axiom.mission.show` 都会读 Mission 全部事件；规模增长时改为带过滤的 store 查询。APPLYING / TESTING 继续只核对已有 baseCommit。
 
 正常晋升顺序：
 
@@ -389,7 +389,7 @@ advanceIntegrationHead 先验证 from / to，再用一个 for-each-ref 同时读
 
 限制与风险：检查 checkout 与写引用是两个 git 调用；中间仍可能有人检出，worktree 内的 rebase / bisect 不在 worktreepath 检查范围；手删目录但未 prune 的工作树仍算检出。worktreepath 需要 Git 2.23（在 2.25 基线内）。引用被人移动后，各 Task 集成在秒级三次重试后以 integration_unavailable 阻塞，只能先把引用放回；没有 Mission 级待处理项（M4-4）。检出的分支也会在三次后丢弃已经通过的回归。耗尽时无法判定的 PROMOTABLE 留开放、Task 阻塞，挡住 Mission 队列，直到解除阻塞后由下一轮重新请求并重跑，或 Task 取消后可读取引用的 try 清理；仓库不可读期间，任何开放 PROMOTABLE 都让该 Mission 的每个 try 在清理之前失败，包括已取消的 Mission。
 
-最后一次资格检查与引用更新之间落下的 block、cancel、pause 不阻止晋升；mergeCommit 已是头时任何这些变化都不阻止补记。引用前进后被阻塞或取消的 Task 保持原状态，虽其变化已在集成分支；阻塞者解除后要等请求重跑才 INTEGRATED：M4-2b 的下一轮重排已结束的请求，仍 pending / running 的请求继续沿用；取消者保持 CANCELED。INTEGRATED 是终态，没有反向操作，也未新增写入者守卫。已运行 Worker 从旧头起步，在自己的合并时遇到新头；没有保全快照、原本能在旧 worktree 继续的中断 Attempt 在头移动后重新启动。最后一个 Task 集成后 Mission 仍 EXECUTING（M4-6）。不触碰目标分支，不 push / fetch / 开 PR；不使用 AWAITING_APPROVAL；修复基线仍等 M4-3，完整恢复与孤儿清扫等 M4-4，展示等 M4-5，交付等 M4-8。
+最后一次资格检查与引用更新之间落下的 block、cancel、pause 不阻止晋升；mergeCommit 已是头时任何这些变化都不阻止补记。引用前进后被阻塞或取消的 Task 保持原状态，虽其变化已在集成分支；阻塞者解除后要等请求重跑才 INTEGRATED：M4-2b 的下一轮重排已结束的请求，仍 pending / running 的请求继续沿用；取消者保持 CANCELED。INTEGRATED 是终态，没有反向操作，也未新增写入者守卫。已运行 Worker 从旧头起步，在自己的合并时遇到新头；没有保全快照、原本能在旧 worktree 继续的中断 Attempt 在头移动后重新启动。最后一个 Task 集成后 Mission 仍 EXECUTING（M4-6）。不触碰目标分支，不 push / fetch / 开 PR；不使用 AWAITING_APPROVAL；修复基线仍等 M4-3，完整恢复与孤儿清扫等 M4-4，读数据由 M4-5a 提供、界面展示等 M4-5b，交付等 M4-8。
 
 ### Integration requests（M4-2b）
 
@@ -410,6 +410,20 @@ INTEGRATION_READY 且仍有 ACTIVE Candidate 时，effect 不存在或状态为 
 `shouldHoldIntegration()` 是 `getMainE2EConfig().enabled && process.env.AXIOM_E2E_HOLD_INTEGRATION === '1'`。withFixtureMission 默认传入 AXIOM_E2E_HOLD_INTEGRATION=1，只有 `runIntegration: true` 才放开；现有 Mission e2e 的断言不改，只有新增 mission-integration.spec.ts 端到端跑 T01 → T04 的验证、合并、回归、晋升和依赖准入。
 
 限制与风险：除 stage change、adjustment、policy update、start、resume、unblock、backoff / cooldown 到期或 boot 等既有触发外，SWEEP-1 每 60 s 请求一轮 sweep；升级后 EXECUTING Mission 的第一轮会请求所有遗留 VERIFIED 中满足条件的 Task。重请求只看 effect 状态：failed 而 Task 仍在 INTEGRATION_READY（耗尽结算失败或进程先停）时，后续每轮可重新给三次尝试，SWEEP-1 使其在没有其它事件时也每分钟重新请求，每次尝试都有合并与回归，直到 Task 离开该 stage；执行器正常情况下不应留下 done、同 ACTIVE Candidate、Task 仍 INTEGRATION_READY 的组合。Mission 暂停或 Task 阻塞时，已有执行器每 30 s 轮询，本模块不改变暂停语义。集成头前进后，没有保全快照、原本会在旧 worktree 继续的中断 Attempt 改为重新启动；已经运行的 Worker 在自己的合并时遇到新头。SWEEP-1 将四个导出类型移至 scheduler/scheduler-contract.ts，由 scheduler.ts 重新导出以保留原 import 路径。所有旧 e2e 按住集成，新增用例的宿主执行由 verifier 负责。所有 Task 都 INTEGRATED 后 Mission 仍为 EXECUTING；修复基线、完整恢复、展示、收尾、Approval 与交付仍归后续 M4。
+
+### Integration read model（M4-5a）
+
+现有响应新增两个可选字段，无新 RPC 或参数：`axiom.task.list` 的每个 Task 与 `axiom.task.show` 的 Task 可带 `integration`（`TaskIntegrationSchema`）；只有 `axiom.mission.show` 在 `mission` 旁可带 `integration`（`MissionIntegrationSchema`）。`axiom.mission.list`、Mission mutations 与 Task mutations 不携带 integration；没有批次的 Task 与没有记录基点的 Mission 省略键，不返回 null。
+
+Task 的 `batchId` 是批次 id，`candidateId` 是批次唯一候选的 id，`status` 是存储的批次状态，`baseCommit` 是该批次的基点，`mergeCommit` 是合并成功后的提交（尚无时为 null），`conflicts` 是存储的冲突路径，`updatedAt` 是批次更新时间，经 `utcTimestamp` 转为 UTC ISO 8601。`taskIntegrations(store, missionId)` 用 Mission 的全部候选（包括 SUPERSEDED）关联 Task，忽略候选不在该 Mission 列表中的批次；“最新”是 `listIntegrationBatches` 返回顺序中的最后一个，即 created_at、插入顺序，而不是按 updatedAt 排序。最新批次可以处于任何状态；不列早期批次，下一批次出现后，同一 Task 早先的冲突或回归失败不再出现在该字段中。
+
+Mission 的 `branch` 是由执行器的 `integrationHeadRef` 去掉 `refs/heads/` 得到的短分支名 `axiom/integration/<missionId>`；`recordedHead` 是 `recordedIntegrationHead` 返回的合法 git object id。`missionIntegration(store, missionId)` 仅在该记录存在且合法时返回这两个键；无记录或最新相关事件的值不合法时省略 integration。这个头正是批次开始核对的记录，不是即时读取分支：晋升引用之后、审计提交之前可短暂落后，也不察觉被人手动移动的分支；读侧不运行 git，不启动进程。
+
+`conflicts` 原样返回执行器已脱敏、最多 200 条的路径；恰好 200 条时可能已截断。它随每个携带该 Task 的读取响应送达所有有权调用该读取的调用方，没有额外的路径权限过滤。批次的合并树回归经既有 `axiom.verification.list` 携带 `batchId` 读取；本读模型不带 VerificationRun。
+
+两个 schema 均为普通 `z.object`：旧客户端解析时丢弃未知键，新客户端面对旧主进程缺失的可选字段得到 undefined。CLI 表格列不变，`--json` 输出完整结果，因此会显示新键。当前界面尚不显示这些字段，展示由 M4-5b 实现。
+
+每次 Task list/show 的集成投影各增加一次 Mission 批次列表与一次全部候选列表读取，不按 Task 重复；原 waiting context 的候选读取保持不变。每次 `axiom.mission.show` 在 `missionSummary` 之后第二次读取该 Mission 的全部审计事件。存储的批次或候选行无法解析会使 Task 读取失败；本模块不捕获异常，也不跨请求缓存。
 
 ### Scheduler sweep（SWEEP-1）
 
@@ -897,7 +911,7 @@ M1 已注册 `axiom.mission.create/show/list/start/pause/resume/cancel`、`axiom
 
 CLI `src/cli/runtime/client.ts` 为 `axiom.*` 打版本戳，为 durable mutation 默认生成 request id，`--retry-request` 沿用原 id；`axiom-client.ts` 为 renderer mutation 生成 id，不确定重试复用 id 与原 payload。Worker 身份在 M2 接入（D73 之后由宿主核实，不再随 envelope 携带 capability），M1 CLI user commands 不冒充 Worker。runtime 公布 `axiom.control-plane.v1` capability。
 
-CLI JSON 输出是 `{ ok, result, ... }` / `{ ok:false, error:{code,...}, ... }`；单对象 result 用 `mission` / `goalRevision` / `planRevision` / `task`，列表用 `missions` / `planRevisions` / `tasks`。M2-10 的唯一 `MissionSummary` 形状包含 `runId`；可选 `reason` 来自该 Mission 最新一条 `mission.status` 且 `after.status === mission.status` 的审计的 `after.reason`，缺失时省略。所有 Mission RPC（含 mutation 响应）共用 `missionSummary(mission, store)`。TaskListItem 的 `id` 是 Orca Task id，不是提案 id。
+CLI JSON 输出是 `{ ok, result, ... }` / `{ ok:false, error:{code,...}, ... }`；单对象 result 用 `mission` / `goalRevision` / `planRevision` / `task`（M4-5a 的 `axiom.mission.show` 可在 `mission` 旁带可选 `integration`），列表用 `missions` / `planRevisions` / `tasks`。M2-10 的唯一 `MissionSummary` 形状包含 `runId`；可选 `reason` 来自该 Mission 最新一条 `mission.status` 且 `after.status === mission.status` 的审计的 `after.reason`，缺失时省略。所有 Mission RPC（含 mutation 响应）共用 `missionSummary(mission, store)`。TaskListItem 的 `id` 是 Orca Task id，不是提案 id。
 
 ### Terminal fallback Worker channel（M2-06a/b，D9 / D11 / D16）
 

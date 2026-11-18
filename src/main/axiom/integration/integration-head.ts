@@ -17,25 +17,29 @@ export async function integrationRepository(runtime: IntegrationRuntime, mission
   return repo.path
 }
 
+export function recordedIntegrationHead(store: AxiomStore, missionId: string) {
+  // ponytail: scans all Mission events per batch start or show; use a filtered store query as Missions grow.
+  const latest = store
+    .listAuditEvents({ missionId })
+    .findLast(
+      (event) =>
+        event.event === 'integration.batch_promoted' ||
+        (['integration.base_created', 'integration.base_reused'].includes(event.event) &&
+          event.objectKind === 'mission' &&
+          event.objectId === missionId)
+    )
+  const after = latest?.after
+  const value =
+    after && typeof after === 'object' && !Array.isArray(after)
+      ? after[latest.event === 'integration.batch_promoted' ? 'mergeCommit' : 'sha']
+      : undefined
+  const recorded = GitObjectIdSchema.safeParse(value)
+  return recorded.success ? recorded.data : undefined
+}
+
 export function assertRecordedIntegrationHead(store: AxiomStore, missionId: string, head: string) {
   try {
-    // ponytail: scans every Mission event once per batch start; use a filtered store query as Missions grow.
-    const latest = store
-      .listAuditEvents({ missionId })
-      .findLast(
-        (event) =>
-          event.event === 'integration.batch_promoted' ||
-          (['integration.base_created', 'integration.base_reused'].includes(event.event) &&
-            event.objectKind === 'mission' &&
-            event.objectId === missionId)
-      )
-    const after = latest?.after
-    const value =
-      after && typeof after === 'object' && !Array.isArray(after)
-        ? after[latest.event === 'integration.batch_promoted' ? 'mergeCommit' : 'sha']
-        : undefined
-    const recorded = GitObjectIdSchema.safeParse(value)
-    if (recorded.success && recorded.data === head) {
+    if (recordedIntegrationHead(store, missionId) === head) {
       return
     }
   } catch {

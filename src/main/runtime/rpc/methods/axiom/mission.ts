@@ -18,6 +18,7 @@ import { MissionUsageParams } from '../../../../../shared/axiom-contract/token-u
 import { missionUsage } from '../../../../axiom/supervision/mission-usage'
 import { MissionPendingParams } from '../../../../../shared/axiom-contract/mission-pending'
 import { missionPending } from '../../../../axiom/read-models/mission-pending'
+import { missionIntegration } from '../../../../axiom/read-models/integration-reads'
 
 export const AXIOM_MISSION_METHODS = [
   defineMethod({
@@ -72,7 +73,9 @@ export const AXIOM_MISSION_METHODS = [
     params: MissionShowParams,
     handler: (p, { runtime }) => {
       const { missions, store } = getAxiomControlPlane(runtime)
-      return { mission: missionSummary(missions.getMission(p.missionId), store) }
+      const mission = missionSummary(missions.getMission(p.missionId), store)
+      const integration = missionIntegration(store, p.missionId)
+      return { mission, ...(integration ? { integration } : {}) }
     }
   }),
   defineMethod({

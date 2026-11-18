@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { requiredString } from '../rpc-contract/rpc-param-primitives'
 import { TaskStageSchema } from './lifecycle'
 import { TaskWaitingOnSchema } from './task-waiting-on'
+import { TaskIntegrationSchema } from './integration-batch'
 import {
   AcceptanceCriterionSchema,
   AxiomIdSchema,
@@ -44,7 +45,8 @@ export const TaskListItemSchema = z.object({
   // Glossary §4.5: execution projection only. `completed` is not product completion.
   orcaStatus: z.enum(['pending', 'ready', 'dispatched', 'completed', 'failed', 'blocked']),
   previousStage: TaskStageSchema.optional(),
-  waitingOn: TaskWaitingOnSchema.optional()
+  waitingOn: TaskWaitingOnSchema.optional(),
+  integration: TaskIntegrationSchema.optional()
 })
 export type TaskListItem = z.infer<typeof TaskListItemSchema>
 

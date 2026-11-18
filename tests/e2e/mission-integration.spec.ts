@@ -4,6 +4,9 @@ import { test, expect } from './helpers/orca-app'
 import { FIXTURE_COMMIT, git, withFixtureMission } from './helpers/axiom-fixture-mission'
 import { inspectFixtureMission } from './helpers/axiom-fixture-inspection'
 import type { AcceptanceCriterion } from '../../src/shared/axiom-contract/mission-objects'
+import { desktopCall } from './helpers/axiom-desktop-call'
+import { TaskListResponseSchema } from '../../src/shared/axiom-contract/task-params'
+import { MissionResponseSchema } from '../../src/shared/axiom-contract/mission-params'
 
 const passing: AcceptanceCriterion = {
   text: 'The date-range examples include entityId',
@@ -45,7 +48,7 @@ test('M4-2b: a verified Task is integrated and its dependent Task runs from the 
   await withFixtureMission(
     testInfo,
     source,
-    async ({ mission, clone, userData, ledgerPath, releaseWorkers }) => {
+    async ({ page, mission, clone, userData, ledgerPath, releaseWorkers }) => {
       const inspect = () => inspectFixtureMission(userData, mission.id)
       await expect.poll(() => inspect().tasks.length, { timeout: 60_000 }).toBe(2)
       const tasks = inspect().tasks
@@ -164,6 +167,28 @@ test('M4-2b: a verified Task is integrated and its dependent Task runs from the 
           { timeout: 30_000 }
         )
         .toBe('')
+      const taskList = TaskListResponseSchema.parse(
+        await desktopCall(page, 'axiom.task.list', { missionId: mission.id })
+      )
+      for (const [id, batch, candidateId, mergeCommit] of [
+        [firstId, firstBatch, first.id, head1],
+        [dependentId, secondBatch, second.id, head2]
+      ]) {
+        expect(taskList.tasks.find((task) => task.id === id)?.integration).toMatchObject({
+          batchId: batch,
+          candidateId,
+          status: 'PROMOTED',
+          mergeCommit,
+          conflicts: []
+        })
+      }
+      const missionShow = MissionResponseSchema.parse(
+        await desktopCall(page, 'axiom.mission.show', { missionId: mission.id })
+      )
+      expect(missionShow.integration).toEqual({
+        branch: `axiom/integration/${mission.id}`,
+        recordedHead: head2
+      })
     },
     {
       taskIds: ['T01', 'T04'],
