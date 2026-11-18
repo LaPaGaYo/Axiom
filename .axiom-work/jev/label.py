@@ -52,6 +52,29 @@ BACKFILL = {
 }
 
 FULL = {
+    ('SCHEMA-2', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'a database stamped by a newer Axiom gets no Control Plane: getAxiomControlPlane refuses before '
+        'anything is built, with one code, a reason, two numbers and a next step; every axiom request that needs '
+        'it and every kernel verb that must ask whether a Mission owns a Run answer that refusal, start and stop '
+        'treat it as no Control Plane here, and nothing else changes; the code joins the controller list, so no '
+        'kernel, contract, CLI or renderer file changes; no existing test changed; six new tests under both '
+        'runners; on the host titles 1, 3, 4 and 5 fail with the two files of main put back and 2 and 6 pass; '
+        'the new e2e spec passes three times and fails against the control-plane.ts of main; every Mission spec '
+        'passes on the first host run; the union script failed 0 with ten pins retired by the planner; no '
+        'verifier change; no other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'the check is made when a process first asks for the Control Plane; a plane that exists is not stopped '
+            'when another process raises the stamp later',
+            'kernel orchestration verbs are refused on such a database even for Runs no Mission owns',
+            'the CLI shows the code and the next step, not the reason; the sentence is English',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('SCHEMA-1', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'Axiom gets a schema version of its own: one row in the new table axiom_schema, a chain of '
