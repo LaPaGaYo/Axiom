@@ -197,3 +197,15 @@
   - `88a266e003`（#39256）：原生聊天改为以 SQLite 为准——同步时的大块改动，涉及 headless Worker 的会话记录。
   - 上游的目录重排（"group … by owner"）与成批删除的测试：下次同步的冲突面会很大，`config/e2e-typecheck-baseline.txt` 的陈旧条目届时一并清。
 - **初筛点**推进到 `60d912e153`；下次从 `60d912e153..upstream/main` 接着筛。
+
+### 已应用（UPSTREAM-5，验证者宿主步骤）
+
+依赖与补丁类。按 D56 第 2 条，由验证者经宿主 launcher 安装并提交锁文件（`launchers/upstream-5-host.command`），沙盒里不装任何东西。brief `.axiom-work/briefs/UPSTREAM-5.md`，记录 `.axiom-work/verifications/UPSTREAM-5-1.md`。宿主步骤的候选 `6475e7dbe1`；它在门禁里只差一处：下限测试新注释里上游出处的写法多了一个 vendor-egress 棘轮按文件计数的词。验证者改了这一行注释（不动代码），修正后的候选 `5f6e32cfea`，门禁重跑通过后才写记录、才合并。
+
+| upstream | Axiom 落点 | 移植与差异 |
+|---|---|---|
+| `651f2efaa9`（Electron → 43.8.10；之前 `a82468b023` 的 43.8.7 没有单独取） | `package.json`、`pnpm-lock.yaml`、`src/shared/node-runtime-pin.ts`、`config/scripts/electron-runtime-floor.test.ts`、`src/main/browser/browser-popup-adapter-compatibility.electron.test.ts` | 43.8.6 直接到 43.8.10（发布已超过 `minimumReleaseAge`，不加豁免）。下限取 43.8.10，注释写明原因与出处（上游已删掉这个测试）；探针测试的版本期望随之改。锁文件里只有 Electron 的版本与校验值、三个补丁哈希变了。 |
+| `5ccdb32d31`（WebGL 字形字体串加 `.trim()`） | `config/patches/@xterm__addon-webgl@0.20.0-beta.300.patch`、`config/patches/xterm-src/@xterm__addon-webgl@0.20.0-beta.300.src.patch`、锁文件里这个补丁的哈希 | 上游改的是 beta.329 的补丁；本树在 beta.300 的补丁上做同一处改动：源码一处、两个构建产物各一处。验证者在容器里用发布包按 pnpm 的 diff 方式重现了原补丁（逐字节相同）再改，源码补丁等于新补丁的源码部分。**两个 source map 没有重生成**（差这一处表达式）；下次同步换上游的补丁时一并解决。 |
+| `19e5992f0f`（桌面端一半） | `config/patches/picomatch@4.0.4.patch`、`config/patches/picomatch@4.0.7.patch`（逐字节取自上游）、`pnpm-workspace.yaml`、`config/scripts/dependency-security-patches.test.mjs`、`config/patches/dependency-security.md` | 只打本工作区安装的两个版本；上游的 2.3.2 / 4.0.5 补丁、RubyGems、cloud、文档站、mobile、审计工具与 `@shadcn/lint` 的改动不取。 |
+
+**UPSTREAM-5 已合入（2026-11-18）**：merge `6bc8edf485`，候选 `5f6e32cfea`（宿主步骤 `6475e7dbe1` 加一行注释修正），记录 `1950d6a2f4`（`.axiom-work/verifications/UPSTREAM-5-1.md`）。宿主步骤：装上的 Electron 是 43.8.10，锁文件只动了 Electron、WebGL 补丁哈希与两个 picomatch 补丁；字形探针在 43.8.6 上正常、43.8.10 加修正后正常、去掉修正后字变小（红检查成立）；12 个 Electron 探针文件新旧两版全过；全量测试失败的 9 个文件、31 条测试都是 main 上本机一直失败的；41 个 Mission 规格 77 条全过；三栈冷启动出口记录为空；打包的 `build:unpack` 仍因本机 pnpm 共享仓库的老问题 rc=1（与本次改动无关），产物里的 Electron 是 43.8.10。没做的：没有人看过屏幕上的终端（请 Henry 打开应用后看一眼）；5 个 WebGL 终端规格带 `@headful` 标记、无头项目不跑；打包产物的前台出口检查要露出窗口，等 Henry 定时间；两个 source map 没有重生成；宿主 launcher 的 picomatch 探针在本机找不到副本（pnpm 共享仓库），改由合入 launcher 在合并前直接验。另：宿主 launcher 的 Mission 循环误把三个真实账号冒烟规格也列了进去，它们因没有冒烟环境变量各自跳过，没有用到任何真实账号。
