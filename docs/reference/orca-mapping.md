@@ -165,6 +165,8 @@ M3-06-2b / D88、D64 新只读内核 import：`src/main/axiom/execution/preserve
 
 判定依据：`tasks.run_id`（或 `dispatch_contexts.run_id`）命中 `missions.run_id`。M1-07 已实现统一守卫 `src/main/axiom/admission/mission-managed-run-guard.ts`，下列 handler 在对象解析后、首次写入前调用；`mission_managed` 已登记于 `src/main/runtime/rpc/errors.ts`。进程内 `caller: control_plane` 不能来自 RPC params。D73 只更换 Worker channel 的身份依据；本节 Mission admission 守卫全部保留。
 
+SCHEMA-2：数据库由更新的 Axiom 写过时，守卫需要查询 Control Plane 的这些入口无论命名哪个 Run 都返回 `axiom_schema_newer`，因为它不能读取 Mission 所有权并据此放行（见 control-plane.md §3 的 Newer Axiom schema 小节）。
+
 | Orca 入口 | 内核原行为 / 风险 | 拦截点 | M1 实现 |
 |---|---|---|---|
 | `orchestration.taskUpdate` 改 `status` | `updateTaskStatus` 只校验活跃 dispatch，可直接写 `completed` 并 `promoteReadyTasks` | `messaging/message-methods.ts` 的 `orchestration.taskUpdate` handler（不拦 `updateTaskStatus` 本身，`resolveGate` 内部要用它） | `assertNotMissionManaged` → `messaging/message-methods.ts`（`taskUpdate`，Task 解析后） |

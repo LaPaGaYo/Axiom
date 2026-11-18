@@ -30,6 +30,7 @@ import { MissionController } from './mission-controller/mission-controller'
 import { RunMailboxConsumer } from './mission-controller/run-mailbox-consumer'
 import { RecoveryService } from './recovery/recovery-service'
 import { getSelectedClaudeAccountIdForTarget } from '../claude-accounts/runtime-selection'
+import { assertAxiomSchemaSupported } from './schema-support'
 
 const instances = new WeakMap<OrchestrationDb, ReturnType<typeof createControlPlane>>()
 
@@ -37,6 +38,7 @@ export function getAxiomControlPlane(runtime: OrcaRuntimeService) {
   const db = runtime.getOrchestrationDb()
   let instance = instances.get(db)
   if (!instance) {
+    assertAxiomSchemaSupported(db)
     instance = createControlPlane(runtime, db)
     instances.set(db, instance)
   }

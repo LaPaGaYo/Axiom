@@ -3,11 +3,21 @@ import { stopHeadlessAttemptWatchers } from './execution/headless-attempt-watche
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { ATTEMPT_RECONCILE_INTERVAL_MS, type RecoveryReport } from './recovery/recovery-service'
 import { sweepExecutingMissions } from './scheduler/mission-sweep'
+import { isAxiomSchemaNewer } from './schema-support'
 
 export async function startAxiomControlPlane(
   runtime: OrcaRuntimeService
 ): Promise<RecoveryReport | undefined> {
-  const plane = getAxiomControlPlane(runtime)
+  let plane: ReturnType<typeof getAxiomControlPlane>
+  try {
+    plane = getAxiomControlPlane(runtime)
+  } catch (error) {
+    if (!isAxiomSchemaNewer(error)) {
+      throw error
+    }
+    console.warn('[axiom] Control Plane not started: database written by a newer Axiom', error.data)
+    return
+  }
   if (plane.started) {
     return
   }
@@ -75,7 +85,15 @@ export async function startAxiomControlPlane(
 
 export function stopAxiomControlPlane(runtime: OrcaRuntimeService): void {
   stopHeadlessAttemptWatchers(runtime)
-  const plane = getAxiomControlPlane(runtime)
+  let plane: ReturnType<typeof getAxiomControlPlane>
+  try {
+    plane = getAxiomControlPlane(runtime)
+  } catch (error) {
+    if (!isAxiomSchemaNewer(error)) {
+      throw error
+    }
+    return
+  }
   plane.started = false
   plane.bootGeneration += 1
   void plane.effects.stop().catch(() => {

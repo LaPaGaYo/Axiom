@@ -19,7 +19,8 @@ export const MISSION_CONTROLLER_ERROR_CODES = [
   'retry_budget_exhausted',
   'synthetic_session_id_invalid',
   'mission_target_busy',
-  'repository_not_local'
+  'repository_not_local',
+  'axiom_schema_newer'
 ] as const
 
 export class MissionControllerError extends Error {
