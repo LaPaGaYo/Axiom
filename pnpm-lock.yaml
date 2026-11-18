@@ -178,7 +178,7 @@ patchedDependencies:
   '@xterm/addon-ligatures@0.11.0-beta.301': 47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920
   '@xterm/addon-search@0.17.0-beta.301': eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0
   '@xterm/addon-serialize@0.15.0-beta.301': b35533fe252e7e45433150170348889f4e08a6c17f7017ac34ea694d831fec7f
-  '@xterm/addon-webgl@0.20.0-beta.300': 5349718f2c19d9319a81552580bf9618ded9b00f3707a5c6cdbbae1910849cd9
+  '@xterm/addon-webgl@0.20.0-beta.300': 67f2853e7ce41c9250f0d82acc8f35bdbc6d28e760b0fe0df2e91bc0ad3b6492
   '@xterm/xterm@6.1.0-beta.304': 87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156
   glob@13.0.6: 163edae2cab27bf7a8cf791c9a0ee368b596bfef898e490b3b77e7e44a8f0223
   i18next-cli@1.74.2: 2ee32eef742615cd133e1a6940f027deb3723a8430bb7953bba3a6769b0aac47
@@ -189,6 +189,8 @@ patchedDependencies:
   monaco-editor@0.55.1: 53b71f7d8a7c00b76ffdb73ce83d18e31692f193f5fafa6a390e48f5b3fdd636
   node-pty@1.1.0: 2aa312c1b29d733bfd3e3ece2fbbb4eed7750384d7d9f91effd27318a75b7a95
   oxlint-plugin-anti-slop@0.1.2: c10c871702365a0c2c59e9f1c5fb92df97cae5755d534c0a3d83c6368f6feafe
+  picomatch@4.0.4: 76f93480db68f4e3e460f56ccd209911ee596325ff3ae5fcf356a454d36536f8
+  picomatch@4.0.7: 7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c
   sprintf-js@1.1.3: 05316a8b01f155fe19a1e0cb4042c81d43d798a76755c407684e1199a18b1e08
   ws@8.22.0: 9393e04dd9a90b01eb7aa35fcd5b1431b5038ce999fbbd82651136193ba51f14
 
@@ -225,7 +227,7 @@ importers:
         version: 0.27.0
       electron-updater:
         specifier: ^6.8.10
-        version: 6.8.10(electron@43.8.6(supports-color@7.2.0))(supports-color@7.2.0)
+        version: 6.8.10(electron@43.8.10(supports-color@7.2.0))(supports-color@7.2.0)
       fflate:
         specifier: 0.8.3
         version: 0.8.3
@@ -307,7 +309,7 @@ importers:
         version: 1.88.0
       '@playwright/test':
         specifier: ^1.63.0
-        version: 1.63.0(electron@43.8.6(supports-color@7.2.0))
+        version: 1.63.0(electron@43.8.10(supports-color@7.2.0))
       '@sanity/diff-match-patch':
         specifier: ^3.2.1
         version: 3.2.1
@@ -316,7 +318,7 @@ importers:
         version: 0.1.5(eslint@10.10.0(@types/keyv@3.1.4)(jiti@2.7.0)(supports-color@7.2.0))
       '@stablyai/playwright-test':
         specifier: ^2.1.16
-        version: 2.1.16(@playwright/test@1.63.0(electron@43.8.6(supports-color@7.2.0)))(zod@4.6.7)
+        version: 2.1.16(@playwright/test@1.63.0(electron@43.8.10(supports-color@7.2.0)))(zod@4.6.7)
       '@tailwindcss/vite':
         specifier: ^4.3.3
         version: 4.3.3(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
@@ -424,7 +426,7 @@ importers:
         version: 0.13.0-beta.301(@xterm/xterm@6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156))
       '@xterm/addon-webgl':
         specifier: 0.20.0-beta.300
-        version: 0.20.0-beta.300(patch_hash=5349718f2c19d9319a81552580bf9618ded9b00f3707a5c6cdbbae1910849cd9)(@xterm/xterm@6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156))
+        version: 0.20.0-beta.300(patch_hash=67f2853e7ce41c9250f0d82acc8f35bdbc6d28e760b0fe0df2e91bc0ad3b6492)(@xterm/xterm@6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156))
       '@xterm/xterm':
         specifier: 6.1.0-beta.304
         version: 6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156)
@@ -450,14 +452,14 @@ importers:
         specifier: 3.4.17
         version: 3.4.17
       electron:
-        specifier: 43.8.6
-        version: 43.8.6(supports-color@7.2.0)
+        specifier: 43.8.10
+        version: 43.8.10(supports-color@7.2.0)
       electron-builder:
         specifier: 26.15.3
         version: 26.15.3(electron-builder-squirrel-windows@26.15.3)(supports-color@7.2.0)
       electron-vite:
         specifier: ^6.0.0
-        version: 6.0.0(@swc/core@1.16.2)(electron@43.8.6(supports-color@7.2.0))(supports-color@7.2.0)(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+        version: 6.0.0(@swc/core@1.16.2)(electron@43.8.10(supports-color@7.2.0))(supports-color@7.2.0)(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
       emoji-picker-react:
         specifier: ^4.22.3
         version: 4.22.3(@types/react@19.2.18)(react@19.2.8)
@@ -526,7 +528,7 @@ importers:
         version: 6.3.289
       playwright-core:
         specifier: 1.64.0
-        version: 1.64.0(electron@43.8.6(supports-color@7.2.0))
+        version: 1.64.0(electron@43.8.10(supports-color@7.2.0))
       pngjs:
         specifier: ^7.0.0
         version: 7.0.0
@@ -5090,8 +5092,8 @@ packages:
     resolution: {integrity: sha512-bO3y10YikuUwUuDUQRM4KfwNkKhnpVO7IPdbsrejwN9/AABJzzTQ4GeHwyzNSrVO+tEH3/Np255a3sVZpZDjvg==}
     engines: {node: '>=8.0.0'}
 
-  electron@43.8.6:
-    resolution: {integrity: sha512-2k3n5cjPHZqYTOn8iaJrm4fmb/QsvciomLD7PG9IECd0N/jr8Hxcu6Z/3mvMRrtXWCOp/i8qm5ZAcSnUzAa5Mw==}
+  electron@43.8.10:
+    resolution: {integrity: sha512-He/CVZxahZbDOS++eIwzU+XubARqz8s3d/eqPCmE/VcWc67yf8sei5vbKVZJE2jCmqqbbr5yWrWKmXJSyds8Ug==}
     engines: {node: '>= 22.12.0'}
     hasBin: true
 
@@ -9113,7 +9115,7 @@ snapshots:
       detect-libc: 2.1.2
       is-glob: 4.0.3
       node-addon-api: 7.1.1
-      picomatch: 4.0.4
+      picomatch: 4.0.4(patch_hash=76f93480db68f4e3e460f56ccd209911ee596325ff3ae5fcf356a454d36536f8)
     optionalDependencies:
       '@parcel/watcher-android-arm64': 2.5.6
       '@parcel/watcher-darwin-arm64': 2.5.6
@@ -9151,9 +9153,9 @@ snapshots:
       tslib: 2.8.1
       webcrypto-core: 1.9.2
 
-  '@playwright/test@1.63.0(electron@43.8.6(supports-color@7.2.0))':
+  '@playwright/test@1.63.0(electron@43.8.10(supports-color@7.2.0))':
     dependencies:
-      playwright: 1.63.0(electron@43.8.6(supports-color@7.2.0))
+      playwright: 1.63.0(electron@43.8.10(supports-color@7.2.0))
     transitivePeerDependencies:
       - '@types/electron'
       - electron
@@ -10159,28 +10161,28 @@ snapshots:
 
   '@stablelib/base64@1.0.1': {}
 
-  '@stablyai/playwright-base@2.1.16(@playwright/test@1.63.0(electron@43.8.6(supports-color@7.2.0)))(zod@4.6.7)':
+  '@stablyai/playwright-base@2.1.16(@playwright/test@1.63.0(electron@43.8.10(supports-color@7.2.0)))(zod@4.6.7)':
     dependencies:
-      '@playwright/test': 1.63.0(electron@43.8.6(supports-color@7.2.0))
+      '@playwright/test': 1.63.0(electron@43.8.10(supports-color@7.2.0))
       jpeg-js: 0.4.4
       p-retry: 4.6.2
       pngjs: 7.0.0
     optionalDependencies:
       zod: 4.6.7
 
-  '@stablyai/playwright-test@2.1.16(@playwright/test@1.63.0(electron@43.8.6(supports-color@7.2.0)))(zod@4.6.7)':
+  '@stablyai/playwright-test@2.1.16(@playwright/test@1.63.0(electron@43.8.10(supports-color@7.2.0)))(zod@4.6.7)':
     dependencies:
-      '@playwright/test': 1.63.0(electron@43.8.6(supports-color@7.2.0))
-      '@stablyai/playwright': 2.1.16(@playwright/test@1.63.0(electron@43.8.6(supports-color@7.2.0)))(zod@4.6.7)
-      '@stablyai/playwright-base': 2.1.16(@playwright/test@1.63.0(electron@43.8.6(supports-color@7.2.0)))(zod@4.6.7)
+      '@playwright/test': 1.63.0(electron@43.8.10(supports-color@7.2.0))
+      '@stablyai/playwright': 2.1.16(@playwright/test@1.63.0(electron@43.8.10(supports-color@7.2.0)))(zod@4.6.7)
+      '@stablyai/playwright-base': 2.1.16(@playwright/test@1.63.0(electron@43.8.10(supports-color@7.2.0)))(zod@4.6.7)
     transitivePeerDependencies:
       - '@types/zod'
       - zod
 
-  '@stablyai/playwright@2.1.16(@playwright/test@1.63.0(electron@43.8.6(supports-color@7.2.0)))(zod@4.6.7)':
+  '@stablyai/playwright@2.1.16(@playwright/test@1.63.0(electron@43.8.10(supports-color@7.2.0)))(zod@4.6.7)':
     dependencies:
-      '@playwright/test': 1.63.0(electron@43.8.6(supports-color@7.2.0))
-      '@stablyai/playwright-base': 2.1.16(@playwright/test@1.63.0(electron@43.8.6(supports-color@7.2.0)))(zod@4.6.7)
+      '@playwright/test': 1.63.0(electron@43.8.10(supports-color@7.2.0))
+      '@stablyai/playwright-base': 2.1.16(@playwright/test@1.63.0(electron@43.8.10(supports-color@7.2.0)))(zod@4.6.7)
     transitivePeerDependencies:
       - '@types/zod'
       - zod
@@ -10974,7 +10976,7 @@ snapshots:
     dependencies:
       '@xterm/xterm': 6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156)
 
-  '@xterm/addon-webgl@0.20.0-beta.300(patch_hash=5349718f2c19d9319a81552580bf9618ded9b00f3707a5c6cdbbae1910849cd9)(@xterm/xterm@6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156))':
+  '@xterm/addon-webgl@0.20.0-beta.300(patch_hash=67f2853e7ce41c9250f0d82acc8f35bdbc6d28e760b0fe0df2e91bc0ad3b6492)(@xterm/xterm@6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156))':
     dependencies:
       '@xterm/xterm': 6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156)
 
@@ -11786,7 +11788,7 @@ snapshots:
 
   electron-to-chromium@1.5.422: {}
 
-  electron-updater@6.8.10(electron@43.8.6(supports-color@7.2.0))(supports-color@7.2.0):
+  electron-updater@6.8.10(electron@43.8.10(supports-color@7.2.0))(supports-color@7.2.0):
     dependencies:
       builder-util-runtime: 9.7.0(supports-color@7.2.0)
       fs-extra: 10.1.0
@@ -11797,16 +11799,16 @@ snapshots:
       semver: 7.7.4
       tiny-typed-emitter: 2.1.0
     optionalDependencies:
-      electron: 43.8.6(supports-color@7.2.0)
+      electron: 43.8.10(supports-color@7.2.0)
     transitivePeerDependencies:
       - supports-color
 
-  electron-vite@6.0.0(@swc/core@1.16.2)(electron@43.8.6(supports-color@7.2.0))(supports-color@7.2.0)(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)):
+  electron-vite@6.0.0(@swc/core@1.16.2)(electron@43.8.10(supports-color@7.2.0))(supports-color@7.2.0)(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)):
     dependencies:
       '@babel/core': 7.29.7(supports-color@7.2.0)
       '@babel/plugin-transform-arrow-functions': 7.29.7(@babel/core@7.29.7(supports-color@7.2.0))
       cac: 7.1.0
-      electron: 43.8.6(supports-color@7.2.0)
+      electron: 43.8.10(supports-color@7.2.0)
       magic-string: 1.4.2
       picocolors: 1.1.1
       rolldown: 1.2.14
@@ -11830,7 +11832,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron@43.8.6(supports-color@7.2.0):
+  electron@43.8.10(supports-color@7.2.0):
     dependencies:
       '@electron-internal/extract-zip': 1.0.4
       '@electron/get': 5.0.0(supports-color@7.2.0)
@@ -12121,9 +12123,9 @@ snapshots:
     dependencies:
       format: 0.2.2
 
-  fdir@6.5.0(picomatch@4.0.7):
+  fdir@6.5.0(picomatch@4.0.7(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c)):
     optionalDependencies:
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c)
 
   fflate@0.8.3: {}
 
@@ -12890,7 +12892,7 @@ snapshots:
     dependencies:
       commander: 14.0.3
       listr2: 9.0.5
-      picomatch: 4.0.4
+      picomatch: 4.0.4(patch_hash=76f93480db68f4e3e460f56ccd209911ee596325ff3ae5fcf356a454d36536f8)
       string-argv: 0.3.2
       tinyexec: 1.1.2
       yaml: 2.9.1
@@ -13859,9 +13861,9 @@ snapshots:
 
   picocolors@1.1.1: {}
 
-  picomatch@4.0.4: {}
+  picomatch@4.0.4(patch_hash=76f93480db68f4e3e460f56ccd209911ee596325ff3ae5fcf356a454d36536f8): {}
 
-  picomatch@4.0.7: {}
+  picomatch@4.0.7(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c): {}
 
   pkce-challenge@5.0.1: {}
 
@@ -13880,17 +13882,17 @@ snapshots:
       pvutils: 1.1.5
       tslib: 2.8.1
 
-  playwright-core@1.63.0(electron@43.8.6(supports-color@7.2.0)):
+  playwright-core@1.63.0(electron@43.8.10(supports-color@7.2.0)):
     optionalDependencies:
-      electron: 43.8.6(supports-color@7.2.0)
+      electron: 43.8.10(supports-color@7.2.0)
 
-  playwright-core@1.64.0(electron@43.8.6(supports-color@7.2.0)):
+  playwright-core@1.64.0(electron@43.8.10(supports-color@7.2.0)):
     optionalDependencies:
-      electron: 43.8.6(supports-color@7.2.0)
+      electron: 43.8.10(supports-color@7.2.0)
 
-  playwright@1.63.0(electron@43.8.6(supports-color@7.2.0)):
+  playwright@1.63.0(electron@43.8.10(supports-color@7.2.0)):
     dependencies:
-      playwright-core: 1.63.0(electron@43.8.6(supports-color@7.2.0))
+      playwright-core: 1.63.0(electron@43.8.10(supports-color@7.2.0))
     transitivePeerDependencies:
       - '@types/electron'
       - electron
@@ -14788,8 +14790,8 @@ snapshots:
 
   tinyglobby@0.2.17:
     dependencies:
-      fdir: 6.5.0(picomatch@4.0.7)
-      picomatch: 4.0.7
+      fdir: 6.5.0(picomatch@4.0.7(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c))
+      picomatch: 4.0.7(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c)
     transitivePeerDependencies:
       - '@types/picomatch'
 
@@ -15022,7 +15024,7 @@ snapshots:
   vite@8.3.4(@types/node@18.19.130)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1):
     dependencies:
       lightningcss: 1.33.0
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c)
       postcss: 8.5.30
       rolldown: 1.2.14
       tinyglobby: 0.2.17
@@ -15039,7 +15041,7 @@ snapshots:
   vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1):
     dependencies:
       lightningcss: 1.33.0
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c)
       postcss: 8.5.30
       rolldown: 1.2.14
       tinyglobby: 0.2.17
@@ -15062,7 +15064,7 @@ snapshots:
       expect-type: 1.4.0
       magic-string: 1.4.3
       obug: 3.0.0
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c)
       std-env: 4.3.0
       tinybench: 6.2.2
       tinyexec: 1.3.1
@@ -15087,7 +15089,7 @@ snapshots:
       expect-type: 1.4.0
       magic-string: 1.4.3
       obug: 3.0.0
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c)
       std-env: 4.3.0
       tinybench: 6.2.2
       tinyexec: 1.3.1

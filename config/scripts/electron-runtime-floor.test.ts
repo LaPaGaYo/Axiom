@@ -15,8 +15,10 @@ import { describe, expect, it } from 'vitest'
 // 43.7.8 fixes find-in-page looping across host iframes (electron/electron#54199); 43.8.1 blocks
 // compromised eMudhra TLS intermediates (GHSA-jr5w-w6x2-84p9); 43.8.4 closes File System Access
 // blocklist bypasses and malformed-asar handling (electron/electron#54677, #55331, #55179); 43.8.6
-// carries the Chromium, V8, ANGLE, PDFium, Skia and WebRTC security backports.
-const MINIMUM_ELECTRON_VERSION = '43.8.6'
+// carries the Chromium, V8, ANGLE, PDFium, Skia and WebRTC security backports; 43.8.8 to 43.8.10
+// carry further ANGLE, Chromium, Dawn, ICU, Skia and V8 backports; upstream took 43.8.10 for a
+// Chromium use-after-free that is exploited in the wild (CVE-2026-125350, stablyai/orca#43682).
+const MINIMUM_ELECTRON_VERSION = '43.8.10'
 
 function parseVersion(specifier: string): [number, number, number] {
   const match = /(\d+)\.(\d+)\.(\d+)/.exec(specifier)
