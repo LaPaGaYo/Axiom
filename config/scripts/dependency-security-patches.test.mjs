@@ -21,6 +21,7 @@ const sprintfRequire = dependencyRequire([
   'global-agent',
   'roarr'
 ])
+const picomatchRequire = dependencyRequire(['@parcel/watcher'])
 const globRequire = dependencyRequire(['i18next-cli'])
 const minimatchCopies = [
   ['9.0.9', dependencyRequire(['electron-builder', 'app-builder-lib', '@electron/universal'])],
@@ -103,5 +104,12 @@ describe('installed dependency security patches', () => {
     await lastRead
     expect(reads).toBe(1)
     expect(await glob('**/f', { cwd })).toHaveLength(63)
+  })
+
+  it('collapses repeated wildcard extglobs in picomatch without nested quantifiers', () => {
+    const picomatch = picomatchRequire('picomatch')
+    expect(picomatch('+(*a)')('aaa')).toBe(true)
+    expect(picomatch('+(*a)')(`${'a'.repeat(40)}b`)).toBe(false)
+    expect(picomatch('+(*a)', { capture: true })('+(*a)')).toBe(true)
   })
 })
