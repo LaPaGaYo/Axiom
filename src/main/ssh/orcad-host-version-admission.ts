@@ -2,7 +2,7 @@
  * The downgrade rule every orcad activation on a shared host applies: a build may not start over
  * state a newer Orca's orcad may already have migrated.
  */
-import { compareAppVersions } from '../../shared/app-version'
+import { compareAppVersionsAcrossLines } from '../../shared/orca-baseline'
 import type { OrcadActivationRecord } from '../managed-server/activation/orcad-activation-record'
 
 export type OrcadHostVersionRefusal = 'host-newer'
@@ -21,5 +21,7 @@ export function refuseOrcadHostDowngrade(
   if (!record.activeAppVersion) {
     return null
   }
-  return compareAppVersions(record.activeAppVersion, appVersion) > 0 ? 'host-newer' : null
+  return compareAppVersionsAcrossLines(record.activeAppVersion, appVersion) > 0
+    ? 'host-newer'
+    : null
 }
