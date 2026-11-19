@@ -1,4 +1,5 @@
 import type { ScheduleTrigger } from '../scheduler/scheduler'
+import { requestDeliveryApproval, revokeDeliveryApprovals } from '../approval/delivery-approval'
 import { createTask } from './task-creation'
 import { assertMissionStartable } from './mission-start-guard'
 import { adjustTask, resolveBlockedMessages } from './task-adjustment'
@@ -181,10 +182,14 @@ export class MissionController {
       moveMission(this.ctx, missionId, 'EXECUTING', 'FINALIZING')
     )
   }
-  readyForApproval(missionId: string) {
-    return this.write('ready_for_approval', () =>
-      moveMission(this.ctx, missionId, 'FINALIZING', 'READY_FOR_APPROVAL')
-    )
+  readyForApproval(missionId: string, reportSha256?: string) {
+    return this.write('ready_for_approval', () => {
+      const mission = moveMission(this.ctx, missionId, 'FINALIZING', 'READY_FOR_APPROVAL')
+      if (reportSha256 !== undefined) {
+        requestDeliveryApproval(this.ctx.store, missionId, reportSha256, this.ctx.now())
+      }
+      return mission
+    })
   }
   pauseMission(missionId: string, reason = 'paused by user') {
     return this.write('pause_mission', () =>
@@ -214,6 +219,7 @@ export class MissionController {
     return this.write('cancel_mission', () => {
       const mission = requireMission(this.ctx, missionId)
       cancelMissionTasks(this.ctx, missionId, reason)
+      revokeDeliveryApprovals(this.ctx.store, missionId, 'mission_canceled', this.ctx.now())
       return moveMission(
         this.ctx,
         missionId,

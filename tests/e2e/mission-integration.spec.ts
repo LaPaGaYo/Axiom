@@ -8,6 +8,7 @@ import type { AcceptanceCriterion } from '../../src/shared/axiom-contract/missio
 import { desktopCall } from './helpers/axiom-desktop-call'
 import { TaskListResponseSchema } from '../../src/shared/axiom-contract/task-params'
 import { MissionResponseSchema } from '../../src/shared/axiom-contract/mission-params'
+import { MissionPendingResponseSchema } from '../../src/shared/axiom-contract/mission-pending'
 import { CompletionReportSchema } from '../../src/shared/axiom-contract/completion-report'
 import { ArtifactReadResponseSchema } from '../../src/shared/axiom-contract/artifact-params'
 
@@ -253,6 +254,18 @@ test('M4-2b: a verified Task is integrated and its dependent Task runs from the 
         )
         .toEqual(['done'])
       expect(git(['-C', clone, 'rev-parse', 'refs/heads/main'])).toBe(FIXTURE_COMMIT)
+      const approval = MissionResponseSchema.parse(
+        await desktopCall(page, 'axiom.mission.show', { missionId: mission.id })
+      ).approval
+      expect(approval).toMatchObject({
+        status: 'PENDING',
+        actionKind: 'delivery',
+        inputsHash: ready.reportSha256
+      })
+      const pending = MissionPendingResponseSchema.parse(
+        await desktopCall(page, 'axiom.mission.pending', { missionId: mission.id })
+      )
+      expect(pending.items.map((item) => item.reason)).toContain('delivery_approval_pending')
       await page.getByRole('button', { name: 'Missions', exact: true }).click()
       await page
         .getByRole('navigation', { name: 'Mission list', exact: true })

@@ -11,6 +11,7 @@ import { policyAuditStore } from './policy-audit-store'
 import { messagesStore } from './messages-store'
 import { candidatesStore } from './candidates-store'
 import { integrationBatchesStore } from './integration-batches-store'
+import { approvalsStore } from './approvals-store'
 import { submissionsStore } from './submissions-store'
 import { verificationRunsStore } from './verification-runs-store'
 import { effectsStore } from './effects-store'
@@ -30,6 +31,7 @@ type Artifacts = ReturnType<typeof artifactsStore>
 type PolicyAudit = ReturnType<typeof policyAuditStore>
 type Candidates = ReturnType<typeof candidatesStore>
 type Batches = ReturnType<typeof integrationBatchesStore>
+type Approvals = ReturnType<typeof approvalsStore>
 type Submissions = ReturnType<typeof submissionsStore>
 type VerificationRuns = ReturnType<typeof verificationRunsStore>
 type Effects = ReturnType<typeof effectsStore>
@@ -40,6 +42,10 @@ type AttemptTokenUsage = ReturnType<typeof attemptTokenUsageStore>
 
 // One injected store; table modules keep SQL and validation within the file-size gate.
 export class AxiomStore {
+  readonly insertApproval: Approvals['insertApproval']
+  readonly getApproval: Approvals['getApproval']
+  readonly listApprovals: Approvals['listApprovals']
+  readonly transitionApproval: Approvals['transitionApproval']
   readonly getOldestReadModelAuditAfter: ReturnType<
     typeof readModelAuditsStore
   >['getOldestReadModelAuditAfter']
@@ -153,6 +159,11 @@ export class AxiomStore {
   readonly getContextTokenBudget: Artifacts['getContextTokenBudget']
 
   constructor(private readonly db: OrchestrationDb) {
+    const approvals = approvalsStore(db)
+    this.insertApproval = approvals.insertApproval
+    this.getApproval = approvals.getApproval
+    this.listApprovals = approvals.listApprovals
+    this.transitionApproval = approvals.transitionApproval
     this.getOldestReadModelAuditAfter = readModelAuditsStore(db).getOldestReadModelAuditAfter
     this.getLatestReadModelAudit = readModelAuditsStore(db).getLatestReadModelAudit
     const tokenUsage = attemptTokenUsageStore(db)

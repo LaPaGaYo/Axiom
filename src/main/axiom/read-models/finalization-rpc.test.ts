@@ -98,5 +98,7 @@ it('mission.pending lists no finalization item once the Mission is READY_FOR_APP
   await execute()
   await execute()
   expect(f.missions.getMission(f.missionId).status).toBe('READY_FOR_APPROVAL')
-  expect((await pending()).items).toEqual([])
+  expect((await pending()).items.filter((item) => item.kind === 'mission')).toEqual([
+    expect.objectContaining({ reason: 'delivery_approval_pending' })
+  ])
 })

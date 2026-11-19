@@ -20,6 +20,7 @@ import { MissionPendingParams } from '../../../../../shared/axiom-contract/missi
 import { missionPending } from '../../../../axiom/read-models/mission-pending'
 import { missionIntegration } from '../../../../axiom/read-models/integration-reads'
 import { missionFinalization } from '../../../../axiom/read-models/finalization-reads'
+import { latestDeliveryApproval } from '../../../../axiom/approval/delivery-approval'
 
 export const AXIOM_MISSION_METHODS = [
   defineMethod({
@@ -77,8 +78,10 @@ export const AXIOM_MISSION_METHODS = [
       const mission = missionSummary(missions.getMission(p.missionId), store)
       const integration = missionIntegration(store, p.missionId)
       const finalization = missionFinalization(store, p.missionId)
+      const approval = latestDeliveryApproval(store, p.missionId)
       return {
         mission,
+        ...(approval ? { approval } : {}),
         ...(integration ? { integration } : {}),
         ...(finalization ? { finalization } : {})
       }
