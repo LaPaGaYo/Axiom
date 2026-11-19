@@ -26,3 +26,9 @@ STRUCT-1	M3-09-4b-1	test "$(git grep -l "secret-patterns" -- src/shared/axiom-co
 # them, move into src/main/axiom/scheduler/scheduler-contract.ts and are re-exported. Replaced in SWEEP-1's sidecar
 # by: 'policy' and 'sweep' in scheduler-contract.ts, and scheduler.ts naming scheduler-contract.
 SWEEP-1	M3-09-4c-1	git grep -q "'policy'" -- src/main/axiom/scheduler/scheduler.ts
+
+# M4-6a (docs/plans/M4.md, the M4-6a row): the outbox gains a fifth effect kind, mission.finalize, so the test
+# that pins the list of kinds lists five and its title says so. Replaced in M4-6a's sidecar by the new title in
+# src/shared/axiom-contract/effects.test.ts, by mission.finalize in the contract and by the title of the
+# codec's new test.
+M4-6a	M4-1b	grep -rq "pins the four kinds and five lifecycle states" src/main/axiom src/shared/axiom-contract
