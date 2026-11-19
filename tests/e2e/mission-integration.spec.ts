@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { writeFileSync } from 'node:fs'
 import { z } from 'zod'
 import { test, expect } from './helpers/orca-app'
@@ -7,6 +8,8 @@ import type { AcceptanceCriterion } from '../../src/shared/axiom-contract/missio
 import { desktopCall } from './helpers/axiom-desktop-call'
 import { TaskListResponseSchema } from '../../src/shared/axiom-contract/task-params'
 import { MissionResponseSchema } from '../../src/shared/axiom-contract/mission-params'
+import { CompletionReportSchema } from '../../src/shared/axiom-contract/completion-report'
+import { ArtifactReadResponseSchema } from '../../src/shared/axiom-contract/artifact-params'
 
 const passing: AcceptanceCriterion = {
   text: 'The date-range examples include entityId',
@@ -210,8 +213,36 @@ test('M4-2b: a verified Task is integrated and its dependent Task runs from the 
           outcome: 'ready',
           integrationHead: head2,
           targetHead: FIXTURE_COMMIT,
-          gate: Array(7).fill(true)
+          gate: Array(8).fill(true)
         })
+      const ready = MissionResponseSchema.parse(
+        await desktopCall(page, 'axiom.mission.show', { missionId: mission.id })
+      ).finalization
+      expect(ready).toHaveProperty('reportArtifactId', expect.any(String))
+      if (ready?.outcome !== 'ready' || !ready.reportArtifactId) {
+        throw new Error('Missing completion report')
+      }
+      const artifact = ArtifactReadResponseSchema.parse(
+        await desktopCall(page, 'axiom.artifact.read', { id: ready.reportArtifactId })
+      )
+      const bytes = Buffer.from(artifact.contentBase64, 'base64')
+      expect(createHash('sha256').update(bytes).digest('hex')).toBe(ready.reportSha256)
+      const report = CompletionReportSchema.parse(JSON.parse(bytes.toString('utf8')))
+      expect(report.commits).toEqual({
+        integrationHead: head2,
+        targetHead: FIXTURE_COMMIT,
+        promoted: [head1, head2]
+      })
+      expect(report.tasks).toHaveLength(2)
+      for (const [taskId, mergeCommit] of [
+        [firstId, head1],
+        [dependentId, head2]
+      ]) {
+        expect(report.tasks.find((task) => task.taskId === taskId)).toMatchObject({
+          stage: 'INTEGRATED',
+          integration: { mergeCommit }
+        })
+      }
       await expect
         .poll(
           () =>

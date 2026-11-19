@@ -5,6 +5,7 @@ import type { OrchestrationDb } from '../../runtime/orchestration/db/orchestrati
 import type { AxiomStore } from '../db/axiom-store'
 import { recordedIntegrationHead } from '../integration/integration-head'
 import { activeCandidateVerification } from '../verification/verification-candidate'
+import { QUESTION_BLOCKING_STAGES } from '../read-models/task-waiting-on'
 
 export type FinalizationFacts = {
   integrationHead: string
@@ -39,12 +40,23 @@ export function completionGate(
     return batch?.status !== 'PROMOTED' || latest?.status !== 'PASS'
   })
   const questions = tasks.filter((task) => {
+    if (!QUESTION_BLOCKING_STAGES.has(task.stage)) {
+      return false
+    }
     const question = store.hasPendingQuestionForTask(task.taskId)
     const typed = store.hasPendingTypedQuestionForTask(task.taskId)
     const gates = db.listGates({ taskId: task.taskId, status: 'pending' })
     return question || typed || gates.length > 0
   })
   const approval = store.hasBlockingApproval(missionId)
+  const submissions = verification.map(({ taskId, candidate }) => {
+    const submission = candidate && store.getSubmissionByDispatch(candidate.attemptId)
+    return {
+      taskId,
+      submission: submission?.candidateId === candidate?.id ? submission : undefined
+    }
+  })
+  const missing = submissions.filter((entry) => !entry.submission)
   const mission = store.getMission(missionId)
   const goal = mission?.activeGoalRevisionId
     ? store.getGoalRevision(mission.activeGoalRevisionId)
@@ -99,6 +111,12 @@ export function completionGate(
       Boolean(goal) && coverage.uncovered.length === 0,
       integrated.map((task) => task.taskId),
       !goal ? 'active Goal unavailable' : coverage.uncovered.map((index) => `#${index}`).join(', ')
+    ),
+    item(
+      'limitations_recorded',
+      missing.length === 0,
+      submissions.flatMap((entry) => (entry.submission ? [entry.submission.id] : [])),
+      missing.map((entry) => entry.taskId).join(', ')
     )
   ]
 }

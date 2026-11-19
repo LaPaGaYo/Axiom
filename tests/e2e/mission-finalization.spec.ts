@@ -4,6 +4,7 @@ import { test, expect } from './helpers/orca-app'
 import { FIXTURE_COMMIT, git, withFixtureMission } from './helpers/axiom-fixture-mission'
 import { inspectFixtureMission } from './helpers/axiom-fixture-inspection'
 import { desktopCall } from './helpers/axiom-desktop-call'
+import { ArtifactListResponseSchema } from '../../src/shared/axiom-contract/artifact-params'
 import { MissionResponseSchema } from '../../src/shared/axiom-contract/mission-params'
 import { MissionPendingResponseSchema } from '../../src/shared/axiom-contract/mission-pending'
 import type { AcceptanceCriterion } from '../../src/shared/axiom-contract/mission-objects'
@@ -103,6 +104,14 @@ test('M4-6a: a moved target branch stops finalization and the Mission says why',
         )
         .toEqual(['done'])
       const stopped = await show()
+      expect(stopped.finalization).not.toHaveProperty('reportArtifactId')
+      const reports = ArtifactListResponseSchema.parse(
+        await desktopCall(page, 'axiom.artifact.list', {
+          missionId: mission.id,
+          kind: 'completion_report'
+        })
+      )
+      expect(reports.artifacts).toEqual([])
       expect(stopped.mission.status).toBe('FINALIZING')
       expect(
         inspect().audits.some(

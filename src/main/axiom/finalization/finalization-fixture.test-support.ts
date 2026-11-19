@@ -7,6 +7,11 @@ import {
   provenance
 } from '../../../shared/axiom-contract/contract-fixtures.test-support'
 import type { TaskStage } from '../../../shared/axiom-contract/lifecycle'
+import {
+  reportArtifacts,
+  reportAttempt,
+  reportSubmission
+} from './completion-report-fixture.test-support'
 
 export const integrationHead = 'a'.repeat(40)
 export const targetHead = 'b'.repeat(40)
@@ -38,7 +43,7 @@ export function finalizationFixture(db: OrchestrationDb, count = 2) {
     }
   })
   missions.approvePlan({ planRevisionId: plan.id, resolver: 'tester', provenance })
-  const f = { db, store, missions, missionId: mission.id }
+  const f = { db, store, missions, missionId: mission.id, artifacts: reportArtifacts(store) }
   settleTasks(store, mission.id)
   missions.startExecution(mission.id)
   return { ...f, tasks: store.listTaskStages({ missionId: mission.id }) }
@@ -78,6 +83,8 @@ export function settleTasks(store: AxiomStore, missionId: string) {
         status: 'ACTIVE',
         supersededBy: null
       })
+      reportAttempt(store, task)
+      reportSubmission(store, task)
       store.insertVerificationRun({
         id: `run-${taskId}`,
         missionId,

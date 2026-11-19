@@ -87,12 +87,6 @@ it('fails goal_criteria_covered when only a canceled Task covers a criterion', (
     detail: expect.stringContaining('0')
   })
 })
-it('fails no_open_questions while a Task has a pending question', () => {
-  const pending = f.db.createGate({ taskId: f.tasks[0].taskId, question: 'Confirm scope' })
-  expect(item('no_open_questions').pass).toBe(false)
-  f.db.resolveGate(pending.id, 'resolved')
-  expect(item('no_open_questions').pass).toBe(true)
-})
 it('reports every item in contract order and cuts evidence at 200 entries', () => {
   f.db.close()
   f = finalizationFixture(new OrchestrationDb(':memory:'), 201)

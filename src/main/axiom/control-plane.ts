@@ -121,7 +121,7 @@ function createControlPlane(runtime: OrcaRuntimeService, db: OrchestrationDb) {
   registerMissionEffectExecutors({ db, store, missions, effects, launch, verification })
   registerAttemptContinuation({ store, effects, scheduler })
   registerIntegrationApply({ store, missions, runtime, effects, artifacts })
-  registerMissionFinalize({ db, store, missions, runtime, effects })
+  registerMissionFinalize({ db, store, missions, runtime, effects, artifacts })
   const planner = createPlannerLauncher({
     runtime,
     db,

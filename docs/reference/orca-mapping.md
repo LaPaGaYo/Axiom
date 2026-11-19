@@ -34,7 +34,7 @@
 | Approval | 不复用 `decision_gates`（D7：`resolveGate` 不校验 options、无 pending 守卫、无 resolver/expiry） | `new side table` `approvals` | 精确动作 + inputs hash + 有效期 |
 | Policy | Orca 全局设置局部投影：`nestedWorkerMaxDepth`（`src/shared/default-global-settings.ts:154`）、worker-start 模式（`rpc/methods/orchestration-worker-start-mode.ts`） | `new side table` `mission_policies` | Mission 级策略优先于全局设置 |
 | AuditEvent | `mutation_receipts` / `mutation_caller_identities`（`create-core-tables-sql.ts`；幂等，不是审计） | `new side table` `audit_events` + `reuse` receipts | receipts 保留为幂等机制 |
-| CompletionReport | 无 | Artifact `kind='completion_report'` | 由 `axiom.mission.completionReport` 生成 |
+| CompletionReport | 无 | Artifact `kind='completion_report'` | 由 mission.finalize 执行器写入；不存在 `axiom.mission.completionReport` 方法（M4-10） |
 
 ## 3. 状态与枚举映射
 
@@ -204,7 +204,7 @@ M1 参数契约位于 `src/shared/axiom-contract/mission-params.ts`、`goal-para
 | `axiom.mission.start`（M1 已注册） | missionId | 用户启动：`PLANNED → EXECUTING`，D51 创建/沿用集成基线，重算 readiness 并触发 Scheduler admission/launch | M | 已注册 / 已实现 |
 | `axiom.mission.pause` / `resume` / `cancel`（M1 已注册） | missionId、reason | `missions.status`；pause 停 admission；cancel 持久化 CANCELED 后 await M2-08 reconciliation（stop/abandon/release）；Approval 留 M4 | M | 已注册 / 已实现 |
 | `axiom.mission.deliver` | missionId、approvalId | 集成基线合入目标分支（D6），成功 → `COMPLETED` | M | 未注册；M4 |
-| `axiom.mission.completionReport` | missionId | 生成 Artifact `completion_report` | M | 未注册；M4 |
+| `axiom.mission.completionReport`（不存在） | 无 | mission.finalize 执行器写入 Artifact `completion_report`，经 mission.show 与 artifact.read 读取 | — | M4-10 不新增此方法 |
 | `axiom.goal.propose` / `activate` / `show`（M1 已注册） | missionId、goal 正文 / goalRevisionId | PROPOSED / ACTIVE+SUPERSEDED 前版 + `MAJOR_REPLAN` 触发 | M/M/— | 已注册 / 已实现 |
 | `axiom.plan.propose`（M1 已注册） | missionId、planRevision；人类 provenance 或 Planner attemptId/from + 宿主调用方身份（互斥） | `plan_revisions`(PROPOSED)，Mission → `PLAN_REVIEW`；Planner 强制 clean worktree、写 kind=planner/actor=provider、2 秒 stop grace | M | 已注册 / 已实现 |
 | `axiom.plan.approve` / `reject`（M1 已注册） | planRevisionId、resolver；reject 另需 reason | APPROVED：物化 `tasks`(deps=[]) + `task_stages` + `mission_task_edges`，重算 readiness；旧 Task `inherit/cancel/rebind` 留给 M5 | M | 已注册 / 已实现 |

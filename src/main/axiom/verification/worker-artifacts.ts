@@ -1,4 +1,4 @@
-import type { ArtifactKind } from '../../../shared/axiom-contract/artifact-params'
+import type { StoredArtifactKind } from '../../../shared/axiom-contract/artifact-params'
 import type { ArtifactStore } from '../artifacts/artifact-store'
 import type { AxiomStore } from '../db/axiom-store'
 
@@ -7,7 +7,7 @@ export type WorkerArtifactChecks = {
   required: boolean
   checked: {
     id: string
-    kind: ArtifactKind | null
+    kind: StoredArtifactKind | null
     mediaType: string | null
     bytes: number | null
     problem?: ArtifactProblem
