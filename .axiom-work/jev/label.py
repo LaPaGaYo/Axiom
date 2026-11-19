@@ -52,6 +52,32 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M4-10', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'when every gate item passes the finalize executor builds one JSON completion report from the '
+        'database and the two commits it read, stores it as an artifact of the new kind completion_report and '
+        'records ready with its id and hash; the recording transaction rebuilds the report and writes only when '
+        'the hash is the same; an eighth gate item limitations_recorded; no_open_questions counts a question only '
+        'while its Task is in a blocking stage; a put through the RPC method cannot name the new kind; '
+        'the launcher verification passed (94 assertions); twenty new tests under both runners and three more '
+        'times under each; the red check on the host (titles 14, 16, 17, 18 and 19 fail with the three wiring '
+        'files of main put back, the other fifteen pass; the integration spec fails where it reads the report); '
+        'forty-two Mission specs pass on the candidate build; the union script failed 0 with twenty-four pins '
+        'retired by the planner; four existing test files changed as the brief allows; no verifier change; no '
+        'other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'a Mission that became ready under M4-6a has a record without a report and nothing writes one',
+            'a report that the comparison rejected or a later run replaced stays in the store unreferenced',
+            'no Markdown, no page and no export command until M4-11; the delivery part is M4-8',
+            'the two launch enums are spelled in the contract and again in the builder parser of the launch event',
+            'the CLI commands for artifacts were read with the new kind, not run',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('VER-1', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'three kernel version rules (host downgrade refusal, SQLite profile floor, plugin engine range) '
