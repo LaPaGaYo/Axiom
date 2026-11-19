@@ -189,6 +189,39 @@ test('M4-2b: a verified Task is integrated and its dependent Task runs from the 
         branch: `axiom/integration/${mission.id}`,
         recordedHead: head2
       })
+      await expect
+        .poll(
+          async () => {
+            const shown = MissionResponseSchema.parse(
+              await desktopCall(page, 'axiom.mission.show', { missionId: mission.id })
+            )
+            return {
+              status: shown.mission.status,
+              outcome: shown.finalization?.outcome,
+              integrationHead: shown.finalization?.integrationHead,
+              targetHead: shown.finalization?.targetHead,
+              gate: shown.finalization?.gate?.map((item) => item.pass)
+            }
+          },
+          { timeout: 30_000 }
+        )
+        .toEqual({
+          status: 'READY_FOR_APPROVAL',
+          outcome: 'ready',
+          integrationHead: head2,
+          targetHead: FIXTURE_COMMIT,
+          gate: Array(7).fill(true)
+        })
+      await expect
+        .poll(
+          () =>
+            inspect()
+              .effects.filter((e) => e.kind === 'mission.finalize')
+              .map((e) => e.status),
+          { timeout: 30_000 }
+        )
+        .toEqual(['done'])
+      expect(git(['-C', clone, 'rev-parse', 'refs/heads/main'])).toBe(FIXTURE_COMMIT)
       await page.getByRole('button', { name: 'Missions', exact: true }).click()
       await page
         .getByRole('navigation', { name: 'Mission list', exact: true })

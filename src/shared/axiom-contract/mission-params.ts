@@ -3,6 +3,7 @@ import { OptionalString, requiredString } from '../rpc-contract/rpc-param-primit
 import { RepoSelector } from '../rpc-contract/github-repo-target-params'
 import { MissionStatusSchema } from './lifecycle'
 import { MissionIntegrationSchema } from './integration-batch'
+import { MissionFinalizationSchema } from './mission-finalization'
 import {
   AxiomIdSchema,
   GoalBodySchema,
@@ -53,7 +54,8 @@ export type MissionSummary = z.infer<typeof MissionSummarySchema>
 
 export const MissionResponseSchema = z.object({
   mission: MissionSummarySchema,
-  integration: MissionIntegrationSchema.optional()
+  integration: MissionIntegrationSchema.optional(),
+  finalization: MissionFinalizationSchema.optional()
 })
 export const AttemptReconcileEntrySchema = z.object({
   attemptId: AxiomIdSchema.nullable(),

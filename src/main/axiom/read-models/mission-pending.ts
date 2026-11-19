@@ -15,9 +15,26 @@ import { auditReason, createWaitingContext, type WaitingContext } from './waitin
 import { comparePendingItems, createPendingItems, type PendingItems } from './pending-items'
 import { pendingTaskItems } from './pending-task-items'
 import { missionSince } from './pending-since'
+import { missionFinalization, finalizationSummary } from './finalization-reads'
 
 function missionItem(ctx: WaitingContext, pending: PendingItems): MissionPendingItem[] {
   const { mission, store } = ctx
+  if (mission.status === 'FINALIZING') {
+    const record = missionFinalization(store, mission.id)
+    return record?.outcome === 'stopped'
+      ? [
+          pending.item({
+            kind: 'mission',
+            objectId: mission.id,
+            reason: record.reason,
+            blocking: true,
+            actions: ['axiom.mission.cancel'],
+            since: record.at,
+            summary: finalizationSummary(record)
+          })
+        ]
+      : []
+  }
   const analyzing =
     mission.status === 'ANALYZING' &&
     !ctx.plans.some((plan) => plan.status === 'PROPOSED') &&

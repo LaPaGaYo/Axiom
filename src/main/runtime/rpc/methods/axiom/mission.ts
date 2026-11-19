@@ -19,6 +19,7 @@ import { missionUsage } from '../../../../axiom/supervision/mission-usage'
 import { MissionPendingParams } from '../../../../../shared/axiom-contract/mission-pending'
 import { missionPending } from '../../../../axiom/read-models/mission-pending'
 import { missionIntegration } from '../../../../axiom/read-models/integration-reads'
+import { missionFinalization } from '../../../../axiom/read-models/finalization-reads'
 
 export const AXIOM_MISSION_METHODS = [
   defineMethod({
@@ -75,7 +76,12 @@ export const AXIOM_MISSION_METHODS = [
       const { missions, store } = getAxiomControlPlane(runtime)
       const mission = missionSummary(missions.getMission(p.missionId), store)
       const integration = missionIntegration(store, p.missionId)
-      return { mission, ...(integration ? { integration } : {}) }
+      const finalization = missionFinalization(store, p.missionId)
+      return {
+        mission,
+        ...(integration ? { integration } : {}),
+        ...(finalization ? { finalization } : {})
+      }
     }
   }),
   defineMethod({

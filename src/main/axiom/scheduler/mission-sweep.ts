@@ -14,7 +14,11 @@ export function sweepExecutingMissions(
     if (shouldHoldSweep()) {
       return
     }
-    for (const { id: missionId } of store.listMissions({ status: 'EXECUTING' })) {
+    const missions = [
+      ...store.listMissions({ status: 'EXECUTING' }),
+      ...store.listMissions({ status: 'FINALIZING' })
+    ]
+    for (const { id: missionId } of missions) {
       void scheduler.scheduleRound(missionId, 'sweep').catch(() => {
         console.warn('[axiom] Scheduler round failed', { missionId, trigger: 'sweep' })
       })

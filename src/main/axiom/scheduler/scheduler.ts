@@ -16,6 +16,7 @@ import { blockingQuestionOrApproval, interruptionBackoff } from './admission-blo
 import { orderByCriticalPath } from './critical-path'
 import type { EffectOutbox } from '../outbox/effect-outbox'
 import { requestIntegrations } from '../integration/integration-admission'
+import { requestFinalization } from '../finalization/finalization-request'
 import { admissionRefusalRecorded } from './admission-refusal'
 import type { AdmittedAttempt, ScheduleRoundResult, ScheduleTrigger } from './scheduler-contract'
 
@@ -149,6 +150,7 @@ export class Scheduler {
     trigger: ScheduleTrigger
   ): Promise<ScheduleRoundResult> {
     const result: ScheduleRoundResult = { admitted: [], skipped: [] }
+    requestFinalization(this.store, this.missions, this.deps.effects, missionId)
     if (this.store.getMission(missionId)?.status !== 'EXECUTING') {
       return result
     }
