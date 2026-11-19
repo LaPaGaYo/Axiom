@@ -29,12 +29,13 @@ const dispatch = {
 }
 
 describe('effect contract', () => {
-  it('pins the four kinds and five lifecycle states', () => {
+  it('pins the five kinds and five lifecycle states', () => {
     expect(EFFECT_KINDS).toEqual([
       'attempt.dispatch',
       'verification.enqueue',
       'attempt.continue',
-      'integration.apply'
+      'integration.apply',
+      'mission.finalize'
     ])
     expect(EffectStatusSchema.options).toEqual(['pending', 'running', 'done', 'failed', 'retired'])
   })

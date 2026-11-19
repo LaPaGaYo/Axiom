@@ -169,7 +169,7 @@ RulesEngine 只对 eligible 闭集排序：`routing.roles[role].provider` 最高
 
 AgentSpec 的预算只含本次 Attempt 的 maxRuntimeMinutes（Task → Mission → 45）与可选 maxTokens（Task → Mission），不含 maxAttempts。worker 复制验收标准、scope.allowedPaths 写权限和首段路径去重排序后的 capabilities；planner 固定 planning、空写权限与 planner-worktree。规范 JSON 按 schema 键序生成并 sha256 寻址；INSERT OR IGNORE 只在插入时追加 agent_spec.created，两者同一事务。Factory 不改 Task stage、readiness、权限许可或 attempt_bindings，不创建 worktree、不启动 Worker。
 
-axiom.policy.show/update 及 CLI `axiom mission policy show --mission <id> --json` / `update --mission <id> [--routing-file <json>] [--concurrency <n>] --json` 已注册。M2 patch 仅应用 routing（整体替换，省略字段使用默认值）与 concurrencyLimit；budget 键在 handler 的写入前检查中一律返回 approval_required（M4），其他未知键返回 invalid_argument。更新经现有 mutation fence/receipts，policy 与 policy.updated（before/after）同一事务持久化。M3-09-4c-1：每次提交成功后，经 MissionController 请求本 Mission 的一轮 `policy` 准入；未改变任何值的更新也请求，非 EXECUTING Mission 也请求但该轮立即返回。拒绝或回滚的更新不请求；已完成回执的重放不再运行 handler，也不再请求。
+axiom.policy.show/update 及 CLI `axiom mission policy show --mission <id> --json` / `update --mission <id> [--routing-file <json>] [--concurrency <n>] --json` 已注册。M2 patch 仅应用 routing（整体替换，省略字段使用默认值）与 concurrencyLimit；budget 键在 handler 的写入前检查中一律返回 approval_required（M4），其他未知键返回 invalid_argument。更新经现有 mutation fence/receipts，policy 与 policy.updated（before/after）同一事务持久化。M3-09-4c-1：每次提交成功后，经 MissionController 请求本 Mission 的一轮 `policy` 准入；未改变任何值的更新也请求，非 EXECUTING Mission 也请求；该轮先处理 finalization 请求，再在非 EXECUTING 时返回。拒绝或回滚的更新不请求；已完成回执的重放不再运行 handler，也不再请求。
 
 策略更新只重看本 Mission，不唤醒其它 Mission，也不启动 Planner。仍然没有可用 provider 的 Task，由真实事件触发的每轮仍各追加一条 task.admission_refused；SWEEP-1 的 sweep 轮仅在当前有效拒绝不存在或内容变化时追加（见 Scheduler sweep）；budget、attempts、Question 或 Approval 的阻塞不会因更新策略而解除。该请求只在处理更新的进程里发出，不持久化；若提交后、准入轮之前崩溃，READY Task 由 boot pass 重看；进程仍在但请求丢失或失败时，由下一次 sweep 补看。
 
@@ -217,7 +217,7 @@ M2 仍仅允许首个 Plan 批准；替代计划批准属于 M5。`plan-material
 
 ### Scheduler admission 与预算（M2-04）
 
-`Scheduler.scheduleRound(missionId, trigger)` 只处理 EXECUTING Mission，先重算 readiness，紧接着同步调用 requestIntegrations 请求集成（见 Integration requests），再按最长下游链长度降序、Task id 升序遍历 READY Tasks。每轮从数据库读取状态；同实例/同 Mission 的重叠调用只保留一个待执行 trigger，当前轮结束后再跑一轮；真实事件覆盖待执行 trigger，sweep 只在没有待执行 trigger 时占位。Scheduler 自身不设 timer，周期请求来自既有的 reconcile tick（见 Scheduler sweep）。当前轮抛错时，若已有待执行 trigger，仍执行该 trigger 对应的下一轮；没有待执行 trigger 则照旧拒绝 flight。后续轮接手时不再报告前一轮的错误，后续轮按自己的结果处理；flight 返回值也不包含失败轮已经准入的 Task（持久的 admission 不撤销，目前没有调用方读取该返回值）。进程重启只需重新实例化 Scheduler；序号、计数、provider 占用均从数据库恢复。
+`Scheduler.scheduleRound(missionId, trigger)` 先对传入的 Mission 请求 finalization（不存在的 id 不写入），随后只对仍为 EXECUTING 的 Mission 重算 readiness，紧接着同步调用 requestIntegrations 请求集成（见 Integration requests），再按最长下游链长度降序、Task id 升序遍历 READY Tasks。每轮从数据库读取状态；同实例/同 Mission 的重叠调用只保留一个待执行 trigger，当前轮结束后再跑一轮；真实事件覆盖待执行 trigger，sweep 只在没有待执行 trigger 时占位。Scheduler 自身不设 timer，周期请求来自既有的 reconcile tick（见 Scheduler sweep）。当前轮抛错时，若已有待执行 trigger，仍执行该 trigger 对应的下一轮；没有待执行 trigger 则照旧拒绝 flight。后续轮接手时不再报告前一轮的错误，后续轮按自己的结果处理；flight 返回值也不包含失败轮已经准入的 Task（持久的 admission 不撤销，目前没有调用方读取该返回值）。进程重启只需重新实例化 Scheduler；序号、计数、provider 占用均从数据库恢复。
 
 ContextBuilder/AgentFactory 的异步构建在 admission 事务之前完成。事务内重新校验 Mission/Task、APPROVED Plan 与依赖、Question/Approval、预算/并发、构建前后的 Task/policy 一致性，以及 package/spec 存在且归属匹配；分配 `seq = max(seq) + 1`，写 `attempt_bindings(dispatch_id = NULL, branch = axiom/attempt/<taskId>/<seq>)`，CAS `READY → RUNNING` 并 `attempt_count += 1`，追加 `task.stage` / `attempt.admitted`。RUNNING 转换必须带 `actor: Scheduler` 与 `attemptCountDelta: 1`，否则 `illegal_transition(reason: admission_required)`。
 
@@ -409,7 +409,7 @@ INTEGRATION_READY 且仍有 ACTIVE Candidate 时，effect 不存在或状态为 
 
 `shouldHoldIntegration()` 是 `getMainE2EConfig().enabled && process.env.AXIOM_E2E_HOLD_INTEGRATION === '1'`。withFixtureMission 默认传入 AXIOM_E2E_HOLD_INTEGRATION=1，只有 `runIntegration: true` 才放开；现有 Mission e2e 的断言不改，只有新增 mission-integration.spec.ts 端到端跑 T01 → T04 的验证、合并、回归、晋升和依赖准入。
 
-限制与风险：除 stage change、adjustment、policy update、start、resume、unblock、backoff / cooldown 到期或 boot 等既有触发外，SWEEP-1 每 60 s 请求一轮 sweep；升级后 EXECUTING Mission 的第一轮会请求所有遗留 VERIFIED 中满足条件的 Task。重请求只看 effect 状态：failed 而 Task 仍在 INTEGRATION_READY（耗尽结算失败或进程先停）时，后续每轮可重新给三次尝试，SWEEP-1 使其在没有其它事件时也每分钟重新请求，每次尝试都有合并与回归，直到 Task 离开该 stage；执行器正常情况下不应留下 done、同 ACTIVE Candidate、Task 仍 INTEGRATION_READY 的组合。Mission 暂停或 Task 阻塞时，已有执行器每 30 s 轮询，本模块不改变暂停语义。集成头前进后，没有保全快照、原本会在旧 worktree 继续的中断 Attempt 改为重新启动；已经运行的 Worker 在自己的合并时遇到新头。SWEEP-1 将四个导出类型移至 scheduler/scheduler-contract.ts，由 scheduler.ts 重新导出以保留原 import 路径。所有旧 e2e 按住集成，新增用例的宿主执行由 verifier 负责。所有 Task 都 INTEGRATED 后 Mission 仍为 EXECUTING；修复基线、完整恢复、展示、收尾、Approval 与交付仍归后续 M4。
+限制与风险：除 stage change、adjustment、policy update、start、resume、unblock、backoff / cooldown 到期或 boot 等既有触发外，SWEEP-1 每 60 s 请求一轮 sweep；升级后 EXECUTING Mission 的第一轮会请求所有遗留 VERIFIED 中满足条件的 Task。重请求只看 effect 状态：failed 而 Task 仍在 INTEGRATION_READY（耗尽结算失败或进程先停）时，后续每轮可重新给三次尝试，SWEEP-1 使其在没有其它事件时也每分钟重新请求，每次尝试都有合并与回归，直到 Task 离开该 stage；执行器正常情况下不应留下 done、同 ACTIVE Candidate、Task 仍 INTEGRATION_READY 的组合。Mission 暂停或 Task 阻塞时，已有执行器每 30 s 轮询，本模块不改变暂停语义。集成头前进后，没有保全快照、原本会在旧 worktree 继续的中断 Attempt 改为重新启动；已经运行的 Worker 在自己的合并时遇到新头。SWEEP-1 将四个导出类型移至 scheduler/scheduler-contract.ts，由 scheduler.ts 重新导出以保留原 import 路径。所有旧 e2e 按住集成，新增用例的宿主执行由 verifier 负责。所有 Task 都已 INTEGRATED 或 CANCELED 且至少一个 INTEGRATED 后，M4-6a 在下一轮将 Mission 移到 FINALIZING；目标漂移对齐、Approval 与交付仍归后续 M4。
 
 ### Integration read model（M4-5a）
 
@@ -425,18 +425,45 @@ Mission 的 `branch` 是由执行器的 `integrationHeadRef` 去掉 `refs/heads/
 
 每次 Task list/show 的集成投影各增加一次 Mission 批次列表与一次全部候选列表读取，不按 Task 重复；原 waiting context 的候选读取保持不变。每次 `axiom.mission.show` 在 `missionSummary` 之后第二次读取该 Mission 的全部审计事件。存储的批次或候选行无法解析会使 Task 读取失败；本模块不捕获异常，也不跨请求缓存。
 
+### Mission finalization（M4-6a）
+
+每轮调度先调用 `requestFinalization`，在同一个写事务内重新读取 Mission 与它的全部 Task 行：EXECUTING 且每项都属于 `TERMINAL_TASK_STAGES`（INTEGRATED 或 CANCELED）、至少一个 INTEGRATED 时，由 MissionController 写 `mission.status` 进入 FINALIZING，并以 Mission id 为 key 入队 `mission.finalize`。没有 Task 或全取消时保持 EXECUTING；其它状态和不存在的 id 不写入。已经 FINALIZING 时，只在 effect 缺失或不是 pending / running 时重新入队，不重写状态或审计。请求失败只警告身份，不带错误内容，调度继续。Task stage 是同步的权威：不读没有 state 列的 Attempt binding，也不等待异步 worker/liveness 投影；最后一次 promotion 已提交 INTEGRATED 时，integration.apply 仍 running 不挡收尾。
+
+执行器按顺序只读：先经 `readIntegrationHead` 读集成分支并与 `recordedIntegrationHead` 比对（没有记录也不接受），再在 kernel 查到的本地仓库用 `readIntegrationGit` 读取 `refs/heads/<target>^{commit}`，最后用 `merge-base --is-ancestor` 检查目标头是否已被集成头包含。两次直接 git 读取都沿用 allowParentRepository=true；不存在的目标 ref 和非祖先只识别 exit code 1，其它失败抛给 outbox。三次尝试、两次退避（1 s、5 s），orphan 重试；没有新的 timer、git 环境、ref 或 worktree 写入。
+
+完成门是独立模块的同步纯读函数；逐项评估，不在失败项处退出，证据数组各截到 200 条：
+
+- `tasks_settled`：所有 Task 终态且至少一个 INTEGRATED；证据为已集成 Task ids。
+- `candidates_verified`：每个已集成 Task 的 ACTIVE Candidate 最近一次非批次验证 PASS；证据为读到的 run ids，detail 列失败 Task ids。
+- `batches_promoted`：每个已集成 Task 最近批次 PROMOTED 且该批次最近回归 PASS；证据为 batch ids，detail 列失败 Task ids。
+- `integration_head_recorded`：实际集成头等于记录头；证据为读取的 commit id。
+- `target_branch_contained`：目标头是集成头祖先；证据为目标 commit id。
+- `no_open_questions`：逐 Task 读取 pending question thread、typed QUESTION 和 pending gate，并读取 Mission 的 blocking Approval；没有任何阻塞才通过，证据为检查过的 Task ids。
+- `goal_criteria_covered`：只把已集成 Task specs 交给 `planCoverage`，与 ACTIVE Goal criteria 对照；无 criteria 通过，detail 列 uncovered 零基索引，证据为已集成 Task ids；只由取消 Task 覆盖的标准不算。
+
+停止原因面向人的含义：`target_branch_moved` 表示目标头不在集成历史中，需要后续对齐；`target_branch_not_found` 表示本地目标分支不存在，需要恢复分支；`integration_head_unexpected` 表示集成头与记录不一致或缺记录，需要核对集成分支和审计；`completion_gate_failed` 表示至少一个门未过，需要查看失败 ids 与证据；`finalization_unavailable` 表示三次读取尝试耗尽，需要检查本机仓库可用性。停止只记原因，Mission 留在 FINALIZING；现有 sweep 每分钟再次请求，通常花两到三次 git 读取。
+
+结果为 Mission 对象的一条 `mission.finalization` 审计，after 存 outcome、stopped 专有的 reason、targetBranch、读到的 heads 和已评估的七项 gate；时间由事件自身记录，读模型用 `utcTimestamp` 填 at。写入事务重查 FINALIZING 与本次 entry 的审计序号；ready 还重查记录头未变，结果与 FINALIZING → READY_FOR_APPROVAL 同事务提交。相同 entry 内 outcome、reason、heads、gate 不变不追加第二条，也不移动 since；pause/resume 形成新 entry，旧结果不显示，重叠的旧读取不结算新 entry。
+
+`axiom.mission.show` 以可选 finalization 返回当前 FINALIZING entry 之后的最新记录（到 READY_FOR_APPROVAL 仍可读）；只读审计，多做一次 finalization 审计投影，不做 git 或 Control Plane 查找。list 和 mutation 回答不增加此字段。`axiom.mission.pending` 只为 FINALIZING 的 stopped 记录提供一个 blocking mission item，since 为记录时间，唯一 action 是 cancel；漂移 summary 给目标分支及两个七位 commit，gate failure summary 给失败项 ids。尚无记录及 READY_FOR_APPROVAL 没有收尾待处理项；同 entry 的更早停止仅留在审计历史，没有列表读取它们。
+
+限制：目标漂移只停在 FINALIZING，M4-6b 才对齐，工作留在集成分支；失败门直到原因改变才会通过，只有取消动作可用，取消 Task 独占的标准或原计划从未覆盖的标准尤其如此。READY_FOR_APPROVAL 尚无 Approval、也无向前路径（M4-7）；其后不重新读取目标分支，批准与交付时重查属于 M4-7 / M4-8。不交付、不写 CompletionReport / Artifact、不改变界面字符串、schema、RPC 参数或 CLI，也不使用 FINALIZING → EXECUTING 或 READY_FOR_APPROVAL → FINALIZING。
+
+Task stage 决定入口，所以刚取消 Task 的 worker 可能尚在停止，但不能改变终态 Task；mailbox consumer 保留到下次 pause、cancel 或 restart。FINALIZING 和 READY_FOR_APPROVAL 继续占用 repository 与 target branch，取消前其它 Mission 不能在同一组合启动。pause/resume 与 effect 重叠可暂时留下无记录的 FINALIZING，等下一次 sweep；恢复进程后 stopped Mission 也等 sweep，最多一分钟。旧 build 读到未知 effect kind 会停止 outbox，目前没有发布版本。
+
 ### Scheduler sweep（SWEEP-1）
 
-`control-plane-boot.ts` 复用既有 60 秒（60,000 ms）reconcile interval：每次周期回调先调用 `reconcile()`，再调用 `sweepExecutingMissions(plane.store, plane.scheduler)`；不等待 reconcile 的异步工作完成，也不增加第二个 timer。启动时单独的 `reconcile()` 不附带 sweep，boot 自有的 `resume` rounds 保留；stop 仍清除同一个 unref timer。`sweepExecutingMissions` 每次通过 `listMissions({ status: 'EXECUTING' })` 读取数据库，为每个执行中的 Mission 请求一次 `scheduleRound(missionId, 'sweep')`，其它状态（包括恢复时因 Run 绑定丢失而 BLOCKED）不请求。它不等待 round；列举失败只警告 `[axiom] Scheduler sweep failed`，round 拒绝只警告 `[axiom] Scheduler round failed` 与 `{missionId,trigger:'sweep'}`，不带原始错误，失败不会逃出 tick。
+`control-plane-boot.ts` 复用既有 60 秒（60,000 ms）reconcile interval：每次周期回调先调用 `reconcile()`，再调用 `sweepExecutingMissions(plane.store, plane.scheduler)`；不等待 reconcile 的异步工作完成，也不增加第二个 timer。启动时单独的 `reconcile()` 不附带 sweep，boot 自有的 `resume` rounds 保留；stop 仍清除同一个 unref timer。`sweepExecutingMissions` 每次通过 `listMissions({ status: 'EXECUTING' })` 读取数据库，并在同一个受保护块中再读 `listMissions({ status: 'FINALIZING' })`，为这两种状态的每个 Mission 请求一次 `scheduleRound(missionId, 'sweep')`，其它状态（包括恢复时因 Run 绑定丢失而 BLOCKED）不请求；第一个列表抛错时，第二个不读，也不请求任何 round。它不等待 round；列举失败只警告 `[axiom] Scheduler sweep failed`，round 拒绝只警告 `[axiom] Scheduler round failed` 与 `{missionId,trigger:'sweep'}`，不带原始错误，失败不会逃出 tick。
 
 `shouldHoldSweep()` 仅按 `getMainE2EConfig().enabled` 判断是否处于 e2e；在 e2e 中默认停用，只有 `AXIOM_E2E_RUN_SWEEP=1` 才放开，非 e2e 不受该变量影响。不依赖 fixture helper，独立启动与 restart 的 Mission specs 也默认按住 sweep；没有改动任何 e2e 文件。
 
-`sweep` 是第六个 ScheduleTrigger。每轮仍重新读取持久状态，依次 recomputeReadiness、requestIntegrations、READY Task 准入。`scheduler.round` 仍只在准入非空或 Mission 被预算阻塞时写入；其中 `trigger: sweep` 表明兜底轮发现了可准入工作或耗尽预算，是排查漏触发或外部环境变化的线索，不是每分钟的心跳记录。
+`sweep` 是第六个 ScheduleTrigger。每轮仍重新读取持久状态，先 requestFinalization，再仅对仍为 EXECUTING 的 Mission 依次 recomputeReadiness、requestIntegrations、READY Task 准入。`scheduler.round` 仍只在准入非空或 Mission 被预算阻塞时写入；其中 `trigger: sweep` 表明兜底轮发现了可准入工作或耗尽预算，是排查漏触发或外部环境变化的线索，不是每分钟的心跳记录。
 
 `admissionRefusalRecorded(store, missionId, taskId, data)` 是只读检查：用 `getLatestReadModelAudit` 读取同 Mission、objectKind=task、objectId=Task id 的最新 `task.admission_refused` 和最新 `task.stage`；仅当拒绝 sequence 大于 stage sequence（无 stage 时取 0），且 after 与 data 的 JSON 文本相等，才视为已经记录。sweep 遇到该拒绝就不重复写，否则仍由 Scheduler 写原样的 task.admission_refused。真实事件（policy、resume、stage_change 等）请求的轮照旧每次写拒绝。这个有效拒绝边界与读模型相同：waitingOn 取 stage 之后最新的拒绝及其 accountCooldown until，pending 的 since 取 stage 之后最早的拒绝，因此跳过相同拒绝不改变 since / until；Task 离开 READY 再回来后会重新写一条。没有内存去重状态。
 
 未准入任何 Task 的 round 仍可能写入，sweep 不改变这些路径：
 
+- requestFinalization 可将已了结的 Mission 移到 FINALIZING 并入队，或为 FINALIZING 重请求已结束的 effect。
 - recomputeReadiness 将满足条件的 DEFINED Task 置为 READY，写 stage 与 task.stage。
 - requestIntegrations 为合格 VERIFIED Task 新建请求；对仍为 INTEGRATION_READY 且 effect 缺失或为 failed / retired / done 的 Task，每轮重新入队并写 integration.requested `{again:true}`。
 - check 在 Mission attempts、wall-clock 或 token 预算耗尽时阻塞 Mission，或在 Task 自身 token 预算耗尽时阻塞 Task，保留相应 stage / budget 审计。
@@ -794,7 +821,7 @@ This overlay governs the harness process. The separate layer for commands run by
 
 `RecoveryService.recover()` 保留同步 Mission report；独立的 `async reconcileAttempts({missionId?})` 处理 Attempt。每次重新读取 binding、Task stage、worker/dispatch 与执行宿主观测；重叠调用通过进行中的 Promise 等待前一轮后重读持久状态；非权威 cadence 采样见下节 Supervision rules。扫描非终态 Task 的 bindings，加上仍活跃的 kernel worker 对应 binding；CANCELED Task 的已结算资源也重查，补齐 kernel commit 与 release/audit 之间的崩溃窗口。旧 seq 不得结算最新 RUNNING admission。
 
-启动时在 recover 后执行一次，每 60,000ms 执行一次（unref timer，stop 时清除）；消费者成功处理并 ack 含同 Mission bound dispatchId 的 kernel escalation 批次后再触发一轮。既有 tick 负责 effect recovery / outbox kick、Attempt 对账和 verification kick；SWEEP-1 在每次周期回调调用 reconcile() 后，再为 EXECUTING Mission 请求 sweep round，启动时那次 reconcile() 不请求 sweep。Attempt 对账正常无变化时不写 audit；整个 tick 的 Scheduler 写入边界见 Scheduler sweep，不能把所有未准入的轮都视为无写入。失败只记录身份到 console.warn，其他 Attempt 仍继续对账，报告 action=reconcile_failed，不能当作成功结算。
+启动时在 recover 后执行一次，每 60,000ms 执行一次（unref timer，stop 时清除）；消费者成功处理并 ack 含同 Mission bound dispatchId 的 kernel escalation 批次后再触发一轮。既有 tick 负责 effect recovery / outbox kick、Attempt 对账和 verification kick；SWEEP-1 在每次周期回调调用 reconcile() 后，再为 EXECUTING 与 FINALIZING Mission 请求 sweep round，启动时那次 reconcile() 不请求 sweep。Attempt 对账正常无变化时不写 audit；整个 tick 的 Scheduler 写入边界见 Scheduler sweep，不能把所有未准入的轮都视为无写入。失败只记录身份到 console.warn，其他 Attempt 仍继续对账，报告 action=reconcile_failed，不能当作成功结算。
 
 | 规则                                    | 读取与 kernel 操作                                                                                                                                                                                                                                                                                                                                                                                                                                                                | 审计 / Axiom stage                                                                                                                                                                                                                                                                                                                                                       |
 | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

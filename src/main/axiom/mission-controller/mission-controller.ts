@@ -176,6 +176,16 @@ export class MissionController {
     this.scheduleAfterWrite(missionId, 'mission_start')
     return result
   }
+  startFinalization(missionId: string) {
+    return this.write('start_finalization', () =>
+      moveMission(this.ctx, missionId, 'EXECUTING', 'FINALIZING')
+    )
+  }
+  readyForApproval(missionId: string) {
+    return this.write('ready_for_approval', () =>
+      moveMission(this.ctx, missionId, 'FINALIZING', 'READY_FOR_APPROVAL')
+    )
+  }
   pauseMission(missionId: string, reason = 'paused by user') {
     return this.write('pause_mission', () =>
       interruptMission(this.ctx, missionId, 'PAUSED', reason)

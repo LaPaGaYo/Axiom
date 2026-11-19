@@ -8,9 +8,18 @@ import {
   EffectStatusSchema,
   EffectTimestampSchema,
   IntegrationApplyPayloadSchema,
+  MissionFinalizePayloadSchema,
   VerificationEnqueuePayloadSchema
 } from '../../../shared/axiom-contract/effects'
 import { readJson } from './row-codec'
+
+const payloadSchemas = {
+  'attempt.dispatch': AttemptDispatchPayloadSchema,
+  'attempt.continue': AttemptContinuePayloadSchema,
+  'integration.apply': IntegrationApplyPayloadSchema,
+  'verification.enqueue': VerificationEnqueuePayloadSchema,
+  'mission.finalize': MissionFinalizePayloadSchema
+}
 
 export const EffectRowSchema = z.object({
   id: AxiomIdSchema,
@@ -32,26 +41,13 @@ export const EffectRowCodec = EffectRowSchema.transform((row) =>
     missionId: row.mission_id,
     kind: row.kind,
     key: row.effect_key,
-    payload:
-      row.kind === 'attempt.dispatch'
-        ? readJson(AttemptDispatchPayloadSchema, row.payload, 'axiom_effects', row.id, 'payload')
-        : row.kind === 'attempt.continue'
-          ? readJson(AttemptContinuePayloadSchema, row.payload, 'axiom_effects', row.id, 'payload')
-          : row.kind === 'integration.apply'
-            ? readJson(
-                IntegrationApplyPayloadSchema,
-                row.payload,
-                'axiom_effects',
-                row.id,
-                'payload'
-              )
-            : readJson(
-                VerificationEnqueuePayloadSchema,
-                row.payload,
-                'axiom_effects',
-                row.id,
-                'payload'
-              ),
+    payload: readJson<unknown>(
+      payloadSchemas[row.kind],
+      row.payload,
+      'axiom_effects',
+      row.id,
+      'payload'
+    ),
     status: row.status,
     dueAt: row.due_at,
     attempts: row.attempts,
