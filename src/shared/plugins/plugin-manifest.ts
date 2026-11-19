@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { upstreamLineVersion } from '../orca-baseline'
 import { pluginCapabilitySchema } from './plugin-capabilities'
 import {
   PLUGIN_AGENT_PROFILE_LIMIT,
@@ -163,7 +164,7 @@ export function satisfiesOrcaEngineRange(hostVersion: string, range: string): bo
       .split(/[-+]/)[0]!
       .split('.')
       .map((part) => Number.parseInt(part, 10) || 0)
-  const host = parse(hostVersion)
+  const host = parse(upstreamLineVersion(hostVersion))
   const min = parse(minimum)
   for (let i = 0; i < 3; i++) {
     const a = host[i] ?? 0

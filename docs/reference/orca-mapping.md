@@ -413,3 +413,25 @@ M0-09 / D37：`orca-data.json` 的 GlobalSettings 增加可选 `providerActivati
 | 12 | `orchestration.reset` 删除全部编排表且不知道 Axiom 表（`db/reset/orchestration-reset.ts`） | 对 Mission 拦截并纳入 Approval；Axiom 表挂 AFTER DELETE 触发器兜底（§6） |
 | 13 | `createRun` 一 coordinator 一 Run（`unbindOtherRunsForCoordinator`）；`workerStart` 要求 caller 当前绑定该 Run | Mission 用合成 session party（第 14 条），不得复用真实终端 pane 或真实 agent 会话，否则用户的终端/会话会被解绑 |
 | 14 | **#22555（基线内）**：caller/target 统一为 party `{address, terminalHandle, paneKey, orcaSessionId}`（`orchestration/orchestration-party.ts`、`orchestration-caller-identity.ts`）；Run 绑定键 = pane key 或 Orca session id；`createRun` 接受 `coordinatorOrcaSessionId`（handle/pane 可 null）；session caller 在 `rpc/dispatcher.ts` 入口解析（`rpc/orchestration-session-caller.ts`），`worker-start` 等动词对 session caller 不再要求 `from`；未记录为 structured worker 的 session id 按 chat 处理（`terminalHandle: null`），`resolveDeclaredCallerParty` 拒绝以参数声明的 chat caller | D14 据此修订：Control Plane 以每 Mission 一个合成 Orca session id 作为 session party 充当 Run coordinator（mailbox `orca_session_id:<id>`），在进程内直接构造 `OrchestrationSessionCaller`，dispatch creator `{kind:'system'}`；合成 id 持久化于 `missions` |
+
+
+## 10. Version lines and the Orca baseline（VER-1）
+
+The Axiom line comprises valid app versions with major 0 and minor at least 1, including surrounding whitespace, a leading `v` or `V`, prereleases and build metadata as accepted by `isValidAppVersion`.
+The other line retains the existing upstream comparison behavior, including `1.x`, `0.0.x`, the headless placeholder `0.0.0-orcad`, and invalid text; these values are not classified as Axiom-line versions.
+`ORCA_BASELINE` in `src/shared/orca-baseline.ts` records this build's kernel baseline as release `1.4.214` and commit `41661e33128c3a308a570aa0ed96ce24910a98c4`, from the full upstream sync of 2026-10-23 (D90 item 2).
+A full upstream sync changes the baseline; individual cherry-picked fixes do not, and the constant is updated by hand until VER-3 writes down the sync rule.
+
+- Host admission preserves its two early admissions and otherwise compares versions unchanged within one line, substituting this build's baseline for the Axiom version only when the pair crosses lines.
+- The profile floor treats every Axiom-line version as having reached SQLite profile storage, while other versions retain the existing `1.4.214` floor check and refusal message.
+- The plugin gate evaluates `engines.orca` against the host's upstream-line version (the baseline for an Axiom-line host), preserving the existing `>=x.y.z` grammar and numeric comparison.
+
+The cross-line comparison orders one pair for a rule and must not sort a list: `0.1.0` and `0.2.0` both compare equal to `1.4.214`, while they compare differently to each other.
+A build from before VER-1, or an upstream build, does not see a host served by a `0.x` build as newer than itself.
+The line is identified by the major number (with minor at least 1 for Axiom), so these rules must be reviewed before Axiom reaches `1.0.0`.
+A host's record still stores the app's version, not the baseline.
+Host and plugin refusal messages still print the app's version, which can read oddly beside an upstream number.
+The baseline used by a rule is this build's baseline, not the baseline of the build that wrote a host's record.
+A plugin cannot request a minimum Axiom `0.x` version: every range of the form `>=0.x.y` is satisfied by any Axiom-line `0.x` host.
+Updater ordering, build-picker sorting and remote-runtime version comparison still compare app versions as they are.
+VER-1 does not change `package.json` or display the baseline, so the current `1.4.214` build keeps its existing answers.
