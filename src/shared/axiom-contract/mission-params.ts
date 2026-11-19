@@ -4,6 +4,7 @@ import { RepoSelector } from '../rpc-contract/github-repo-target-params'
 import { MissionStatusSchema } from './lifecycle'
 import { MissionIntegrationSchema } from './integration-batch'
 import { MissionFinalizationSchema } from './mission-finalization'
+import { ApprovalSchema } from './approval'
 import {
   AxiomIdSchema,
   GoalBodySchema,
@@ -53,6 +54,7 @@ export const MissionSummarySchema = MissionSchema.pick({
 export type MissionSummary = z.infer<typeof MissionSummarySchema>
 
 export const MissionResponseSchema = z.object({
+  approval: ApprovalSchema.optional(),
   mission: MissionSummarySchema,
   integration: MissionIntegrationSchema.optional(),
   finalization: MissionFinalizationSchema.optional()

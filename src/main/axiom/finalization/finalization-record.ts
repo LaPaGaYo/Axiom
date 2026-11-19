@@ -78,7 +78,7 @@ export function recordFinalization(
       })
     }
     if (after.outcome === 'ready') {
-      missions.readyForApproval(missionId)
+      missions.readyForApproval(missionId, after.reportSha256)
     }
   })
 }

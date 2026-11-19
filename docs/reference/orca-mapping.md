@@ -31,7 +31,7 @@
 | Decision | 无 | `new side table` `decisions` | 通知经 `messages.type='status'` |
 | VerificationRun | 无；可写 `attempt_observation_facts` facet `outcome`（`finished_unverified` 等） | `new side table` `verification_runs` + `extend-additive` facet | 证据文件走 Artifact 存储 |
 | IntegrationBatch | 无 | `new side table` `integration_batches` | Git 操作复用 `src/main/git/`（`worktree.ts`、`checkout.ts`） |
-| Approval | 不复用 `decision_gates`（D7：`resolveGate` 不校验 options、无 pending 守卫、无 resolver/expiry） | `new side table` `approvals` | 精确动作 + inputs hash + 有效期 |
+| Approval | 不复用 `decision_gates`（D7：`resolveGate` 不校验 options、无 pending 守卫、无 resolver/expiry） | `new side table` `approvals` | M4-7a 写 delivery PENDING 请求与 REVOKED 撤回，inputsHash=报告 hash，有效期 72 小时；grant / deny 留 M4-7b |
 | Policy | Orca 全局设置局部投影：`nestedWorkerMaxDepth`（`src/shared/default-global-settings.ts:154`）、worker-start 模式（`rpc/methods/orchestration-worker-start-mode.ts`） | `new side table` `mission_policies` | Mission 级策略优先于全局设置 |
 | AuditEvent | `mutation_receipts` / `mutation_caller_identities`（`create-core-tables-sql.ts`；幂等，不是审计） | `new side table` `audit_events` + `reuse` receipts | receipts 保留为幂等机制 |
 | CompletionReport | 无 | Artifact `kind='completion_report'` | 由 mission.finalize 执行器写入；不存在 `axiom.mission.completionReport` 方法（M4-10） |
@@ -199,10 +199,10 @@ M1 参数契约位于 `src/shared/axiom-contract/mission-params.ts`、`goal-para
 | 方法 | 参数要点 | 副作用 | M | 当前状态 |
 |---|---|---|---|---|
 | `axiom.mission.create`（M1 已注册） | repo selector、targetBranch、goal、policy | `missions` + `db.createRun`（合成 coordinator）+ `goal_revisions`(ACTIVE) + `mission_policies` + `audit_events` | M | 已注册 / 已实现 |
-| `axiom.mission.show` / `list`（M1 已注册） | missionId / 过滤、cursor | M2-10 MissionSummary 含 runId；reason 为最新同状态 mission.status 审计的 after.reason（无则省略）；M4-5a 仅 show 的响应可带 integration（集成分支与 recordedHead） | — | 已注册 / 已实现 |
+| `axiom.mission.show` / `list`（M1 已注册） | missionId / 过滤、cursor | M2-10 MissionSummary 含 runId；reason 为最新同状态 mission.status 审计的 after.reason（无则省略）；M4-5a 仅 show 的响应可带 integration（集成分支与 recordedHead）；M4-6a / M4-10 带 finalization 与报告引用，M4-7a 带最新 delivery approval | — | 已注册 / 已实现 |
 | `axiom.mission.plan`（M2-09 已注册） | missionId | ANALYZING 启动只读 Planner，pseudo-task/binding/spec/artifacts；响应 attemptId（可空）/seq/branch/worktreeId/provider；transport long-poll + CLI 120 s | M | 已注册 / 已实现 |
 | `axiom.mission.start`（M1 已注册） | missionId | 用户启动：`PLANNED → EXECUTING`，D51 创建/沿用集成基线，重算 readiness 并触发 Scheduler admission/launch | M | 已注册 / 已实现 |
-| `axiom.mission.pause` / `resume` / `cancel`（M1 已注册） | missionId、reason | `missions.status`；pause 停 admission；cancel 持久化 CANCELED 后 await M2-08 reconciliation（stop/abandon/release）；Approval 留 M4 | M | 已注册 / 已实现 |
+| `axiom.mission.pause` / `resume` / `cancel`（M1 已注册） | missionId、reason | `missions.status`；pause 停 admission；cancel 持久化 CANCELED 后 await M2-08 reconciliation（stop/abandon/release）；M4-7a cancel 在同一事务撤回 PENDING 的 delivery Approval，pause / resume 不修改 Approval（D70 第 4 条的停表由 M4-7b 落实） | M | 已注册 / 已实现 |
 | `axiom.mission.deliver` | missionId、approvalId | 集成基线合入目标分支（D6），成功 → `COMPLETED` | M | 未注册；M4 |
 | `axiom.mission.completionReport`（不存在） | 无 | mission.finalize 执行器写入 Artifact `completion_report`，经 mission.show 与 artifact.read 读取 | — | M4-10 不新增此方法 |
 | `axiom.goal.propose` / `activate` / `show`（M1 已注册） | missionId、goal 正文 / goalRevisionId | PROPOSED / ACTIVE+SUPERSEDED 前版 + `MAJOR_REPLAN` 触发 | M/M/— | 已注册 / 已实现 |
@@ -226,7 +226,7 @@ M1 参数契约位于 `src/shared/axiom-contract/mission-params.ts`、`goal-para
 | `axiom.verification.rerun` | candidateId、reason | 新 `verification_runs`(QUEUED) | M | 未注册；M3 |
 | `axiom.integration.queue` / `show` | missionId / batchId | 无 | — | 未注册；M4 |
 | `axiom.integration.promote` | batchId、approvalId? | `PROMOTABLE/AWAITING_APPROVAL → PROMOTED`，基线 ref 前进 | M | 未注册；M4 |
-| `axiom.approval.list` / `grant` / `deny` / `revoke` | missionId / approvalId、resolver、note | `approvals.status`；grant 后单次 CONSUMED | —/M/M/M | 未注册；M4 |
+| `axiom.approval.list` / `grant` / `deny` / `revoke` | 后续 grant / deny 的输入由 M4-7b 定义 | 没有 list 或 revoke 方法：`axiom.mission.show` 带最新 delivery Approval，Control Plane 撤回；M4-7a 只写 PENDING / REVOKED | — | 均未注册；grant / deny 属于 M4-7b |
 | `axiom.decision.propose` / `accept` / `reject` / `list` / `show` | missionId、decision 正文、provenance | `decisions`；accept 发 DECISION 通知 | M/M/M/—/— | 未注册；不早于 M3（后续 Task 定义） |
 | `axiom.artifact.put` / `read` / `list`（M2-02 已注册） | put：missionId、kind、contentBase64（≤8 MiB）、mediaType、related、createdBy；read：id；list：missionId、kind?、relatedTo? | 原子内容寻址写入 + `artifacts` 元数据；read 校验 hash；CLI 挂 `mission artifact`，无新顶层命令 | M/—/— | 已注册 / 已实现 |
 | `axiom.message.list`（M2-06a 已注册） | missionId、type?、taskId?、attemptId?、pendingOnly? | 同 Run 的 typed messages + question_threads QUESTION 投影（question/options/answer/status），sequence 升序；QUESTION pending 按 thread 状态，REQUEST_SUBTASK pending 按 subtask.resolved | — | 已注册 / 已实现 |
@@ -338,7 +338,7 @@ M1-04～M1-08 的业务写入使用七张表：`missions`、`goal_revisions`、`
 | `decisions` | `id PK`, `mission_id`, `status`, `title`, `options`(JSON), `resolution`, `authority`, `provenance`(JSON) | M2-02 按 Mission/status 读取；`supersedes_id` 列已建；Decision 写入者后续接入 |
 | `verification_runs` | `id PK`, `candidate_id`, `task_id`, `status`, `verdict_detail`(JSON), `commands`(JSON), `tool_versions`(JSON), `verifier`, `runtime_epoch TEXT`, `claim_count INTEGER NOT NULL DEFAULT 0`, `worktree_id TEXT`, `started_at TEXT`, `finished_at TEXT`（后五列 v45，除 claim_count 外可空），`batch_id TEXT`（可空，DDL 末列，指向合并树回归所属批次） | M2-07 入 QUEUED；M3-01 CAS 领取、独立 worktree 准备、启动重排队；M3-02 检查、verdict 与 Task 结算、cleanupPending；`idx_verification_runs_status(status,created_at,id)` 支持领取与周期恢复；verdict_detail 只存摘要与引用；证据内容走 artifacts |
 | `integration_batches` | `id PK`, `mission_id`, `base_commit`, `candidate_ids`(JSON，V1 长度 1), `status`, `merge_commit`, `conflicts`(JSON), `approval_id` | 单一集成权威串行写 |
-| `approvals` | `id PK`, `mission_id`, `action_kind`, `inputs_hash`, `risk`, `status`, `expires_at`, `resolver` | 已建 `requested_by`, `resolution`, `outcome`(JSON，执行结果), `executed_at` |
+| `approvals` | `id PK`, `mission_id`, `action_kind`, `inputs_hash`, `risk`, `status`, `expires_at`, `resolver` | M4-7a 读写 delivery 请求与撤回，另读写 `requested_by`、`resolution`、created_at / updated_at；inputs_hash 为报告 hash。既有 `outcome`(JSON，执行结果)、`executed_at` 尚不读取；无 DDL 变更 |
 | `mission_policies` | `mission_id PK`, `concurrency_limit`, `budget`(JSON), `readiness_threshold`, `approval_rules`(JSON), `verification_rules`(JSON), `nested_worker_max_depth`(=1), `unverifiable_tolerance_minutes INTEGER NOT NULL DEFAULT 30`, `updated_at`, `routing TEXT NOT NULL DEFAULT '{}'`（v44） | M2-03 provider 偏好/禁用/高风险 tier/model；policy RPC 更新 routing/concurrency，M3-02 增加 verificationRules 严格校验后整对象替换；budget 修改拒绝至 M4 |
 | `axiom_effects` | `id PK`, `mission_id`, `kind`, `effect_key`, `payload`(JSON), `status`, `due_at`, `attempts DEFAULT 0`, `lease_epoch`, `last_error`, `created_at`, `updated_at` | `UNIQUE(kind,effect_key)`；pending / running / done / failed / retired；kind = attempt.dispatch / verification.enqueue；命令事务入队，执行器提交后运行，详见 control-plane.md 的 Effect outbox (M3-06) |
 | `supervision_settings` | `rule TEXT NOT NULL`, `mission_id TEXT NOT NULL DEFAULT ''`, `revision INTEGER NOT NULL`, `mode TEXT`, `actor TEXT NOT NULL`, `provenance TEXT NOT NULL DEFAULT '{}'`, `audit_sequence INTEGER NOT NULL DEFAULT 0`, `created_at` | `PRIMARY KEY(rule,mission_id,revision)`；仅追加，最高 revision 为当前 scope 值；mode / scope 由 zod 校验 |
@@ -388,7 +388,7 @@ M0-09 / D37：`orca-data.json` 的 GlobalSettings 增加可选 `providerActivati
 
 `src/main/axiom/db/axiom-store.ts` 的 `AxiomStore` 集中 M1 七张 side table 的数据访问，所有读取遵循「parse rows, never cast」：逐表 zod row schema 校验后转换为共享契约对象。
 
-- `src/main/axiom/` 的 M1 实装：`db/`、`mission-controller/`、`admission/`、`recovery/`、`kernel-contract/`，以及 `control-plane.ts` / `control-plane-boot.ts`；service/DB 边界与模块职责见 [control-plane.md](control-plane.md)。`scheduler/`、`agent-factory/`、`context-builder/`、`message-router/`、`verification/`、`integration/`、`approval/` 等仍属后续规划路径，不是已存在的 M1 服务。
+- `src/main/axiom/` 的 M1 实装：`db/`、`mission-controller/`、`admission/`、`recovery/`、`kernel-contract/`，以及 `control-plane.ts` / `control-plane-boot.ts`；service/DB 边界与模块职责见 [control-plane.md](control-plane.md)。后续 M2–M4 已建 `scheduler/`、`agent-factory/`、`context-builder/`、消息路由、`verification/` 与 `integration/`；M4-7a 新建 `approval/`，仅提供 delivery 请求、撤回、最新行读取，不代表 grant / deny 或 Delivery 已实现。
 - `src/shared/axiom-contract/` 的 M1 实装：`lifecycle.ts`、`mission-objects.ts`、`plan-proposal.ts` / `plan-task-graph.ts`、四域 params/响应、`mutations.ts`、`stage-labels.ts`；枚举与 Glossary 一一对应，renderer/CLI/main 共用。Worker payload / Submission 合同后续添加。
 - M1-09 UI：`src/renderer/src/components/missions/` + `src/renderer/src/lib/axiom-client.ts`；store 只持有选择/请求等 UI 状态，刷新与 mutation 后重新读取 `axiom.*`；`stage-labels.ts` 将 stage 与执行投影分开呈现。
 - `@ts-nocheck` 基线：`config/ts-nocheck-baseline.txt` 共 176 项，其中 `src/main/runtime/orca-runtime-*.ts` **137** 项（非测试 `orca-runtime-*.ts` 共 150 个）；`config/scripts/check-ts-nocheck-ratchet.mjs` 是只减不增的 ratchet（`pnpm lint` 内 `check:ts-nocheck-ratchet`），新文件带 `@ts-nocheck` 直接 CI 失败。规则：Axiom 不在这些文件内新增逻辑（D12）；如必须触碰（例如 `getNestedWorkerMaxDepth`，`orca-runtime-resolve-worktree-selector.ts:118`），只加一行委托到强类型模块。

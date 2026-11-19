@@ -16,9 +16,29 @@ import { comparePendingItems, createPendingItems, type PendingItems } from './pe
 import { pendingTaskItems } from './pending-task-items'
 import { missionSince } from './pending-since'
 import { missionFinalization, finalizationSummary } from './finalization-reads'
+import { latestDeliveryApproval } from '../approval/delivery-approval'
 
 function missionItem(ctx: WaitingContext, pending: PendingItems): MissionPendingItem[] {
   const { mission, store } = ctx
+  if (mission.status === 'READY_FOR_APPROVAL') {
+    const approval = latestDeliveryApproval(store, mission.id)
+    const record = missionFinalization(store, mission.id)
+    return approval?.status === 'PENDING' &&
+      record?.outcome === 'ready' &&
+      approval.inputsHash === record.reportSha256
+      ? [
+          pending.item({
+            kind: 'mission',
+            objectId: mission.id,
+            reason: 'delivery_approval_pending',
+            blocking: true,
+            actions: ['axiom.mission.cancel'],
+            since: approval.createdAt,
+            summary: `Delivery to ${record.targetBranch}: integration ${record.integrationHead?.slice(0, 7)}, target ${record.targetHead?.slice(0, 7)}, report ${record.reportArtifactId}; approval expires ${approval.expiresAt}.`
+          })
+        ]
+      : []
+  }
   if (mission.status === 'FINALIZING') {
     const record = missionFinalization(store, mission.id)
     return record?.outcome === 'stopped'

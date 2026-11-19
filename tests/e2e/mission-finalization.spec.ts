@@ -104,6 +104,7 @@ test('M4-6a: a moved target branch stops finalization and the Mission says why',
         )
         .toEqual(['done'])
       const stopped = await show()
+      expect(stopped.approval).toBeUndefined()
       expect(stopped.finalization).not.toHaveProperty('reportArtifactId')
       const reports = ArtifactListResponseSchema.parse(
         await desktopCall(page, 'axiom.artifact.list', {
