@@ -52,6 +52,32 @@ BACKFILL = {
 }
 
 FULL = {
+    ('VER-1', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'three kernel version rules (host downgrade refusal, SQLite profile floor, plugin engine range) '
+        'tell the Axiom 0.x line from the upstream 1.x line through one new module that records the Orca '
+        'baseline; a 0.x version meets an upstream one as the baseline version, two versions on one line compare '
+        'as before; no caller and no package.json change; '
+        'the launcher verification passed on its second run - the first lost a node-runtime worker to a '
+        'native fault of an upstream plugin test (heap corruption in the file-watcher addon: main 3 of 21 '
+        'folder runs, candidate 5 of 23, the file alone 15 of 15, ten crash reports) and no test failed in '
+        'either run; fourteen new tests under both runners and three more times under each; '
+        'the red check on the host (titles 5, 11, 12 and 13 fail with the three rule files of main put back, '
+        'the other ten pass); forty-two Mission specs pass on the candidate build; '
+        'the union script failed 0 with twenty-three pins retired by the planner; no verifier change; no other '
+        'model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'an older or upstream build does not see a host that a 0.x build served as newer than itself',
+            'the line is told by the major number: look at the three rules again before 1.0.0',
+            'the updater ordering, the build picker and the remote-runtime comparison still compare app versions',
+            'the baseline constant is changed by hand at a full upstream sync until VER-3 writes the rule down',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M4-6a', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'a Mission whose Tasks are all settled moves to FINALIZING in the next scheduling round and a '
