@@ -51,3 +51,10 @@ M4-6a	M4-6a	! git diff --quiet main -- src/main/axiom/mission-controller/mission
 M4-6a	M4-6a	! git diff --quiet main -- src/main/runtime/rpc/methods/axiom/mission.ts
 M4-6a	M4-6a	! git diff --quiet main -- tests/e2e/mission-integration.spec.ts
 M4-6a	M4-6a	! git diff --quiet main -- docs/reference/control-plane.md
+
+# M4-10 (docs/plans/M4.md, the M4-10 row): the question item of the completion gate counts a question only while
+# its Task is in a stage where a question blocks, as the rest of the code does, so the test with this title - a
+# kernel gate on an INTEGRATED Task fails the item - goes away with what it asserted. Replaced in M4-10's sidecar by
+# the titles "no_open_questions passes with an unanswered question on a settled Task" and "no_open_questions fails
+# while the Mission has a blocking Approval".
+M4-10	M4-6a	git grep -q -F "fails no_open_questions while a Task has a pending question" -- src/main/axiom src/shared/axiom-contract
