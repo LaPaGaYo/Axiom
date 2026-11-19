@@ -27,7 +27,7 @@ const approval = {
 it('the approval transitions allow only the listed moves and four statuses have no way out', () => {
   const moves: Record<string, string[]> = {
     PENDING: ['GRANTED', 'DENIED', 'EXPIRED', 'REVOKED'],
-    GRANTED: ['CONSUMED', 'REVOKED', 'EXPIRED'],
+    GRANTED: ['CONSUMED'],
     DENIED: [],
     EXPIRED: [],
     REVOKED: [],

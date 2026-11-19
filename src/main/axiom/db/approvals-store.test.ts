@@ -77,7 +77,7 @@ it('a transition records the resolver and the resolution it was given', () => {
     })
   ).toBe(true)
   expect(store.getApproval(input.id)).toMatchObject({ resolver: 'tester', resolution: 'approved' })
-  store.transitionApproval({ id: input.id, expectedStatus: 'GRANTED', status: 'REVOKED' })
+  store.transitionApproval({ id: input.id, expectedStatus: 'GRANTED', status: 'CONSUMED' })
   expect(store.getApproval(input.id)).toMatchObject({ resolver: 'tester', resolution: 'approved' })
 })
 

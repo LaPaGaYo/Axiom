@@ -202,7 +202,7 @@ M1 参数契约位于 `src/shared/axiom-contract/mission-params.ts`、`goal-para
 | `axiom.mission.show` / `list`（M1 已注册） | missionId / 过滤、cursor | M2-10 MissionSummary 含 runId；reason 为最新同状态 mission.status 审计的 after.reason（无则省略）；M4-5a 仅 show 的响应可带 integration（集成分支与 recordedHead）；M4-6a / M4-10 带 finalization 与报告引用，M4-7a 带最新 delivery approval | — | 已注册 / 已实现 |
 | `axiom.mission.plan`（M2-09 已注册） | missionId | ANALYZING 启动只读 Planner，pseudo-task/binding/spec/artifacts；响应 attemptId（可空）/seq/branch/worktreeId/provider；transport long-poll + CLI 120 s | M | 已注册 / 已实现 |
 | `axiom.mission.start`（M1 已注册） | missionId | 用户启动：`PLANNED → EXECUTING`，D51 创建/沿用集成基线，重算 readiness 并触发 Scheduler admission/launch | M | 已注册 / 已实现 |
-| `axiom.mission.pause` / `resume` / `cancel`（M1 已注册） | missionId、reason | `missions.status`；pause 停 admission；cancel 持久化 CANCELED 后 await M2-08 reconciliation（stop/abandon/release）；M4-7a cancel 在同一事务撤回 open delivery Approval，pause / resume 保留 Approval 与原 expiry | M | 已注册 / 已实现 |
+| `axiom.mission.pause` / `resume` / `cancel`（M1 已注册） | missionId、reason | `missions.status`；pause 停 admission；cancel 持久化 CANCELED 后 await M2-08 reconciliation（stop/abandon/release）；M4-7a cancel 在同一事务撤回 PENDING 的 delivery Approval，pause / resume 不修改 Approval（D70 第 4 条的停表由 M4-7b 落实） | M | 已注册 / 已实现 |
 | `axiom.mission.deliver` | missionId、approvalId | 集成基线合入目标分支（D6），成功 → `COMPLETED` | M | 未注册；M4 |
 | `axiom.mission.completionReport`（不存在） | 无 | mission.finalize 执行器写入 Artifact `completion_report`，经 mission.show 与 artifact.read 读取 | — | M4-10 不新增此方法 |
 | `axiom.goal.propose` / `activate` / `show`（M1 已注册） | missionId、goal 正文 / goalRevisionId | PROPOSED / ACTIVE+SUPERSEDED 前版 + `MAJOR_REPLAN` 触发 | M/M/— | 已注册 / 已实现 |

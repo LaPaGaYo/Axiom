@@ -67,13 +67,16 @@ it('a second request revokes the open approval as superseded and inserts a new o
   const second = request()
   expect(second.id).not.toBe(first.id)
   expect(approvals().filter((row) => row.status === 'PENDING')).toEqual([second])
-  for (const id of [first.id, granted.id]) {
-    expect(store.getApproval(id)).toMatchObject({
-      status: 'REVOKED',
-      resolver: 'MissionController',
-      resolution: 'superseded'
-    })
-  }
+  expect(store.getApproval(first.id)).toMatchObject({
+    status: 'REVOKED',
+    resolver: 'MissionController',
+    resolution: 'superseded'
+  })
+  expect(store.getApproval(granted.id)).toMatchObject({
+    status: 'GRANTED',
+    resolver: null,
+    resolution: null
+  })
   expect(store.getApproval(budget.id)).toEqual(budget)
   expect(latestDeliveryApproval(store, missionId)).toEqual(second)
   store.transaction('test_revoke', () =>

@@ -43,7 +43,8 @@ export function revokeDeliveryApprovals(
   now: string
 ): void {
   for (const approval of store.listApprovals({ missionId, actionKind: 'delivery' })) {
-    if (approval.status !== 'PENDING' && approval.status !== 'GRANTED') {
+    // GRANTED has one way out, CONSUMED (AGENTS.md), so only a PENDING request is withdrawn.
+    if (approval.status !== 'PENDING') {
       continue
     }
     if (

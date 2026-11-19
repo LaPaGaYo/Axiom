@@ -14,7 +14,7 @@ export type ApprovalStatus = z.infer<typeof ApprovalStatusSchema>
 
 export const APPROVAL_TRANSITIONS: Record<ApprovalStatus, readonly ApprovalStatus[]> = {
   PENDING: ['GRANTED', 'DENIED', 'EXPIRED', 'REVOKED'],
-  GRANTED: ['CONSUMED', 'REVOKED', 'EXPIRED'],
+  GRANTED: ['CONSUMED'],
   DENIED: [],
   EXPIRED: [],
   REVOKED: [],
