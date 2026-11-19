@@ -52,6 +52,35 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M4-6a', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'a Mission whose Tasks are all settled moves to FINALIZING in the next scheduling round and a '
+        'new effect, mission.finalize, checks the integration head against the recorded one, reads the target '
+        'branch without writing, evaluates seven gate items with their evidence and records each run as one '
+        'audit event; all pass -> READY_FOR_APPROVAL, otherwise the Mission stays in FINALIZING with a reason and '
+        'one blocking pending item; no alignment, no Approval, no delivery, no report; '
+        'twenty-six new tests in seven files under both runners, no existing unit test changed except the kinds '
+        'test of the effect contract; '
+        'on the host: the new files three more times under each runner, the red check with the five wiring '
+        'files of main (titles 8, 9, 11, 19, 21, 23 and 24 fail at an assertion, the other nineteen pass), both '
+        'e2e specs fail against that wiring where they should and pass three times each on the candidate, all '
+        '42 Mission spec files pass; '
+        'the union script failed 0 with eleven pins retired by the planner; no verifier change; no other model '
+        'CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'a target branch that moved stops the Mission: aligning it is M4-6b',
+            'READY_FOR_APPROVAL has no next step until M4-7 and no CompletionReport until M4-10',
+            'a criterion that only a canceled Task covered fails the gate and the only exit is cancel',
+            'a stopped or waiting Mission still occupies its repository and target branch',
+            'the question item of the gate counts unanswered questions of settled Tasks: narrow it in M4-10',
+            'the mailbox consumer of a Mission keeps running after it enters FINALIZING: wrap with M4-7',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M4-5b', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'the Missions page shows what integration did: an Integration block with the branch, the '
