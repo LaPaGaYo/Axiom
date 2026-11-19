@@ -90,7 +90,7 @@ READY_FOR_APPROVAL → FINALIZING（交付前目标分支 HEAD 已变，D70）
 ```
 
 - `PLAN_REVIEW`：PlanRevision 已 PROPOSED，等待人工或 policy 自动批准。
-- `FINALIZING`：所有 required Task 已 `INTEGRATED` 或经授权 `CANCELED`，运行最终全量回归与 completion gate 评估。M4-6a：进入由 Scheduler 的一轮判定（只看 Task 的 stage，至少一个 `INTEGRATED`）；收尾由副作用 `mission.finalize` 执行——核对集成头、只读地看目标分支、评估七项门禁；停下时留在 `FINALIZING`，原因在收尾记录（审计 `mission.finalization`）与待处理项里。
+- `FINALIZING`：所有 required Task 已 `INTEGRATED` 或经授权 `CANCELED`，运行最终全量回归与 completion gate 评估。M4-6a：进入由 Scheduler 的一轮判定（只看 Task 的 stage，至少一个 `INTEGRATED`）；收尾由副作用 `mission.finalize` 执行——核对集成头、只读地看目标分支、评估完成门禁（M4-6a 七项，M4-10 起八项，多一项 `limitations_recorded`）；停下时留在 `FINALIZING`，原因在收尾记录（审计 `mission.finalization`）与待处理项里。M4-10：门禁全部通过时执行器先把 CompletionReport 存成产物，再在重建出同一份报告的事务里记下 `ready`（带报告的编号与哈希）并进入 `READY_FOR_APPROVAL`。
 - Delivery 是动作不是状态：`READY_FOR_APPROVAL →（Delivery）→ COMPLETED`。没有远程时本地快进合入后直接 `COMPLETED`（D92 h）；有远程时开 PR，PR 合并才 `COMPLETED`，其间 Mission 处于“已交付、等合并”，这个状态的名字在做 PR 交付时定（D92 d）。
 - `READY_FOR_APPROVAL`：等待最终交付 Approval（若 policy 要求）。
 - **Delivery / 交付**：把集成基线交到目标分支的最终动作，在交付 Approval 之后：有远程时开 PR（合并后进入 `COMPLETED`，D92 d），没有远程时本地快进合入（D92 h）。

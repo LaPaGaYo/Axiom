@@ -193,7 +193,7 @@ EXECUTING ↔ REPLANNING
 | `EXECUTING → REPLANNING` | `MAJOR_REPLAN`（V1 只由人发起：改 Goal 或从待处理项选"重新规划"，D8 修订；自动分级在 V2）；暂停新 admission，活跃 Attempt 按 policy 继续或停止 |
 | `REPLANNING → EXECUTING` | 新 PlanRevision APPROVED，旧 revision SUPERSEDED，Task 继承/取消/重绑完成 |
 | `EXECUTING → FINALIZING` | 所有 required Task ∈ {`INTEGRATED`, `CANCELED`}，无活跃 Attempt（M4-6a：由 Scheduler 的每一轮最先判定，只看 Task 的 stage——每个 Task 都是 `INTEGRATED` 或 `CANCELED`，且至少一个 `INTEGRATED`；Attempt 的状态是读时算出来的投影、不存库，不参与判定（验证者的细则，Henry 可推翻）；同一事务入队 `mission.finalize`） |
-| `FINALIZING → READY_FOR_APPROVAL` | 目标分支漂移已合入集成基线并通过最终全量回归；completion gate 全部通过；CompletionReport 生成（M4-6a 是最小版：`mission.finalize` 核对集成头就是库里记的那个，只读地确认集成分支包含目标分支的最新提交——不包含就停在 `FINALIZING`、原因 `target_branch_moved`，对齐是 M4-6b；这时最后一个批次的合并树回归就是最终回归；七项门禁逐项连同证据记进审计 `mission.finalization`；CompletionReport 到 M4-10 才生成） |
+| `FINALIZING → READY_FOR_APPROVAL` | 目标分支漂移已合入集成基线并通过最终全量回归；completion gate 全部通过；CompletionReport 生成（M4-6a 是最小版：`mission.finalize` 核对集成头就是库里记的那个，只读地确认集成分支包含目标分支的最新提交——不包含就停在 `FINALIZING`、原因 `target_branch_moved`，对齐是 M4-6b；这时最后一个批次的合并树回归就是最终回归；门禁逐项连同证据记进审计 `mission.finalization`（M4-6a 七项，M4-10 起八项）。M4-10：全部通过时执行器把 CompletionReport 存成一份产物（种类 `completion_report`，JSON，格式版本 1，只由数据库与这次读到的两个提交得出），收尾记录写明它的编号与哈希；记下 `ready` 的事务先重建报告并比对哈希，相同才写记录并进入 `READY_FOR_APPROVAL`，不同则什么都不写、由 outbox 重试） |
 | `READY_FOR_APPROVAL → COMPLETED` | 交付 Approval GRANTED（V1 总是要求，D92 a）；Delivery 成功：没有远程时本地快进合入目标分支（D92 h）；有远程时开 PR，PR 合并之后才 COMPLETED（D92 d；开 PR 到合并之间的状态名在做 PR 交付时定） |
 | `FINALIZING → EXECUTING` | 目标分支漂移合并冲突或最终全量回归失败：没有肇事候选，Control Plane 建 FIX_TASK（D79），审计 `mission.finalizing_reopened{reason}`；required Task 再次全部 INTEGRATED 后重新进入 FINALIZING（D70） |
 | `READY_FOR_APPROVAL → FINALIZING` | 交付前目标分支 HEAD 不等于 FINALIZING 时合入的 HEAD；交付 Approval 随之失效（D70） |
