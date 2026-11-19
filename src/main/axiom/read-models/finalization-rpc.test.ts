@@ -6,6 +6,7 @@ import {
   integrationHead,
   targetHead
 } from '../finalization/finalization-fixture.test-support'
+import { blockingReportApproval } from '../finalization/completion-report-fixture.test-support'
 import { mockFinalizationGit } from '../finalization/finalization-runtime.test-support'
 import { executeFinalization } from '../finalization/mission-finalize'
 import { MissionResponseSchema } from '../../../shared/axiom-contract/mission-params'
@@ -85,7 +86,7 @@ it('mission.pending lists a stopped finalization as a blocking mission item with
   for (const text of ['main', targetHead.slice(0, 7), integrationHead.slice(0, 7)]) {
     expect(items[0].summary).toContain(text)
   }
-  f.db.createGate({ taskId: f.tasks[0].taskId, question: 'Confirm scope' })
+  blockingReportApproval(f.db, f.missionId)
   await execute()
   const failed = (await pending()).items.find((item) => item.kind === 'mission')!
   expect(failed.reason).toBe('completion_gate_failed')

@@ -429,27 +429,53 @@ Mission 的 `branch` 是由执行器的 `integrationHeadRef` 去掉 `refs/heads/
 
 每轮调度先调用 `requestFinalization`，在同一个写事务内重新读取 Mission 与它的全部 Task 行：EXECUTING 且每项都属于 `TERMINAL_TASK_STAGES`（INTEGRATED 或 CANCELED）、至少一个 INTEGRATED 时，由 MissionController 写 `mission.status` 进入 FINALIZING，并以 Mission id 为 key 入队 `mission.finalize`。没有 Task 或全取消时保持 EXECUTING；其它状态和不存在的 id 不写入。已经 FINALIZING 时，只在 effect 缺失或不是 pending / running 时重新入队，不重写状态或审计。请求失败只警告身份，不带错误内容，调度继续。Task stage 是同步的权威：不读没有 state 列的 Attempt binding，也不等待异步 worker/liveness 投影；最后一次 promotion 已提交 INTEGRATED 时，integration.apply 仍 running 不挡收尾。
 
-执行器按顺序只读：先经 `readIntegrationHead` 读集成分支并与 `recordedIntegrationHead` 比对（没有记录也不接受），再在 kernel 查到的本地仓库用 `readIntegrationGit` 读取 `refs/heads/<target>^{commit}`，最后用 `merge-base --is-ancestor` 检查目标头是否已被集成头包含。两次直接 git 读取都沿用 allowParentRepository=true；不存在的目标 ref 和非祖先只识别 exit code 1，其它失败抛给 outbox。三次尝试、两次退避（1 s、5 s），orphan 重试；没有新的 timer、git 环境、ref 或 worktree 写入。
+执行器先按顺序只读 Git：先经 `readIntegrationHead` 读集成分支并与 `recordedIntegrationHead` 比对（没有记录也不接受），再在 kernel 查到的本地仓库用 `readIntegrationGit` 读取 `refs/heads/<target>^{commit}`，最后用 `merge-base --is-ancestor` 检查目标头是否已被集成头包含。两次直接 git 读取都沿用 allowParentRepository=true；不存在的目标 ref 和非祖先只识别 exit code 1，其它失败抛给 outbox。门禁全部通过后，执行器写入一份 CompletionReport Artifact（M4-10），再记录 ready。Git 读取、报告构建或存储失败都走三次尝试、两次退避（1 s、5 s），orphan 重试；没有新的 timer、git 环境、ref 或 worktree 写入。
 
-完成门是独立模块的同步纯读函数；逐项评估，不在失败项处退出，证据数组各截到 200 条：
+完成门是独立模块的同步纯读函数，现有八项；逐项评估，不在失败项处退出，证据数组各截到 200 条：
 
 - `tasks_settled`：所有 Task 终态且至少一个 INTEGRATED；证据为已集成 Task ids。
 - `candidates_verified`：每个已集成 Task 的 ACTIVE Candidate 最近一次非批次验证 PASS；证据为读到的 run ids，detail 列失败 Task ids。
 - `batches_promoted`：每个已集成 Task 最近批次 PROMOTED 且该批次最近回归 PASS；证据为 batch ids，detail 列失败 Task ids。
 - `integration_head_recorded`：实际集成头等于记录头；证据为读取的 commit id。
 - `target_branch_contained`：目标头是集成头祖先；证据为目标 commit id。
-- `no_open_questions`：逐 Task 读取 pending question thread、typed QUESTION 和 pending gate，并读取 Mission 的 blocking Approval；没有任何阻塞才通过，证据为检查过的 Task ids。
+- `no_open_questions`：只对 stage 属于共享 `QUESTION_BLOCKING_STAGES` 的 Task 计入 pending question thread、typed QUESTION 和 pending gate，并读取 Mission 的 blocking Approval；没有阻塞才通过，证据仍为全部 Task ids。Mission 进入收尾时所有 Task 已了结，所以此项此时只会因 blocking Approval 失败；已了结 Task 的未答问题进入报告的 `openQuestions`。
 - `goal_criteria_covered`：只把已集成 Task specs 交给 `planCoverage`，与 ACTIVE Goal criteria 对照；无 criteria 通过，detail 列 uncovered 零基索引，证据为已集成 Task ids；只由取消 Task 覆盖的标准不算。
+- `limitations_recorded`：每个 INTEGRATED Task 的 ACTIVE Candidate 必须有对应的已存 Submission；证据为 submission ids，detail 为缺失的 Task ids。只检查存在，不判断 limitations / risks 的内容，空列表也通过。
 
-停止原因面向人的含义：`target_branch_moved` 表示目标头不在集成历史中，需要后续对齐；`target_branch_not_found` 表示本地目标分支不存在，需要恢复分支；`integration_head_unexpected` 表示集成头与记录不一致或缺记录，需要核对集成分支和审计；`completion_gate_failed` 表示至少一个门未过，需要查看失败 ids 与证据；`finalization_unavailable` 表示三次读取尝试耗尽，需要检查本机仓库可用性。停止只记原因，Mission 留在 FINALIZING；现有 sweep 每分钟再次请求，通常花两到三次 git 读取。
+停止原因面向人的含义：`target_branch_moved` 表示目标头不在集成历史中，需要后续对齐；`target_branch_not_found` 表示本地目标分支不存在，需要恢复分支；`integration_head_unexpected` 表示集成头与记录不一致或缺记录，需要核对集成分支和审计；`completion_gate_failed` 表示至少一个门未过，需要查看失败 ids 与证据；`finalization_unavailable` 表示三次尝试耗尽：仓库读取失败、报告无法存储（包括超过 8 MiB）或报告事实持续改变都可能导致它，需要检查仓库、产物存储和 Mission 变化。停止只记原因，Mission 留在 FINALIZING；现有 sweep 每分钟再次请求，通常花两到三次 git 读取。
 
-结果为 Mission 对象的一条 `mission.finalization` 审计，after 存 outcome、stopped 专有的 reason、targetBranch、读到的 heads 和已评估的七项 gate；时间由事件自身记录，读模型用 `utcTimestamp` 填 at。写入事务重查 FINALIZING 与本次 entry 的审计序号；ready 还重查记录头未变，结果与 FINALIZING → READY_FOR_APPROVAL 同事务提交。相同 entry 内 outcome、reason、heads、gate 不变不追加第二条，也不移动 since；pause/resume 形成新 entry，旧结果不显示，重叠的旧读取不结算新 entry。
+结果为 Mission 对象的一条 `mission.finalization` 审计，after 存 outcome、stopped 专有的 reason、targetBranch、读到的 heads 和已评估的八项 gate，ready 另带 `reportArtifactId` 与 `reportSha256`；时间由事件自身记录，读模型用 `utcTimestamp` 填 at。写入事务重查 FINALIZING 与本次 entry 的审计序号；ready 还重查记录头未变、在事务内重建报告并核对 UTF-8 字节的 SHA-256 与已存 Artifact 一致；不一致抛错且不写记录或推进状态，交 outbox 重试。记录头不一致则改写 stopped 并去掉两个报告字段。结果与 FINALIZING → READY_FOR_APPROVAL 同事务提交。相同 entry 内 outcome、reason、heads、gate 及报告引用不变不追加第二条，也不移动 since；pause/resume 形成新 entry，旧结果不显示，重叠的旧读取不结算新 entry。
 
 `axiom.mission.show` 以可选 finalization 返回当前 FINALIZING entry 之后的最新记录（到 READY_FOR_APPROVAL 仍可读）；只读审计，多做一次 finalization 审计投影，不做 git 或 Control Plane 查找。list 和 mutation 回答不增加此字段。`axiom.mission.pending` 只为 FINALIZING 的 stopped 记录提供一个 blocking mission item，since 为记录时间，唯一 action 是 cancel；漂移 summary 给目标分支及两个七位 commit，gate failure summary 给失败项 ids。尚无记录及 READY_FOR_APPROVAL 没有收尾待处理项；同 entry 的更早停止仅留在审计历史，没有列表读取它们。
 
-限制：目标漂移只停在 FINALIZING，M4-6b 才对齐，工作留在集成分支；失败门直到原因改变才会通过，只有取消动作可用，取消 Task 独占的标准或原计划从未覆盖的标准尤其如此。READY_FOR_APPROVAL 尚无 Approval、也无向前路径（M4-7）；其后不重新读取目标分支，批准与交付时重查属于 M4-7 / M4-8。不交付、不写 CompletionReport / Artifact、不改变界面字符串、schema、RPC 参数或 CLI，也不使用 FINALIZING → EXECUTING 或 READY_FOR_APPROVAL → FINALIZING。
+限制：目标漂移只停在 FINALIZING，M4-6b 才对齐，工作留在集成分支；失败门直到原因改变才会通过，只有取消动作可用，取消 Task 独占的标准或原计划从未覆盖的标准尤其如此。READY_FOR_APPROVAL 尚无 Approval、也无向前路径（M4-7）；其后不重新读取目标分支，批准与交付时重查属于 M4-7 / M4-8。不交付；M4-10 增加 CompletionReport Artifact、存储合同及 artifact list 的种类过滤，保留旧记录的读取兼容；不改变界面字符串、数据库 schema 或 CLI，也不使用 FINALIZING → EXECUTING 或 READY_FOR_APPROVAL → FINALIZING。
 
 Task stage 决定入口，所以刚取消 Task 的 worker 可能尚在停止，但不能改变终态 Task；mailbox consumer 保留到下次 pause、cancel 或 restart。FINALIZING 和 READY_FOR_APPROVAL 继续占用 repository 与 target branch，取消前其它 Mission 不能在同一组合启动。pause/resume 与 effect 重叠可暂时留下无记录的 FINALIZING，等下一次 sweep；恢复进程后 stopped Mission 也等 sweep，最多一分钟。旧 build 读到未知 effect kind 会停止 outbox，目前没有发布版本。
+
+### Completion report（M4-10）
+
+CompletionReport 是由 Control Plane 从数据库和本次只读取得的 `integrationHead` / `targetHead` 构建的 JSON Artifact；不调用模型，不执行 Git、文件、网络或时钟读取。格式版本 `version: 1`，media type 为 `application/json`，存储种类 `completion_report`；内容按严格 schema 的键顺序、两空格缩进、一个末尾换行编码为 UTF-8，没有生成时间或随机值，数组保留 reader 的顺序。每层对象拒绝未知字段；字段变更需要新版本。文件在 `<userData>/axiom/artifacts/<sha256>`，数据库保存元数据与哈希，`related` 是 Mission id，`createdBy` 是 `MissionController`。
+
+| 报告部分 | 来源与含义 |
+|---|---|
+| `mission` | `getMission` 的 id、repoId、targetBranch。 |
+| `goal` | `listGoalRevisions` 中 activeGoalRevisionId 指向的目标、约束与 criteria；每个 criterion 的 coveredBy 是 `listTaskStages` 中 INTEGRATED 且 spec.coversGoalCriteria 包含该索引的实际 taskId；revisions 保留全部目标版本的 id、revision、status。 |
+| `plans` | `listPlanRevisions` 的全部版本：身份、状态、goalRevisionId、supersedesId、provenance（kind / actor / 可选 model）、计划自身的 taskIds 和原样 risks（id / description / 可选 mitigation）。 |
+| `tasks` | `listTaskStages` 的全部行，taskId 与 spec.id（planTaskId）分开，保留 planRevisionId、title、kind、stage；取消理由来自 `getLatestReadModelAudit` 的 task.stage → CANCELED 的 reason。 |
+| `tasks[].attempts` | `listAttemptBindings` 的 seq、branch、agentSpecId、contextPackageId；`getAgentSpec(...).spec` 的 provider / model / reasoning.effort；`getLatestReadModelAudit` 的 attempt.started 提供可选 channel / posture；`listCandidates` 按 attemptId 与 dispatchId 关联 candidateId。没有启动事件的 Attempt 不含 channel 或 posture。 |
+| 已集成 Task 的结果 | `activeCandidateVerification` 给 ACTIVE Candidate 的 id / commitSha / treeSha 与最近非批次 run；`getSubmissionByDispatch` 给该候选的 summary / limitations / risks / followUps；`readVerdictRecord` 给 command / result / criteria、可选人工 resolution（verdict / rationale / at）、verdictArtifactId 与 evidenceArtifactIds，`getArtifact` 仅为已知产物附 id / sha256；run 本身给 verifier 与 toolVersions。 |
+| `tasks[].integration` 与 `runs` | `listIntegrationBatches` 按候选归属选 Task 的最新批次，附 batchId / baseCommit / mergeCommit 与 `listVerificationRuns({missionId,batchId})` 的最新 regressionRunId / regressionStatus；runs 先列 Task 的所有非批次 runs，再按批次顺序列每批的 runs，保留 id / candidateId / status / 可选 batchId。 |
+| `tasks[].openQuestions` | `listMessages({missionId,taskId,pendingOnly:true})` 中携带 question 的条目（含内核 question thread 投影）以 source=message、id、text 保存；随后是 `db.listGates({taskId,status:'pending'})` 的 source=gate、id、question 文本。已了结 Task 的未答问题与 pending kernel gate 不再拦住 Mission，只在报告中出现。 |
+| `decisions`、`gate`、`commits` | `listDecisions` 的 ids（当前产品尚无 Decision 写入路径）；`completionGate` 重新评估的八项门禁；本次读到的两个 heads 与 `listIntegrationBatches` 中 PROMOTED 批次按读取顺序的 mergeCommit 列表 `promoted`。 |
+| `risks` | 每个 posture=tui-bypass 的 Attempt 生成 bypass_posture（taskId / seq）；每个含 resolution 的 Task verification 生成 human_resolved_verification（taskId / runId）。 |
+
+门禁的第八项 `limitations_recorded` 保证用于报告的 Submission 已保存，不评价其中的陈述。`no_open_questions` 复用 `QUESTION_BLOCKING_STAGES`，不是把所有历史未答问题当阻塞：所有 Task 在 finalization 入口已了结，该项此时只会因 blocking Approval 失败；未答内容仍完整进入 `openQuestions`。
+
+只有八项全部通过才构建并调用 ArtifactStore.put。一个 ready run 构建两次：写文件前一次，recordFinalization 的写事务内一次；事务检查 Mission 仍在同一次 FINALIZING entry、记录头仍一致，再比较重建文本的字节哈希与报告 Artifact 的 sha256（并核对 kind、Mission 和记录里的 hash）。事实在异步 put 期间改变导致哈希不同，则事务不写任何 finalization 记录或状态，并让 outbox 重试；下次存入新报告。put 失败同样重试，三次耗尽记录 finalization_unavailable。相同字节、Mission 和 kind 有相同 Artifact id，所以存完报告后中断或记录事务失败的重放复用原产物，只成功记录一次 ready。失败门或 Git 停止路径不存报告；已存但未被引用或被后来报告替代的产物保留，没有删除动作。
+
+读取先调用 `axiom.mission.show` 取得 ready 的 `reportArtifactId` / `reportSha256`，再调用既有 `axiom.artifact.read {id: reportArtifactId}` 解码 contentBase64；读操作复核文件哈希。没有 `axiom.mission.completionReport` 方法。Artifact list 接受 completion_report；Attempt / CLI 的 artifact put 和验收 criterion 的 ArtifactKind 仍只接受原七种，不能指定报告种类。
+
+兼容与限制：M4-6a 的七项 gate、无报告引用的 ready / stopped 仍可读；已在旧版进入 READY_FOR_APPROVAL 的 Mission 不会补写报告。旧 build 无法读取带报告字段的 ready、八项 gate 或新产物种类，目前尚未发布。报告按普通 Artifact 权限可读，Mission 的 agent session 也能读；它重复保存的摘要、理由、问题和命令，不提升这些文本的权威。超过 8 MiB 无法存储并最终 finalization_unavailable；没有 Markdown、页面或导出命令，渲染与查看入口在 M4-11；delivery 部分和第二份报告属于 M4-8。本任务没有批准、交付或消费报告的其它模块。
 
 ### Scheduler sweep（SWEEP-1）
 

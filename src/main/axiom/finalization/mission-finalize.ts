@@ -9,12 +9,19 @@ import { readIntegrationGit } from '../integration/integration-merge'
 import { finalizationEntry } from '../read-models/finalization-reads'
 import { completionGate } from './completion-gate'
 import { recordFinalization } from './finalization-record'
+import type { ArtifactStore } from '../artifacts/artifact-store'
+import {
+  COMPLETION_REPORT_MEDIA_TYPE,
+  completionReportText
+} from '../../../shared/axiom-contract/completion-report'
+import { buildCompletionReport } from './completion-report'
 
 type FinalizationDependencies = {
   db: OrchestrationDb
   store: AxiomStore
   missions: MissionController
   runtime: IntegrationRuntime
+  artifacts: ArtifactStore
 }
 
 function exitedOne(error: unknown): boolean {
@@ -29,7 +36,7 @@ export async function executeFinalization(deps: FinalizationDependencies, missio
   }
   const entry = finalizationEntry(store, missionId)
   const record = (outcome: FinalizationOutcome) =>
-    recordFinalization(store, missions, missionId, outcome, entry)
+    recordFinalization(store, db, missions, missionId, outcome, entry)
   const integrationHead = await readIntegrationHead(runtime, mission)
   const heads = { targetBranch: mission.targetBranch, integrationHead }
   if (recordedIntegrationHead(store, missionId) !== integrationHead) {
@@ -66,16 +73,33 @@ export async function executeFinalization(deps: FinalizationDependencies, missio
     record({ ...heads, targetHead, outcome: 'stopped', reason: 'target_branch_moved' })
     return 'done' as const
   }
-  const gate = completionGate(store, db, missionId, {
+  const facts = {
     integrationHead,
     targetHead,
     targetContained: true
-  })
-  record(
-    gate.every((item) => item.pass)
-      ? { ...heads, targetHead, gate, outcome: 'ready' }
-      : { ...heads, targetHead, gate, outcome: 'stopped', reason: 'completion_gate_failed' }
-  )
+  }
+  const gate = completionGate(store, db, missionId, facts)
+  if (gate.every((item) => item.pass)) {
+    const report = buildCompletionReport(store, db, missionId, facts)
+    const artifact = await deps.artifacts.put({
+      missionId,
+      kind: 'completion_report',
+      mediaType: COMPLETION_REPORT_MEDIA_TYPE,
+      related: [missionId],
+      createdBy: 'MissionController',
+      content: Buffer.from(completionReportText(report), 'utf8')
+    })
+    record({
+      ...heads,
+      targetHead,
+      gate,
+      outcome: 'ready',
+      reportArtifactId: artifact.id,
+      reportSha256: artifact.sha256
+    })
+  } else {
+    record({ ...heads, targetHead, gate, outcome: 'stopped', reason: 'completion_gate_failed' })
+  }
   return 'done' as const
 }
 
@@ -90,7 +114,7 @@ export function registerMissionFinalize(
     onExhausted: (effect) => {
       const mission = deps.store.getMission(effect.missionId)
       if (mission?.status === 'FINALIZING') {
-        recordFinalization(deps.store, deps.missions, mission.id, {
+        recordFinalization(deps.store, deps.db, deps.missions, mission.id, {
           targetBranch: mission.targetBranch,
           outcome: 'stopped',
           reason: 'finalization_unavailable'

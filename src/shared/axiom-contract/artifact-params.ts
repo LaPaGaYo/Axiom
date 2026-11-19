@@ -1,13 +1,15 @@
 import { z } from 'zod'
 import { ArtifactKind, AxiomIdSchema } from './mission-objects'
 export { ArtifactKind } from './mission-objects'
+export const StoredArtifactKind = z.enum([...ArtifactKind.options, 'completion_report'])
+export type StoredArtifactKind = z.infer<typeof StoredArtifactKind>
 
 export const MAX_ARTIFACT_BYTES = 8 * 1024 * 1024
 export const Sha256Schema = z.string().regex(/^[a-f0-9]{64}$/)
 export const ArtifactMetaSchema = z.object({
   id: AxiomIdSchema,
   missionId: AxiomIdSchema,
-  kind: ArtifactKind,
+  kind: StoredArtifactKind,
   sha256: Sha256Schema,
   sizeBytes: z.number().int().nonnegative(),
   mediaType: z.string().min(1),
@@ -39,6 +41,7 @@ export const ArtifactPutParams = ArtifactMetaSchema.pick({
   related: true,
   createdBy: true
 }).extend({
+  kind: ArtifactKind,
   contentBase64: ContentBase64,
   attemptId: AxiomIdSchema.optional(),
   from: z.string().min(1).optional()
@@ -46,7 +49,7 @@ export const ArtifactPutParams = ArtifactMetaSchema.pick({
 export const ArtifactReadParams = z.object({ id: AxiomIdSchema })
 export const ArtifactListParams = z.object({
   missionId: AxiomIdSchema,
-  kind: ArtifactKind.optional(),
+  kind: StoredArtifactKind.optional(),
   relatedTo: AxiomIdSchema.optional()
 })
 export const ArtifactPutResponseSchema = z.object({ artifact: ArtifactMetaSchema })

@@ -56,6 +56,6 @@ export function finalizationSummary(
         .map((item) => item.id)
         .join(', ')}. Resolve the recorded causes to retry finalization.`
     case 'finalization_unavailable':
-      return `Finalization could not read the repository after three tries. Check local repository access to ${record.targetBranch}.`
+      return `Finalization could not read the repository or store a stable completion report after three tries. Check repository access to ${record.targetBranch}, artifact storage and changing Mission facts.`
   }
 }

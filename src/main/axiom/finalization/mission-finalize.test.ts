@@ -50,7 +50,7 @@ it('records ready and moves to READY_FOR_APPROVAL when the target is contained a
     integrationHead,
     targetHead
   })
-  expect(record()!.gate).toHaveLength(7)
+  expect(record()!.gate).toHaveLength(8)
   expect(record()!.gate!.every((item) => item.pass)).toBe(true)
   expect(events()[0].after).not.toHaveProperty('at')
   expect(git.readGit.mock.calls.slice(-2)).toEqual([
@@ -96,7 +96,7 @@ it('stops with integration_head_unexpected when the branch is not at the recorde
 })
 it('stops with completion_gate_failed and records the failing items', async () => {
   setStage(f.store, f.tasks[0].taskId, 'RUNNING')
-  f.db.createGate({ taskId: f.tasks[1].taskId, question: 'Confirm scope' })
+  f.db.createGate({ taskId: f.tasks[0].taskId, question: 'Confirm scope' })
   await execute()
   expect(record()).toMatchObject({ outcome: 'stopped', reason: 'completion_gate_failed' })
   expect(
