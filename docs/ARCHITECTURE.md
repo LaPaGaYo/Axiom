@@ -457,6 +457,7 @@ Approval（D7）：
 - 独立存储于 `approvals`：`action_kind`、`inputs_hash`（精确输入摘要）、风险、`requested_by`、`expires_at`、resolver、resolution、`outcome`（执行结果）、`executed_at`；
 - 单次使用：`GRANTED → CONSUMED`，执行动作时校验 inputs hash 一致且未过期；一句「批准了」不能复用；
 - 不复用 Orca decision gate（它不校验 options、无 pending 守卫、无 resolver/expiry）；gate 只承载无活跃 Attempt 的 Task 级 QUESTION（D7a）；Worker 运行中的提问走 `axiom attempt ask`。
+- 现状（M4-7a）：只有交付 Approval 的请求、撤回与读取（`src/main/axiom/approval/`，ApprovalGateway 的第一部分）。记下收尾 `ready` 的同一个事务里由 MissionController 请求一份 `delivery`、`PENDING` 的 Approval，`inputs_hash` 就是完成报告的哈希（报告里有 Mission、目标分支、两个提交、每个 Task 与门禁），72 小时后到期；请求失败则收尾记录与状态一并回滚。取消 Mission 撤回 `PENDING` 的请求；批准与拒绝（M4-7b）、消费（M4-8）尚未实现，暂停期间的过期停表（D70 第 4 条）随 M4-7b 落实。
 
 ## 15. 产品界面
 
