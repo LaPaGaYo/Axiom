@@ -52,6 +52,36 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M4-7a', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'the Approval gets its contract, its store and three plain functions that request, withdraw '
+        'and read; the transaction that records ready requests one delivery Approval bound to the hash of the '
+        'completion report (PENDING, 72 hours) and a request that fails rolls the record and the status back; '
+        'canceling a Mission withdraws the pending request and pausing leaves it; axiom.mission.show carries the '
+        'latest one and a waiting Mission shows one blocking pending item whose only action is cancel; the '
+        'launcher verification passed (98 assertions) on the attempt and again on the corrected candidate; '
+        'twenty new tests under both runners and three more times under each; the red check on the host, twice '
+        '(titles 13, 15, 16, 17, 18 and 19 fail with the four wiring files of main put back, the other fourteen '
+        'pass; the integration spec fails where it reads the approval); forty-two Mission specs pass on the '
+        'candidate build; the union script failed 0; one existing test changed as the brief allows; one verifier '
+        'change, caused by the brief and not by the attempt: the brief let a GRANTED Approval be revoked or '
+        'expire, against AGENTS.md, and the Worker followed it and reported the difference; two product lines, '
+        'three test expectations and the doc sentences were brought back to GRANTED -> CONSUMED; no other model '
+        'CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'nobody can grant or deny until M4-7b; nothing expires; the pause clock of D70 item 4 is not implemented',
+            'whether a GRANTED Approval may be revoked or may expire is a rule change for Henry to decide',
+            'a Mission that was ready before this Task has no Approval and none is requested for it',
+            'no re-check of the report or the commits while a Mission waits; the grant and the delivery compare',
+            'a brief must be compared with AGENTS.md, ARCHITECTURE, GLOSSARY and the decision log before launch; a '
+            'fact-check that reads only code does not find a lifecycle conflict',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M4-10', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'when every gate item passes the finalize executor builds one JSON completion report from the '
