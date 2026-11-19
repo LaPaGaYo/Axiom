@@ -32,3 +32,22 @@ SWEEP-1	M3-09-4c-1	git grep -q "'policy'" -- src/main/axiom/scheduler/scheduler.
 # src/shared/axiom-contract/effects.test.ts, by mission.finalize in the contract and by the title of the
 # codec's new test.
 M4-6a	M4-1b	grep -rq "pins the four kinds and five lifecycle states" src/main/axiom src/shared/axiom-contract
+
+# M4-6a (2026-11-18): twelve pins of its own sidecar say "this file differs from main". They held on the attempt
+# branch - the launcher verified attempt 1 with all 123 assertions passing - and cannot hold on main once that branch
+# is merged: verify-main ran them there and the push guard refused the push (19:43 MST). Such a pin describes the
+# attempt, not the tree; the union script skips every diff against main for that reason. Nothing replaces them:
+# which files the attempt changed is in its verification record and in the merge itself. Later sidecars do not use
+# this form of pin.
+M4-6a	M4-6a	! git diff --quiet main -- src/shared/axiom-contract/effects.ts
+M4-6a	M4-6a	! git diff --quiet main -- src/shared/axiom-contract/mission-params.ts
+M4-6a	M4-6a	! git diff --quiet main -- src/shared/axiom-contract/effects.test.ts
+M4-6a	M4-6a	! git diff --quiet main -- src/main/axiom/db/effect-rows.ts
+M4-6a	M4-6a	! git diff --quiet main -- src/main/axiom/read-models/mission-pending.ts
+M4-6a	M4-6a	! git diff --quiet main -- src/main/axiom/scheduler/scheduler.ts
+M4-6a	M4-6a	! git diff --quiet main -- src/main/axiom/scheduler/mission-sweep.ts
+M4-6a	M4-6a	! git diff --quiet main -- src/main/axiom/control-plane.ts
+M4-6a	M4-6a	! git diff --quiet main -- src/main/axiom/mission-controller/mission-controller.ts
+M4-6a	M4-6a	! git diff --quiet main -- src/main/runtime/rpc/methods/axiom/mission.ts
+M4-6a	M4-6a	! git diff --quiet main -- tests/e2e/mission-integration.spec.ts
+M4-6a	M4-6a	! git diff --quiet main -- docs/reference/control-plane.md
