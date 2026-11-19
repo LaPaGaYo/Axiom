@@ -192,8 +192,8 @@ EXECUTING ↔ REPLANNING
 | `PLANNED → EXECUTING` | 用户启动或 policy 自动启动；Scheduler 开始 admission |
 | `EXECUTING → REPLANNING` | `MAJOR_REPLAN`（V1 只由人发起：改 Goal 或从待处理项选"重新规划"，D8 修订；自动分级在 V2）；暂停新 admission，活跃 Attempt 按 policy 继续或停止 |
 | `REPLANNING → EXECUTING` | 新 PlanRevision APPROVED，旧 revision SUPERSEDED，Task 继承/取消/重绑完成 |
-| `EXECUTING → FINALIZING` | 所有 required Task ∈ {`INTEGRATED`, `CANCELED`}，无活跃 Attempt |
-| `FINALIZING → READY_FOR_APPROVAL` | 目标分支漂移已合入集成基线并通过最终全量回归；completion gate 全部通过；CompletionReport 生成 |
+| `EXECUTING → FINALIZING` | 所有 required Task ∈ {`INTEGRATED`, `CANCELED`}，无活跃 Attempt（M4-6a：由 Scheduler 的每一轮最先判定，只看 Task 的 stage——每个 Task 都是 `INTEGRATED` 或 `CANCELED`，且至少一个 `INTEGRATED`；Attempt 的状态是读时算出来的投影、不存库，不参与判定（验证者的细则，Henry 可推翻）；同一事务入队 `mission.finalize`） |
+| `FINALIZING → READY_FOR_APPROVAL` | 目标分支漂移已合入集成基线并通过最终全量回归；completion gate 全部通过；CompletionReport 生成（M4-6a 是最小版：`mission.finalize` 核对集成头就是库里记的那个，只读地确认集成分支包含目标分支的最新提交——不包含就停在 `FINALIZING`、原因 `target_branch_moved`，对齐是 M4-6b；这时最后一个批次的合并树回归就是最终回归；七项门禁逐项连同证据记进审计 `mission.finalization`；CompletionReport 到 M4-10 才生成） |
 | `READY_FOR_APPROVAL → COMPLETED` | 交付 Approval GRANTED（V1 总是要求，D92 a）；Delivery 成功：没有远程时本地快进合入目标分支（D92 h）；有远程时开 PR，PR 合并之后才 COMPLETED（D92 d；开 PR 到合并之间的状态名在做 PR 交付时定） |
 | `FINALIZING → EXECUTING` | 目标分支漂移合并冲突或最终全量回归失败：没有肇事候选，Control Plane 建 FIX_TASK（D79），审计 `mission.finalizing_reopened{reason}`；required Task 再次全部 INTEGRATED 后重新进入 FINALIZING（D70） |
 | `READY_FOR_APPROVAL → FINALIZING` | 交付前目标分支 HEAD 不等于 FINALIZING 时合入的 HEAD；交付 Approval 随之失效（D70） |
@@ -431,6 +431,8 @@ ContextPackage 是可寻址（`id = sha256(manifest)`）、可复现、最小充
 
 ### 12.3 目标分支漂移
 用户在 Mission 期间可能继续提交到目标分支。`FINALIZING` 时把目标分支 HEAD 作为特殊候选合入集成基线并跑回归，只对齐这一次，执行过程中不追（D92 e）；冲突或回归失败时没有肇事候选，由 Control Plane 建 FIX_TASK，Mission `FINALIZING → EXECUTING`（D70、D79）。
+
+**现状（M4-6a）**：对齐还没有做。收尾只读地比较两个分支：集成分支包含目标分支的最新提交时继续评估完成门禁；不包含时 Mission 停在 `FINALIZING`，收尾记录写明原因 `target_branch_moved` 与两边的提交，待处理项里出现一条只能取消的阻塞项，巡检每分钟重看一次，原因消失后自行继续。对齐、对齐失败后的修复 Task 与回边 `FINALIZING → EXECUTING` 是 M4-6b。
 
 ### 12.4 交付
 `axiom.mission.deliver`：在交付 Approval 之后执行。有远程时推集成分支并开 PR，Mission 进入“已交付、等合并”，只读地把 CI 与评审状态读回来当证据；PR 合并才 `COMPLETED`；CI 失败、要求修改、冲突或被关闭成为待处理项，由人决定（D92 d；这个状态的名字在做 PR 交付时定）。没有远程时只在能快进、且目标分支没被任何工作树检出时本地合入，成功后 `COMPLETED`，否则停下问人（D92 h）。CompletionReport 记录 promoted commits。只有 PROMOTED 的候选计入完成度。

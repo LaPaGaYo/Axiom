@@ -90,7 +90,7 @@ READY_FOR_APPROVAL → FINALIZING（交付前目标分支 HEAD 已变，D70）
 ```
 
 - `PLAN_REVIEW`：PlanRevision 已 PROPOSED，等待人工或 policy 自动批准。
-- `FINALIZING`：所有 required Task 已 `INTEGRATED` 或经授权 `CANCELED`，运行最终全量回归与 completion gate 评估。
+- `FINALIZING`：所有 required Task 已 `INTEGRATED` 或经授权 `CANCELED`，运行最终全量回归与 completion gate 评估。M4-6a：进入由 Scheduler 的一轮判定（只看 Task 的 stage，至少一个 `INTEGRATED`）；收尾由副作用 `mission.finalize` 执行——核对集成头、只读地看目标分支、评估七项门禁；停下时留在 `FINALIZING`，原因在收尾记录（审计 `mission.finalization`）与待处理项里。
 - Delivery 是动作不是状态：`READY_FOR_APPROVAL →（Delivery）→ COMPLETED`。没有远程时本地快进合入后直接 `COMPLETED`（D92 h）；有远程时开 PR，PR 合并才 `COMPLETED`，其间 Mission 处于“已交付、等合并”，这个状态的名字在做 PR 交付时定（D92 d）。
 - `READY_FOR_APPROVAL`：等待最终交付 Approval（若 policy 要求）。
 - **Delivery / 交付**：把集成基线交到目标分支的最终动作，在交付 Approval 之后：有远程时开 PR（合并后进入 `COMPLETED`，D92 d），没有远程时本地快进合入（D92 h）。
@@ -399,7 +399,7 @@ M3-04b-3：报告中的 **typed QUESTION item** 是绑定 Task 的 `messages.pay
 
 - **Effect / 副作用**：与命令的权威状态在同一事务写入 `axiom_effects` 的持久化执行请求；执行器仅在提交后、事务外执行。不是新的 Task / Attempt 生命周期。
 - **Effect outbox / 副作用发件箱**：Control Plane 的持久化副作用出口；v0 每个 `(kind, missionId)` 同时最多执行一个条目，不同 lane 独立。单进程持有数据库，租约按进程 epoch 识别，无时间过期。
-- **Effect kinds**：`attempt.dispatch`（key = `<taskId>/<seq>`，一个 Attempt 恰有一个 dispatch）；`verification.enqueue`（key = VerificationRun id，只唤醒既有验证队列）；`attempt.continue`（key = 被中断的 `<taskId>/<seq>`，严格 payload `{taskId,seq,chain,failureClass,resetsAt?,account?:{provider,key}}`，请求该 Mission 的 Scheduler round；usage_limit 还唤醒其它所有 EXECUTING Mission）；`integration.apply`（key = Candidate id，严格 payload `{taskId,candidateId}`，合并执行器，M4-1b；入队方是 Scheduler 每一轮里的 `requestIntegrations`，M4-2b）。
+- **Effect kinds**：`attempt.dispatch`（key = `<taskId>/<seq>`，一个 Attempt 恰有一个 dispatch）；`verification.enqueue`（key = VerificationRun id，只唤醒既有验证队列）；`attempt.continue`（key = 被中断的 `<taskId>/<seq>`，严格 payload `{taskId,seq,chain,failureClass,resetsAt?,account?:{provider,key}}`，请求该 Mission 的 Scheduler round；usage_limit 还唤醒其它所有 EXECUTING Mission）；`integration.apply`（key = Candidate id，严格 payload `{taskId,candidateId}`，合并执行器，M4-1b；入队方是 Scheduler 每一轮里的 `requestIntegrations`，M4-2b）；`mission.finalize`（key = Mission id，payload 是没有键的严格对象，收尾执行器，M4-6a；入队方是 Scheduler 每一轮最先调用的 `requestFinalization`）。
 - **Continuation**：chain 从 1 起，前一个 seq 的 effect 无论状态均计入；第三次直接 BLOCKED，无 effect。有效 reset 为 `now < resetsAt ≤ now + 8 days`，dueAt = reset + 60 s；否则用 1 / 5 / 15 min ladder（第三档仅留给未来提高连续次数上限）。重启保留等待；执行器检查 EXECUTING / READY / 无更新 Attempt，失败重试 1 s / 5 s、最多三次，旧租约 retry。task.adjust 同事务 retire pending continuation，审计 `effect.retired {reason: superseded_by_task_adjust}`；retired 前驱仍计入 chain。
 - **Effect status**：`pending`（等待 dueAt）→ `running`（已租用）→ `done`（执行器完成）、`pending`（延后 / 有界重试）、`failed`（失败次数耗尽）或 `retired`（重启后无法安全重放，或人工调整取代 continuation）。`attempts` 只计抛出的执行失败，`later` 和 boot retry 不增加它。
 - **`effect.failed`**：`EffectOutbox` 对 `effect` 记录 `{ kind, key, attempts, lastError }`；错误通过 `redactContext` 脱敏且最多 2,000 字符。
