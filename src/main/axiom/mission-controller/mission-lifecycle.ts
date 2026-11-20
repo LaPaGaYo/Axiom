@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { resumeDeliveryApprovalClock } from '../approval/delivery-approval-clock'
 import { assertSupportedReadinessThreshold } from './policy-readiness'
 import { generateId } from '../../runtime/orchestration/db/generated-id'
 import { isOrcaSessionId } from '../../../shared/orca-session-address'
@@ -141,6 +142,9 @@ export function moveMission(
     before: { status: from, previousStatus: before.previousStatus },
     after: { status: to, previousStatus, reason, restoring }
   })
+  if (from === 'PAUSED') {
+    resumeDeliveryApprovalClock(ctx.store, id)
+  }
   return projectMission(ctx, id)
 }
 

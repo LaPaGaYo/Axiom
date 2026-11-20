@@ -23,6 +23,31 @@ function missionItem(ctx: WaitingContext, pending: PendingItems): MissionPending
   if (mission.status === 'READY_FOR_APPROVAL') {
     const approval = latestDeliveryApproval(store, mission.id)
     const record = missionFinalization(store, mission.id)
+    if (
+      approval?.status === 'GRANTED' &&
+      record?.outcome === 'ready' &&
+      approval.inputsHash === record.reportSha256
+    ) {
+      const granted = store.getLatestReadModelAudit({
+        missionId: mission.id,
+        objectKind: 'approval',
+        objectId: approval.id,
+        events: ['approval.granted']
+      })
+      return granted
+        ? [
+            pending.item({
+              kind: 'mission',
+              objectId: mission.id,
+              reason: 'delivery_approved',
+              blocking: true,
+              actions: ['axiom.mission.cancel'],
+              since: granted.createdAt,
+              summary: `Delivery approved to ${record.targetBranch}: integration ${record.integrationHead?.slice(0, 7)}, target ${record.targetHead?.slice(0, 7)}, report ${record.reportArtifactId}.`
+            })
+          ]
+        : []
+    }
     return approval?.status === 'PENDING' &&
       record?.outcome === 'ready' &&
       approval.inputsHash === record.reportSha256

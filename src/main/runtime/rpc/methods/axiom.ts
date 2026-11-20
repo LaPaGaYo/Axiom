@@ -1,4 +1,5 @@
 import { AXIOM_ATTEMPT_METHODS } from './axiom/attempt'
+import { AXIOM_APPROVAL_METHODS } from './axiom/approval'
 import { AXIOM_MESSAGE_METHODS } from './axiom/message'
 import { AXIOM_POLICY_METHODS } from './axiom/policy'
 import { AXIOM_SUPERVISION_METHODS } from './axiom/supervision'
@@ -12,6 +13,7 @@ import { AXIOM_VERIFICATION_METHODS } from './axiom/verification'
 
 export const AXIOM_METHODS = [
   namespaceMethod,
+  ...AXIOM_APPROVAL_METHODS,
   ...AXIOM_ATTEMPT_METHODS,
   ...AXIOM_MESSAGE_METHODS,
   ...AXIOM_MISSION_METHODS,

@@ -46,6 +46,7 @@ export class AxiomStore {
   readonly getApproval: Approvals['getApproval']
   readonly listApprovals: Approvals['listApprovals']
   readonly transitionApproval: Approvals['transitionApproval']
+  readonly updateApprovalExpiry: Approvals['updateApprovalExpiry']
   readonly getOldestReadModelAuditAfter: ReturnType<
     typeof readModelAuditsStore
   >['getOldestReadModelAuditAfter']
@@ -164,6 +165,7 @@ export class AxiomStore {
     this.getApproval = approvals.getApproval
     this.listApprovals = approvals.listApprovals
     this.transitionApproval = approvals.transitionApproval
+    this.updateApprovalExpiry = approvals.updateApprovalExpiry
     this.getOldestReadModelAuditAfter = readModelAuditsStore(db).getOldestReadModelAuditAfter
     this.getLatestReadModelAudit = readModelAuditsStore(db).getLatestReadModelAudit
     const tokenUsage = attemptTokenUsageStore(db)

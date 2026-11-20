@@ -8,6 +8,8 @@ import { resolveAttemptIdentity } from '../execution/attempt-authority'
 type CallerClass = 'desktop_only' | 'attempt' | 'read'
 
 export const AXIOM_METHOD_CALLER_CLASS: Record<string, CallerClass> = {
+  'axiom.approval.grant': 'desktop_only',
+  'axiom.approval.deny': 'desktop_only',
   'axiom.verification.resolve': 'desktop_only',
   'axiom.verification.rerun': 'desktop_only',
   'axiom.namespace.get': 'read',
