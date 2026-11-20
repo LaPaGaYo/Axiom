@@ -58,3 +58,8 @@ M4-6a	M4-6a	! git diff --quiet main -- docs/reference/control-plane.md
 # the titles "no_open_questions passes with an unanswered question on a settled Task" and "no_open_questions fails
 # while the Mission has a blocking Approval".
 M4-10	M4-6a	git grep -q -F "fails no_open_questions while a Task has a pending question" -- src/main/axiom src/shared/axiom-contract
+# M4-7b registers the two methods a person decides a delivery Approval with, axiom.approval.grant and
+# axiom.approval.deny. M4-7a pinned that no method name with that prefix exists yet; the pin goes away with the
+# fact. Replaced in M4-7b's sidecar by pins on the two names in the handler file, the caller-class map, the
+# mutation list and the generated catalog.
+M4-7b	M4-7a	! git grep -q -E "axiom\.approval\.[a-z]" -- src tests
