@@ -266,6 +266,27 @@ test('M4-2b: a verified Task is integrated and its dependent Task runs from the 
         await desktopCall(page, 'axiom.mission.pending', { missionId: mission.id })
       )
       expect(pending.items.map((item) => item.reason)).toContain('delivery_approval_pending')
+      const granted = MissionResponseSchema.parse(
+        await desktopCall(page, 'axiom.approval.grant', { approvalId: approval?.id })
+      )
+      expect(granted.approval).toMatchObject({
+        id: approval?.id,
+        status: 'GRANTED',
+        resolver: 'user'
+      })
+      const stillWaiting = MissionResponseSchema.parse(
+        await desktopCall(page, 'axiom.mission.show', { missionId: mission.id })
+      )
+      expect(stillWaiting.mission.status).toBe('READY_FOR_APPROVAL')
+      expect(stillWaiting.approval).toEqual(granted.approval)
+      const approvedPending = MissionPendingResponseSchema.parse(
+        await desktopCall(page, 'axiom.mission.pending', { missionId: mission.id })
+      )
+      expect(approvedPending.items.map((item) => item.reason)).toContain('delivery_approved')
+      expect(approvedPending.items.map((item) => item.reason)).not.toContain(
+        'delivery_approval_pending'
+      )
+      expect(git(['-C', clone, 'rev-parse', 'refs/heads/main'])).toBe(FIXTURE_COMMIT)
       await page.getByRole('button', { name: 'Missions', exact: true }).click()
       await page
         .getByRole('navigation', { name: 'Mission list', exact: true })

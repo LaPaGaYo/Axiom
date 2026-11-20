@@ -1,5 +1,7 @@
 // The single Axiom classification feeds both the contract fence and durable receipts.
 export const AXIOM_MUTATION_METHODS = [
+  'axiom.approval.grant',
+  'axiom.approval.deny',
   'axiom.verification.resolve',
   'axiom.verification.rerun',
   'axiom.attempt.submit',

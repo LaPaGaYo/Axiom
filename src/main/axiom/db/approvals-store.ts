@@ -67,9 +67,19 @@ const Transition = z.strictObject({
   resolver: ApprovalSchema.shape.resolver.optional(),
   resolution: ApprovalSchema.shape.resolution.optional()
 })
+const Expiry = ApprovalSchema.pick({ id: true, expiresAt: true })
 
 export function approvalsStore(db: OrchestrationDb) {
   return {
+    updateApprovalExpiry(input: z.input<typeof Expiry>) {
+      const p = Expiry.parse(input)
+      return (
+        db.db
+          .prepare(`UPDATE approvals SET expires_at = ?, updated_at = datetime('now')
+        WHERE id = ? AND status IN ('PENDING', 'GRANTED')`)
+          .run(p.expiresAt, p.id).changes === 1
+      )
+    },
     insertApproval(input: z.input<typeof Insert>) {
       const p = Insert.parse(input)
       db.db

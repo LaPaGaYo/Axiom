@@ -42,6 +42,10 @@ it('pausing and resuming a Mission that awaits approval keeps the approval PENDI
   expect(approval()).toEqual(before)
   f.missions.resumeMission(f.missionId)
   expect(f.store.getMission(f.missionId)?.status).toBe('READY_FOR_APPROVAL')
-  expect(approval()).toEqual(before)
+  expect(approval()).toMatchObject({
+    id: before?.id,
+    status: 'PENDING',
+    inputsHash: before?.inputsHash
+  })
   expect(f.store.listApprovals({ missionId: f.missionId })).toHaveLength(1)
 })

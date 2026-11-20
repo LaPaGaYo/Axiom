@@ -1,4 +1,5 @@
 import type { ScheduleTrigger } from '../scheduler/scheduler'
+import * as deliveryDecision from '../approval/delivery-decision'
 import { requestDeliveryApproval, revokeDeliveryApprovals } from '../approval/delivery-approval'
 import { createTask } from './task-creation'
 import { assertMissionStartable } from './mission-start-guard'
@@ -195,6 +196,14 @@ export class MissionController {
     return this.write('pause_mission', () =>
       interruptMission(this.ctx, missionId, 'PAUSED', reason)
     )
+  }
+  grantApproval(input: Parameters<typeof deliveryDecision.grant>[1]) {
+    const result = this.write('grant_approval', () => deliveryDecision.grant(this.ctx, input))
+    return deliveryDecision.grantResult(result)
+  }
+  denyApproval(input: Parameters<typeof deliveryDecision.deny>[1]) {
+    deliveryDecision.validateDenial(input.reason)
+    return this.write('deny_approval', () => deliveryDecision.deny(this.ctx, input))
   }
   resumeMission(missionId: string, reason?: string) {
     const result = this.write('resume_mission', () =>

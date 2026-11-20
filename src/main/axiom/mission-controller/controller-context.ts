@@ -4,6 +4,10 @@ import type { OrchestrationDb } from '../../runtime/orchestration/db/orchestrati
 import { AuditEventSchema } from '../../../shared/axiom-contract/mission-objects'
 
 export const MISSION_CONTROLLER_ERROR_CODES = [
+  'approval_not_found',
+  'approval_not_pending',
+  'approval_stale',
+  'approval_expired',
   'mission_not_found',
   'goal_revision_not_found',
   'goal_not_proposed',

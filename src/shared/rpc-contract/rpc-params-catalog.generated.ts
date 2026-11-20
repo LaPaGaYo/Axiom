@@ -7,6 +7,7 @@ import {
   AiVaultSearchStatusRequestSchema,
   AiVaultSetSearchEnabledParamsSchema
 } from '../ai-vault-search-contract'
+import { ApprovalDenyParams, ApprovalGrantParams } from '../axiom-contract/approval-params'
 import {
   ArtifactListParams,
   ArtifactPutParams,
@@ -835,6 +836,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'automation.runs': AutomationRuns,
   'automation.show': AutomationId,
   'automation.update': AutomationUpdate,
+  'axiom.approval.deny': ApprovalDenyParams,
+  'axiom.approval.grant': ApprovalGrantParams,
   'axiom.artifact.list': ArtifactListParams,
   'axiom.artifact.put': ArtifactPutParams,
   'axiom.artifact.read': ArtifactReadParams,
