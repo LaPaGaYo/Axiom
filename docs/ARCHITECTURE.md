@@ -437,6 +437,8 @@ ContextPackage 是可寻址（`id = sha256(manifest)`）、可复现、最小充
 ### 12.4 交付
 `axiom.mission.deliver`：在交付 Approval 之后执行。有远程时推集成分支并开 PR，Mission 进入“已交付、等合并”，只读地把 CI 与评审状态读回来当证据；PR 合并才 `COMPLETED`；CI 失败、要求修改、冲突或被关闭成为待处理项，由人决定（D92 d；这个状态的名字在做 PR 交付时定）。没有远程时只在能快进、且目标分支没被任何工作树检出时本地合入，成功后 `COMPLETED`，否则停下问人（D92 h）。CompletionReport 记录 promoted commits。只有 PROMOTED 的候选计入完成度。
 
+**现状（M4-8a）**：没有远程时的本地快进已实现（`axiom.mission.deliver`，只许桌面调用）。交付前再核对一次 Approval（是这个 Mission 最新的一份、`inputs_hash` 等于当前报告、没有过期），再对着 git 核对集成头与目标分支都在报告记下的提交上；目标分支不在那个提交上就 `READY_FOR_APPROVAL → FINALIZING` 重做收尾（D70）。目标分支被某个工作树检出、仓库设了 `merge.verifySignatures`（集成提交没有签名）、集成头与库里的记录不符、或者仓库有远程时停下：不写 git，审计 `mission.delivery_stopped`，待处理项里出现一条只能取消的`delivery_stopped`，原因消失后同一份 Approval 仍可用。写目标分支之前先提交审计 `mission.delivery_started`；写用带旧值的 `update-ref`，不带配置覆盖（仓库自己的 hooks 照常运行），reflog 写明 Mission；成功后同一个事务里 Approval `CONSUMED`、Mission `COMPLETED`。有远程的仓库现在一律停下：PR 交付（M4-8b）还没有做，0.1 是否对有远程的仓库本地快进待 Henry 定。不另写第二份 CompletionReport（验证者的细则，Henry 可推翻）：快进不产生新提交，报告里的 `commits.integrationHead` 就是目标分支最后所在的提交。
+
 ## 13. Replanning
 
 不是每完成一个 Task 就重规划。触发器由 RulesEngine 分级（DecisionEngine 可给建议，规则拍板）：
@@ -458,7 +460,8 @@ Approval（D7）：
 - 单次使用：`GRANTED → CONSUMED`，执行动作时校验 inputs hash 一致且未过期；一句「批准了」不能复用；
 - 不复用 Orca decision gate（它不校验 options、无 pending 守卫、无 resolver/expiry）；gate 只承载无活跃 Attempt 的 Task 级 QUESTION（D7a）；Worker 运行中的提问走 `axiom attempt ask`。
 - 现状（M4-7a）：只有交付 Approval 的请求、撤回与读取（`src/main/axiom/approval/`，ApprovalGateway 的第一部分）。记下收尾 `ready` 的同一个事务里由 MissionController 请求一份 `delivery`、`PENDING` 的 Approval，`inputs_hash` 就是完成报告的哈希（报告里有 Mission、目标分支、两个提交、每个 Task 与门禁），72 小时后到期；请求失败则收尾记录与状态一并回滚。取消 Mission 撤回 `PENDING` 的请求。
-- 现状（M4-7b）：人在桌面上批准或拒绝这份交付 Approval（`axiom.approval.grant` / `axiom.approval.deny`，只许桌面调用；批准人记 `user`，审计另记调用来路）。批准时核对它仍是 `PENDING`、Mission 处在 `READY_FOR_APPROVAL`、`inputs_hash` 等于当前收尾记录的报告哈希、并且没有过期；过期的请求记为 `EXPIRED`，为同一份报告另请求一份，这一次批准被拒绝。拒绝使 Mission 进入 `BLOCKED(delivery_denied)`。Mission 每次离开 `PAUSED`，未关闭的交付 Approval 的到期时间顺延这次暂停的时长（D70 第 4 条的 Approval 部分；阻塞的时间不停表）。消费与交付时的再次核对（M4-8）、启动恢复时标记过期（16.1 第 2 步，M4-4）尚未实现。
+- 现状（M4-7b）：人在桌面上批准或拒绝这份交付 Approval（`axiom.approval.grant` / `axiom.approval.deny`，只许桌面调用；批准人记 `user`，审计另记调用来路）。批准时核对它仍是 `PENDING`、Mission 处在 `READY_FOR_APPROVAL`、`inputs_hash` 等于当前收尾记录的报告哈希、并且没有过期；过期的请求记为 `EXPIRED`，为同一份报告另请求一份，这一次批准被拒绝。拒绝使 Mission 进入 `BLOCKED(delivery_denied)`。Mission 每次离开 `PAUSED`，未关闭的交付 Approval 的到期时间顺延这次暂停的时长（D70 第 4 条的 Approval 部分；阻塞的时间不停表）。启动恢复时标记过期（16.1 第 2 步，M4-4）尚未实现。
+- 现状（M4-8a）：交付时再次核对这份 Approval（最新的一份、`inputs_hash`、到期），交付成功的同一个事务里消费：`GRANTED → CONSUMED`，写 `outcome`（`fast_forwarded` 或 `up_to_date`）与 `executed_at`，审计 `approval.consumed`（带目标分支与前后两个提交）。到期的 `GRANTED` 不换状态（现行生命周期只有 `GRANTED → CONSUMED`）：为同一份报告另请求一份，审计 `approval.lapsed`，这一次交付被拒绝。
 
 ## 15. 产品界面
 

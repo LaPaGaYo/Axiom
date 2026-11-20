@@ -91,8 +91,8 @@ READY_FOR_APPROVAL → FINALIZING（交付前目标分支 HEAD 已变，D70）
 
 - `PLAN_REVIEW`：PlanRevision 已 PROPOSED，等待人工或 policy 自动批准。
 - `FINALIZING`：所有 required Task 已 `INTEGRATED` 或经授权 `CANCELED`，运行最终全量回归与 completion gate 评估。M4-6a：进入由 Scheduler 的一轮判定（只看 Task 的 stage，至少一个 `INTEGRATED`）；收尾由副作用 `mission.finalize` 执行——核对集成头、只读地看目标分支、评估完成门禁（M4-6a 七项，M4-10 起八项，多一项 `limitations_recorded`）；停下时留在 `FINALIZING`，原因在收尾记录（审计 `mission.finalization`）与待处理项里。M4-10：门禁全部通过时执行器先把 CompletionReport 存成产物，再在重建出同一份报告的事务里记下 `ready`（带报告的编号与哈希）并进入 `READY_FOR_APPROVAL`。
-- Delivery 是动作不是状态：`READY_FOR_APPROVAL →（Delivery）→ COMPLETED`。没有远程时本地快进合入后直接 `COMPLETED`（D92 h）；有远程时开 PR，PR 合并才 `COMPLETED`，其间 Mission 处于“已交付、等合并”，这个状态的名字在做 PR 交付时定（D92 d）。
-- `READY_FOR_APPROVAL`：等待最终交付 Approval（若 policy 要求）。M4-7a：进入该状态的同一个事务里请求这份 Approval（`delivery`、`PENDING`，绑定完成报告的哈希，72 小时到期）；取消 Mission 撤回它；待处理项里一条 `mission` 项、原因 `delivery_approval_pending`（只能取消）；M4-7b：人在桌面上用 `axiom.approval.grant` / `axiom.approval.deny` 决定它；批准后 Mission 仍在该状态等待交付（M4-8），待处理项的原因变为 `delivery_approved`（仍只能取消）；过期的请求在有人批准时作废并换一份新的；离开 `PAUSED` 时它的到期时间顺延暂停的时长。
+- Delivery 是动作不是状态：`READY_FOR_APPROVAL →（Delivery）→ COMPLETED`。没有远程时本地快进合入后直接 `COMPLETED`（D92 h）；有远程时开 PR，PR 合并才 `COMPLETED`，其间 Mission 处于“已交付、等合并”，这个状态的名字在做 PR 交付时定（D92 d）。M4-8a：没有远程时的本地快进已实现；有远程的仓库在 PR 交付做出来之前停下并说明。
+- `READY_FOR_APPROVAL`：等待最终交付 Approval（若 policy 要求）。M4-7a：进入该状态的同一个事务里请求这份 Approval（`delivery`、`PENDING`，绑定完成报告的哈希，72 小时到期）；取消 Mission 撤回它；待处理项里一条 `mission` 项、原因 `delivery_approval_pending`（只能取消）；M4-7b：人在桌面上用 `axiom.approval.grant` / `axiom.approval.deny` 决定它；批准后 Mission 仍在该状态等待交付，待处理项的原因变为 `delivery_approved`（仍只能取消）；过期的请求在有人批准时作废并换一份新的；离开 `PAUSED` 时它的到期时间顺延暂停的时长。M4-8a：`axiom.mission.deliver` 交付成功后进入 `COMPLETED`；交付停下时留在该状态，待处理项的原因变为 `delivery_stopped`（仍只能取消）；目标分支不在收尾时的提交上则回 `FINALIZING`。
 - **Delivery / 交付**：把集成基线交到目标分支的最终动作，在交付 Approval 之后：有远程时开 PR（合并后进入 `COMPLETED`，D92 d），没有远程时本地快进合入（D92 h）。
 - `BLOCKED`：阻塞解除（Approval GRANTED / DENIED、Question ANSWERED、预算经 Approval 上调或 replan）后回到进入前的状态；进入前的状态持久化在 `missions.previous_status`（与 `PAUSED` 相同）。
 - `BLOCKED(delivery_denied)`：交付 Approval 被 DENIED；人选择修改后重交（回 `EXECUTING`，走 Goal / plan 调整）或 `CANCELED`；EXPIRED 则重新请求，不自动交付（D70）。M4-7b：由 `axiom.approval.deny` 写入；0.1 里这之后只能取消，“修改后重交”要等重新规划。
@@ -172,7 +172,7 @@ Task 页仅提供该 Task 的待处理项在 `actions` 中列出的操作：处�
 | stall_notice | current stall notification | stalled；false | axiom.task.cancel |
 | supervision_proposal | 全局 open proposal，列于每个非终态 Mission | stalled；false | axiom.supervision.resolve |
 
-M4 给 `mission` 项加了三种情况（M4-6a、M4-7a、M4-7b），都是 blocking=true、actions 只有 axiom.mission.cancel：FINALIZING 且最近一次收尾记录是 stopped，reason 为该记录的原因；READY_FOR_APPROVAL 且最新的交付 Approval 为 PENDING、它的 inputsHash 等于 ready 记录的报告哈希，reason 为 `delivery_approval_pending`，since 取 Approval 的创建时间；同样条件下 Approval 为 GRANTED，reason 为 `delivery_approved`，since 取 `approval.granted` 审计的时间。被拒的 Mission 走上表的 BLOCKED 一行，summary 为 `delivery_denied`。批准与拒绝的 action 随 M4-11 加入。
+M4 给 `mission` 项加了四种情况（M4-6a、M4-7a、M4-7b、M4-8a），都是 blocking=true、actions 只有 axiom.mission.cancel：FINALIZING 且最近一次收尾记录是 stopped，reason 为该记录的原因；READY_FOR_APPROVAL 且最新的交付 Approval 为 PENDING、它的 inputsHash 等于 ready 记录的报告哈希，reason 为 `delivery_approval_pending`，since 取 Approval 的创建时间；同样条件下 Approval 为 GRANTED，reason 为 `delivery_approved`，since 取 `approval.granted` 审计的时间；批准之后这份 Approval 有交付停下的记录（审计 `mission.delivery_stopped`）时，reason 为 `delivery_stopped`，since 取最近一次停下的时间，summary 写明停在哪里。被拒的 Mission 走上表的 BLOCKED 一行，summary 为 `delivery_denied`。批准与拒绝的 action 随 M4-11 加入。
 
 adjust 只在 Mission PLANNED / EXECUTING、Task DEFINED / READY / NEEDS_FIX / BLOCKED 或 VERIFYING + HUMAN_REVIEW 提供，upstream_canceled / no_eligible_provider 不提供。rerun 需要 ACTIVE Candidate，Task BLOCKED 或 VERIFYING + HUMAN_REVIEW，最新 run 非 QUEUED / RUNNING。各命令仍自行检查参数、权限和竞态；actions 只承诺以上状态条件。BLOCKED Mission 只有 cancel；stall_notice 只有 Task cancel，没有单 Attempt stop。
 
@@ -300,13 +300,15 @@ APPLYING / TESTING → QUEUED（应用重启时由 RecoveryService 丢弃临时�
 
 **集成请求**（M4-2b）：Scheduler 的每一轮在重算就绪之后、准入新的 Attempt 之前调用 `requestIntegrations`（Mission 不是 `EXECUTING` 时不做事）。新请求要三条都成立：Task 是 `VERIFIED` 且有 `ACTIVE` 候选；这个候选最近一次不属于批次的 VerificationRun 是 `PASS`（人工处置的 `PASS` 也算）；每个上游 Task 属于同一 Mission、同一 PlanRevision 且已 `INTEGRATED`。成立则一个事务里写 `INTEGRATION_READY`（actor `IntegrationController`，原因 `integration_requested`）、入队 `integration.apply`、记审计 `integration.requested`（`taskId`、`runId`、`again: false`）；不成立的 Task 什么都不写。先后按 Task 最近一次进入 `VERIFIED` 的审计序号，没有这条事件的排最后，再按 Task id。**重新请求**：Task 在 `INTEGRATION_READY`、候选仍 `ACTIVE`、而它的 `integration.apply` 不存在或已经结束（`failed` / `retired` / `done`）时，下一轮重新入队并记 `again: true`，不看验证记录；`pending` / `running` 的请求不动（保住已用的次数与延迟）。每个 Task 一个事务：一个失败只回滚它自己，只留一行不含错误内容的警告，不挡其余 Task，也不让这一轮失败。请求在既有的触发（阶段变化、调整、policy 更新、开始、恢复、解除阻塞、启动）带来的一轮里发出；SWEEP-1 起兜底巡检每分钟也带来一轮（见下一段），所以请求已经结束、Task 却仍在 `INTEGRATION_READY` 的，约每分钟重新入队一次。
 
-**调度兜底巡检**（SWEEP-1）：每 60 秒的对账 tick 做完对账之后，`sweepExecutingMissions` 给每个 `EXECUTING` 的 Mission 请求一轮调度，触发名 `sweep`；启动时不加（启动自己有 `resume` 那一轮），不是新的定时器。它只补"丢了的一轮"——那一轮失败了，或者变化在 Control Plane 之外（新装或刚登录的 provider）。一轮本来就重读全部持久状态，所以巡检不带任何内存态。`scheduler.round` 审计里的 `sweep` 表示是巡检准入了东西：有一个触发丢了，值得查。巡检的一轮遇到"没有可用 provider"时，只有 `admissionRefusalRecorded` 答"否"才写 `task.admission_refused`——该 Task 最近一条拒绝存在、晚于它最近一次阶段变化、内容相同（按 JSON 文本）就不再写，这正是读模型认"哪条拒绝算数"的规则；事件触发的一轮照旧每次写。一轮正在跑时到来的 `sweep` 不顶替已经在等的触发，没有在等的才自己等。e2e 下默认不巡检，`AXIOM_E2E_RUN_SWEEP=1` 才开。限制：巡检不是免费的——每个等待的 Task 一个事务，只卡在 provider 上限的 Task 每分钟重建一次合同（内容变了才写）；失败的一轮每分钟失败并警告一次；丢失的触发最多晚一个 tick 才补上。
+**调度兜底巡检**（SWEEP-1）：每 60 秒的对账 tick 做完对账之后，`sweepExecutingMissions` 给每个 `EXECUTING`（M4-6a 起也包括 `FINALIZING`）的 Mission 请求一轮调度，触发名 `sweep`；启动时不加（启动自己有 `resume` 那一轮），不是新的定时器。它只补"丢了的一轮"——那一轮失败了，或者变化在 Control Plane 之外（新装或刚登录的 provider）。一轮本来就重读全部持久状态，所以巡检不带任何内存态。`scheduler.round` 审计里的 `sweep` 表示是巡检准入了东西：有一个触发丢了，值得查。巡检的一轮遇到"没有可用 provider"时，只有 `admissionRefusalRecorded` 答"否"才写 `task.admission_refused`——该 Task 最近一条拒绝存在、晚于它最近一次阶段变化、内容相同（按 JSON 文本）就不再写，这正是读模型认"哪条拒绝算数"的规则；事件触发的一轮照旧每次写。一轮正在跑时到来的 `sweep` 不顶替已经在等的触发，没有在等的才自己等。e2e 下默认不巡检，`AXIOM_E2E_RUN_SWEEP=1` 才开。限制：巡检不是免费的——每个等待的 Task 一个事务，只卡在 provider 上限的 Task 每分钟重建一次合同（内容变了才写）；失败的一轮每分钟失败并警告一次；丢失的触发最多晚一个 tick 才补上。
 
 **集成的读数据**（M4-5a）：`axiom.task.list` / `axiom.task.show` 的每个 Task 带可选的 `integration`——它最近一个批次的 `batchId`、`candidateId`、`status`、`baseCommit`、`mergeCommit`、`conflicts`、`updatedAt`（没有批次的 Task 不带这个键，较早的批次不列出）；`axiom.mission.show` 带可选的 `integration`——集成分支名 `branch` 与 `recordedHead`。`recordedHead` 是库里记的集成头（最近一次晋升的合并 commit，否则启动时记下的基线），也就是批次开始时核对分支用的那个值，不是现读分支：晋升之后可能慢一拍，分支被人手动挪动它不知道。只读，不新增 RPC 方法；`axiom.mission.list` 与各 mutation 的响应不带。一个批次的合并树回归用 `axiom.verification.list` 加 `batchId` 读。界面是 M4-5b。
 
 ### 4.10 Approval
 
 `PENDING → GRANTED | DENIED | EXPIRED | REVOKED`；`GRANTED → CONSUMED`（单次使用，执行后即消费）。
+
+M4-8a：交付成功的同一个事务里写 `CONSUMED`、`outcome` 与 `executed_at`；别的 action kind 还没有消费方。
 
 ### 4.11 Decision
 
