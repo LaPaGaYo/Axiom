@@ -326,6 +326,39 @@ test('M4-2b: a verified Task is integrated and its dependent Task runs from the 
         .locator('tbody tr')
       await expect(rows).toHaveCount(1, { timeout: 30_000 })
       await expect(rows.first()).toContainText('PASS', { timeout: 30_000 })
+      git(['-C', clone, 'config', 'merge.verifySignatures', 'false'])
+      const deliveryParams = { missionId: mission.id, approvalId: granted.approval?.id }
+      await expect(
+        desktopCall(page, 'axiom.mission.deliver', deliveryParams)
+      ).rejects.toMatchObject({
+        code: 'delivery_stopped'
+      })
+      git(['-C', clone, 'remote', 'remove', 'origin'])
+      await expect(
+        desktopCall(page, 'axiom.mission.deliver', deliveryParams)
+      ).rejects.toMatchObject({
+        code: 'delivery_stopped'
+      })
+      expect(git(['-C', clone, 'rev-parse', 'refs/heads/main'])).toBe(FIXTURE_COMMIT)
+      const stoppedPending = MissionPendingResponseSchema.parse(
+        await desktopCall(page, 'axiom.mission.pending', { missionId: mission.id })
+      )
+      expect(stoppedPending.items.map((item) => item.reason)).toContain('delivery_stopped')
+      git(['-C', clone, 'checkout', '--detach'])
+      const delivered = MissionResponseSchema.parse(
+        await desktopCall(page, 'axiom.mission.deliver', deliveryParams)
+      )
+      expect(delivered.mission.status).toBe('COMPLETED')
+      expect(delivered.approval).toMatchObject({ status: 'CONSUMED', outcome: 'fast_forwarded' })
+      expect(git(['-C', clone, 'rev-parse', 'refs/heads/main'])).toBe(head2)
+      const completed = MissionResponseSchema.parse(
+        await desktopCall(page, 'axiom.mission.show', { missionId: mission.id })
+      )
+      expect(completed.mission.status).toBe('COMPLETED')
+      const completedPending = MissionPendingResponseSchema.parse(
+        await desktopCall(page, 'axiom.mission.pending', { missionId: mission.id })
+      )
+      expect(completedPending.items).toEqual([])
     },
     {
       taskIds: ['T01', 'T04'],

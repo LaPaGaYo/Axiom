@@ -16,6 +16,7 @@ export const AXIOM_MUTATION_METHODS = [
   'axiom.attempt.handoff',
   'axiom.attempt.request-subtask',
   'axiom.mission.create',
+  'axiom.mission.deliver',
   'axiom.mission.plan',
   'axiom.mission.start',
   'axiom.mission.pause',

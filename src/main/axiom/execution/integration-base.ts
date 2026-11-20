@@ -72,13 +72,35 @@ export async function advanceIntegrationHead(input: {
 }): Promise<
   { advanced: true } | { advanced: false; reason: 'checked_out' | 'moved' | 'unavailable' }
 > {
+  const result = await advanceLocalBranch({
+    ...input,
+    ref: `refs/heads/axiom/integration/${input.missionId}`,
+    hooks: 'off'
+  })
+  return result.advanced ? { advanced: true } : { advanced: false, reason: result.reason }
+}
+
+export async function advanceLocalBranch(input: {
+  repoPath: string
+  ref: string
+  from: string
+  to: string
+  hooks: 'on' | 'off'
+  reflogMessage?: string
+}): Promise<
+  | { advanced: true; written: boolean }
+  | { advanced: false; reason: 'checked_out'; worktreePath: string }
+  | { advanced: false; reason: 'moved' | 'unavailable' }
+> {
   const unavailable = { advanced: false, reason: 'unavailable' } as const
-  const advanced = { advanced: true } as const
   const moved = { advanced: false, reason: 'moved' } as const
   try {
     const from = GitObjectIdSchema.parse(input.from)
     const to = GitObjectIdSchema.parse(input.to)
-    const ref = `refs/heads/axiom/integration/${input.missionId}`
+    const ref = input.ref
+    if (!ref.startsWith('refs/heads/') || ref.length === 'refs/heads/'.length) {
+      return unavailable
+    }
     const options = { ...gitOptionsForWorktree(input.repoPath), timeout: 30_000 }
     const read = async () => {
       const { stdout } = await gitExecFileAsync(
@@ -100,30 +122,39 @@ export async function advanceIntegrationHead(input: {
       return unavailable
     }
     if (before.commit === to) {
-      return advanced
+      return { advanced: true, written: false }
     }
     if (before.commit !== from) {
       return moved
     }
     if (before.checkout) {
-      return { advanced: false, reason: 'checked_out' }
+      return { advanced: false, reason: 'checked_out', worktreePath: before.checkout }
     }
-    return await withHooklessGit(
-      input.repoPath,
-      { timeout: 30_000, confine: false },
-      async ({ hooks, options }) => {
-        try {
-          await gitExecFileAsync([...hooks, 'update-ref', ref, to, from], options)
-        } catch {
-          // The readback decides, including a refused or interrupted write.
-        }
-        const after = await read()
-        if (after?.commit === to) {
-          return advanced
-        }
-        return !after || after.commit === from ? unavailable : moved
-      }
-    )
+    const args = [
+      'update-ref',
+      ...(input.reflogMessage === undefined ? [] : ['-m', input.reflogMessage]),
+      ref,
+      to,
+      from
+    ]
+    let written = false
+    try {
+      await (input.hooks === 'off'
+        ? withHooklessGit(
+            input.repoPath,
+            { timeout: 30_000, confine: false },
+            ({ hooks, options }) => gitExecFileAsync([...hooks, ...args], options)
+          )
+        : gitExecFileAsync(args, options))
+      written = true
+    } catch {
+      // Readback decides the position; only a successful write establishes authorship.
+    }
+    const after = await read()
+    if (after?.commit === to) {
+      return { advanced: true, written }
+    }
+    return !after || after.commit === from ? unavailable : moved
   } catch {
     return unavailable
   }

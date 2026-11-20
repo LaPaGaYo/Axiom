@@ -20,6 +20,8 @@ const Row = z.object({
   requested_by: z.string().min(1),
   resolver: z.string().nullable(),
   resolution: z.string().nullable(),
+  outcome: z.string().nullable(),
+  executed_at: z.string().nullable(),
   created_at: z.string().min(1),
   updated_at: z.string().min(1)
 })
@@ -41,6 +43,8 @@ const RowCodec = z.unknown().transform((value) => {
     requestedBy: r.requested_by,
     resolver: r.resolver,
     resolution: r.resolution,
+    ...(r.outcome === null ? {} : { outcome: r.outcome }),
+    ...(r.executed_at === null ? {} : { executedAt: r.executed_at }),
     createdAt: r.created_at,
     updatedAt: r.updated_at
   })
@@ -68,9 +72,20 @@ const Transition = z.strictObject({
   resolution: ApprovalSchema.shape.resolution.optional()
 })
 const Expiry = ApprovalSchema.pick({ id: true, expiresAt: true })
+const Consumption = ApprovalSchema.pick({ id: true, outcome: true, executedAt: true }).required()
 
 export function approvalsStore(db: OrchestrationDb) {
   return {
+    consumeApproval(input: z.input<typeof Consumption>) {
+      const p = Consumption.parse(input)
+      return (
+        db.db
+          .prepare(`UPDATE approvals
+        SET status = 'CONSUMED', outcome = ?, executed_at = ?, updated_at = ?
+        WHERE id = ? AND status = 'GRANTED'`)
+          .run(p.outcome, p.executedAt, p.executedAt, p.id).changes === 1
+      )
+    },
     updateApprovalExpiry(input: z.input<typeof Expiry>) {
       const p = Expiry.parse(input)
       return (
