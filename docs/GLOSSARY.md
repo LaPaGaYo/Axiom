@@ -92,10 +92,10 @@ READY_FOR_APPROVAL → FINALIZING（交付前目标分支 HEAD 已变，D70）
 - `PLAN_REVIEW`：PlanRevision 已 PROPOSED，等待人工或 policy 自动批准。
 - `FINALIZING`：所有 required Task 已 `INTEGRATED` 或经授权 `CANCELED`，运行最终全量回归与 completion gate 评估。M4-6a：进入由 Scheduler 的一轮判定（只看 Task 的 stage，至少一个 `INTEGRATED`）；收尾由副作用 `mission.finalize` 执行——核对集成头、只读地看目标分支、评估完成门禁（M4-6a 七项，M4-10 起八项，多一项 `limitations_recorded`）；停下时留在 `FINALIZING`，原因在收尾记录（审计 `mission.finalization`）与待处理项里。M4-10：门禁全部通过时执行器先把 CompletionReport 存成产物，再在重建出同一份报告的事务里记下 `ready`（带报告的编号与哈希）并进入 `READY_FOR_APPROVAL`。
 - Delivery 是动作不是状态：`READY_FOR_APPROVAL →（Delivery）→ COMPLETED`。没有远程时本地快进合入后直接 `COMPLETED`（D92 h）；有远程时开 PR，PR 合并才 `COMPLETED`，其间 Mission 处于“已交付、等合并”，这个状态的名字在做 PR 交付时定（D92 d）。
-- `READY_FOR_APPROVAL`：等待最终交付 Approval（若 policy 要求）。M4-7a：进入该状态的同一个事务里请求这份 Approval（`delivery`、`PENDING`，绑定完成报告的哈希，72 小时到期）；取消 Mission 撤回它；待处理项里一条 `mission` 项、原因 `delivery_approval_pending`（只能取消）；批准与拒绝是 M4-7b。
+- `READY_FOR_APPROVAL`：等待最终交付 Approval（若 policy 要求）。M4-7a：进入该状态的同一个事务里请求这份 Approval（`delivery`、`PENDING`，绑定完成报告的哈希，72 小时到期）；取消 Mission 撤回它；待处理项里一条 `mission` 项、原因 `delivery_approval_pending`（只能取消）；M4-7b：人在桌面上用 `axiom.approval.grant` / `axiom.approval.deny` 决定它；批准后 Mission 仍在该状态等待交付（M4-8），待处理项的原因变为 `delivery_approved`（仍只能取消）；过期的请求在有人批准时作废并换一份新的；离开 `PAUSED` 时它的到期时间顺延暂停的时长。
 - **Delivery / 交付**：把集成基线交到目标分支的最终动作，在交付 Approval 之后：有远程时开 PR（合并后进入 `COMPLETED`，D92 d），没有远程时本地快进合入（D92 h）。
 - `BLOCKED`：阻塞解除（Approval GRANTED / DENIED、Question ANSWERED、预算经 Approval 上调或 replan）后回到进入前的状态；进入前的状态持久化在 `missions.previous_status`（与 `PAUSED` 相同）。
-- `BLOCKED(delivery_denied)`：交付 Approval 被 DENIED；人选择修改后重交（回 `EXECUTING`，走 Goal / plan 调整）或 `CANCELED`；EXPIRED 则重新请求，不自动交付（D70）。
+- `BLOCKED(delivery_denied)`：交付 Approval 被 DENIED；人选择修改后重交（回 `EXECUTING`，走 Goal / plan 调整）或 `CANCELED`；EXPIRED 则重新请求，不自动交付（D70）。M4-7b：由 `axiom.approval.deny` 写入；0.1 里这之后只能取消，“修改后重交”要等重新规划。
 - `PAUSED`：停止新 admission 与新 VerificationRun 领取；运行中的 Attempt 按 policy `pauseMode: drain | stop`（默认 `drain`）；集成不开新批次、进行中的批次跑完；wall-clock 预算与 Approval 过期停表；恢复回 `previous_status`（D70）。
 
 ### 4.2 GoalRevision
@@ -171,6 +171,8 @@ Task 页仅提供该 Task 的待处理项在 `actions` 中列出的操作：处�
 | follow_up | pending REQUEST with followUp | follow_up；false | axiom.message.resolve |
 | stall_notice | current stall notification | stalled；false | axiom.task.cancel |
 | supervision_proposal | 全局 open proposal，列于每个非终态 Mission | stalled；false | axiom.supervision.resolve |
+
+M4 给 `mission` 项加了三种情况（M4-6a、M4-7a、M4-7b），都是 blocking=true、actions 只有 axiom.mission.cancel：FINALIZING 且最近一次收尾记录是 stopped，reason 为该记录的原因；READY_FOR_APPROVAL 且最新的交付 Approval 为 PENDING、它的 inputsHash 等于 ready 记录的报告哈希，reason 为 `delivery_approval_pending`，since 取 Approval 的创建时间；同样条件下 Approval 为 GRANTED，reason 为 `delivery_approved`，since 取 `approval.granted` 审计的时间。被拒的 Mission 走上表的 BLOCKED 一行，summary 为 `delivery_denied`。批准与拒绝的 action 随 M4-11 加入。
 
 adjust 只在 Mission PLANNED / EXECUTING、Task DEFINED / READY / NEEDS_FIX / BLOCKED 或 VERIFYING + HUMAN_REVIEW 提供，upstream_canceled / no_eligible_provider 不提供。rerun 需要 ACTIVE Candidate，Task BLOCKED 或 VERIFYING + HUMAN_REVIEW，最新 run 非 QUEUED / RUNNING。各命令仍自行检查参数、权限和竞态；actions 只承诺以上状态条件。BLOCKED Mission 只有 cancel；stall_notice 只有 Task cancel，没有单 Attempt stop。
 

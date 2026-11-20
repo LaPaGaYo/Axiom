@@ -457,7 +457,8 @@ Approval（D7）：
 - 独立存储于 `approvals`：`action_kind`、`inputs_hash`（精确输入摘要）、风险、`requested_by`、`expires_at`、resolver、resolution、`outcome`（执行结果）、`executed_at`；
 - 单次使用：`GRANTED → CONSUMED`，执行动作时校验 inputs hash 一致且未过期；一句「批准了」不能复用；
 - 不复用 Orca decision gate（它不校验 options、无 pending 守卫、无 resolver/expiry）；gate 只承载无活跃 Attempt 的 Task 级 QUESTION（D7a）；Worker 运行中的提问走 `axiom attempt ask`。
-- 现状（M4-7a）：只有交付 Approval 的请求、撤回与读取（`src/main/axiom/approval/`，ApprovalGateway 的第一部分）。记下收尾 `ready` 的同一个事务里由 MissionController 请求一份 `delivery`、`PENDING` 的 Approval，`inputs_hash` 就是完成报告的哈希（报告里有 Mission、目标分支、两个提交、每个 Task 与门禁），72 小时后到期；请求失败则收尾记录与状态一并回滚。取消 Mission 撤回 `PENDING` 的请求；批准与拒绝（M4-7b）、消费（M4-8）尚未实现，暂停期间的过期停表（D70 第 4 条）随 M4-7b 落实。
+- 现状（M4-7a）：只有交付 Approval 的请求、撤回与读取（`src/main/axiom/approval/`，ApprovalGateway 的第一部分）。记下收尾 `ready` 的同一个事务里由 MissionController 请求一份 `delivery`、`PENDING` 的 Approval，`inputs_hash` 就是完成报告的哈希（报告里有 Mission、目标分支、两个提交、每个 Task 与门禁），72 小时后到期；请求失败则收尾记录与状态一并回滚。取消 Mission 撤回 `PENDING` 的请求。
+- 现状（M4-7b）：人在桌面上批准或拒绝这份交付 Approval（`axiom.approval.grant` / `axiom.approval.deny`，只许桌面调用；批准人记 `user`，审计另记调用来路）。批准时核对它仍是 `PENDING`、Mission 处在 `READY_FOR_APPROVAL`、`inputs_hash` 等于当前收尾记录的报告哈希、并且没有过期；过期的请求记为 `EXPIRED`，为同一份报告另请求一份，这一次批准被拒绝。拒绝使 Mission 进入 `BLOCKED(delivery_denied)`。Mission 每次离开 `PAUSED`，未关闭的交付 Approval 的到期时间顺延这次暂停的时长（D70 第 4 条的 Approval 部分；阻塞的时间不停表）。消费与交付时的再次核对（M4-8）、启动恢复时标记过期（16.1 第 2 步，M4-4）尚未实现。
 
 ## 15. 产品界面
 
