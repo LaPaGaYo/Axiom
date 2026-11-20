@@ -52,6 +52,38 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M4-8a', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'one desktop-only durable mutation, axiom.mission.deliver, uses a granted delivery Approval: it '
+        'checks the Approval once more (the Mission, the status, the latest request, the hash of the current '
+        'report, the expiry), stops with a record when the repository has a remote, when the integration branch '
+        'is off its recorded commit, when merge.verifySignatures is true or when the target branch is checked '
+        'out, returns the Mission to FINALIZING when the target branch is not at the commit of the report, '
+        'commits its intention before git is written, fast-forwards the target branch by a compare-and-swap with '
+        'no configuration override, and consumes the Approval and completes the Mission in one write; nothing is '
+        'pushed; the launcher verification passed (129 assertions); thirty tests in seven new files under both '
+        'runners and three more times under each; the red check on the host (titles 11 to 30 fail at an '
+        'assertion with the wiring file of main put back, titles 1 to 10 pass; the integration spec fails where '
+        'it first delivers); forty-two Mission specs pass on the candidate build; the union script failed 0; no '
+        'existing test changed; no verifier change; no other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'a repository with a remote is not delivered until Henry decides what 0.1 does with it; the spec does '
+            'not tell the remote stop from the checkout stop, strengthen it when the rule is settled',
+            'a target branch that already points at the approved integration head after a merge by hand costs a '
+            'second approval (D70 item 2 by the letter); completing directly needs a revision line',
+            'no button until M4-11',
+            'mission-controller.ts has 289 of its 290 allowed non-blank lines: the next Task that adds an '
+            'operation there must move code out first',
+            'restart recovery knows nothing of delivery: after a crash between the branch write and the record '
+            'the committed mission.delivery_started is the record (M4-4)',
+            'the consumed row writes updated_at in ISO form where the other writers use the database clock form',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M4-7b', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'two desktop-only durable mutations, axiom.approval.grant and axiom.approval.deny, decide a '
