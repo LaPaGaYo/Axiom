@@ -52,6 +52,35 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M4-7b', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'two desktop-only durable mutations, axiom.approval.grant and axiom.approval.deny, decide a '
+        'waiting delivery Approval; a grant checks the row, its status, the Mission, the hash of the current '
+        'report and the expiry in one write, an expired request is closed and requested again in a write that '
+        'commits before the call is refused, a denial records its reason and blocks the Mission with '
+        'delivery_denied; the resolver is user and the audit records via the caller kind, never a parameter; '
+        'every move out of PAUSED moves the expiry of the open delivery Approvals by the time of the pause; a '
+        'granted Mission shows the pending item delivery_approved; the launcher verification passed (104 '
+        'assertions); eighteen required and thirteen further tests under both runners and three more times '
+        'under each; the red check on the host (titles 5 to 17 fail at an assertion with the two wiring files '
+        'of main put back, titles 1 to 4 and 18 pass; the integration spec fails where it grants); forty-two '
+        'Mission specs pass on the candidate build; the union script failed 0; one existing test changed as '
+        'the brief allows; no verifier change; no other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'no button until M4-11 and no delivery until M4-8: a granted Mission waits in READY_FOR_APPROVAL',
+            'a GRANTED Approval keeps that status after a cancel, a replaced report or its expiry; whether it '
+            'may be revoked or may expire is a rule change for Henry to decide, and M4-8 must check both',
+            'nothing expires by itself: only an attempted grant closes a request that is past its time; restart '
+            'recovery of expired Approvals is M4-4',
+            'a denied Mission can only be canceled in 0.1',
+            'the revision line under D78 on how the resolver is recorded waits for Henry',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M4-7a', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'the Approval gets its contract, its store and three plain functions that request, withdraw '
