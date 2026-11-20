@@ -5,6 +5,10 @@ import { AuditEventSchema } from '../../../shared/axiom-contract/mission-objects
 
 export const MISSION_CONTROLLER_ERROR_CODES = [
   'approval_not_found',
+  'approval_not_granted',
+  'delivery_inputs_changed',
+  'delivery_stopped',
+  'delivery_unavailable',
   'approval_not_pending',
   'approval_stale',
   'approval_expired',

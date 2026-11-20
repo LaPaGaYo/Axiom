@@ -33,6 +33,7 @@ import {
 import {
   MissionCancelParams,
   MissionCreateParams,
+  MissionDeliverParams,
   MissionListParams,
   MissionPlanParams
 } from '../axiom-contract/mission-params'
@@ -860,6 +861,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'axiom.message.resolve': MessageResolveParams,
   'axiom.mission.cancel': MissionCancelParams,
   'axiom.mission.create': MissionCreateParams,
+  'axiom.mission.deliver': MissionDeliverParams,
   'axiom.mission.list': MissionListParams,
   'axiom.mission.pause': MissionCancelParams,
   'axiom.mission.pending': MissionPendingParams,

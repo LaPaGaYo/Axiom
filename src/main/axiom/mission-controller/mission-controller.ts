@@ -1,5 +1,7 @@
 import type { ScheduleTrigger } from '../scheduler/scheduler'
 import * as deliveryDecision from '../approval/delivery-decision'
+import * as deliveryCheck from '../approval/delivery-check'
+import * as deliveryWrite from '../delivery/delivery-write'
 import { requestDeliveryApproval, revokeDeliveryApprovals } from '../approval/delivery-approval'
 import { createTask } from './task-creation'
 import { assertMissionStartable } from './mission-start-guard'
@@ -200,6 +202,17 @@ export class MissionController {
   grantApproval(input: Parameters<typeof deliveryDecision.grant>[1]) {
     const result = this.write('grant_approval', () => deliveryDecision.grant(this.ctx, input))
     return deliveryDecision.grantResult(result)
+  }
+  checkDelivery(input: Parameters<typeof deliveryCheck.check>[1]) {
+    return deliveryCheck.result(
+      this.write('delivery_check', () => deliveryCheck.check(this.ctx, input))
+    )
+  }
+  settleDelivery(input: deliveryWrite.DeliveryWrite) {
+    const result = this.write('delivery_write', () => deliveryWrite.settle(this.ctx, input))
+    return deliveryWrite.result(result, () =>
+      this.scheduleAfterWrite(input.missionId, 'stage_change')
+    )
   }
   denyApproval(input: Parameters<typeof deliveryDecision.deny>[1]) {
     deliveryDecision.validateDenial(input.reason)

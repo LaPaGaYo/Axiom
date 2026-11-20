@@ -19,6 +19,10 @@ export const MissionCreateParams = RepoSelector.extend({
   policy: PolicySchema
 })
 export const MissionShowParams = z.object({ missionId: AxiomIdSchema })
+export const MissionDeliverParams = z.strictObject({
+  missionId: AxiomIdSchema,
+  approvalId: AxiomIdSchema
+})
 export const MissionStartParams = MissionShowParams
 export const MissionPlanParams = MissionShowParams
 export const MissionPlanResponseSchema = z.object({

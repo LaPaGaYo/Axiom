@@ -17,6 +17,7 @@ import { pendingTaskItems } from './pending-task-items'
 import { missionSince } from './pending-since'
 import { missionFinalization, finalizationSummary } from './finalization-reads'
 import { latestDeliveryApproval } from '../approval/delivery-approval'
+import { deliveryStop } from './delivery-stop'
 
 function missionItem(ctx: WaitingContext, pending: PendingItems): MissionPendingItem[] {
   const { mission, store } = ctx
@@ -34,6 +35,7 @@ function missionItem(ctx: WaitingContext, pending: PendingItems): MissionPending
         objectId: approval.id,
         events: ['approval.granted']
       })
+      const stopped = granted && deliveryStop(store, mission.id, approval.id, granted.sequence)
       return granted
         ? [
             pending.item({
@@ -43,7 +45,8 @@ function missionItem(ctx: WaitingContext, pending: PendingItems): MissionPending
               blocking: true,
               actions: ['axiom.mission.cancel'],
               since: granted.createdAt,
-              summary: `Delivery approved to ${record.targetBranch}: integration ${record.integrationHead?.slice(0, 7)}, target ${record.targetHead?.slice(0, 7)}, report ${record.reportArtifactId}.`
+              summary: `Delivery approved to ${record.targetBranch}: integration ${record.integrationHead?.slice(0, 7)}, target ${record.targetHead?.slice(0, 7)}, report ${record.reportArtifactId}.`,
+              ...stopped
             })
           ]
         : []

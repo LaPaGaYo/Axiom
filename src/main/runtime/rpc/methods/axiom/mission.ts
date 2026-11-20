@@ -1,9 +1,11 @@
 import { ensureIntegrationBase } from '../../../../axiom/execution/integration-base'
+import { deliverMission } from '../../../../axiom/delivery/mission-deliver'
 import { MissionControllerError } from '../../../../axiom/mission-controller/controller-context'
 import { isLocalVerificationRepository } from '../../../../axiom/verification/verification-checks'
 import { defineMethod } from '../../core'
 import {
   MissionCreateParams,
+  MissionDeliverParams,
   MissionShowParams,
   MissionListParams,
   MissionStartParams,
@@ -23,6 +25,19 @@ import { missionFinalization } from '../../../../axiom/read-models/finalization-
 import { latestDeliveryApproval } from '../../../../axiom/approval/delivery-approval'
 
 export const AXIOM_MISSION_METHODS = [
+  defineMethod({
+    name: 'axiom.mission.deliver',
+    permission: 'workspace',
+    params: MissionDeliverParams,
+    handler: async (p, ctx) => {
+      const { missions, store } = getAxiomControlPlane(ctx.runtime)
+      const result = await deliverMission(ctx.runtime, missions, {
+        ...p,
+        via: ctx.caller?.kind ?? 'unknown'
+      })
+      return { mission: missionSummary(result.mission, store), approval: result.approval }
+    }
+  }),
   defineMethod({
     name: 'axiom.mission.pending',
     permission: 'workspace',

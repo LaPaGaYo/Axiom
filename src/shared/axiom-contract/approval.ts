@@ -39,6 +39,8 @@ export const ApprovalSchema = z.strictObject({
   requestedBy: z.string().min(1),
   resolver: z.string().nullable(),
   resolution: z.string().nullable(),
+  outcome: z.string().min(1).optional(),
+  executedAt: z.iso.datetime().optional(),
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1)
 })

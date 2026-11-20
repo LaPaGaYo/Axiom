@@ -15,6 +15,7 @@ export const AXIOM_METHOD_CALLER_CLASS: Record<string, CallerClass> = {
   'axiom.namespace.get': 'read',
   'axiom.effect.list': 'read',
   'axiom.mission.create': 'desktop_only',
+  'axiom.mission.deliver': 'desktop_only',
   'axiom.mission.plan': 'desktop_only',
   'axiom.mission.start': 'desktop_only',
   'axiom.mission.pause': 'desktop_only',
