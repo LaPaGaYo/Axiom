@@ -134,7 +134,7 @@ M2-06a 的严格载荷契约在 `src/shared/axiom-contract/message-params.ts`（
 
 ### 4a. Axiom 内部调用的 Orca 方法（经 service/DB 边界，不经 CLI）
 
-以下状态按 M2-12 / D59 合入后的实现回填；表中的 Orca RPC 名只定位原语，Control Plane 实际走 service/DB 边界。子系统现状见 [control-plane.md](control-plane.md)。
+以下状态按 M2-12 / D59 合入后的实现回填；表中的 Orca RPC 名只定位原语，Control Plane 实际走 service/DB 边界。子系统现状见 [control-plane.md](control-plane.md)。还没用上的内核能力（按计划项与延后项列出）见 [reuse-map.md](reuse-map.md)。
 
 | Orca 方法（文件） | Axiom 用途 | 备注 | M2 最终状态 |
 |---|---|---|---|
