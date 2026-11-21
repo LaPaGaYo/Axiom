@@ -172,7 +172,7 @@ Task 页仅提供该 Task 的待处理项在 `actions` 中列出的操作：处�
 | stall_notice | current stall notification | stalled；false | axiom.task.cancel |
 | supervision_proposal | 全局 open proposal，列于每个非终态 Mission | stalled；false | axiom.supervision.resolve |
 
-M4 给 `mission` 项加了四种情况（M4-6a、M4-7a、M4-7b、M4-8a），都是 blocking=true、actions 只有 axiom.mission.cancel：FINALIZING 且最近一次收尾记录是 stopped，reason 为该记录的原因；READY_FOR_APPROVAL 且最新的交付 Approval 为 PENDING、它的 inputsHash 等于 ready 记录的报告哈希，reason 为 `delivery_approval_pending`，since 取 Approval 的创建时间；同样条件下 Approval 为 GRANTED，reason 为 `delivery_approved`，since 取 `approval.granted` 审计的时间；批准之后这份 Approval 有交付停下的记录（审计 `mission.delivery_stopped`）时，reason 为 `delivery_stopped`，since 取最近一次停下的时间，summary 写明停在哪里。被拒的 Mission 走上表的 BLOCKED 一行，summary 为 `delivery_denied`。批准与拒绝的 action 随 M4-11 加入。
+M4 给 `mission` 项加了四种情况（M4-6a、M4-7a、M4-7b、M4-8a），都是 blocking=true、actions 只有 axiom.mission.cancel：FINALIZING 且最近一次收尾记录是 stopped，reason 为该记录的原因；READY_FOR_APPROVAL 且最新的交付 Approval 为 PENDING、它的 inputsHash 等于 ready 记录的报告哈希，reason 为 `delivery_approval_pending`，since 取 Approval 的创建时间；同样条件下 Approval 为 GRANTED，reason 为 `delivery_approved`，since 取 `approval.granted` 审计的时间；批准之后这份 Approval 有交付停下的记录（审计 `mission.delivery_stopped`）时，reason 为 `delivery_stopped`，since 取最近一次停下的时间，summary 写明停在哪里。被拒的 Mission 走上表的 BLOCKED 一行，summary 为 `delivery_denied`。批准与拒绝的 action 随 M4-11b 加入。
 
 adjust 只在 Mission PLANNED / EXECUTING、Task DEFINED / READY / NEEDS_FIX / BLOCKED 或 VERIFYING + HUMAN_REVIEW 提供，upstream_canceled / no_eligible_provider 不提供。rerun 需要 ACTIVE Candidate，Task BLOCKED 或 VERIFYING + HUMAN_REVIEW，最新 run 非 QUEUED / RUNNING。各命令仍自行检查参数、权限和竞态；actions 只承诺以上状态条件。BLOCKED Mission 只有 cancel；stall_notice 只有 Task cancel，没有单 Attempt stop。
 
