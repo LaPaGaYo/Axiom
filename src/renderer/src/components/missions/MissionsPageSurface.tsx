@@ -9,6 +9,7 @@ import { visiblePlanRevisions } from './plan-revision-diff'
 import { PlanReviewPanel } from './PlanReviewPanel'
 import { TaskStageTable } from './TaskStageTable'
 import { MissionIntegration } from './MissionIntegration'
+import { MissionFinalization } from './MissionFinalization'
 import { TaskDetail } from './TaskDetail'
 import { activateWorktreeFromSidebar } from '@/lib/sidebar-worktree-activation'
 import type { MissionsPageController } from './use-missions-page-controller'
@@ -87,6 +88,7 @@ export function MissionsPageSurface({ controller: c }: { controller: MissionsPag
                 selectedTaskId={c.selectedTaskId}
                 onSelect={c.selectTask}
               />
+              <MissionFinalization key={c.detail.mission.id} finalization={c.detail.finalization} />
               <TaskStageTable
                 tasks={c.detail.tasks}
                 selectedTaskId={c.selectedTaskId}

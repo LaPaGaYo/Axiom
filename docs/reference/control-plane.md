@@ -477,7 +477,7 @@ CompletionReport 是由 Control Plane 从数据库和本次只读取得的 `inte
 
 读取先调用 `axiom.mission.show` 取得 ready 的 `reportArtifactId` / `reportSha256`，再调用既有 `axiom.artifact.read {id: reportArtifactId}` 解码 contentBase64；读操作复核文件哈希。没有 `axiom.mission.completionReport` 方法。Artifact list 接受 completion_report；Attempt / CLI 的 artifact put 和验收 criterion 的 ArtifactKind 仍只接受原七种，不能指定报告种类。
 
-兼容与限制：M4-6a 的七项 gate、无报告引用的 ready / stopped 仍可读；已在旧版进入 READY_FOR_APPROVAL 的 Mission 不会补写报告。旧 build 无法读取带报告字段的 ready、八项 gate 或新产物种类，目前尚未发布。报告按普通 Artifact 权限可读，Mission 的 agent session 也能读；它重复保存的摘要、理由、问题和命令，不提升这些文本的权威。超过 8 MiB 无法存储并最终 finalization_unavailable；没有 Markdown、页面或导出命令，渲染与查看入口在 M4-11；M4-8a 不改报告或写第二份报告，快进终点就是已有报告的 commits.integrationHead，交付事实记在消费后的 Approval 与审计里（本 Task 验证者决定，向 Henry 报告）。M4-7a 以此报告的 hash 绑定 delivery Approval；M4-7b 实现批准 / 拒绝，M4-8a 实现本地交付和消费。
+兼容与限制：M4-6a 的七项 gate、无报告引用的 ready / stopped 仍可读；已在旧版进入 READY_FOR_APPROVAL 的 Mission 不会补写报告。旧 build 无法读取带报告字段的 ready、八项 gate 或新产物种类，目前尚未发布。报告按普通 Artifact 权限可读，Mission 的 agent session 也能读；它重复保存的摘要、理由、问题和命令，不提升这些文本的权威。超过 8 MiB 无法存储并最终 finalization_unavailable；页面查看入口见下文「Mission 页的收尾记录与完成报告（M4-11a）」，仍没有 Markdown 渲染或导出命令；M4-8a 不改报告或写第二份报告，快进终点就是已有报告的 commits.integrationHead，交付事实记在消费后的 Approval 与审计里（本 Task 验证者决定，向 Henry 报告）。M4-7a 以此报告的 hash 绑定 delivery Approval；M4-7b 实现批准 / 拒绝，M4-8a 实现本地交付和消费。
 
 ### Delivery approval（M4-7a）
 
@@ -1290,6 +1290,22 @@ Task 页在头部与 Attempts 之间显示「Current acceptance criteria」：�
 `readMission` 传递 M4-5a 的 Mission integration，Task 列表提供展示的批次；`readTaskEvidence` 仅在 Task show 成功且携带批次时，用该 batchId 额外读取一次 `axiom.verification.list`，独立 settled，失败仅在回归区显示刷新重试句，不影响候选记录、usage、Attempts、消息或整页错误和 toast。没有批次或 Task show 失败时不发该请求，也不设置 regressionRuns / regressionError；无批次字段的旧主进程维持原页面。两区只读 M4-5a 的现有字段及上述现有请求的回答，不增加请求种类。只列与展示批次 batchId 相同的 runs；Task 列表的批次与 Task show 所读批次可能在一轮刷新内不同，此时不显示另一批次的 run，而显示此批次暂无记录。回归没有人工处置通道，resolve 与 rerun 是候选验证的命令，因此这里只读、不提供处置、重验、重试或批准控件；输出沿用 CheckOutput 的证据读取。
 
 边界：只展示每个 Task 的最近批次及该批次的 runs，不列历史批次；Mission 块也只列有最近批次的 Task。recordedHead 是 Control Plane 记录而不是即时分支头，可短暂落后，也不发现手动移动分支。两区沿用页面五秒刷新，选中 Task 有批次时每轮多一次请求；隐藏或忙碌时仍受原刷新规则约束。冲突列表是执行器存储的已脱敏路径，最多 200 条，重复路径按位置保留；恰好 200 条时仅提示可能还有更多，不断言已截断。两个检查表分别名为 Checks 和 Regression checks，heading id 各自独立，但 Show output #N 按钮名可在两表重复。新文案只在 en 与 zh（D94），其余五种语言回落英文。单测构造冲突和失败批次，端到端只观察两个 PROMOTED 批次；没有在真实冲突或失败批次上运行页面的测试。
+
+### Mission 页的收尾记录与完成报告（M4-11a）
+
+`MissionFinalization.tsx` 在集成块之后、Task 表之前显示收尾记录：ready 显示原词与「所有完成门禁项均已通过」，stopped 显示 Control Plane 的原因原词与说明，二者都列记录时间、目标分支、目标头与集成头（七位提交、title 保留完整值，缺失为破折号），不使用成功色。
+有 gate 时按记录顺序列每项的原 id、`finalizationGateLabel` 说明、通过与否、证据引用数及原 detail；没有 gate 时说明尚未评估；ready 有报告时显示 Artifact id 与 `reportSha256` 前十二位（title 保留完整哈希），旧 ready 没有报告时说明没有记录报告，stopped 不显示报告行。
+记录由既有 `axiom.mission.show` 随页面刷新返回，已完成 Mission 仍保留它；没有 finalization 的 Mission 或旧主进程保持原页面，重新进入 FINALIZING 后到下一次记录前也不显示此区，只展示最新一条而不列历史。
+点击 Show report 才通过 `axiom.artifact.read` 读取一次，页面五秒刷新不重读、不关闭同一报告；请求状态按 Artifact id 与记录哈希隔离，换 Mission、换报告或没有报告时关闭，隐藏或替换后才返回的回答由 generation 丢弃，再次展开可重新读取。
+显示前依次要求四件事：种类是 completion_report，分号前的 media type 是 application/json，meta.sha256 等于记录的 reportSha256，内容可按严格 UTF-8 解码、解析 JSON 并通过 CompletionReportSchema；哈希不符显示「The stored report is not the one this finalization recorded.」，其余失败显示「The completion report could not be read.」，请求被拒或失败还以等宽字原样显示 missionErrorText 的 code 与 message。
+比较记录哈希是因为 delivery Approval 绑定它；这里只比较主进程送来的两个值，证明读到的是记录指定的 Artifact，不证明主进程诚实，文件字节校验仍由主进程负责。
+`MissionReport.tsx` 依次显示 Goal 的目标、约束、零基验收标准与覆盖 Task 标题（找不到时显示 id），全部 Task 的阶段原词与说明、候选提交、验证状态与通过检查数及人工处置结果、合并树回归状态和合并提交，随后按 Task 展示 Worker 摘要、限制、风险、后续工作及带来源的未答问题；取消理由在 Task 表显示，没有结果的四格为破折号，没有书面内容的 Task 不另起块。
+接着显示 Control Plane 自行记录的两类风险及 Task、Attempt 次数或 run id，没有风险时明确说明；再列各计划修订的状态、provenance 与风险及缓解措施，两个头提交与按序推进的提交、Decision 数，最后按需展开 `completionReportText` 的原始 JSON，放在限高且带标准滚动条的容器中。
+报告的所有文字都作为 React 文本呈现并保留换行、允许折行，绝不变成富文本、链接或图片，因为目标、摘要、问题、理由、命令和风险来自人或模型，报告重复它们并不为它们背书；页面不翻译或脱敏，按存储时的语言和内容显示。
+门禁行只显示引用数量，不展开引用身份，报告的原始 JSON 才有这些 ids；记录在 200 条处截断，所以数量也到 200 为止，M4-10 以前的记录只有七项门禁且没有报告。
+报告最多 8 MiB，一次完整读入内存且无分页或虚拟化，Task、run 和 Artifact 均不可从报告打开，既无导出、复制或下载，也无 Git 读取。
+此区不改变 Mission，仍不能在页面批准或交付，Approval 与交付控件属于 M4-11b；在 ARCHITECTURE §15 的 Mission 对话建成前，此报告暂放 Mission 页；新文案只在 en 与 zh（D94），另外五种语言回落英文。
+端到端规格观察已完成 Mission 的真实 ready 记录与目标分支移动后的真实 stopped 记录；带 gate 的 completion_gate_failed 和另外三种停止原因仅用单测构造的记录覆盖，Electron 规格由验证者在宿主机运行。
 
 ### 人工验证处置与同候选重验（M3-05；D82 / D85 / DEF-21 ④）
 
