@@ -359,6 +359,37 @@ test('M4-2b: a verified Task is integrated and its dependent Task runs from the 
         await desktopCall(page, 'axiom.mission.pending', { missionId: mission.id })
       )
       expect(completedPending.items).toEqual([])
+      const finalization = page.getByRole('region', { name: 'Finalization', exact: true })
+      await expect(finalization.locator('[data-finalization-outcome="ready"]')).toBeVisible({
+        timeout: 30_000
+      })
+      if (!ready.reportSha256) {
+        throw new Error('Missing completion report hash')
+      }
+      const reportHash = finalization.getByTestId('completion-report-sha')
+      await expect(reportHash).toHaveText(ready.reportSha256.slice(0, 12), { timeout: 30_000 })
+      await expect(reportHash).toHaveAttribute('title', ready.reportSha256, { timeout: 30_000 })
+      const gateRows = finalization
+        .getByRole('table', { name: 'Completion gate', exact: true })
+        .locator('tbody tr')
+      await expect(gateRows).toHaveCount(8, { timeout: 30_000 })
+      for (let index = 0; index < 8; index += 1) {
+        await expect(gateRows.nth(index)).toHaveAttribute('data-gate-pass', 'true', {
+          timeout: 30_000
+        })
+      }
+      await finalization.getByRole('button', { name: 'Show report', exact: true }).click()
+      const reportView = page.getByRole('region', { name: 'Completion report', exact: true })
+      await expect(reportView).toContainText(report.goal.objective, { timeout: 30_000 })
+      for (const [id, head] of [
+        [firstId, head1],
+        [dependentId, head2]
+      ]) {
+        await expect(reportView.locator(`[data-report-task-id="${id}"]`)).toContainText(
+          head.slice(0, 7),
+          { timeout: 30_000 }
+        )
+      }
     },
     {
       taskIds: ['T01', 'T04'],

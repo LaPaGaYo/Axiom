@@ -138,6 +138,27 @@ test('M4-6a: a moved target branch stops finalization and the Mission says why',
         expect(pending.items[0].summary).toContain(text)
       }
       expect(git(['-C', clone, 'rev-parse', 'refs/heads/main'])).toBe(targetHead)
+      await page.getByRole('button', { name: 'Missions', exact: true }).click()
+      await page
+        .getByRole('navigation', { name: 'Mission list', exact: true })
+        .getByRole('button')
+        .filter({ hasText: mission.id })
+        .click()
+      const finalization = page.getByRole('region', { name: 'Finalization', exact: true })
+      await expect(finalization.locator('[data-finalization-outcome="stopped"]')).toBeVisible({
+        timeout: 30_000
+      })
+      for (const text of [
+        'target_branch_moved',
+        targetHead.slice(0, 7),
+        integrationHead.slice(0, 7),
+        'The completion gate was not evaluated.'
+      ]) {
+        await expect(finalization).toContainText(text, { timeout: 30_000 })
+      }
+      await expect(
+        finalization.getByRole('button', { name: 'Show report', exact: true })
+      ).toHaveCount(0, { timeout: 30_000 })
       const canceled = MissionResponseSchema.parse(
         await desktopCall(page, 'axiom.mission.cancel', {
           missionId: mission.id,
