@@ -52,6 +52,38 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M4-11a', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'a read-only Finalization section on the Mission page, renderer only: the latest finalization '
+        'record that axiom.mission.show already answers (outcome in the Control Plane word, time, target branch, '
+        'both commits, every completion gate item) and, on request, the completion report - read once, shown only '
+        'when its kind, media type and hash are the ones the record names, rendered as structured text and raw '
+        'JSON with every report text as plain text; the five-second refresh neither reads again nor closes it; no '
+        'control changes a Mission; 58 strings in en and zh; the launcher verification passed (121 assertions); '
+        'nineteen tests in three new files under both runners and three more times under each; the red check on '
+        'the host (titles 16 and 17 fail at an assertion with the two wiring files of main put back, the sixteen '
+        'control titles pass; both specs fail at their first added expectation); forty-two Mission specs pass on '
+        'the candidate build; the verifier looked at pictures of the section for a real ready and a real stopped '
+        'record; the union script failed 0; no existing test changed; no verifier change; no other model CLI '
+        'called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'no control on the page: a person still approves and delivers by RPC only until M4-11b',
+            'a Markdown view and an export of the report wait for Henry (pending item 20); the view here is '
+            'structured text and raw JSON',
+            'the report is read whole (up to 8 MiB) and rendered without paging; no run measures a large one',
+            'a gate row shows how many references an item was judged by, not which; nothing in the report can be '
+            'opened',
+            'a Goal without acceptance criteria shows the criteria table as a header with no row (the brief '
+            'gave no sentence for it); one sentence and one string, when M4-11b touches the page',
+            'the page in Chinese and in a window of ordinary width was not looked at',
+            'the merge is local: GitHub paused the workflows of the fork, the push waits for CI or for Henry',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M4-8a', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'one desktop-only durable mutation, axiom.mission.deliver, uses a granted delivery Approval: it '
