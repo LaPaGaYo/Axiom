@@ -9,6 +9,11 @@ cd "$(dirname "$0")/.." || exit 1
 ID="${1:?}"; SEQ="${2:?}"; shift 2
 # Remaining args: vitest targets (files/dirs) for the unit-tests step; VERIFY_EXTRA holds extra shell commands separated by ';'.
 TEST_TARGETS=("$@")
+# Why: VERIFY_EXTRA carries the assertions of every listed Task (458 KB at 106 Tasks). Left exported, every check and
+# every process a test starts inherits it; a kernel test that hands its environment on a second time inside one more
+# variable then no longer got its process chain started and timed out (two full rounds in a row, 2026-11-20). Keep
+# the text in this shell only.
+EXTRA_TEXT="${VERIFY_EXTRA:-}"; unset VERIFY_EXTRA
 mkdir -p .axiom-work/logs
 TS=$(date +%Y%m%d-%H%M%S); LOG=".axiom-work/logs/verify-$ID-$SEQ-$TS.log"
 export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
@@ -37,7 +42,7 @@ run typecheck-node pnpm tc:node
 run typecheck-cli pnpm tc:cli
 run typecheck-web pnpm tc:web
 run code-quality-changed pnpm run check:code-quality:changed
-IFS=';' read -ra EXTRAS <<< "${VERIFY_EXTRA:-}"
+IFS=';' read -ra EXTRAS <<< "$EXTRA_TEXT"
 # An assertion whose command is missing on this host (e.g. `! rg …` without ripgrep) must not pass vacuously:
 # bash -c returns 127, `!` inverts it, and the check would look green. Treat "command not found" as a failed check.
 run_extra() { local cmd="$1"; echo; echo "---- CHECK extra :: $cmd"; local t0=$(date +%s); local out; out=$(bash -c "$cmd" 2>&1); local rc=$?; [ -n "$out" ] && printf '%s\n' "$out"; if printf '%s' "$out" | grep -q "command not found"; then echo "---- extra INVALID: a command in this assertion is not installed on this host"; rc=127; fi; local t1=$(date +%s); echo "---- RESULT extra rc=$rc duration=$((t1-t0))s"; [ $rc -eq 0 ] || FAIL=1; }
