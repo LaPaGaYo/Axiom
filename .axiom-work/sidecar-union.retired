@@ -63,3 +63,8 @@ M4-10	M4-6a	git grep -q -F "fails no_open_questions while a Task has a pending q
 # fact. Replaced in M4-7b's sidecar by pins on the two names in the handler file, the caller-class map, the
 # mutation list and the generated catalog.
 M4-7b	M4-7a	! git grep -q -E "axiom\.approval\.[a-z]" -- src tests
+
+# M4-11a: the Mission page becomes the first reader of the completion report and checks the kind of the Artifact
+# by name, so M4-10's pin that the text stands nowhere under src/renderer no longer holds. Replaced in M4-11a's
+# sidecar by the same search over src/cli, src/preload and src/main/runtime.
+M4-11a	M4-10	! git grep -q "completion_report" -- src/renderer src/cli src/preload src/main/runtime
