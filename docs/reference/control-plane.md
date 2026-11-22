@@ -152,7 +152,7 @@ M3-06-3-3b：仅 headless 且 Task 或 Mission 有 maxTokens 时，在 `Permissi
 
 AgentFactory.build 接受 worker 的 missionId/taskId/contextPackageId，或 planner 的 missionId/goalRevisionId；引用必须存在且归属匹配。ContextPackage 是输入，不由 Factory 创建。主机安装集合由注入的 listInstalledProviders 提供，Control Plane 注入 detectInstalledAgentsWithShellPathHydration；此处不新增认证探测或网络调用。
 
-执行身份由 provider（harness）、model 与 endpointProfile 组成。D57 的矩阵在 `src/main/axiom/agent-factory/certified-providers.ts` 的 `CERTIFIED_PROVIDER_COMBOS`；`endpointProfile` 均为 `subscription`，不存储凭据。D82 的 V1 真实 provider 为 Codex 与 Claude Code，均支持 planner、worker；保留的 Antigravity/OpenCode 条目不扩大 V1 范围。当前只有 Codex 为 `certified`（宿主证据见 `.axiom-work/verifications/M3-08-smoke-real-codex.md`），Claude 保持 `provisional`，由 verifier 的真实宿主 smoke 决定认证。确定性 fake 测试不认证真实组合。Claude Worker 的 `maxRisk: high` 以 OS sandbox 启用且 `failIfUnavailable: true` 为前提（D57 ④）；无 OS sandbox 的组合不得据此取得 high 风险资格。
+执行身份由 provider（harness）、model 与 endpointProfile 组成。D57 的矩阵在 `src/main/axiom/agent-factory/certified-providers.ts` 的 `CERTIFIED_PROVIDER_COMBOS`；`endpointProfile` 均为 `subscription`，不存储凭据。D82 的 V1 真实 provider 为 Codex 与 Claude Code，均支持 planner、worker；保留的 Antigravity/OpenCode 条目不扩大 V1 范围。Codex 与 Claude 均为 `certified`（宿主证据见 `.axiom-work/verifications/M3-08-smoke-real-codex.md` 与 `.axiom-work/verifications/M3-08-smoke-real-claude.md`；Claude 由 D57 的 2026-10-29 修订认证）。确定性 fake 测试不认证真实组合。Claude Worker 的 `maxRisk: high` 以 OS sandbox 启用且 `failIfUnavailable: true` 为前提（D57 ④）；无 OS sandbox 的组合不得据此取得 high 风险资格。
 
 | Provider    | 模型选择方式    | Tier | 角色            | 最高风险 |
 | ----------- | --------------- | ---- | --------------- | -------- |
@@ -1634,7 +1634,7 @@ M2 出口证据以 [M2-exit-e2e.md](../review-evidence/axiom-m2/M2-exit-e2e.md) 
 | 后续责任                   | M2 出口边界                                                                                                                                                                        |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | M2 出口复验                | M2-12 已合入；verifier 运行本候选的出口与五个既有宿主 spec，填写证据并决定验收；不再保留已修复的审计/boot 缺口为待办                                                               |
-| D58（ACCEPTED）/ D57 / D82 | Worker channel A headless、Claude Planner channel B structured 已接入；Codex 已有认证宿主证据，Claude provisional 仍待 verifier smoke。V1 真实 provider 范围为 Codex + Claude Code |
+| D58（ACCEPTED）/ D57 / D82 | Worker channel A headless、Claude Planner channel B structured 已接入；Codex 与 Claude 均已有认证宿主证据（D57 的 2026-10-26 与 2026-10-29 修订）。V1 真实 provider 范围为 Codex + Claude Code |
 | M3                         | 独立 VerificationService、Candidate worktree、deterministic verdict、Reviewer advisory、失败证据与 NEEDS_FIX 重试；复审 DEF-4/5/6/9/10 对应项                                      |
 | M4                         | 串行 Integration、Approval、Delivery、完成门与全对象恢复；集成基线在此之前不前进                                                                                                   |
 | M5 / M6                    | 替代 PlanRevision、完整 replanning / 决策模型；远端扩展与 mixed-version 验证                                                                                                       |
