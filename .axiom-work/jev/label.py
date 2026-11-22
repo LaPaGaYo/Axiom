@@ -52,6 +52,38 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M3-09-4c-2a', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'the policy write moved from the RPC handler into the MissionController with no change in '
+        'behaviour (the same refusals in the same order, the same stored policy, the same audit event written '
+        'through the store, one admission round after a commit and none otherwise), and axiom.policy.show answers '
+        'on request which providers a Planner and a Worker at each risk level may use and the first reason where '
+        'not - computed by filterProviders, the first half of selectProvider taken out as one function; main '
+        'process and contract only; the launcher verification passed (84 assertions); twelve tests in three new '
+        'files under both runners and three more times under each; the nine existing policy titles untouched and '
+        'green; the red check on the host (titles 9, 10 and 11 fail at an assertion with the handler of main put '
+        'back, the nine control titles pass; the spec fails at its first expectation about the providers answer '
+        'with the old handler and controller built in); forty-two Mission specs pass on the candidate build; the '
+        'union script failed 0; no existing test changed; no verifier change; no other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'no interface calls the answer or changes a policy until M3-09-4c-2b',
+            'the answer is computed from the stored routing: an editor learns the effect of a routing change only '
+            'after it saved',
+            'the Planner slot repeats the risk word that AgentFactory.build uses; title 7 fails if the two drift',
+            'the answer is on the existing read, so the CLI and agent sessions can ask which providers are '
+            'installed, have an account or are cooling down; Henry can overturn that',
+            'where raising a budget on the desktop (D92 f) goes waits for Henry (pending item 22); a budget key is '
+            'still refused',
+            'host detection runs on every call that asks; how long it takes was not measured',
+            'two stale sentences on certification in control-plane.md were corrected by the planner commit',
+            'the merge is local: GitHub paused the workflows of the fork, the push waits for CI or for Henry',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M4-11a', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'a read-only Finalization section on the Mission page, renderer only: the latest finalization '
