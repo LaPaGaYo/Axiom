@@ -68,3 +68,10 @@ M4-7b	M4-7a	! git grep -q -E "axiom\.approval\.[a-z]" -- src tests
 # by name, so M4-10's pin that the text stands nowhere under src/renderer no longer holds. Replaced in M4-11a's
 # sidecar by the same search over src/cli, src/preload and src/main/runtime.
 M4-11a	M4-10	! git grep -q "completion_report" -- src/renderer src/cli src/preload src/main/runtime
+
+# M3-09-4c-2a moves the policy write out of the RPC handler into the MissionController (the new module
+# src/main/axiom/mission-controller/policy-update.ts), so the refusal code and the name of the audit event no
+# longer stand in the handler file. Replaced in M3-09-4c-2a's sidecar by pins on the two words in the new module
+# and by a pin that the handler names neither.
+M3-09-4c-2a	M3-09-4c-1	git grep -q "approval_required" -- src/main/runtime/rpc/methods/axiom/policy.ts
+M3-09-4c-2a	M3-09-4c-1	git grep -q "policy.updated" -- src/main/runtime/rpc/methods/axiom/policy.ts
