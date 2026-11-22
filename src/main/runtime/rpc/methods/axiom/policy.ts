@@ -1,71 +1,29 @@
 import { defineMethod } from '../../core'
-import { assertSupportedReadinessThreshold } from '../../../../axiom/mission-controller/policy-readiness'
+import { requirePolicy } from '../../../../axiom/mission-controller/policy-update'
 import {
   PolicyShowParams,
   PolicyUpdateParams
 } from '../../../../../shared/axiom-contract/policy-params'
 import { getAxiomControlPlane } from '../../../../axiom/control-plane'
-import type { AxiomStore } from '../../../../axiom/db/axiom-store'
-import { MissionControllerError } from '../../../../axiom/mission-controller/controller-context'
-
-function requirePolicy(store: AxiomStore, missionId: string) {
-  const policy = store.getPolicy(missionId)
-  if (!store.getMission(missionId) || !policy) {
-    throw new MissionControllerError('mission_not_found', { missionId })
-  }
-  return policy
-}
 
 export const AXIOM_POLICY_METHODS = [
   defineMethod({
     name: 'axiom.policy.show',
     permission: 'workspace',
     params: PolicyShowParams,
-    handler: (p, { runtime }) => ({
-      policy: requirePolicy(getAxiomControlPlane(runtime).store, p.missionId)
-    })
+    handler: async (p, { runtime }) => {
+      const { store, agentFactory } = getAxiomControlPlane(runtime)
+      const policy = requirePolicy(store, p.missionId)
+      return {
+        policy,
+        ...(p.providers ? { providers: await agentFactory.providerEligibility(p.missionId) } : {})
+      }
+    }
   }),
   defineMethod({
     name: 'axiom.policy.update',
     permission: 'workspace',
     params: PolicyUpdateParams,
-    handler: (p, { runtime }) => {
-      assertSupportedReadinessThreshold(p.patch.readinessThreshold)
-      if (Object.hasOwn(p.patch, 'budget')) {
-        throw Object.assign(new Error('Budget updates require Approval (M4)'), {
-          code: 'approval_required'
-        })
-      }
-      const { store, missions } = getAxiomControlPlane(runtime)
-      const result = store.transaction('policy_update', () => {
-        const before = requirePolicy(store, p.missionId)
-        const policy = {
-          ...before,
-          ...(p.patch.readinessThreshold === undefined
-            ? {}
-            : { readinessThreshold: p.patch.readinessThreshold }),
-          ...(p.patch.routing === undefined ? {} : { routing: p.patch.routing }),
-          ...(p.patch.verificationRules === undefined
-            ? {}
-            : { verificationRules: p.patch.verificationRules }),
-          ...(p.patch.concurrencyLimit === undefined
-            ? {}
-            : { concurrencyLimit: p.patch.concurrencyLimit })
-        }
-        store.upsertPolicy(p.missionId, policy)
-        store.appendAuditEvent({
-          missionId: p.missionId,
-          actor: 'user',
-          objectKind: 'policy',
-          objectId: p.missionId,
-          event: 'policy.updated',
-          before,
-          after: policy
-        })
-        return { policy }
-      })
-      missions.policyUpdated(p.missionId)
-      return result
-    }
+    handler: (p, { runtime }) => getAxiomControlPlane(runtime).missions.updatePolicy(p)
   })
 ]

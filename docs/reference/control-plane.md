@@ -171,11 +171,25 @@ RulesEngine 只对 eligible 闭集排序：`routing.roles[role].provider` 最高
 
 AgentSpec 的预算只含本次 Attempt 的 maxRuntimeMinutes（Task → Mission → 45）与可选 maxTokens（Task → Mission），不含 maxAttempts。worker 复制验收标准、scope.allowedPaths 写权限和首段路径去重排序后的 capabilities；planner 固定 planning、空写权限与 planner-worktree。规范 JSON 按 schema 键序生成并 sha256 寻址；INSERT OR IGNORE 只在插入时追加 agent_spec.created，两者同一事务。Factory 不改 Task stage、readiness、权限许可或 attempt_bindings，不创建 worktree、不启动 Worker。
 
-axiom.policy.show/update 及 CLI `axiom mission policy show --mission <id> --json` / `update --mission <id> [--routing-file <json>] [--concurrency <n>] --json` 已注册。M2 patch 仅应用 routing（整体替换，省略字段使用默认值）与 concurrencyLimit；budget 键在 handler 的写入前检查中一律返回 approval_required（M4），其他未知键返回 invalid_argument。更新经现有 mutation fence/receipts，policy 与 policy.updated（before/after）同一事务持久化。M3-09-4c-1：每次提交成功后，经 MissionController 请求本 Mission 的一轮 `policy` 准入；未改变任何值的更新也请求，非 EXECUTING Mission 也请求；该轮先处理 finalization 请求，再在非 EXECUTING 时返回。拒绝或回滚的更新不请求；已完成回执的重放不再运行 handler，也不再请求。
+axiom.policy.show/update 及 CLI `axiom mission policy show --mission <id> --json` / `update --mission <id> [--routing-file <json>] [--concurrency <n>] --json` 已注册。patch 应用 routing 与 verificationRules（均整体替换，省略字段使用各自 schema 的默认值）、concurrencyLimit 与 readinessThreshold；budget 键在 MissionController 的写入前检查中一律返回 approval_required（M4），其他未知键返回 invalid_argument。更新经现有 mutation fence/receipts，policy 与 policy.updated（before/after）同一事务持久化。M3-09-4c-1：每次提交成功后，经 MissionController 请求本 Mission 的一轮 `policy` 准入；未改变任何值的更新也请求，非 EXECUTING Mission 也请求；该轮先处理 finalization 请求，再在非 EXECUTING 时返回。拒绝或回滚的更新不请求；已完成回执的重放不再运行 handler，也不再请求。
 
 策略更新只重看本 Mission，不唤醒其它 Mission，也不启动 Planner。仍然没有可用 provider 的 Task，由真实事件触发的每轮仍各追加一条 task.admission_refused；SWEEP-1 的 sweep 轮仅在当前有效拒绝不存在或内容变化时追加（见 Scheduler sweep）；budget、attempts、Question 或 Approval 的阻塞不会因更新策略而解除。该请求只在处理更新的进程里发出，不持久化；若提交后、准入轮之前崩溃，READY Task 由 boot pass 重看；进程仍在但请求丢失或失败时，由下一次 sweep 补看。
 
 M2 之后：落实 D58 的执行通道与权限映射后补真实组合认证；M3 使用独立验证证据，不把 provisional 等同已认证。
+
+### Policy 的写入与 provider 可用性（M3-09-4c-2a）
+
+`axiom.policy.update` 的 handler 只把 dispatcher 已按 `PolicyUpdateParams` 解析的参数交给 `MissionController.updatePolicy` 并返回其结果。控制器用 `write('policy_update', …)` 调用 `mission-controller/policy-update.ts` 的写入体，沿用 `axiom_policy_update` 事务名：先拒绝 `readinessThreshold: 'VERIFIED'`（`invalid_argument`，`reason: threshold_not_supported`），再拒绝任何值的 `budget` 键（`approval_required`，消息仍为 `Budget updates require Approval (M4)`）；然后查 Mission 与 policy，任一缺失即 `mission_not_found`；按 patch 中存在的 `readinessThreshold`、`routing`、`verificationRules`、`concurrencyLimit` 替换对应值；调用 `upsertPolicy`，再直接调用 store 的 `appendAuditEvent` 写一条 `policy.updated`（actor=user、objectKind=policy、objectId=Mission id、before/after 为两份 policy），最后返回 `{ policy }`。policy 与 audit 同一事务提交或回滚，事件不经控制器的 audit helper 重解析或另取时钟。
+
+提交后由控制器的 `scheduleAfterWrite(missionId, 'policy')` 请求一轮准入；拒绝或回滚后不请求，外层事务尚未提交时沿用延迟与回滚抑制，回执重放不再运行操作。写入仍不检查 Mission 状态，所以已完成或已取消 Mission 的 policy 也能改，执行准入不再读取它；仍拒绝预算键，不实现 D92 f。`routing` 与 `verificationRules` 仍是整份替换，不深合并，也不在写入时校验主机上是否有该 provider。
+
+`axiom.policy.show {missionId}` 仍只回答 `{policy}`；只有 `providers: true` 才另答 `providers` 数组，缺省或 false 不包含此键，也不运行 factory 的主机输入。每项为 `{provider, planner, worker: {low, medium, high}}`，四个 slot 都是严格的 `{eligible, reason?}`：候选为 true，被过滤者为 false 且带 selection 原有的首个原因，不在该 slot 的候选或过滤列表中则为 `{eligible: false}`，没有 reason。数组按 `TUI_AGENT_CONFIG` 顺序列出至少在一个 slot 出现的 provider；没有认证组合、未安装且不是任何角色指定 provider 的项完全不列出。
+
+`agent-factory/provider-selection.ts` 的 `filterProviders` 是唯一过滤函数：`selectProvider` 在排名前调用它，`providerEligibility` 为 Planner 与三个 Worker 风险各调用一次它；没有复制原因阶梯，也不调用 DecisionEngine。Planner 固定以 risk `high`、无 cooldown view 询问，与 `AgentFactory.build` 的 Planner 调用（`task?.spec.risk ?? 'high'`）一致；过滤规则的变化经同一个 `filterProviders` 调用路径反映在两边，未来若改变 Planner 的调用风险也须同步此参数。`AgentFactory.providerEligibility(missionId)` 通过已有输入各读取一次 installed providers 与 account cooldown，再读所存 routing，不写 AgentSpec 或 audit。
+
+这个答案只针对已存 routing，不接受草稿；编辑器改变 `disallowedProviders`、`requireCertified` 或 `highRiskTier` 后，要保存才知道影响。它描述调用当时的情况，下一秒安装 provider、选中账号或 cooldown 到期都会改变答案，准入仍会自行重新询问；每次要求这个答案都运行主机探测，不缓存。它只说明可用集合，不说明会选谁、排名、模型或 effort 目录、cooldown 的结束时间，也不保证 Task 已通过预算、依赖与并发等其它准入守卫。
+
+`axiom.policy.show` 仍属于 `read`，桌面、本地 CLI 与 Mission 的 Agent session 都能请求这个答案，从 eligible 与首个过滤原因了解 provider 的安装、账号可用或冷却情况，不泄露账号身份；后续原因可能被前面的原因遮住，不是一份完整主机清单。由于主机探测会 hydrate login-shell PATH、探测命令并读取账号冷却信息，它不是默认答案；Mission 页每五秒的已有 policy 读取不带 `providers`。目前没有界面调用新的答案或 policy 写入，编辑器属于下一 Task `M3-09-4c-2b`，也没有新 CLI flag 或新 RPC 方法。
 
 ## 4. 状态机与 readiness
 
@@ -1560,7 +1574,7 @@ M3-08e / D83 ③④（Codex；Claude 见 §4「Claude channels and invocation pi
 
 M2-05 启动审计：`attempt.started` / `attempt.launch_failed` / `attempt.start_unknown` 的 objectKind 为 attempt，绑定后 objectId = dispatchId，after 含 taskId/seq/branch/worktreeId/provider；绑定前失败的 objectId = taskId/seq，after 含脱敏 message。`integration.base_created` / `integration.base_reused` 的 objectKind 为 mission，after 含 sha。这些事件不代表 Submission、验证或完成。
 
-M2-04：MissionController 在 startExecution 提交后触发 mission_start；axiom.policy.update 的事务提交后调用 policyUpdated，经同一 scheduleAfterWrite 入口触发 policy；resumeMission/unblockMission 提交后触发 resume；transitionTaskStage/cancelTask/recomputeReadiness 实际移动 stage 后触发 stage_change。recomputeReadiness 无变化不触发；M3-04b 的 adjustTask 成功写入即触发 stage_change（包括只改 spec / rationale），由 Scheduler 重算 readiness。嵌套事务（mailbox、RPC、admission）延至当前同步调用栈提交后才触发，并核对持久审计以抑制回滚事务的通知。control-plane.ts 以 fire-and-forget 调用 scheduleRound，拒绝仅 console.warn，不抛回生命周期调用者；manual 可由服务调用者显式请求。SWEEP-1 增加 sweep trigger，由既有 60 s reconcile tick 为每个 EXECUTING Mission 请求；backoff / account cooldown 到期的 attempt.continue 仍 await stage_change round，boot 仍请求 resume。现有 RunMailboxConsumer 的 readiness 调用沿用此入口，不另设 timer。
+M2-04：MissionController 在 startExecution 提交后触发 mission_start；axiom.policy.update 由 MissionController.updatePolicy 写入，提交后经同一 scheduleAfterWrite 入口触发 policy；resumeMission/unblockMission 提交后触发 resume；transitionTaskStage/cancelTask/recomputeReadiness 实际移动 stage 后触发 stage_change。recomputeReadiness 无变化不触发；M3-04b 的 adjustTask 成功写入即触发 stage_change（包括只改 spec / rationale），由 Scheduler 重算 readiness。嵌套事务（mailbox、RPC、admission）延至当前同步调用栈提交后才触发，并核对持久审计以抑制回滚事务的通知。control-plane.ts 以 fire-and-forget 调用 scheduleRound，拒绝仅 console.warn，不抛回生命周期调用者；manual 可由服务调用者显式请求。SWEEP-1 增加 sweep trigger，由既有 60 s reconcile tick 为每个 EXECUTING Mission 请求；backoff / account cooldown 到期的 attempt.continue 仍 await stage_change round，boot 仍请求 resume。现有 RunMailboxConsumer 的 readiness 调用沿用此入口，不另设 timer。
 
 `RunMailboxConsumer` 先注册 exclusive waiter 再 drain backlog，避免读空到订阅之间丢唤醒；waiter 的独占仅限进程。`getOrCreateRunDelivery` 与 `acknowledgeRunDelivery` 用启动时捕获的 generation 栅栏，不能重读并采用别人的新 generation。
 

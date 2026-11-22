@@ -6,7 +6,7 @@ import { AgentSpecSchema, type AgentSpec } from '../../../shared/axiom-contract/
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import type { AxiomStore } from '../db/axiom-store'
 import type { DecisionEngine } from '../decision-engine/decision-engine'
-import { AgentFactoryError, selectProvider } from './provider-selection'
+import { AgentFactoryError, providerEligibility, selectProvider } from './provider-selection'
 import { resolveAcceptance } from '../../../shared/axiom-contract/acceptance'
 export { AgentFactoryError } from './provider-selection'
 
@@ -63,6 +63,16 @@ export class AgentFactory {
     private readonly hasAccount: (provider: string) => boolean = () => true,
     readonly accountCooldown: () => Promise<ReadonlyMap<string, string>> = async () => new Map()
   ) {}
+
+  async providerEligibility(missionId: string) {
+    const installed = await this.listInstalledProviders()
+    const cooldown = await this.accountCooldown()
+    const policy = this.store.getPolicy(missionId)
+    if (!this.store.getMission(missionId) || !policy) {
+      throw new AgentFactoryError('mission_not_found', { missionId })
+    }
+    return providerEligibility(installed, policy.routing, this.hasAccount, cooldown)
+  }
 
   async selectWorkerProvider(
     input: { missionId: string; taskId: string },
