@@ -4,7 +4,8 @@ import * as deliveryCheck from '../approval/delivery-check'
 import * as deliveryWrite from '../delivery/delivery-write'
 import { requestDeliveryApproval, revokeDeliveryApprovals } from '../approval/delivery-approval'
 import { createTask } from './task-creation'
-import { assertMissionStartable } from './mission-start-guard'
+import { assertMissionStartable, startExecution } from './mission-start-guard'
+import { updatePolicy } from './policy-update'
 import { adjustTask, resolveBlockedMessages } from './task-adjustment'
 import { redactContext } from '../redaction/redaction'
 import { OrchestrationError } from '../../runtime/orchestration/orchestration-error'
@@ -111,8 +112,10 @@ export class MissionController {
     })
   }
 
-  policyUpdated(missionId: string): void {
-    this.scheduleAfterWrite(missionId, 'policy')
+  updatePolicy(input: Parameters<typeof updatePolicy>[1]) {
+    const result = this.write('policy_update', () => updatePolicy(this.ctx, input))
+    this.scheduleAfterWrite(input.missionId, 'policy')
+    return result
   }
   createMission(input: CreateMissionInput) {
     return this.write('create_mission', () => createMission(this.ctx, input))
@@ -170,13 +173,7 @@ export class MissionController {
     return assertMissionStartable(this.ctx, missionId)
   }
   startExecution(missionId: string) {
-    const result = this.write('start_execution', () => {
-      assertMissionStartable(this.ctx, missionId)
-      // Replayed/concurrent starts retain the expected PLANNED source for the CAS.
-      moveMission(this.ctx, missionId, 'PLANNED', 'EXECUTING')
-      recomputeReadiness(this.ctx, missionId)
-      return projectMission(this.ctx, missionId)
-    })
+    const result = this.write('start_execution', () => startExecution(this.ctx, missionId))
     this.scheduleAfterWrite(missionId, 'mission_start')
     return result
   }

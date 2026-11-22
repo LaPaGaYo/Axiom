@@ -3,6 +3,8 @@ import {
   requireMission,
   type ControllerContext
 } from './controller-context'
+import { moveMission, projectMission } from './mission-lifecycle'
+import { recomputeReadiness } from './task-readiness'
 
 export function assertMissionStartable(ctx: ControllerContext, missionId: string) {
   const mission = requireMission(ctx, missionId)
@@ -41,4 +43,12 @@ export function assertMissionStartable(ctx: ControllerContext, missionId: string
     })
   }
   return mission
+}
+
+export function startExecution(ctx: ControllerContext, missionId: string) {
+  assertMissionStartable(ctx, missionId)
+  // Replayed/concurrent starts retain the expected PLANNED source for the CAS.
+  moveMission(ctx, missionId, 'PLANNED', 'EXECUTING')
+  recomputeReadiness(ctx, missionId)
+  return projectMission(ctx, missionId)
 }

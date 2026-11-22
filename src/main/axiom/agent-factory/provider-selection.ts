@@ -7,6 +7,7 @@ import {
 } from '../../../shared/axiom-contract/agent-spec'
 import { RISK_LEVELS, type RiskLevel } from '../../../shared/axiom-contract/lifecycle'
 import type { AuditEvent, Policy } from '../../../shared/axiom-contract/mission-objects'
+import type { ProviderEligibilitySchema } from '../../../shared/axiom-contract/policy-params'
 import type { DecisionContext, DecisionEngine } from '../decision-engine/decision-engine'
 import type { DecisionRule } from '../decision-engine/rules-engine'
 import { certifiedCombo } from './certified-providers'
@@ -85,16 +86,14 @@ export const PROVIDER_SELECTION_RULES: readonly DecisionRule[] = [
   }
 ]
 
-export function selectProvider(
+export function filterProviders(
   available: string[],
   routing: Policy['routing'],
   role: AgentSpec['role'],
   risk: RiskLevel,
-  engine: DecisionEngine,
   hasAccount: (provider: string) => boolean = () => true,
-  plannerProvider: AgentSpec['provider'] | null = null,
   accountCooldown: ReadonlyMap<string, string> = new Map()
-): AgentSpec['selection'] {
+) {
   const installed = DEFAULT_ORDER.filter(
     (id) => id !== EXCLUDED_LAUNCH_MODE && available.includes(id)
   )
@@ -130,6 +129,27 @@ export function selectProvider(
     (a, b) =>
       ProviderFilterReasonSchema.options.indexOf(a.reason) -
       ProviderFilterReasonSchema.options.indexOf(b.reason)
+  )
+  return { installed, candidates, filtered, roleProvider }
+}
+
+export function selectProvider(
+  available: string[],
+  routing: Policy['routing'],
+  role: AgentSpec['role'],
+  risk: RiskLevel,
+  engine: DecisionEngine,
+  hasAccount: (provider: string) => boolean = () => true,
+  plannerProvider: AgentSpec['provider'] | null = null,
+  accountCooldown: ReadonlyMap<string, string> = new Map()
+): AgentSpec['selection'] {
+  const { installed, candidates, filtered, roleProvider } = filterProviders(
+    available,
+    routing,
+    role,
+    risk,
+    hasAccount,
+    accountCooldown
   )
   const roleProviderUnavailable = filtered.find((entry) => entry.provider === roleProvider)?.reason
   const roleEvidence = roleProviderUnavailable ? { roleProviderUnavailable } : {}
@@ -190,4 +210,35 @@ export function selectProvider(
     crossProvider: { plannerProvider, applied },
     ...roleEvidence
   }
+}
+
+export function providerEligibility(
+  available: string[],
+  routing: Policy['routing'],
+  hasAccount: (provider: string) => boolean,
+  accountCooldown: ReadonlyMap<string, string>
+): z.infer<typeof ProviderEligibilitySchema>[] {
+  // Match build's Planner selection: high risk, without the Worker cooldown view.
+  const planner = filterProviders(available, routing, 'planner', 'high', hasAccount)
+  const workers = RISK_LEVELS.map((risk) =>
+    filterProviders(available, routing, 'worker', risk, hasAccount, accountCooldown)
+  )
+  const slots = [planner, ...workers]
+  return DEFAULT_ORDER.filter((provider) =>
+    slots.some(
+      (slot) =>
+        slot.candidates.includes(provider) ||
+        slot.filtered.some((entry) => entry.provider === provider)
+    )
+  ).map((provider) => {
+    const slot = (selection: ReturnType<typeof filterProviders>) => {
+      const reason = selection.filtered.find((entry) => entry.provider === provider)?.reason
+      return { eligible: selection.candidates.includes(provider), ...(reason ? { reason } : {}) }
+    }
+    return {
+      provider,
+      planner: slot(planner),
+      worker: { low: slot(workers[0]), medium: slot(workers[1]), high: slot(workers[2]) }
+    }
+  })
 }

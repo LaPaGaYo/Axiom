@@ -6,6 +6,8 @@ import { desktopCall } from './helpers/axiom-desktop-call'
 import { axiomFixtureRouting } from './helpers/axiom-fixture-provider'
 import { TaskResponseSchema } from '../../src/shared/axiom-contract/task-params'
 import { MissionPendingResponseSchema } from '../../src/shared/axiom-contract/mission-pending'
+import { PolicyResponseSchema } from '../../src/shared/axiom-contract/policy-params'
+import { ProviderFilterReasonSchema } from '../../src/shared/axiom-contract/agent-spec'
 
 const source = process.env.AXIOM_FIXTURE_REPO
 test.skip(!source || process.platform === 'win32', 'Requires POSIX host and AXIOM_FIXTURE_REPO')
@@ -78,6 +80,31 @@ test('M3-09-4c-1: a policy update admits the Task it unblocks without another ev
         })
       )
 
+      const refusal = inspect().audits.find(
+        (audit) =>
+          audit.event === 'task.admission_refused' &&
+          audit.object_id === y &&
+          audit.sequence > firstSequence
+      )
+      const { filtered } = z
+        .object({
+          filtered: z.array(z.object({ provider: z.string(), reason: ProviderFilterReasonSchema }))
+        })
+        .parse(JSON.parse(refusal?.after ?? '{}'))
+      expect(filtered.length).toBeGreaterThan(0)
+      const refusedPolicy = PolicyResponseSchema.parse(
+        await desktopCall(page, 'axiom.policy.show', { missionId: mission.id, providers: true })
+      )
+      expect(refusedPolicy.providers).toEqual(expect.any(Array))
+      for (const { provider, reason } of filtered) {
+        const slot = { eligible: false, reason }
+        expect(refusedPolicy.providers?.find((entry) => entry.provider === provider)).toEqual({
+          provider,
+          planner: slot,
+          worker: { low: slot, medium: slot, high: slot }
+        })
+      }
+
       await desktopCall(page, 'axiom.policy.update', {
         missionId: mission.id,
         patch: { routing: axiomFixtureRouting('codex') }
@@ -130,6 +157,19 @@ test('M3-09-4c-1: a policy update admits the Task it unblocks without another ev
         )
       ).toEqual([])
       expect(admitted.effects.filter((effect) => effect.kind === 'attempt.continue')).toEqual([])
+      const admittedPolicy = PolicyResponseSchema.parse(
+        await desktopCall(page, 'axiom.policy.show', { missionId: mission.id, providers: true })
+      )
+      expect(admittedPolicy.providers).toEqual(expect.any(Array))
+      expect(waiting.spec).toBeDefined()
+      if (!waiting.spec) {
+        throw new Error('Missing Task spec')
+      }
+      expect(
+        admittedPolicy.providers?.find((entry) => entry.provider === 'codex')?.worker[
+          waiting.spec.risk
+        ]
+      ).toEqual({ eligible: true })
     },
     {
       provider: 'codex',
