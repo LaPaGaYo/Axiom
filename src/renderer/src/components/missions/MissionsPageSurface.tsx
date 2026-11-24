@@ -5,6 +5,7 @@ import { MissionList } from './MissionList'
 import { MissionCreateDialog } from './MissionCreateDialog'
 import { MissionHome } from './MissionHome'
 import { MissionSupervision } from './MissionSupervision'
+import { MissionPolicy } from './MissionPolicy'
 import { visiblePlanRevisions } from './plan-revision-diff'
 import { PlanReviewPanel } from './PlanReviewPanel'
 import { TaskStageTable } from './TaskStageTable'
@@ -65,6 +66,13 @@ export function MissionsPageSurface({ controller: c }: { controller: MissionsPag
                 busy={c.busy}
                 onUpdate={c.updateSupervision}
                 onResolve={c.resolveSupervision}
+              />
+              <MissionPolicy
+                key={c.detail.mission.id}
+                mission={c.detail.mission}
+                policy={c.detail.policy}
+                busy={c.busy}
+                onSave={c.updatePolicy}
               />
               {visiblePlanRevisions(c.detail.plans, c.detail.mission.activePlanRevisionId).map(
                 (plan) => (

@@ -189,7 +189,26 @@ M2 之后：落实 D58 的执行通道与权限映射后补真实组合认证；
 
 这个答案只针对已存 routing，不接受草稿；编辑器改变 `disallowedProviders`、`requireCertified` 或 `highRiskTier` 后，要保存才知道影响。它描述调用当时的情况，下一秒安装 provider、选中账号或 cooldown 到期都会改变答案，准入仍会自行重新询问；每次要求这个答案都运行主机探测，不缓存。它只说明可用集合，不说明会选谁、排名、模型或 effort 目录、cooldown 的结束时间，也不保证 Task 已通过预算、依赖与并发等其它准入守卫。
 
-`axiom.policy.show` 仍属于 `read`，桌面、本地 CLI 与 Mission 的 Agent session 都能请求这个答案，从 eligible 与首个过滤原因了解 provider 的安装、账号可用或冷却情况，不泄露账号身份；后续原因可能被前面的原因遮住，不是一份完整主机清单。由于主机探测会 hydrate login-shell PATH、探测命令并读取账号冷却信息，它不是默认答案；Mission 页每五秒的已有 policy 读取不带 `providers`。目前没有界面调用新的答案或 policy 写入，编辑器属于下一 Task `M3-09-4c-2b`，也没有新 CLI flag 或新 RPC 方法。
+`axiom.policy.show` 仍属于 `read`，桌面、本地 CLI 与 Mission 的 Agent session 都能请求这个答案，从 eligible 与首个过滤原因了解 provider 的安装、账号可用或冷却情况，不泄露账号身份；后续原因可能被前面的原因遮住，不是一份完整主机清单。由于主机探测会 hydrate login-shell PATH、探测命令并读取账号冷却信息，它不是默认答案；Mission 页每五秒的已有 policy 读取不带 `providers`。Mission 页的 Policy 编辑器已调用 policy 写入（M3-09-4c-2b）；`providers` 答案仍没有界面调用，属于 M3-09-4c-2c，也没有新 CLI flag 或新 RPC 方法。
+
+### Mission 页的 Policy 块与编辑（M3-09-4c-2b）
+
+`MissionPolicy.tsx` 在 Supervision 后、计划面板前显示 Policy，复用页面唯一的 `readMissionPolicy` 读取所得 `c.detail.policy`，不另读 policy。
+定义列表的七项为同时运行的 Task 数、setup commands、low / medium / high 三档 Task 门禁、合并后代码的门禁、验证时间预算（分钟）；值节点分别带 `data-policy-value="concurrency|setup|low|medium|high|integration|minutes"` 的对应单值，命令逐行显示，缺省或空列表显示 None，唯独未设置的合并门禁说明使用最高已配置门禁，显式空列表则显示 None。
+只有非终态 Mission 有 Edit policy，页面忙时禁用；终态仍可查看，读取失败且没有打开表单时只显示读取失败的提示，规则不合 schema 时只显示并发数及计划面板既有的无效规则说明，编辑也只提供并发数。
+
+`MissionPolicyForm.tsx` 原地替换列表与入口，七个字段以同样顺序编辑；`policy-draft.ts` 的 `buildPolicyUpdate(missionId, policy, opened, draft)` 仅纳入文本与打开时不同的字段，在保存时页面最近读到的规则上替换它们，其余规则键及整份 routing 保留原值，不发送 routing。
+命令按行去掉首尾空白并丢弃空行；清空一个风险档或合并门禁会删除该键（setup 清空为 `[]`），使合并门禁恢复 high → medium → low 中首个存在列表的回退语义，未编辑的显式空列表必须保留，因为它会在该处停止回退。
+改变过的数字文本必须全为数字且为至少 1 的整数，最终有效性由写入路径的 `PolicyUpdateParams` 决定，发送的是解析后的值，schema 拒绝的首条消息按等宽错误样式显示。
+
+`policy-actions.ts` 的 `updatePolicy(params, consequence)` 使用页面已有 `confirmAction`，标题与确认按钮均为 Save policy，另一按钮为 Keep editing，variant 为 default；说明按表单顺序用逗号和空格连接改变字段的标签，有规则字段改变时追加命令在本机运行、仅影响之后开始运行的说明，确认只列字段名而不列值，两种语言使用同样的逗号。
+Keep editing 不调用写入并保留草稿；确认后才经 `mutate` 和客户端 `updatePolicy` 调用桌面专用 `axiom.policy.update`，接受后关闭表单并显示页面重读的值，拒绝后保留草稿并由页面显示 Control Plane 的原始错误，确认与请求期间所有表单控件禁用。
+五秒静默刷新不重置表单：打开时的文本与编辑中的文本各自在 state initializer 建立，随后只用最新 policy 计算请求，不在属性改变时设置 state；打开表单期间 policy 读取失败仍保留表单与已输入内容，显示读取失败提示并禁止保存，直到后续读取成功。
+
+没有 revision 检查，两窗口或 CLI 同时保存可能逐键覆盖；未编辑字段从页面最后一次读取重建，最多落后一个刷新周期，不保证保存瞬间的新鲜度。
+此表单能保留显式空列表但不能新建它，也不能修复不合 schema 的规则；第一次保存规则会把当前 schema 为缺省键提供的默认值显式写入存储（Control Plane 对任何规则更新都这样做），以后默认值改变不再影响这份 Mission 的这些值。
+命令除非空行外不额外检查，会按原文运行；策略改变不影响已经运行中的验证；本节不展示变更历史（audit 已记录），五种其它语言回退英文。
+routing 的显示与编辑、`providers` 答案及待处理项入口属于 `M3-09-4c-2c`。
 
 ## 4. 状态机与 readiness
 
