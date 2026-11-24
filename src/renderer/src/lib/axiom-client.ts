@@ -25,6 +25,17 @@ import { GoalShowParams, GoalResponseSchema } from '../../../shared/axiom-contra
 export const axiomClient = {
   showPolicy: (params: z.infer<typeof policy.PolicyShowParams>) =>
     call('axiom.policy.show', params, policy.PolicyShowParams, policy.PolicyResponseSchema),
+  updatePolicy: (
+    params: z.infer<typeof policy.PolicyUpdateParams>,
+    requestId: string = createNonSecureContextUuid()
+  ) =>
+    call(
+      'axiom.policy.update',
+      params,
+      policy.PolicyUpdateParams,
+      policy.PolicyResponseSchema,
+      requestId
+    ),
   showSupervision: (params: z.infer<typeof supervision.SupervisionShowParams>) =>
     call(
       'axiom.supervision.show',

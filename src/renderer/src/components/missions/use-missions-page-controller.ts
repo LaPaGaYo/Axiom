@@ -11,6 +11,7 @@ import type { MissionAction } from './MissionActions'
 import { useMissionsPageRead } from './use-missions-page-read'
 import { planApprovalDescription } from './plan-approval'
 import { createSupervisionActions } from './supervision-actions'
+import { createPolicyActions } from './policy-actions'
 import { missionErrorText } from './mission-error-text'
 
 export function useMissionsPageController() {
@@ -213,6 +214,7 @@ export function useMissionsPageController() {
     )
   return {
     ...createSupervisionActions(mutate, confirmAction),
+    ...createPolicyActions(mutate, confirmAction),
     adjustTask,
     cancelTask,
     resolveVerification,
