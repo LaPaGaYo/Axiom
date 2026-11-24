@@ -46,9 +46,7 @@ name: Daily macOS Dev Build
 # drafts, so it holds its number and the next run does not reuse it.
 
 on:
-  schedule:
-    # Once a day, late morning Pacific. Single cron — no DST twin, no clock gate.
-    - cron: '15 18 * * *'
+  # D41: automatic schedule/push triggers are disabled for the fork.
   workflow_dispatch:
     inputs:
       force:
