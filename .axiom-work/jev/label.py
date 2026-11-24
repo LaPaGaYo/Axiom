@@ -52,6 +52,48 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M3-09-4c-2b', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'the Mission page shows a Policy section after Supervision (the limit of Tasks at once, the '
+        'setup commands, the gates of each risk level, the gates on the merged tree, the time budget of '
+        'verification) and, when the Mission is not finished, a form that changes them through '
+        'axiom.policy.update: only fields whose text changed, on the rules stored at the moment of saving, '
+        'validity decided by PolicyUpdateParams, and a confirmation before any write that names the changed '
+        'fields; renderer only; the launcher verification passed (96 assertions) on the commit of the Worker and '
+        'again on the corrected candidate; 23 tests in four new files under both runners and three more times '
+        'under each; the red check on the host, twice (titles 19 to 22 fail at an assertion with the surface of '
+        'main put back, the nineteen control titles pass; the new spec fails at its first expectation after the '
+        'Mission is picked with the old surface built in); every tracked Mission spec passes on the build of the '
+        'Worker commit and again on the candidate build; one verifier change, caused by the brief and not by the '
+        'attempt: the brief asked the new spec to compare every audit row before and after Keep editing, which '
+        'races with the start-up events of the held Worker Attempt and failed in one run of three; five lines of '
+        'the spec now compare the policy.updated events and the corrected spec passed eight runs of eight; the '
+        'union script failed 0; no existing test changed; a first-pass review by an Opus subagent and the reading '
+        'of the verifier found no defect in the product code; pictures of the real page were looked at; no other '
+        'model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'routing, provider availability and the entry from the pending item are M3-09-4c-2c',
+            'a text that differs counts as a change even when the value is the same: a write with one audit event',
+            'every value of the list is monospace, the numbers too; look at it again in M3-09-4c-2c',
+            'the unit step of the CI workflow named the client test by path and did not run the new client test '
+            'file; the planner commit adds the line',
+            'no revision check: two windows saving at once overwrite each other key by key',
+            'a first save writes the schema defaults of today into the stored rules',
+            'an open form disappears with its draft when the Mission reaches a terminal status',
+            'the brief was changed before launch on the word of Henry: saving asks for confirmation first',
+            'the brief said a CLI call can save a policy; it cannot (desktop_only, caller_not_desktop): the phrase the '
+            'Worker copied into control-plane.md is corrected in the planner commit',
+            'an e2e expectation that compares every audit row of an executing Mission races with the start-up '
+            'events of its Attempts: compare only the events the action could write; two existing specs make the '
+            'whole-list comparison later in the life of the Attempt and have no failed run on record',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+        'failures': {'20261124T063605': [('candidate', 'verification_record:M3-09-4c-2b-1: the one failed spec run of the first host check is the second of three runs of the new spec of the candidate, mission-policy-editor; it compared every audit row before and after Keep editing while the held Worker Attempt wrote attempt.headless_prepared and attempt.started in between; the failing file is new in the candidate and the failure went away through a change of its expectation (verifier fix 1, five lines, the policy.updated events only); the expectation came from the brief of the verifier, not from a choice of the Worker')]},
+    },
     ('M3-09-4c-2a', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'the policy write moved from the RPC handler into the MissionController with no change in '
