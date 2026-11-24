@@ -48,7 +48,11 @@ test('M3-09-4c-2b: a person changes the policy on the Mission page', async (// o
       await form.getByLabel('Setup commands', { exact: true }).fill(setup.join('\n'))
       await form.getByLabel('Gates for low-risk Tasks', { exact: true }).fill(low[0])
       await form.getByLabel('Tasks at once', { exact: true }).fill(limit)
-      const auditsBefore = inspect().audits
+      // Why: the held Worker's Attempt is still writing its own start-up events, so only the events
+      // a policy write leaves are compared.
+      const policyUpdates = () =>
+        inspect().audits.filter((audit) => audit.event === 'policy.updated')
+      const updatesBefore = policyUpdates()
       await form.getByRole('button', { name: 'Save policy', exact: true }).click()
       const dialog = page.getByRole('dialog', { name: 'Save policy', exact: true })
       await expect(dialog).toBeVisible()
@@ -58,7 +62,7 @@ test('M3-09-4c-2b: a person changes the policy on the Mission page', async (// o
       await dialog.getByRole('button', { name: 'Keep editing', exact: true }).click()
       await expect(dialog).toHaveCount(0)
       expect(await show()).toEqual(before)
-      expect(inspect().audits).toEqual(auditsBefore)
+      expect(policyUpdates()).toEqual(updatesBefore)
       await expect(form.getByLabel('Tasks at once', { exact: true })).toHaveValue(limit)
       await expect(form.getByLabel('Setup commands', { exact: true })).toHaveValue(setup.join('\n'))
       await expect(form.getByLabel('Gates for low-risk Tasks', { exact: true })).toHaveValue(low[0])
@@ -78,9 +82,7 @@ test('M3-09-4c-2b: a person changes the policy on the Mission page', async (// o
         setupCommands: setup,
         repositoryGates: { ...rulesBefore.repositoryGates, low }
       })
-      expect(inspect().audits.filter((audit) => audit.event === 'policy.updated')).toHaveLength(
-        auditsBefore.filter((audit) => audit.event === 'policy.updated').length + 1
-      )
+      expect(policyUpdates()).toHaveLength(updatesBefore.length + 1)
 
       await region.getByRole('button', { name: 'Edit policy', exact: true }).click()
       await form.getByLabel('Gates for low-risk Tasks', { exact: true }).fill('')
