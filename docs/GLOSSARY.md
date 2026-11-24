@@ -158,7 +158,7 @@ Mission 预算仅在 EXECUTING 调用 admission 的 `budgetExhaustion`，次序�
 
 Mission 首页（M3-09-3a）按该视图返回的顺序列出全部待处理项，计数严格等于所列项数。
 
-Task 页仅提供该 Task 的待处理项在 `actions` 中列出的操作：处置审查、重验（M3-09-2b-2）、调整与取消（M3-09-2b-3），未列出时不显示控件；`axiom.policy.update` 尚无控件（M3-09-4）。
+Task 页仅提供该 Task 的待处理项在 `actions` 中列出的操作：处置审查、重验（M3-09-2b-2）、调整与取消（M3-09-2b-3），未列出时不显示控件；`axiom.policy.update` 的控件不在 Task 页：Mission 页的 Policy 块可编辑并发上限与验证的设置，保存前确认（M3-09-4c-2b）；路由的编辑与待处理项里的入口随 M3-09-4c-2c。
 
 | kind（同分次序） | 对象 / 条件 | reason；blocking | actions（按顺序，受当前状态约束） |
 |---|---|---|---|
