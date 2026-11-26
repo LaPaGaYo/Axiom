@@ -23,6 +23,7 @@ export function MissionHome({
   pendingItems,
   pendingError,
   onSelectTask,
+  onEditProviders,
   proposedPlans,
   busy,
   onAction
@@ -34,6 +35,7 @@ export function MissionHome({
   pendingItems?: readonly MissionPendingItem[]
   pendingError?: boolean
   onSelectTask: (taskId: string) => void
+  onEditProviders?: () => void
   proposedPlans: number
   busy: boolean
   onAction: (action: MissionAction) => void
@@ -122,6 +124,7 @@ export function MissionHome({
           failed={pendingError}
           tasks={tasks}
           onSelectTask={onSelectTask}
+          onEditProviders={onEditProviders}
         />
         {proposedPlans > 0 && (
           <p className="text-sm">
