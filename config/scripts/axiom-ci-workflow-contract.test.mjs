@@ -15,6 +15,7 @@ const testTargets = [
   'src/cli/handlers/axiom',
   'src/renderer/src/components/missions',
   'src/renderer/src/lib/axiom-client.test.ts',
+  'src/renderer/src/lib/axiom-client-policy.test.ts',
   'src/renderer/src/lib/missions-view.test.ts',
   'tests/e2e/helpers/fixture-plan-proposal.unit.test.ts'
 ]
