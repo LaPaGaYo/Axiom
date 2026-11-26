@@ -209,3 +209,15 @@
 | `19e5992f0f`（桌面端一半） | `config/patches/picomatch@4.0.4.patch`、`config/patches/picomatch@4.0.7.patch`（逐字节取自上游）、`pnpm-workspace.yaml`、`config/scripts/dependency-security-patches.test.mjs`、`config/patches/dependency-security.md` | 只打本工作区安装的两个版本；上游的 2.3.2 / 4.0.5 补丁、RubyGems、cloud、文档站、mobile、审计工具与 `@shadcn/lint` 的改动不取。 |
 
 **UPSTREAM-5 已合入（2026-11-18）**：merge `6bc8edf485`，候选 `5f6e32cfea`（宿主步骤 `6475e7dbe1` 加一行注释修正），记录 `1950d6a2f4`（`.axiom-work/verifications/UPSTREAM-5-1.md`）。宿主步骤：装上的 Electron 是 43.8.10，锁文件只动了 Electron、WebGL 补丁哈希与两个 picomatch 补丁；字形探针在 43.8.6 上正常、43.8.10 加修正后正常、去掉修正后字变小（红检查成立）；12 个 Electron 探针文件新旧两版全过；全量测试失败的 9 个文件、31 条测试都是 main 上本机一直失败的；41 个 Mission 规格 77 条全过；三栈冷启动出口记录为空；打包的 `build:unpack` 仍因本机 pnpm 共享仓库的老问题 rc=1（与本次改动无关），产物里的 Electron 是 43.8.10。没做的：没有人看过屏幕上的终端（请 Henry 打开应用后看一眼）；5 个 WebGL 终端规格带 `@headful` 标记、无头项目不跑；打包产物的前台出口检查要露出窗口，等 Henry 定时间；两个 source map 没有重生成；宿主 launcher 的 picomatch 探针在本机找不到副本（pnpm 共享仓库），改由合入 launcher 在合并前直接验。另：宿主 launcher 的 Mission 循环误把三个真实账号冒烟规格也列了进去，它们因没有冒烟环境变量各自跳过，没有用到任何真实账号。
+
+## 2026-11-25 · 取了上游对一条测试的删除（不在三类之内；Henry 2026-11-25 在“A 跟上游一样删掉、B 留着加一次重试、C 都不动”三种选法里答："A"）
+
+`config/scripts/patched-dependencies-frozen-install.test.mjs` 在临时目录里对清单、锁文件、补丁与 `config/pnpmfile.cjs` 的副本真跑一次 `pnpm install --frozen-lockfile`，以此校验锁文件里的补丁哈希。它在 verify-main 有记录的 122 轮完整单测里失败过 2 轮：2026-11-13 13:20 与 2026-11-24 00:43 开始的两轮。两次是同一个错：pnpm 在跑 `updateConfig` 钩子时以 "Error during pnpmfile execution"、"Broken pipe (os error 32)" 结束，用例约 60 毫秒就失败，还没走到校验。其余 120 轮和每次单独运行都通过；文件里不带 pnpmfile 的第二个用例两次都通过。第二次出现在 flaky 台账之后，推送守卫按规则不放行。
+
+**原因查到的程度**：pnpm 12 把 pnpmfile 的钩子放在一个子进程里执行；失败时是 pnpm 往这个子进程写请求，管道已经断了。仓库的钩子只有十行，是环境变量的纯函数。子进程为什么不在了没有查明，也没有按需复现的办法；问题在工具里，不在仓库里。pnpm 上游 2026-10-12 修过同一部件在 macOS 上的另一个竞态（pnpm 的 PR 16871，本仓库锁定的 12.14.0 已包含），没有找到与这个症状对应的问题单。
+
+**上游**：`b7fe7ba45f`（2026-11-05，#38587）把这条测试连同另外 11 个测试文件一起删掉，提交标题称删掉的是低价值的清点类测试；在同步点 `41661e3312` 之后，不在 D56 的三类之内。
+
+**我们做的**（本提交，验证者直接提交）：取上游对这一个文件的删除。它查的东西仍然有人查：`.github/workflows/axiom-ci.yml` 的三个 job 都经 `.github/actions/install-node-dependencies` 先删掉 `node_modules`、再跑同一条 `pnpm install --frozen-lockfile --ignore-scripts`（失败时重试一次）；验证者改依赖的宿主步骤也真跑安装。`config/scripts/ci-shard-timings.json` 里它的计时条目没有动，与上游一样：条目只是分片的权重，没有检查拿它对照文件。
+
+**以后**：flaky 台账里这个文件的两行留作记录。同一个 pnpm 错误如果在别的测试里出现，照规则走：先单独重跑，第二次查原因。
