@@ -52,6 +52,48 @@ BACKFILL = {
 }
 
 FULL = {
+    ('M3-09-4c-2c', '1'): {
+        'verdict': 'VERIFIED',
+        'reason': 'the Mission page shows a Providers section after Policy (who plans, who works, the providers '
+        'not allowed, whether only certified combinations may run) and, when the Mission is not finished, a form '
+        'that changes them through axiom.policy.update on a copy of the routing stored at the moment of saving, '
+        'validity decided by PolicyUpdateParams, behind the confirmation of the Policy section; when the form '
+        'opens the page asks once which providers the Control Plane would accept under the saved policy and '
+        'shows the answer with the reason codes; the pending item that offers the policy update opens the form; '
+        'renderer only; the launcher verification passed (113 assertions) on the commit of the Worker and again '
+        'on the corrected candidate; 31 tests in four new files (32 with fix 1) under both runners and three more '
+        'times under each; the red check on the host, twice (the page titles fail at an assertion with the '
+        'surface of main put back, the twenty-five control titles pass; the new spec fails at its first '
+        'expectation after the Mission is picked with the old surface built in); every tracked Mission spec '
+        'passes on the build of the Worker commit and again on the candidate build; one verifier change, caused '
+        'by the brief and not by the attempt: the wiring the brief prescribed kept the request that opens the '
+        'form across a switch to another Mission and back, so the form reopened by itself under an availability '
+        'answer read earlier; three lines of the surface clear the request when the selection moves and a new '
+        'page title fails without them; a first-pass review by an Opus subagent found it and the verifier '
+        'confirmed it in the code; the union script failed 0; no existing test changed; pictures of the real page '
+        'were looked at; no other model CLI called',
+        'scope_creep': False,
+        'report_completeness': 3,
+        'followups': [
+            'a role model and effort have no control: M3-09-4c-2d, waiting for pending item 26',
+            'no revision check: two windows saving at once overwrite the whole routing of each other',
+            'when the availability read failed and another window removed an id from the stored list, the draft '
+            'keeps that id without a checkbox and a later change writes it back',
+            'the sentence shown when the availability read failed has no role: a screen reader is not told',
+            'the table shows the first reason of the filter: a provider that is disallowed and has no account '
+            'says no_account',
+            'the Policy section still shows every value in monospace and the Providers section does not; the '
+            'record of M3-09-4c-2b had said this Task would touch that section, and it did not',
+            'the brief contradicted itself on model and effort in one document sentence; the Worker wrote the '
+            'true one and reported it',
+            'a brief that prescribes page state must say what ends it when the selection changes: the fact-check '
+            'and the simulation of this brief did not catch that',
+            'a first save writes the schema defaults of the routing into the stored policy',
+        ],
+        'failures_caused_by_candidate': [],
+        'failure_labels': [],
+        'label_evidence': [],
+    },
     ('M3-09-4c-2b', '1'): {
         'verdict': 'VERIFIED',
         'reason': 'the Mission page shows a Policy section after Supervision (the limit of Tasks at once, the '
