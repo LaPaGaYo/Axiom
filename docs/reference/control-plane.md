@@ -218,7 +218,7 @@ routing 的四项设置、`providers` 答案及待处理项入口已由 `M3-09-4
 表单有两个入口：本节按钮，以及 actions 含 `axiom.policy.update` 的待处理项通过 `onEditProviders` 得到的按钮；该按钮加在原样保留的 `You can:` 行下方，读不到 policy 时没有这个入口，打开 handler 也拒绝从空 policy 建草稿。
 
 `MissionsPageSurface.tsx` 的同一个打开 handler 保存 `{missionId, providers}` 请求对象，并经 `readProviderEligibility` 在本目录唯一的 `showPolicy(` 调用行以 `providers: true` 读取一次；普通 `readMissionPolicy(missionId)` 不带此键，五秒刷新与 effect 均不读取可用性。
-答案只在当前请求仍是发起读取的同一个对象时写回，关闭或替换请求后到达的旧答案丢弃；切换 Mission 时只把 id 匹配的请求交给本节。
+答案只在当前请求仍是发起读取的同一个对象时写回，关闭或替换请求后到达的旧答案丢弃；选中的 Mission 一变，请求就在渲染时清掉，再选回原 Mission 不会自行重开表单，须重新按入口并重读可用性；交给本节的也只有 id 匹配的请求。
 每次按入口都重新探测一次主机，可能需要片刻；表单已打开时再按待处理项按钮会重读并显示读取中，保持表单和草稿，不再次移动焦点；初次挂载才聚焦表单并滚动到它。
 `MissionProvidersForm.tsx` 在读取中显示状态句，失败时显示不可读提示且只列已存策略中的 id；成功时原生表格按答案顺序逐行列提供方，以及 Planner 和 low / medium / high 风险 Worker 的四个 slot，候选为 Yes，拒绝为等宽原始 reason 加 `provider-copy.ts` 的短释义，无 reason 为 No。
 表格说明这是打开表单时已保存策略的可用性，不随草稿变化；四个认证矩阵提供方无论安装与否始终由 Control Plane 列出，表格和选项不隐藏答案中的任何提供方，选项随后补齐答案未列出的已存角色提供方及 disallowed id，去重保序。

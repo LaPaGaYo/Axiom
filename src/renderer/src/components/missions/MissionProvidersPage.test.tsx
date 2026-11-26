@@ -403,3 +403,20 @@ it('drops an availability answer that arrives after the form was closed', async 
   expect(availabilityCalls()).toHaveLength(4)
   expect(screen.getAllByRole<HTMLSelectElement>('combobox')[1].value).toBe('claude')
 })
+
+it('closes the provider form when another Mission is selected', async () => {
+  await mount()
+  expect(screen.queryByRole('region', { name: 'Providers' })).not.toBeNull()
+  await press(within(region()).getByRole('button', { name: 'Edit providers' }))
+  expect(form()).toBeTruthy()
+  await act(async () => {
+    useAppStore.getState().selectMission('another-mission')
+  })
+  expect(screen.queryByRole('region', { name: 'Providers' })).toBeNull()
+  await act(async () => {
+    useAppStore.getState().selectMission(mission.id)
+  })
+  expect(screen.queryByRole('form', { name: 'Edit the providers of this Mission' })).toBeNull()
+  expect(within(region()).getByRole('button', { name: 'Edit providers' })).toBeTruthy()
+  expect(availabilityCalls()).toHaveLength(1)
+})

@@ -20,6 +20,12 @@ import type { MissionsPageController } from './use-missions-page-controller'
 
 export function MissionsPageSurface({ controller: c }: { controller: MissionsPageController }) {
   const [providersRequest, setProvidersRequest] = useState<ProvidersRequest | null>(null)
+  // Why: a request belongs to one visit of a Mission. It is cleared during render when the
+  // selection moves, so that coming back does not reopen the form with a new draft under an
+  // availability answer that was read before.
+  if (providersRequest !== null && providersRequest.missionId !== c.selectedId) {
+    setProvidersRequest(null)
+  }
   const openProviders = async () => {
     if (!c.detail?.policy) {
       return
