@@ -12,12 +12,14 @@ export function MissionPendingList({
   items = NO_ITEMS,
   failed = false,
   tasks,
+  onEditProviders,
   onSelectTask
 }: {
   items?: readonly MissionPendingItem[]
   failed?: boolean
   tasks: readonly TaskListItem[]
   onSelectTask: (id: string) => void
+  onEditProviders?: () => void
 }) {
   if (failed) {
     return (
@@ -97,6 +99,11 @@ export function MissionPendingList({
                     {translate('missions.pendingYouCan', 'You can:')}{' '}
                     {item.actions.map(pendingActionLabel).join(', ')}
                   </p>
+                )}
+                {onEditProviders && item.actions.includes('axiom.policy.update') && (
+                  <Button variant="outline" size="sm" onClick={onEditProviders}>
+                    {translate('missions.editProviders', 'Edit providers')}
+                  </Button>
                 )}
               </li>
             )

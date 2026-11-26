@@ -189,7 +189,7 @@ M2 之后：落实 D58 的执行通道与权限映射后补真实组合认证；
 
 这个答案只针对已存 routing，不接受草稿；编辑器改变 `disallowedProviders`、`requireCertified` 或 `highRiskTier` 后，要保存才知道影响。它描述调用当时的情况，下一秒安装 provider、选中账号或 cooldown 到期都会改变答案，准入仍会自行重新询问；每次要求这个答案都运行主机探测，不缓存。它只说明可用集合，不说明会选谁、排名、模型或 effort 目录、cooldown 的结束时间，也不保证 Task 已通过预算、依赖与并发等其它准入守卫。
 
-`axiom.policy.show` 仍属于 `read`，桌面、本地 CLI 与 Mission 的 Agent session 都能请求这个答案，从 eligible 与首个过滤原因了解 provider 的安装、账号可用或冷却情况，不泄露账号身份；后续原因可能被前面的原因遮住，不是一份完整主机清单。由于主机探测会 hydrate login-shell PATH、探测命令并读取账号冷却信息，它不是默认答案；Mission 页每五秒的已有 policy 读取不带 `providers`。Mission 页的 Policy 编辑器已调用 policy 写入（M3-09-4c-2b）；`providers` 答案仍没有界面调用，属于 M3-09-4c-2c，也没有新 CLI flag 或新 RPC 方法。
+`axiom.policy.show` 仍属于 `read`，桌面、本地 CLI 与 Mission 的 Agent session 都能请求这个答案，从 eligible 与首个过滤原因了解 provider 的安装、账号可用或冷却情况，不泄露账号身份；后续原因可能被前面的原因遮住，不是一份完整主机清单。由于主机探测会 hydrate login-shell PATH、探测命令并读取账号冷却信息，它不是默认答案；Mission 页每五秒的已有 policy 读取不带 `providers`。Mission 页的 Policy 编辑器已调用 policy 写入（M3-09-4c-2b）；`providers` 答案现由 Mission 页的 Providers 表单在打开时请求（M3-09-4c-2c），也没有新 CLI flag 或新 RPC 方法。
 
 ### Mission 页的 Policy 块与编辑（M3-09-4c-2b）
 
@@ -208,7 +208,35 @@ Keep editing 不调用写入并保留草稿；确认后才经 `mutate` 和客户
 没有 revision 检查，两个窗口同时保存可能逐键覆盖（本机 CLI 不能写 policy：`axiom.policy.update` 是 `desktop_only`，非桌面调用被 `caller_not_desktop` 拒绝，D78）；未编辑字段从页面最后一次读取重建，最多落后一个刷新周期，不保证保存瞬间的新鲜度。
 此表单能保留显式空列表但不能新建它，也不能修复不合 schema 的规则；第一次保存规则会把当前 schema 为缺省键提供的默认值显式写入存储（Control Plane 对任何规则更新都这样做），以后默认值改变不再影响这份 Mission 的这些值。
 命令除非空行外不额外检查，会按原文运行；策略改变不影响已经运行中的验证；本节不展示变更历史（audit 已记录），五种其它语言回退英文。
-routing 的显示与编辑、`providers` 答案及待处理项入口属于 `M3-09-4c-2c`。
+routing 的四项设置、`providers` 答案及待处理项入口已由 `M3-09-4c-2c` 实现；其它 routing 键仍不展示或编辑，model 与 effort 仅随角色只读显示，不提供编辑控件。
+
+### Mission 页的 Providers 块与编辑（M3-09-4c-2c）
+
+`MissionProviders.tsx` 紧接 Policy 块，复用页面唯一 policy 读取的 `c.detail.policy`，只读模式没有额外读取，也不显示可用性。
+定义列表显示 Planner、Workers 的 Automatic 或提供方名称；已存的角色 model 与 effort 作为文字以 ` · ` 连接在其后；不允许的提供方以名称列表或 None 显示，仅已认证组合为 Yes / No；四个值节点分别带 `data-providers-value="planner|worker|disallowed|certified"` 的对应单值，均使用普通文字，不使用成功颜色。
+非终态 Mission 且 policy 已读到时提供 Edit providers，页面忙时禁用；终态仍显示值但不编辑，没有 policy 且表单未打开时只有读取失败提示。
+表单有两个入口：本节按钮，以及 actions 含 `axiom.policy.update` 的待处理项通过 `onEditProviders` 得到的按钮；该按钮加在原样保留的 `You can:` 行下方，读不到 policy 时没有这个入口，打开 handler 也拒绝从空 policy 建草稿。
+
+`MissionsPageSurface.tsx` 的同一个打开 handler 保存 `{missionId, providers}` 请求对象，并经 `readProviderEligibility` 在本目录唯一的 `showPolicy(` 调用行以 `providers: true` 读取一次；普通 `readMissionPolicy(missionId)` 不带此键，五秒刷新与 effect 均不读取可用性。
+答案只在当前请求仍是发起读取的同一个对象时写回，关闭或替换请求后到达的旧答案丢弃；选中的 Mission 一变，请求就在渲染时清掉，再选回原 Mission 不会自行重开表单，须重新按入口并重读可用性；交给本节的也只有 id 匹配的请求。
+每次按入口都重新探测一次主机，可能需要片刻；表单已打开时再按待处理项按钮会重读并显示读取中，保持表单和草稿，不再次移动焦点；初次挂载才聚焦表单并滚动到它。
+`MissionProvidersForm.tsx` 在读取中显示状态句，失败时显示不可读提示且只列已存策略中的 id；成功时原生表格按答案顺序逐行列提供方，以及 Planner 和 low / medium / high 风险 Worker 的四个 slot，候选为 Yes，拒绝为等宽原始 reason 加 `provider-copy.ts` 的短释义，无 reason 为 No。
+表格说明这是打开表单时已保存策略的可用性，不随草稿变化；四个认证矩阵提供方无论安装与否始终由 Control Plane 列出，表格和选项不隐藏答案中的任何提供方，选项随后补齐答案未列出的已存角色提供方及 disallowed id，去重保序。
+策略只能改变 `disallowed` 与 `not_certified` 中 provisional 被仅认证开关挡住的部分；安装、Settings › Accounts 选账户、等待 cooldown 及角色或风险等级的资格不是这些字段能解决的，单元格只显示过滤器的首个原因，去掉它可能显露下一个。
+
+四个字段依次是 Planner、Workers（Select，Automatic 或提供方）、Allowed providers（逐项 Checkbox）与 Only certified combinations；允许选择当前不具资格的角色提供方，Control Plane 会改选其它 eligible 提供方并记录原因，无候选时 Task 等待，角色有任何相关 slot 被拒绝时显示这一提示并关联到 Select trigger。
+`providers-draft.ts` 的 `buildProvidersUpdate(missionId, policy, opened, draft)` 对照打开时的草稿决定哪些字段变了，在保存时页面最后读到的 routing 副本上仅替换这些键，其余键原样携带，patch 只有 routing。
+角色只设置或删除 provider，原有 model 与 effort 即使换了 provider 也保留；删掉 provider 后没有其它键的角色从 roles 删除；disallowed 按集合比较，集合变了就写草稿整份列表，保留原有顺序、移除重新允许的项、新禁用项加到末尾；认证开关仅在变化时写入 requireCertified。
+有效性由写入路径的 `PolicyUpdateParams` 解析决定，发送解析后的值，失败显示首条等宽错误；无变化、无 policy、解析失败或页面忙时不能保存，所有表单控件在页面忙时禁用。
+草稿仅在挂载的 state initializer 打开，属性改变不设 state；五秒刷新或新可用性答案不重置编辑内容，保存参数每次渲染用最新 policy 计算；打开期间 policy 读取失败仍保留表单和草稿，显示读取失败并禁止保存，后续读取恢复后才可保存。
+保存沿用 `policy-actions.ts` 的 `updatePolicy` 确认：标题及确认按钮为 Save policy，另一按钮 Keep editing，variant 为 default；说明按表单顺序以逗号加空格列出变化字段，再说明之后启动的 Planner、之后准入的 Worker Attempt 使用新选择，已运行 Attempt 保留提供方。
+Keep editing 不写入且保留草稿；确认后才调用桌面 `axiom.policy.update`，拒绝时草稿不变且页面显示 Control Plane 错误，接受后关闭表单并显示页面重读结果；Close 只丢弃草稿，不调用写入。
+提交成功的 policy 更新请求本 Mission 的一轮准入，等候 Task 可由此获准；待处理项要在准入成功后的后续读取才消失，策略改变不触碰已运行的 Attempt。
+
+可用性只描述读取那一刻的已保存策略：随后安装提供方、选账户或 cooldown 结束，须再次打开表单才显示；它不预测草稿、不保证通过其它准入守卫。
+更新没有 revision 检查，两个窗口同时保存会覆盖对方整份 routing；本机 CLI 不能写 policy（`axiom.policy.update` 为 `desktop_only`，非桌面调用返回 `caller_not_desktop`），未改键来自页面最后一次读取，可能落后一个刷新周期，disallowed 集合变化时也始终整份替换。
+第一次保存会写入页面读到的每一个 routing 键，包括 schema 默认值，后续默认值改变不再影响该 Mission；角色 model 仍作用于最终选中的提供方（含回退），是否应绑定提供方仍待 Henry 决定，本任务保留既有行为。
+`preferredProviders`、`providerConcurrency`、`models`、`highRiskTier`、`crossProvider` 均不展示或编辑；没有模型或推理强度控件、草稿可用性预览、撤销或历史，也没有主进程、契约或 CLI 改动；五种其它语言回退英文。
 
 ## 4. 状态机与 readiness
 

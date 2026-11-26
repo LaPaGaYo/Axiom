@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Loader2, Plus, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
@@ -6,6 +7,8 @@ import { MissionCreateDialog } from './MissionCreateDialog'
 import { MissionHome } from './MissionHome'
 import { MissionSupervision } from './MissionSupervision'
 import { MissionPolicy } from './MissionPolicy'
+import { MissionProviders, type ProvidersRequest } from './MissionProviders'
+import { readProviderEligibility } from './mission-policy-read'
 import { visiblePlanRevisions } from './plan-revision-diff'
 import { PlanReviewPanel } from './PlanReviewPanel'
 import { TaskStageTable } from './TaskStageTable'
@@ -16,6 +19,22 @@ import { activateWorktreeFromSidebar } from '@/lib/sidebar-worktree-activation'
 import type { MissionsPageController } from './use-missions-page-controller'
 
 export function MissionsPageSurface({ controller: c }: { controller: MissionsPageController }) {
+  const [providersRequest, setProvidersRequest] = useState<ProvidersRequest | null>(null)
+  // Why: a request belongs to one visit of a Mission. It is cleared during render when the
+  // selection moves, so that coming back does not reopen the form with a new draft under an
+  // availability answer that was read before.
+  if (providersRequest !== null && providersRequest.missionId !== c.selectedId) {
+    setProvidersRequest(null)
+  }
+  const openProviders = async () => {
+    if (!c.detail?.policy) {
+      return
+    }
+    const request: ProvidersRequest = { missionId: c.detail.mission.id, providers: undefined }
+    setProvidersRequest(request)
+    const providers = await readProviderEligibility(request.missionId)
+    setProvidersRequest((current) => (current === request ? { ...request, providers } : current))
+  }
   const selectedTask = c.detail?.tasks.find((task) => task.id === c.selectedTaskId)
   return (
     <main className="flex h-full min-h-0 flex-col bg-background pt-5 text-foreground md:pt-6">
@@ -58,6 +77,7 @@ export function MissionsPageSurface({ controller: c }: { controller: MissionsPag
                 proposedPlans={c.detail.plans.filter((plan) => plan.status === 'PROPOSED').length}
                 busy={c.busy}
                 onAction={c.missionAction}
+                onEditProviders={c.detail.policy ? openProviders : undefined}
                 onSelectTask={c.selectTask}
               />
               <MissionSupervision
@@ -72,6 +92,18 @@ export function MissionsPageSurface({ controller: c }: { controller: MissionsPag
                 mission={c.detail.mission}
                 policy={c.detail.policy}
                 busy={c.busy}
+                onSave={c.updatePolicy}
+              />
+              <MissionProviders
+                key={c.detail.mission.id}
+                mission={c.detail.mission}
+                policy={c.detail.policy}
+                busy={c.busy}
+                request={
+                  providersRequest?.missionId === c.detail.mission.id ? providersRequest : null
+                }
+                onEdit={openProviders}
+                onClose={() => setProvidersRequest(null)}
                 onSave={c.updatePolicy}
               />
               {visiblePlanRevisions(c.detail.plans, c.detail.mission.activePlanRevisionId).map(
