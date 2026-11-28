@@ -1,6 +1,6 @@
 # 复用清单：还要做的东西，Orca 内核与 T3 Code 里哪些已经有（reuse-map）V1
 
-更新日期：2026-11-21 · 内核：本仓库主线 `71ea7a9d96`（Orca 基线见 [orca-mapping.md](orca-mapping.md) 第 10 节）· T3 Code：`pingdotgg/t3code@9f9ebf61`（MIT，2026-11-21）。
+更新日期：2026-11-21；2026-11-28 复查了 0.1 剩余的任务，见第 10 节 · 内核：本仓库主线 `71ea7a9d96`（Orca 基线见 [orca-mapping.md](orca-mapping.md) 第 10 节）· T3 Code：`pingdotgg/t3code@9f9ebf61`（MIT，2026-11-21）。
 来源：验证者 2026-11-21 的两次只读读码，记录在 `claude/reuse-map-orca-t3-v1.md`；界面组件的逐条清单在 `claude/ui-reuse-map-v1.md`（DEF-22 ⑭），T3 的可借机制在 `claude/t3code-review-v1.md`。
 
 ## 1. 用途与读法
@@ -8,7 +8,7 @@
 写任何一份 brief、复审任何一条延后项之前，先在这里找到对应的行，把“内核里现成的”那一列写进 brief 的“先看这里”一节；找不到才新写。依据是 D82 的修订行（2026-11-11）：护城河认真自己做；新建的东西先找现成的；已经跑通的，不为换成更好的而重做。
 
 - **Orca 内核**就在本仓库里：标“直接调用”或只给出位置的可以直接 import；标“要抽”的是逻辑写在界面组件或 IPC 处理函数里，得先搬出来。调用仍要遵守 `AGENTS.md` 的内核边界（经现有的 service 与 RPC 边界扩展，不另起一套）。
-- **T3 Code** 几乎全部建在 Effect 之上，数据模型是“线程”：默认只借设计、规则与测试方法，代码自己写；标“可移植”的是纯 TypeScript 的小块，移植时在 `NOTICE.md` 署名。
+- **T3 Code** 自己的 TypeScript 文件约一半建在 Effect 之上（2026-11-28 重数：49%，server 85%），数据模型是“线程”，本仓库没有 Effect。纯 TypeScript 的小件可以带着出处与许可移植（D95：固定到一个提交，文件头写出处与原版权行，`NOTICE.md` 有 T3 Code 的 MIT 声明，产品里不出现它的名称与素材）；绑在 Effect 上的大件仍然只借设计、规则与测试方法。
 - **【核】** = 验证者读过那段代码；没有标的 = 文件、行号与符号名经脚本逐条核对过存在（内核 249 处全部对上；T3 272 处对上），“它怎么工作”来自只读子代理的读码报告，用之前要读。
 - 路径的省略：界面组件省掉了前缀 `src/renderer/src/components/`；`orchestration/…` 省掉了 `src/main/runtime/`；同一格里只写文件名的，目录与前一个相同。行号是写这份文档时的，会漂移，以符号名为准。
 - 这份文档只记“哪里有现成的”，不排任务、不登记延后项：任务在 `docs/plans/`，延后项在 `docs/decisions/DEFERRED.md`。
@@ -101,4 +101,116 @@ git 执行器与选项；内核管的工作树建与删；orchestration 的 run�
 
 ## 9. 维护
 
-每周上游初筛时顺带更新；T3 的游标是 `9f9ebf61`。本仓库基线之后上游 Orca 新加的功能没有看过。改这份文档只改“哪里有现成的”，不在这里做决定。
+每周上游初筛时顺带更新；T3 的游标是 `38aaacd480`（2026-11-28；第 2 至第 8 节写于 `9f9ebf61`）。本仓库基线之后上游 Orca 新加的功能没有看过。改这份文档只改“哪里有现成的”，不在这里做决定。
+
+## 10. 0.1 剩余任务的取用清单（2026-11-28 复查）
+
+Henry 2026-11-27 要的复查：0.1 还没做的任务里，Orca 内核和 T3 Code 有什么可以拿来即用。这一节补充并更正第 2 节；两处说法不一样时以这一节为准。
+
+**来源与核对程度。** 两个 Opus 子代理各读一边（内核 8.4 分钟、T3 7.9 分钟）。内核这一份的 89 处“路径:行”验证者在 main `78ac73957d` 上逐条核对：87 处原样，2 处文件名更正（已改在下面）。T3 这一份的 13 处在 `23846b0c` 上核对，全部原样。带 ✓ 的行为是验证者读代码确认的；不带的是子代理的读法，写各任务 brief 时再核对。
+
+**T3 的固定版本。** `pingdotgg/t3code` 的提交 `38aaacd480fe4dba82d71fa7fe565cce15a7858f`（Henry 本地的克隆，干净）。它比清查用的 `23846b0c` 多 1 个提交，只动了 `packages/client-runtime/src/work-log/commandLabel.ts` 和它的测试，与下面列的文件无关 ✓。
+
+**四类。** 【直调】内核里现成，按原样调用。【薄层】内核有、形状差一点，包一层或抽一个函数。【移植】T3 的纯 TypeScript，交 Worker 改成我们的写法（oxfmt、Vitest、不用 Effect），带出处与 MIT 声明。【自写】两边都没有。
+
+### 总的判断
+
+- Axiom 完全没有 Effect（0 处 import，`package.json` 里也没有）✓。T3 自己的 7,869 个 `.ts/.tsx` 文件（不算它仓库里附带的那份 Effect 源码）里，3,884 个引 Effect，49% ✓：server 85%、contracts 98%，各 forge 与 provider 适配器都绑在上面；web 只有 25% 引 Effect ✓，但绑它自己的状态层、UI 套件和 gt-react。整块搬不动；能搬的是十来个纯函数文件，加规则和测试场景。
+- 较新的上游 Orca（`60d912e153`）重构了 `remote.ts`、fetch 控制器、`hosted-review-creation.ts`、`merge-pr.ts`，但我们缺的三处接口形状（推一个没检出的分支、不要求当前分支的开 PR、合并时锁定 head）它也没有。
+- 我们这一层今天没有从 `src/main/github`、`src/main/source-control`、`git/remote`、`git/upstream`、fetch 控制器 import 任何东西。`.oxlintrc.json:180-252` 禁止 `src/main/axiom/**` 的非测试文件 import `electron`：子代理追过的 import 闭包里没有 `electron`，但 `orca-runtime` 和少数 github client 模块没追，brief 里要核。
+- 选 A（Henry 在 GitHub 上合并）时，照这份清单我们这一层不必新写任何一条 `gh` 调用。
+
+### REMOTE-1：开始时取远端目标分支，从它的最新提交起步
+
+- 【直调】git 执行器 `gitExecFileAsync`（`src/main/git/command-runner/git-exec-file.ts:178`），非交互环境在 `src/main/git/command-runner/git-process-env.ts:50-78`。
+- 【直调】默认分支：`getRepoDefaultBranchName`、`getRemoteHeadBranchName`（`src/main/source-control/repo-default-branch.ts:83`、`:100`）。
+- 【直调】ahead/behind：`parseGitRevListAheadBehindCounts`（`src/shared/git-rev-list-output.ts:13`），对两个明确的 ref 可用。
+- 【直调，有条件】单分支 fetch：`getOrStartRemoteTrackingBaseRefresh(repoPath, {remote, branch, ref, base}, gitOptions?)`，经 `OrcaRuntimeService` 的公开包装（`src/main/runtime/workspaces/workspace-metadata.ts:39-68`）✓。它跑 `fetch --no-tags <remote> +refs/heads/<b>:<ref>`，60 秒超时、并发去重 ✓。
+- **注意** ✓：`FETCH_FRESHNESS_MS = 30_000`（`src/main/runtime/runtime-remote-fetch-controller.ts:25`）——30 秒内再调直接回 ok、不真取，没法强制；失败只回 `{ok:false, errorKind:'git_error'}`，stderr 只进 console。所以开始时那一次可以用它；收尾对齐和交付前那两次要“一定真取、要拿到失败原因”，用执行器直接跑同一条 fetch。`getOrStartRemoteFetch` 取整个 remote 而且带 tags，不用。
+- 【薄层】`resolveEffectiveGitUpstream`（`src/shared/git-effective-upstream.ts:186`：配置的上游，否则 `origin/<同名>`）绑在 HEAD 上，要抽出“给定分支名”的版本。`resolveGitStatusUpstreamRef`（`src/main/git/status-upstream-ref.ts:17`）只验证给定的上游名，不负责发现。
+- 【自写】`ensureIntegrationBase`（`src/main/axiom/execution/integration-base.ts:7`）现在取本地 `refs/heads/<targetBranch>`（`:33`），并要求已有的集成分支是本地目标的祖先（`:40`）：两处都要改成以远端跟踪 ref 为准。Mission 开始前的远端预检（有没有 remote、目标分支在远端是否存在、本地有没有没推上去的提交）没有现成的。
+- **约束**：M4-2a-3 / STRUCT-1 的检查不许 `integration-base.ts` 里出现带引号的 `'fetch'`、`'push'`、`'pull'` 参数，取与推的代码放新文件。
+- 【移植】T3 `apps/server/src/vcs/GitVcsDriverCore.ts`（7,916 行的 Effect 文件）里的三个纯函数，合计 56 行：`fetchFailureDetail`（685-720）、`isRefLockFailure`（723-733）、`parseDefaultBranchFromRemoteHeadRef`（610-618）。测试场景照它的思路写：远端分支被删时不回落到陈旧的跟踪 ref；远端不可达时失败而不是回落；ref 锁竞争重试一次；不取 tags；remote 名长得像选项时要加 `--`。
+
+### REMOTE-2：推送集成分支、开 PR（两个任务）
+
+- 【直调】`validateGitPushTarget`（`src/main/git/push-target-validation.ts:8`）。
+- 【直调】`getForgeProviderForRepository({repoPath, executionHostId})`（`src/main/source-control/forge-provider.ts:329`），provider 的 `createReview`、`getReviewForBranch`、`getReviewByNumber`（`:69-81`）。
+- 【直调】类型 `CreateHostedReviewInput`（`src/shared/hosted-review.ts:84`：`{provider, base, head?, title, body?, draft?, worktreePath?, useTemplate?}`）；结果码有 `auth_required`、`unsupported_provider`、`already_exists`、`validation`、`timeout`、`unknown_completion`、`push_failed`、`unknown`，带 `existingReview?`。
+- 【直调】`createGitHubPullRequest`（`src/main/github/client/create/create-github-pull-request.ts:28`）跑 `gh pr create --repo o/r --base … --title … --body-file <tmp> [--head h] [--draft]` ✓；同一分支已有 PR 时回 `already_exists` 加 `existingReview`（经 `findOpenPRByHeadBase`，`src/main/github/client/create/pull-request-template.ts:9`）✓，所以重试天然不会开第二个；head 等于 base 时拒绝。
+- 【直调】`diagnoseGhAuth`（`src/main/github/auth-diagnose.ts:93`）；PR 模板读取；脱敏：我们的 `redactContext`、`detectSecretPatterns`（`src/main/axiom/redaction/redaction.ts:3`、`:12`），内核的 `redactString`、`redactValue`（`src/main/observability/redactor.ts:99`、`:195`）和 `stripCredentialsFromMessage`（`src/shared/git-remote-error.ts:22`）。
+- **绕开**：`createHostedReview`（`src/main/source-control/hosted-review-creation.ts:248`）要求 head 是当前检出的分支。不经过它，直接调 provider 的 `createReview` 并给明确的 `head`。
+- 【自写】一条 push：明确 refspec、不 force、不设上游。内核的 `gitPush`（`src/main/git/remote.ts:26`）只推 `HEAD` 或 `HEAD:<branch>`，而且总带 `--set-upstream` ✓；内核唯一一处明确 refspec 的 push 嵌在 `src/shared/git-fork-sync.ts:296` 里 ✓，不能单独调用。
+- 【自写】停止原因的分类：`normalizeGitErrorMessage`（`src/shared/git-remote-error.ts:154`）给的是给用户看的文字；它的匹配模式（`:163-213`）可参照，分类码我们自己定。
+- 【自写】新状态 `AWAITING_MERGE`：`MISSION_STATUSES`（`src/shared/axiom-contract/lifecycle.ts:3`）、`MissionStatusSchema`（`:94`）、终态集合（`:114`）、转移表（`:123`）。`missions.status` 是 `TEXT NOT NULL`、没有 CHECK，不用重建表；旧版本读到新值会解析失败，这是混版本问题，brief 里要交代。
+- 【薄层】给人看的 compare 链接：主进程只有 `buildHostedRemoteCommitUrl`（`src/main/git/hosted-remote-url.ts:130`）；renderer 的 `buildSourceControlManualReviewUrl`（`src/renderer/src/components/right-sidebar/source-control/review/manual-review-url.ts:112`，纯函数，闭包 2 个文件）可以抽到 shared，或者只在 renderer 调。
+- 【移植】T3 `packages/source-control-core/src/server/mergeMessage.ts`（68 行、零 import ✓，`removeAgentCredits`，测试 6 条）。
+- 【移植，先比对】T3 的脱敏正则 `packages/provider-core/src/server/failure.ts:269-324`（Effect 文件里的纯函数 ✓，测试 17 条）：先看和我们已有的 `redaction.ts` 重不重，只补缺的模式。
+- 只作参照：T3 `packages/client-runtime/src/state/gitActions.ts`（498 行，绑 gt-i18n ✓）里 push 的前置规则；`buildPrContentPrompt`（`packages/provider-core/src/server/textGenerationPrompts.ts:92-169`）——我们的 PR 正文由 completion report 确定地生成，不用模型写。
+
+### REMOTE-3：读回 PR 状态，合并后落地
+
+- 【直调】`HostedReviewInfo`（`src/shared/hosted-review.ts:30`）：`state` 为 `open`、`closed`、`merged`、`draft` 之一，另有 `mergeable`、`reviewDecision`、`mergeStateStatus`、`headSha`、`baseRefName`、`conflictSummary` 等 ✓。
+- 【直调】`getPRChecks`（`src/main/github/client/check/get-pr-checks.ts:239`）、`getPRCheckDetails`（`src/main/github/client/check/get-pr-check-details.ts:26`）、`startCheckJobLogDownload`（`src/main/github/client/check/check-job-log-download.ts:117`）、`getPRComments`（`src/main/github/client/fetch/get-pr-comments.ts:14`）。
+- 【直调】`isCommitPartOfMergedPR`（`src/main/github/merged-pr-commit-membership.ts:52`，回 `contained`、`not-contained` 或 `unknown`）；节奏常数 `src/main/source-control/hosted-review-refresh-pacing.ts:11-30`。
+- 【我们已有，直接接】60 秒的那一个 `setInterval`（`src/main/axiom/control-plane-boot.ts:68-71`）→ `sweepExecutingMissions`（`src/main/axiom/scheduler/mission-sweep.ts:9`，现在列 EXECUTING 和 FINALIZING）；outbox 的 `register`、`enqueue`（`src/main/axiom/outbox/effect-outbox.ts:38`、`:46`），种类表 `src/shared/axiom-contract/effects.ts:5`；本地快进用 `advanceLocalBranch`、`advanceIntegrationHead`（`src/main/axiom/execution/integration-base.ts:83`、`:67`，compare-and-swap 的 `update-ref`，拒绝已检出的 ref）。
+- 【自写】`HostedReviewInfo` 没有 merge commit，也没有 mergedAt ✓。读到“已合并”之后要取回目标分支，自己认定落地的提交并记下。sweep 加 `AWAITING_MERGE`。
+- 【移植，先比对】T3 `packages/source-control-core/src/server/pullRequestChecks.ts`（104 行：汇总、排序、去重；两处 Effect import——`DateTime`、`Option`——要换掉 ✓；测试 10 条）：先比内核的 `getCheckCounts`、`getChecksSummaryLabel` 是否已经够用。
+- 【移植，规则】“已合并”的证明：`storageCleanupPullRequestMerged`（T3 `apps/server/src/storageCleanup.ts:297-317` ✓——squash 或 rebase 合并时，要求 PR 记的 head 正是我们推的那个提交）和 `:1803-1826` 的 `merge-base --is-ancestor`。
+- 【移植，只取规则】T3 `apps/server/src/orchestration-v2/pullRequestWatch.ts`（573 行的纯评估器，1 处 Effect import ✓，测试 43 条）：只取与读回有关的上限（2 分钟一轮、连续 8 次读失败、15 分钟仍没有检查）；其余是唤醒 Agent 用的（DEF-34，0.1 之后）。
+
+### REMOTE-4：应用内合并（只在第 16 件第 2 条选 B 时）
+
+- 【直调】`mergePR`（`src/main/github/client/merge/merge-pr.ts:16`：`gh pr merge <n> --<method> [--repo]`）、`getPRMergeBlocker`（`:110`）、`formatMergeConflictBlocker`（`:166`）；renderer 的 `PRActionsMergeMenu`（`src/renderer/src/components/github-item-dialog/land-pull-request/pr-actions-merge-menu.tsx:18`，只吃 props，另有一处 `window.api.shell.openUrl` ✓）。
+- 【自写】合并时锁定 head：内核没有 `--match-head-commit`。T3 的做法可照：`apps/server/src/pullRequest/PullRequestService.ts:2418-2446`；按钮状态的规则 `resolvePullRequestPrimaryControl`（`apps/web/src/components/pullRequest/pullRequestDetail.logic.ts:101-125`）。
+
+### REMOTE-5：收尾对齐时遇到冲突
+
+- 【薄层】`getPRConflictSummary`（`src/main/github/conflict-summary.ts:48`）：不需要 worktree；remote 名写死 `origin`（`:170`）；10 秒预算。
+- 【自写，改我们自己的】`mergeIntegrationCandidate`（`src/main/axiom/integration/integration-merge.ts:39`）和单个 Task 绑在一起：提交信息 `axiom: integrate <candidate.id>`、父提交检查（`:84`）、`createIntegrationScratch(runtime, mission, batch, taskId)`、`runIntegrationRegression`；`IntegrationBatchSchema` 的 `candidateIds` 长度固定为 1（`src/shared/axiom-contract/integration-batch.ts:50`、`:54`）。
+- T3 没有可用的：它不做本地合并。
+
+### M4-11b：交付的批准卡
+
+- 【直调】`CommentMarkdown`（`src/renderer/src/components/sidebar/CommentMarkdown.tsx:275`，只吃 props）；`useConfirmationDialog`（`src/renderer/src/components/confirmation-dialog-context.ts:47`）；`window.api.shell.openUrl`（只放行 http 和 https，`src/main/ipc/shell.ts:153`、`:160`）。
+- 【直调】CI 检查的行与汇总，都只吃 props 或是纯函数（这几个文件里没有 store 和 `window.api` 的引用 ✓）：`ChecksTabCheckRow`（`src/renderer/src/components/github-item-dialog/inspect-pull-request/checks-tab-check-row.tsx:40`）；`CHECK_ICON`、`CHECK_COLOR`、`prStateColor`（`src/renderer/src/components/right-sidebar/checks-panel/check-presentation.tsx:15`、`:27`、`:39`）；`getCheckCounts`、`getChecksSummaryLabel`（`src/renderer/src/components/pr-check-counts.ts:24`、`:99`）；`getCheckStatusLabel`（`src/renderer/src/components/github/pr-check-presentation.ts:8`）；`presentGitHubPRMergeState`（`src/renderer/src/components/github-pr-merge-state.ts:90`）。
+- 【自写，小】`src/renderer/src/lib/axiom-client.ts` 里没有 `axiom.approval.grant`、`axiom.approval.deny`、`axiom.mission.deliver` 的客户端方法 ✓。主进程的处理器早就有（`src/main/runtime/rpc/methods/axiom/approval.ts:10`、`:20`，`mission.ts:29`），都是 `desktop_only` ✓。加三个方法；注意这个文件 300 行的 lint 上限。
+- 【自写，小】评审结论的小徽章：内核没有只吃 props 的现成件（`PRReviewCell`、`HostedReviewActions` 都绑 store）。
+- 【我们已有】待处理项 `delivery_approved`、`delivery_approval_pending` 出自 `src/main/axiom/read-models/mission-pending.ts:38-61`，由 `src/renderer/src/components/missions/MissionPendingList.tsx` 通用渲染。
+- T3 只作参照：`ApprovalText.tsx`、`pullRequestPresentation.tsx`、`ChatMarkdown.tsx:433-447` 的 `safeUrl`。
+
+### M3-09-4c-2d：角色的模型与力度
+
+- 【直调】`getAgentSessionOptionCatalog`（`src/shared/agent-session-option-catalog.ts:47`）；`NativeChatModelCombobox`（`src/renderer/src/components/native-chat/NativeChatModelCombobox.tsx:37`，只吃 props）。
+- 【薄层】`agentSessionEffortLevels`（`src/shared/agent-session-effort-levels.ts:4`）：入参是 wire 上的 model option。
+- 【我们已有】`RoleRoutingSchema`（`src/shared/axiom-contract/mission-objects.ts:187`：`{provider?, model?, effort?}`）。第 26 件说的问题在 `src/main/axiom/agent-factory/agent-factory.ts:146-153` ✓：不管最后选中的是哪一家 provider，都先用角色上写的模型。
+- T3 只作参照：`apps/server/src/provider/model-manifest.json` 的格式。
+
+### VER-2、VER-3：版本与发布
+
+- 【直调】`compareAppVersions`（`src/shared/app-version.ts:60`）；VER-1 做的 `src/shared/orca-baseline.ts`（`ORCA_BASELINE` `:4`、`isAxiomLineVersion` `:9`、`upstreamLineVersion` `:17`、`compareAppVersionsAcrossLines` `:22`）；`package.json:3` 现在是 `1.4.214`，经 `app.getVersion()` 读。
+- 【直调，用之前先读】`config/scripts/create-draft-release.mjs`、`config/scripts/release-policy.mjs`。
+- 【移植】T3 `scripts/smoke-desktop-app.ts`（141 行，只用 Node 内置模块加 playwright-core ✓）：打包后的应用冒烟。发布手册 `docs/operations/03_release.md` 只作参照。
+
+### 0.1 之后才看的
+
+D89 第 8 条：0.1 之前不从外部项目的清查往 DEFERRED 与任务行登记新条目，所以这里只记一笔。
+
+- T3 的 lint 插件 `oxlint-plugin-t3code/rules`（36 条）里通用的几条：`require-suppression-reason`、`no-test-timeout-or-unreasoned-skip`、`no-wall-clock-in-tests`、`no-polling-loop-in-tests`、`no-test-in-loop`、`no-unreasoned-state-sync`、`no-em-dash-copy`、`namespace-node-imports`。
+- `pullRequestWatch.ts` 里唤醒 Agent 的那一大半（DEF-34）。
+
+### 对第 2 节的更正
+
+- “只取一个分支、去重、超时”只对 `getOrStartRemoteTrackingBaseRefresh` 成立，而且它有 30 秒的新鲜期。
+- `status-upstream-ref.ts:17` 不发现上游，只验证给定的名字。
+- `getPRCheckDetails` 和 `startCheckJobLogDownload` 不在 `get-pr-checks.ts`，各在 `get-pr-check-details.ts` 和 `check-job-log-download.ts`。
+- 第 2 节没写的：我们这层怎样够到 fetch 控制器（runtime 的公开包装）、`git-effective-upstream.ts`、已有 PR 时的 `already_exists`、只吃 props 的 CI 检查件、`axiom-client.ts` 缺的三个方法。
+- 第 2 节引的其余内核路径与行号，在 main 上仍然对得上（子代理核对）。
+
+### 许可与商标
+
+T3 Code 是 MIT 许可，版权行属于 T3 Tools Inc.。它的 `TRADEMARK.md` 不许用 T3 Code、T3 Connect、T3 Tools 的名称、字标、logo、图标、`assets/` 和域名，只允许一句如实的出处说明。移植来的文件：文件头写出处（仓库、提交、原路径）和版权行；`NOTICE.md` 加一条 T3 Code 的 MIT 声明。Henry 2026-11-28 已同意把 T3 的代码放进产品（D95）；`NOTICE.md` 的条目随第一个移植 T3 文件的任务的规划提交加入。
+
+### 怎么用这份清单
+
+每个任务发出前：Opus 子代理按这里的条目出一份“适配单”（调哪个函数、签名、和我们要的差在哪）→ 验证者核对 → 写进 brief 开头的“先看这里”（路径加行号）→ 验证清单里加“必须调用现成的、不许另写一份”的检查。要移植的 T3 文件，按上面固定的提交把源文件和它的测试附给 Worker。
