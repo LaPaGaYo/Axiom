@@ -125,12 +125,12 @@ Henry 2026-11-27 要的复查：0.1 还没做的任务里，Orca 内核和 T3 Co
 - 【直调】git 执行器 `gitExecFileAsync`（`src/main/git/command-runner/git-exec-file.ts:178`），非交互环境在 `src/main/git/command-runner/git-process-env.ts:50-78`。
 - 【直调】默认分支：`getRepoDefaultBranchName`、`getRemoteHeadBranchName`（`src/main/source-control/repo-default-branch.ts:83`、`:100`）。
 - 【直调】ahead/behind：`parseGitRevListAheadBehindCounts`（`src/shared/git-rev-list-output.ts:13`），对两个明确的 ref 可用。
-- 【直调，有条件】单分支 fetch：`getOrStartRemoteTrackingBaseRefresh(repoPath, {remote, branch, ref, base}, gitOptions?)`，经 `OrcaRuntimeService` 的公开包装（`src/main/runtime/workspaces/workspace-metadata.ts:39-68`）✓。它跑 `fetch --no-tags <remote> +refs/heads/<b>:<ref>`，60 秒超时、并发去重 ✓。
-- **注意** ✓：`FETCH_FRESHNESS_MS = 30_000`（`src/main/runtime/runtime-remote-fetch-controller.ts:25`）——30 秒内再调直接回 ok、不真取，没法强制；失败只回 `{ok:false, errorKind:'git_error'}`，stderr 只进 console。所以开始时那一次可以用它；收尾对齐和交付前那两次要“一定真取、要拿到失败原因”，用执行器直接跑同一条 fetch。`getOrStartRemoteFetch` 取整个 remote 而且带 tags，不用。
-- 【薄层】`resolveEffectiveGitUpstream`（`src/shared/git-effective-upstream.ts:186`：配置的上游，否则 `origin/<同名>`）绑在 HEAD 上，要抽出“给定分支名”的版本。`resolveGitStatusUpstreamRef`（`src/main/git/status-upstream-ref.ts:17`）只验证给定的上游名，不负责发现。
+- 【不用，2026-11-28 写 REMOTE-1a 的 brief 时改定】内核的取回控制器：`getOrStartRemoteTrackingBaseRefresh`（经 `OrcaRuntimeService` 的公开包装，`src/main/runtime/workspaces/workspace-metadata.ts:39-68`）30 秒内再调直接回 ok、不真取（`FETCH_FRESHNESS_MS`，`src/main/runtime/runtime-remote-fetch-controller.ts:25`）✓，失败只回 `{ok:false, errorKind:'git_error'}`、stderr 只进 console ✓，remote 名前不加 `--`，分不清“远端没有这条分支”和“远端够不着”；`getOrStartRemoteFetch` 取整个 remote 而且带 tags。开始、收尾、交付前三次都用执行器直接跑同一条 fetch：`fetch --no-tags -- <remote> +refs/heads/<b>:<ref>`，带 `GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS`（`src/shared/git-fetch-auto-maintenance.ts`），经 `withHooklessGit` 与 `retryOnGitLockContention`（`src/shared/git-lock-contention.ts`，锁文件竞争重试三次），显式给超时（网络命令没有默认超时）。
+- 【不用，同上】`resolveEffectiveGitUpstream`（`src/shared/git-effective-upstream.ts:186`）：只答当前检出的分支，经 `@{u}` 问（跟踪引用没取过就失败），还会把 `origin` 上另一个名字的上游换成 `origin/<当前分支>`。REMOTE-1a 用一条 `for-each-ref`（`%(upstream)`、`%(upstream:remotename)`、`%(upstream:remoteref)`）自己解析目标分支的上游。`resolveGitStatusUpstreamRef`（`src/main/git/status-upstream-ref.ts:17`）只验证给定的上游名，不负责发现。
 - 【自写】`ensureIntegrationBase`（`src/main/axiom/execution/integration-base.ts:7`）现在取本地 `refs/heads/<targetBranch>`（`:33`），并要求已有的集成分支是本地目标的祖先（`:40`）：两处都要改成以远端跟踪 ref 为准。Mission 开始前的远端预检（有没有 remote、目标分支在远端是否存在、本地有没有没推上去的提交）没有现成的。
 - **约束**：M4-2a-3 / STRUCT-1 的检查不许 `integration-base.ts` 里出现带引号的 `'fetch'`、`'push'`、`'pull'` 参数，取与推的代码放新文件。
 - 【移植】T3 `apps/server/src/vcs/GitVcsDriverCore.ts`（7,916 行的 Effect 文件）里的三个纯函数，合计 56 行：`fetchFailureDetail`（685-720）、`isRefLockFailure`（723-733）、`parseDefaultBranchFromRemoteHeadRef`（610-618）。测试场景照它的思路写：远端分支被删时不回落到陈旧的跟踪 ref；远端不可达时失败而不是回落；ref 锁竞争重试一次；不取 tags；remote 名长得像选项时要加 `--`。
+- 【直调，写 brief 时补】`isMissingRemoteRefGitError`（`src/main/git/fetch-error-classification.ts`，远端没有这条分支）。T3 的三个函数里只移植 `fetchFailureDetail` 与 `isRefLockFailure`（REMOTE-1a）；`parseDefaultBranchFromRemoteHeadRef` 内核已有等价的，不移植。
 
 ### REMOTE-2：推送集成分支、开 PR（两个任务）
 
